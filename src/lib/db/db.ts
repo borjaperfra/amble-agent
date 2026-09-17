@@ -183,3 +183,51 @@ export function getDb(): DatabaseSync {
 }
 
 export const DATA_DIRECTORY = DATA_DIR
+
+type DeferredWrite = () => void
+let transactionDepth = 0
+const deferredWrites: DeferredWrite[] = []
+
+export function queueWrite(write: DeferredWrite): void {
+  if (transactionDepth > 0) {
+    deferredWrites.push(write)
+  } else {
+    write()
+  }
+}
+
+export function runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  const db = getDb()
+  const isOutermost = transactionDepth === 0
+  if (isOutermost) db.exec('BEGIN')
+  transactionDepth++
+  return fn().then(
+    (result) => {
+      transactionDepth--
+      if (isOutermost) {
+        db.exec('COMMIT')
+        flushDeferredWrites()
+      }
+      return result
+    },
+    (error) => {
+      transactionDepth--
+      if (isOutermost) {
+        db.exec('ROLLBACK')
+        flushDeferredWrites()
+      }
+      throw error
+    },
+  )
+}
+
+function flushDeferredWrites(): void {
+  const writes = deferredWrites.splice(0, deferredWrites.length)
+  for (const write of writes) {
+    try {
+      write()
+    } catch {
+      // Audit writes must never break the flow that produced them.
+    }
+  }
+}

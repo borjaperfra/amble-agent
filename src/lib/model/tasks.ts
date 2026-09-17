@@ -47,14 +47,18 @@ function normalizeClaim(raw: unknown, defaultEpistemic: (typeof epistemicValues)
   const requiresConfirmation = epistemicKnown ? c.requiresConfirmation === true : true
   const excerpt = typeof c.sourceExcerpt === 'string' && c.sourceExcerpt.trim().length >= 3 ? c.sourceExcerpt : null
   return {
-    statement: statement.trim(),
+    statement: statement.trim().slice(0, 400),
     claimType,
     epistemicState,
-    sourceExcerpt: excerpt,
-    sourceLocation: typeof c.sourceLocation === 'string' ? c.sourceLocation : null,
+    sourceExcerpt: excerpt ? excerpt.trim().slice(0, 600) : null,
+    sourceLocation: typeof c.sourceLocation === 'string' ? c.sourceLocation.slice(0, 40) : null,
     confidence: typeof c.confidence === 'number' && c.confidence >= 0 && c.confidence <= 1 ? c.confidence : 0.75,
     requiresConfirmation,
-    possibleCapabilities: Array.isArray(c.possibleCapabilities) ? c.possibleCapabilities.filter((s): s is string => typeof s === 'string').slice(0, 8) : [],
+    possibleCapabilities: Array.isArray(c.possibleCapabilities)
+      ? c.possibleCapabilities
+          .filter((s): s is string => typeof s === 'string' && s.trim().length >= 2 && s.trim().length <= 60)
+          .slice(0, 8)
+      : [],
   }
 }
 
@@ -109,19 +113,143 @@ const capabilityAssessmentSchema = z.object({
     .max(6),
 })
 
-export const assessCapabilitiesOutputSchema = z.object({
-  capabilities: z.array(capabilityAssessmentSchema).max(20),
-})
+const ASSESSMENT_VALUES = [
+  'STRONG_EVIDENCE',
+  'GOOD_EVIDENCE',
+  'SOME_EVIDENCE',
+  'LIMITED_EVIDENCE',
+  'NO_EVIDENCE_YET',
+  'CONTRADICTORY_EVIDENCE',
+] as const
+
+type CapabilityAssessment = {
+  name: string
+  slug: string
+  assessment: string
+  evidenceIds: string[]
+  reason: string
+  uncertainties: { description: string; materiality: string }[]
+}
+
+function normalizeSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60)
+}
+
+function normalizeAssessment(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const upper = raw.toUpperCase().replace(/\s+/g, '_')
+  if ((ASSESSMENT_VALUES as readonly string[]).includes(upper)) return upper
+  if (['STRONG', 'GOOD', 'SOME', 'LIMITED'].includes(upper)) return `${upper}_EVIDENCE`
+  if (upper === 'NO_EVIDENCE' || upper === 'NONE') return 'NO_EVIDENCE_YET'
+  if (upper === 'CONTRADICTORY') return 'CONTRADICTORY_EVIDENCE'
+  return ''
+}
+
+function prettifySlug(slug: string): string {
+  return slug
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim()
+}
+
+function normalizeCapability(raw: unknown): CapabilityAssessment | null {
+  if (!raw || typeof raw !== 'object') return null
+  const c = raw as Record<string, unknown>
+  const name =
+    typeof c.name === 'string' && c.name.trim().length >= 2
+      ? c.name.trim()
+      : typeof c.capability === 'string' && c.capability.trim().length >= 2
+        ? c.capability.trim()
+        : typeof c.title === 'string' && c.title.trim().length >= 2
+          ? c.title.trim()
+          : null
+  const slug = typeof c.slug === 'string' && c.slug.trim().length >= 2 ? normalizeSlug(c.slug) : null
+  if (!name && !slug) return null
+  const resolvedName = (name ?? prettifySlug(slug as string)).slice(0, 60)
+  const assessment = normalizeAssessment(c.assessment ?? c.level ?? c.evidenceLevel)
+  if (!assessment) return null
+  const rawEvidenceIds = c.evidenceIds ?? c.evidence ?? c.supportingEvidence ?? c.evidence_ids
+  const evidenceIds = Array.isArray(rawEvidenceIds)
+    ? rawEvidenceIds.filter((id): id is string => typeof id === 'string' && id.length > 0).slice(0, 80)
+    : []
+  const reason =
+    typeof c.reason === 'string' && c.reason.trim().length >= 3
+      ? c.reason
+      : typeof c.rationale === 'string'
+        ? c.rationale
+        : typeof c.explanation === 'string'
+          ? c.explanation
+          : ''
+  if (reason.trim().length < 3) return null
+  const rawUncertainties = Array.isArray(c.uncertainties) ? c.uncertainties : []
+  const uncertainties = rawUncertainties
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item.trim().length >= 3 ? { description: item.trim().slice(0, 400), materiality: 'MEDIUM' } : null
+      }
+      const u = (item ?? {}) as Record<string, unknown>
+      const description =
+        typeof u.description === 'string' && u.description.trim().length >= 3
+          ? u.description
+          : typeof u.uncertainty === 'string' && u.uncertainty.trim().length >= 3
+            ? u.uncertainty
+            : typeof u.statement === 'string' && u.statement.trim().length >= 3
+              ? u.statement
+              : typeof u.whyItMatters === 'string' && u.whyItMatters.trim().length >= 3
+                ? u.whyItMatters
+                : null
+      if (!description) return null
+      const materiality = ['HIGH', 'MEDIUM', 'LOW'].includes(u.materiality as string)
+        ? (u.materiality as string)
+        : 'MEDIUM'
+      return { description: description.trim().slice(0, 400), materiality }
+    })
+    .filter((item): item is { description: string; materiality: string } => item !== null)
+    .slice(0, 6)
+  return {
+    name: resolvedName,
+    slug: slug ?? normalizeSlug(resolvedName),
+    assessment,
+    evidenceIds,
+    reason: reason.trim().slice(0, 600),
+    uncertainties,
+  }
+}
+
+export const assessCapabilitiesOutputSchema = z.preprocess(
+  (raw) => {
+    const obj = (raw ?? {}) as { capabilities?: unknown }
+    const list = Array.isArray(obj.capabilities) ? obj.capabilities : []
+    return {
+      capabilities: list
+        .map((item) => normalizeCapability(item))
+        .filter((item): item is CapabilityAssessment => item !== null)
+        .slice(0, 20),
+    }
+  },
+  z.object({
+    capabilities: z.array(capabilityAssessmentSchema).max(20),
+  }),
+)
 
 export type AssessCapabilitiesOutput = z.infer<typeof assessCapabilitiesOutputSchema>
 
 export const reassessOutputSchema = z.preprocess(
   (raw) => {
     const obj = (raw ?? {}) as Record<string, unknown>
+    const assessments = Array.isArray(obj.assessments) ? obj.assessments : []
     const newUncertainties = Array.isArray(obj.newUncertainties) ? obj.newUncertainties : []
     type NewUncertainty = { capabilitySlug: string | null; description: string; materiality: string }
     return {
-      ...obj,
+      assessments: assessments
+        .map((item) => normalizeCapability(item))
+        .filter((item): item is CapabilityAssessment => item !== null)
+        .slice(0, 20),
+      uncertaintyUpdates: Array.isArray(obj.uncertaintyUpdates) ? obj.uncertaintyUpdates : [],
       newUncertainties: newUncertainties
         .map((item): NewUncertainty | null => {
           const u = (item ?? {}) as Record<string, unknown>

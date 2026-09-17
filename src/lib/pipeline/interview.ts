@@ -20,7 +20,7 @@ import {
   linkCapabilityEvidence,
   type InterviewTurnRow,
 } from '../db/repo'
-import { getDb } from '../db/db'
+import { runInTransaction } from '../db/db'
 import {
   runExtractAnswerClaimsTask,
   runPlanNextQuestionTask,
@@ -42,6 +42,16 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
   const interview = getOrCreateInterview(candidateId)
   const turns = listTurns(interview.id)
   const answered = turns.filter((turn) => turn.answer !== null)
+
+  const pendingTurn = [...turns].reverse().find((turn) => turn.answer === null && turn.question !== null)
+  if (pendingTurn) {
+    return {
+      action: 'ASK',
+      turnId: pendingTurn.id,
+      question: pendingTurn.question ?? undefined,
+      reason: pendingTurn.question_reason ?? undefined,
+    }
+  }
 
   if (answered.length >= MAX_QUESTIONS) {
     completeInterview(interview.id)
@@ -139,17 +149,10 @@ export async function incorporateAnswer(
   if (!turn) throw new Error('Interview turn not found.')
   if (turn.answer !== null) throw new Error('This question has already been answered.')
 
-  const db = getDb()
-  db.exec('BEGIN')
-  try {
+  return runInTransaction(async () => {
     answerTurn(turnId, answerText)
-    const result = await incorporateAnswerInner(candidateId, turn, answerText)
-    db.exec('COMMIT')
-    return result
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+    return incorporateAnswerInner(candidateId, turn, answerText)
+  })
 }
 
 async function incorporateAnswerInner(

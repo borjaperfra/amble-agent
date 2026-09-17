@@ -1,5 +1,5 @@
 ﻿import { randomUUID } from 'node:crypto'
-import { getDb } from './db'
+import { getDb, queueWrite } from './db'
 
 export const DEFAULT_CANDIDATE_ID = 'user-zero'
 
@@ -465,26 +465,28 @@ export function answerTurn(id: string, answer: string): void {
 }
 
 export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
-  getDb()
-    .prepare(
-      `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      row.id,
-      row.candidate_id,
-      row.task,
-      row.task_version,
-      row.provider,
-      row.model_id,
-      row.base_url,
-      row.prompt_chars,
-      row.output_chars,
-      row.latency_ms,
-      row.ok,
-      row.error,
-      row.raw_output,
-      now(),
-    )
+  queueWrite(() =>
+    getDb()
+      .prepare(
+        `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        row.id,
+        row.candidate_id,
+        row.task,
+        row.task_version,
+        row.provider,
+        row.model_id,
+        row.base_url,
+        row.prompt_chars,
+        row.output_chars,
+        row.latency_ms,
+        row.ok,
+        row.error,
+        row.raw_output,
+        now(),
+      ),
+  )
 }
 
 export function listModelRuns(candidateId: string, limit = 100): ModelRunRow[] {
