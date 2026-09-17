@@ -1,0 +1,30 @@
+.trigger {
+  font: inherit;
+  font-size: var(--text-body-lg);
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  padding: 2px 2px;
+  cursor: text;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.trigger:hover {
+  border-bottom-color: var(--moss);
+  background: var(--paper-light);
+}
+
+.input {
+  font: inherit;
+  font-size: var(--text-body-lg);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  width: 100%;
+  max-width: 320px;
+}

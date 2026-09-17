@@ -1,0 +1,128 @@
+.page {
+  max-width: var(--conversation-max);
+  margin: 0 auto;
+  padding: 24px var(--page-pad) 64px;
+  min-height: calc(100svh - 72px);
+  display: flex;
+  flex-direction: column;
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 32px;
+  padding: 48px 0;
+}
+
+.arriving {
+  animation: enter 600ms var(--ease-standard) both;
+}
+
+.arrivingLine {
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.statusLine {
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  max-width: 24ch;
+}
+
+.statusLineReturn {
+  max-width: 20ch;
+}
+
+.listeningFor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.listeningForValues {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.listeningForValue {
+  font-size: var(--text-body-lg);
+  color: var(--ink);
+}
+
+.changeIntent {
+  margin-top: 8px;
+}
+
+.repSummary {
+  border-top: 1px solid var(--border-soft);
+  padding: 40px 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.repLabel {
+  font-family: var(--font-display);
+  font-size: var(--heading-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.repCount {
+  font-size: var(--text-body);
+  color: var(--ink-secondary);
+}
+
+.repLink {
+  margin-top: 16px;
+  margin-left: -4px;
+}
+
+.fixtureToggle {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 8px;
+}
+
+.fixtureToggleBtn {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  opacity: 0.6;
+}
+
+.fixtureToggleBtn:hover {
+  opacity: 1;
+  color: var(--ink-tertiary);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arriving {
+    animation: none;
+  }
+}

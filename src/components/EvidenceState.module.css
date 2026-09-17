@@ -1,0 +1,40 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-tertiary);
+  background: transparent;
+}
+
+.dotFilled {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.dotContradictory {
+  border-color: var(--clay);
+}
+
+.dotContradictoryFilled {
+  background: var(--clay);
+  border-color: var(--clay);
+}
+
+.label {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}

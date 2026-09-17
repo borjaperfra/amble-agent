@@ -1,0 +1,101 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+}
+
+.toggle {
+  font-size: var(--text-label);
+  color: var(--ink-tertiary);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--motion-fast) ease;
+}
+
+.toggle:hover {
+  opacity: 1;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--paper-light);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.option {
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  color: var(--ink-secondary);
+}
+
+.optionActive {
+  border-color: var(--moss);
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+}
+
+.comment {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  background: var(--paper);
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel {
+  font-size: var(--text-label);
+  background: none;
+  border: none;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+}
+
+.send {
+  font-size: var(--text-label);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper-light);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sent {
+  font-size: var(--text-label);
+  color: var(--ink-tertiary);
+}

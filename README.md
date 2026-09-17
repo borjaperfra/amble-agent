@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Amble
 
-## Getting Started
+Your professional Rep. You don't look for your next job — your Rep listens for you.
 
-First, run the development server:
+This repository contains the candidate-side vertical slice (Next.js 16, App Router, TypeScript) plus the **User Zero** pipeline: real source ingestion → claim extraction → evidence with provenance → capability assessment → uncertainty model → adaptive interview → Professional Map.
+
+Two specs are the source of truth: [`PRODUCT_SPEC.md`](./PRODUCT_SPEC.md) and [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md).
+
+## Setup
 
 ```bash
+npm install
+copy .env.example .env.local   # (Windows) or: cp .env.example .env.local
+# fill in the model variables, then:
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Purpose |
+| --- | --- |
+| `AMBLE_USER_ZERO` | `"true"` enables the real pipeline and completely disables all demo fixtures. |
+| `AMBLE_MODEL_PROVIDER` | Provider kind. `openai-compatible` (default). |
+| `AMBLE_MODEL_BASE_URL` | OpenAI-compatible endpoint base (e.g. `https://api.deepseek.com`). |
+| `AMBLE_MODEL_ID` | Exact model identifier. No default — set it explicitly. |
+| `AMBLE_MODEL_API_KEY` | Server-side only. Never exposed to the browser. |
 
-## Learn More
+Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly with a 503 — it never falls back to demo data.
 
-To learn more about Next.js, take a look at the following resources:
+## Modes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **User Zero** (`AMBLE_USER_ZERO=true`): no seeded profile, no seeded questions, no hidden fixtures. Sources are read for real; every claim carries provenance; the interview is planned from open uncertainties.
+- **Fixture mode** (flag off): the original demo journey with the Borja fixture profile, for design iteration and demos.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Developer trace
 
-## Deploy on Vercel
+With the flag active and `next dev` running: **http://localhost:3000/dev/user-zero** shows the full graph trace — sources, claims, evidence, capabilities, uncertainties, interview turns, model runs and evaluations.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Local data lives in `.amble-data/` (SQLite + uploaded sources). Delete the folder to reset the experiment.
