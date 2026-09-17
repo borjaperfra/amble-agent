@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
-import { getOrCreateCandidate } from '@/lib/db/repo'
+import { getOrCreateCandidate, listSources } from '@/lib/db/repo'
 import {
   createFileSource,
+  createGitHubSource,
   createLinkedInSource,
   createWebsiteSource,
   type SourceCreated,
@@ -15,6 +16,20 @@ function guard(): NextResponse | null {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
   return null
+}
+
+export async function GET() {
+  const blocked = guard()
+  if (blocked) return blocked
+  const candidate = getOrCreateCandidate()
+  const sources = listSources(candidate.id).map((source) => ({
+    id: source.id,
+    name: source.name,
+    type: source.type,
+    status: source.status,
+    detail: source.status_detail,
+  }))
+  return NextResponse.json(sources)
 }
 
 export async function POST(request: Request) {
@@ -41,6 +56,8 @@ export async function POST(request: Request) {
       }
       if (body.kind === 'linkedin') {
         result = createLinkedInSource(candidate.id, url)
+      } else if (body.kind === 'github') {
+        result = createGitHubSource(candidate.id, url)
       } else if (body.kind === 'website') {
         result = await createWebsiteSource(candidate.id, url)
       } else {

@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
+import StatusDot from '@/components/StatusDot'
 import styles from '@/app/onboarding/processing/processing.module.css'
 
 interface LogEntry {
@@ -11,6 +12,12 @@ interface LogEntry {
   text?: string
   title?: string
   meta?: string
+}
+
+interface SourceItem {
+  id: string
+  name: string
+  status: string
 }
 
 interface StageResponse {
@@ -25,20 +32,21 @@ interface StageResponse {
 
 export default function UserZeroProcessingFlow() {
   const [entries, setEntries] = useState<LogEntry[]>([])
+  const [working, setWorking] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const [running, setRunning] = useState(false)
+  const startedRef = useRef(false)
 
   function push(entry: Omit<LogEntry, 'key'>) {
     setEntries((prev) => [...prev, { ...entry, key: `${entry.kind}-${Math.random().toString(36).slice(2)}` }])
   }
 
-  async function callStage(stage: string): Promise<StageResponse | null> {
+  async function callStage(stage: string, sourceId?: string): Promise<StageResponse | null> {
     try {
       const response = await fetch('/api/onboarding/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage }),
+        body: JSON.stringify(sourceId ? { stage, sourceId } : { stage }),
       })
       const data = (await response.json()) as StageResponse
       if (!response.ok) {
@@ -57,71 +65,83 @@ export default function UserZeroProcessingFlow() {
   }
 
   async function run() {
-    setRunning(true)
     setFailure(null)
-    setEntries([])
     setDone(false)
 
-    const sourcesResult = await callStage('sources')
-    if (!sourcesResult) {
-      setRunning(false)
+    const listResponse = await fetch('/api/onboarding/sources')
+    const sources = (await listResponse.json()) as SourceItem[]
+    const pending = sources.filter((source) => source.status === 'extracted')
+    if (pending.length === 0) {
+      setFailure('There are no unread sources to process. Go back and add one.')
       return
     }
 
-    const processed = sourcesResult.processed ?? []
-    if (processed.length > 0 && (sourcesResult.totalClaims ?? 0) === 0) {
-      setFailure(
-        `I read ${processed.map((source) => source.name).join(', ')} but couldn't extract a single professional statement. That is probably my failure, not yours — the document may be unusual. Try again, or use a plain text export.`,
-      )
-      setRunning(false)
-      return
-    }
+    let keptStatements = 0
 
-    for (const source of processed) {
+    for (const source of pending) {
       push({ kind: 'activity', text: `Reading ${source.name}...` })
-      await pause(500)
-      for (const discovery of source.discoveries) {
-        push({ kind: 'discovery', title: discovery.title, meta: discovery.meta })
-        await pause(420)
+      setWorking(`Reading ${source.name}...`)
+      const result = await callStage('sources', source.id)
+      if (!result) {
+        setWorking(null)
+        return
       }
-      push({
-        kind: 'summary',
-        text:
-          processed.length > 1
-            ? `I kept ${source.claimsCount} statements from ${source.name}.`
-            : `I kept ${source.claimsCount} statements from what you gave me.`,
-      })
-      await pause(500)
+      for (const processed of result.processed ?? []) {
+        for (const discovery of processed.discoveries) {
+          push({ kind: 'discovery', title: discovery.title, meta: discovery.meta })
+          await pause(300)
+        }
+        keptStatements += processed.claimsCount
+        push({ kind: 'summary', text: `I kept ${processed.claimsCount} statements from ${processed.name}.` })
+        await pause(400)
+      }
+    }
+
+    if (keptStatements === 0) {
+      setWorking(null)
+      setFailure(
+        'I read your sources but could not extract a single professional statement. That is probably my failure, not yours. Try again, or use a plain text export.',
+      )
+      return
     }
 
     push({ kind: 'activity', text: 'Looking at what it all means...' })
+    setWorking('Looking at what it all means...')
     const evidenceResult = await callStage('evidence')
     if (!evidenceResult) {
-      setRunning(false)
+      setWorking(null)
       return
     }
     push({ kind: 'count', text: `Grounded ${evidenceResult.evidenceCreated ?? 0} pieces of evidence.` })
-    await pause(600)
+    await pause(500)
 
     push({ kind: 'activity', text: 'Connecting the dots...' })
+    setWorking('Connecting the dots...')
     const capabilitiesResult = await callStage('capabilities')
     if (!capabilitiesResult) {
-      setRunning(false)
+      setWorking(null)
       return
     }
     push({ kind: 'count', text: `Found ${capabilitiesResult.capabilitiesCount ?? 0} capabilities.` })
-    await pause(600)
+    await pause(500)
 
-    push({ kind: 'activity', text: 'Noting what I still don\'t know...' })
+    setWorking("Noting what I still don't know...")
     const profileResult = await callStage('profile')
     if (!profileResult) {
-      setRunning(false)
+      setWorking(null)
       return
     }
 
+    setWorking(null)
     setDone(true)
-    setRunning(false)
   }
+
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+    void run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>
@@ -150,6 +170,13 @@ export default function UserZeroProcessingFlow() {
               </p>
             ),
           )}
+
+          {working && (
+            <div className={styles.workingRow} role="status">
+              <StatusDot />
+              <span>{working}</span>
+            </div>
+          )}
         </div>
 
         {failure && (
@@ -158,7 +185,7 @@ export default function UserZeroProcessingFlow() {
             <p className={styles.doneDetail}>{failure}</p>
             <p className={styles.doneDetail}>Nothing has been invented to fill the gap.</p>
             <div className={styles.doneCta}>
-              <button type="button" className="btn" onClick={run} disabled={running}>
+              <button type="button" className="btn" onClick={() => void run()}>
                 Try again →
               </button>
             </div>
@@ -176,14 +203,6 @@ export default function UserZeroProcessingFlow() {
                 Continue →
               </Link>
             </div>
-          </div>
-        )}
-
-        {!done && !failure && !running && (
-          <div className={styles.doneCta}>
-            <button type="button" className="btn" onClick={run}>
-              Start reading →
-            </button>
           </div>
         )}
       </main>

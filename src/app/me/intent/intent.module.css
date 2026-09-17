@@ -137,6 +137,14 @@
   gap: 12px;
 }
 
+.workingArea {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-secondary);
+  font-size: var(--text-body);
+}
+
 .answerTextarea {
   width: 100%;
   font: inherit;

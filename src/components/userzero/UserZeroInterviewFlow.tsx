@@ -164,6 +164,10 @@ export default function UserZeroInterviewFlow() {
         {phase === 'gotit' && (
           <div className={styles.stage} role="status">
             <p className={styles.gotit}>Got it.</p>
+            <div className={styles.workingArea}>
+              <StatusDot />
+              <span>Thinking about what to ask next.</span>
+            </div>
           </div>
         )}
 
@@ -180,11 +184,20 @@ export default function UserZeroInterviewFlow() {
             </div>
             <h1 className={styles.question}>{question}</h1>
 
-            <div className={styles.recorderArea}>
-              <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
-            </div>
+            {phase === 'answering' ? (
+              <div className={styles.workingArea} role="status">
+                <StatusDot />
+                <span>Updating what I understand about you...</span>
+              </div>
+            ) : (
+              <>
+                <div className={styles.recorderArea}>
+                  <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
+                </div>
 
-            <p className={styles.voiceNotice}>{VOICE_NOTICE}</p>
+                <p className={styles.voiceNotice}>{VOICE_NOTICE}</p>
+              </>
+            )}
 
             <div className={styles.typingArea}>
               <label className={styles.typeLabel} htmlFor="interview-answer">

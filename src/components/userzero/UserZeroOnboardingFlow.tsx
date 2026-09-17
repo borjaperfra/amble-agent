@@ -18,6 +18,7 @@ export default function UserZeroOnboardingFlow() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sources, setSources] = useState<SourceItem[]>([])
   const [linkedinUrl, setLinkedinUrl] = useState('')
+  const [githubHandle, setGithubHandle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,7 +45,7 @@ export default function UserZeroOnboardingFlow() {
     }
   }
 
-  async function addUrl(kind: 'linkedin' | 'website', url: string, reset: () => void) {
+  async function addUrl(kind: 'linkedin' | 'github' | 'website', url: string, reset: () => void) {
     if (!url.trim()) return
     setBusy(true)
     setError(null)
@@ -128,6 +129,32 @@ export default function UserZeroOnboardingFlow() {
               </span>
             </div>
           ))}
+
+          <div className={`${styles.row} ${styles.enter}`}>
+            <span className={styles.rowLabel}>GitHub</span>
+            <span className={styles.rowRight}>
+              <input
+                type="text"
+                className={styles.urlInput}
+                placeholder="username"
+                aria-label="GitHub username or profile URL"
+                value={githubHandle}
+                onChange={(event) => setGithubHandle(event.target.value)}
+              />
+              <button
+                type="button"
+                className="text-btn"
+                disabled={busy || !githubHandle.trim()}
+                onClick={() => {
+                  const raw = githubHandle.trim()
+                  const url = raw.startsWith('http') ? raw : `https://github.com/${raw}`
+                  addUrl('github', url, () => setGithubHandle(''))
+                }}
+              >
+                Add →
+              </button>
+            </span>
+          </div>
 
           <div className={`${styles.row} ${styles.enter}`}>
             <span className={styles.rowLabel}>LinkedIn</span>

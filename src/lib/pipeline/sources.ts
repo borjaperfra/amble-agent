@@ -227,6 +227,35 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
   return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
 }
 
+export function createGitHubSource(candidateId: string, url: string): SourceCreated {
+  const id = newId('src')
+  const handle = url
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+    .replace(/\/.*$/, '')
+    .trim()
+  const name = handle || url
+  const source = insertSource({
+    id,
+    candidate_id: candidateId,
+    type: 'github',
+    name,
+    uri: `https://github.com/${name}`,
+    original_filename: null,
+    mime_type: null,
+    stored_path: null,
+    char_count: 0,
+    status: 'registered',
+    status_detail: "GitHub reading isn't supported in this build yet. The profile is stored, not read.",
+  })
+  return {
+    id: source.id,
+    name: source.name,
+    type: source.type,
+    status: source.status,
+    detail: "GitHub reading isn't supported in this build yet. The profile is stored, not read.",
+  }
+}
+
 export function createLinkedInSource(candidateId: string, url: string): SourceCreated {
   const id = newId('src')
   const source = insertSource({

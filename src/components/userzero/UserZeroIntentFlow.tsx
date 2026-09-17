@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Header from '@/components/Header'
 import InlineEdit from '@/components/InlineEdit'
+import StatusDot from '@/components/StatusDot'
 import VoiceRecorder from '@/components/VoiceRecorder'
 import styles from '@/app/me/intent/intent.module.css'
 
@@ -101,9 +102,18 @@ export default function UserZeroIntentFlow() {
             <p className={styles.lead}>{PROMPT_LEAD}</p>
             <h1 className={styles.question}>{PROMPT_QUESTION}</h1>
 
-            <div className={styles.recorderArea}>
-              <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
-            </div>
+            {phase === 'sending' && (
+              <div className={styles.workingArea} role="status">
+                <StatusDot />
+                <span>Reading what matters to you...</span>
+              </div>
+            )}
+
+            {phase !== 'sending' && (
+              <div className={styles.recorderArea}>
+                <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
+              </div>
+            )}
 
             <p className={styles.hint} role="status">
               Voice is simulated in this build — it doesn&apos;t transcribe. Use the text box

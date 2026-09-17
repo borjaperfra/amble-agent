@@ -20,12 +20,13 @@ export async function POST(request: Request) {
   if (blocked) return blocked
 
   const candidate = getOrCreateCandidate()
-  const body = (await request.json().catch(() => ({}))) as { stage?: string }
+  const body = (await request.json().catch(() => ({}))) as { stage?: string; sourceId?: string }
   const stage = body.stage
 
   try {
     if (stage === 'sources') {
-      const sources = listUnprocessedSources(candidate.id)
+      const all = listUnprocessedSources(candidate.id)
+      const sources = body.sourceId ? all.filter((source) => source.id === body.sourceId) : all
       const processed: { name: string; claimsCount: number; discoveries: { title: string; meta: string }[] }[] = []
       for (const source of sources) {
         const result = await processSource(source, candidate.id)
