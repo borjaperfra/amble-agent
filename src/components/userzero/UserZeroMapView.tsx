@@ -14,10 +14,44 @@ interface MapViewProps {
   vm: MapViewModel
 }
 
+/**
+ * What the map rests on, in one line, in plain numbers.
+ *
+ * Deliberately not a percentage: a score invites arguing with the number
+ * instead of answering the question underneath it, and there is no honest
+ * denominator for "a professional life".
+ */
+function restsOn(vm: MapViewModel): string | null {
+  const { completeness, counts } = vm
+  if (counts.capabilities === 0) return null
+
+  const parts: string[] = []
+  parts.push(
+    `Built from ${counts.sources} source${counts.sources === 1 ? '' : 's'} and ${counts.evidence} pieces of evidence`,
+  )
+  // Say exactly what the number counts: this is the assessment of how much
+  // the evidence proves, not a tally of mentions.
+  parts.push(
+    completeness.solid > 0
+      ? `${completeness.solid} of ${counts.capabilities} capabilities are held up by good or strong evidence`
+      : `none of the ${counts.capabilities} capabilities are held up by good evidence yet`,
+  )
+  if (completeness.answeredQuestions > 0) {
+    parts.push(
+      `${completeness.answeredQuestions} question${completeness.answeredQuestions === 1 ? '' : 's'} answered in your own words`,
+    )
+  }
+  if (completeness.openQuestions > 0) {
+    parts.push(`${completeness.openQuestions} still open`)
+  }
+  return `${parts.join('. ')}.`
+}
+
 export default function UserZeroMapView({ vm }: MapViewProps) {
   const [openCapability, setOpenCapability] = useState<Capability | null>(null)
 
   const hasContent = vm.capabilities.length > 0
+  const rests = restsOn(vm)
 
   return (
     <>
@@ -34,6 +68,7 @@ export default function UserZeroMapView({ vm }: MapViewProps) {
             {vm.descriptor ?? 'Your Rep is still forming a picture of your work.'}
           </p>
           <p className={styles.updated}>{vm.updated}</p>
+          {rests && <p className={styles.rests}>{rests}</p>}
         </section>
 
         <section className={styles.section} aria-labelledby="demonstrates">
@@ -125,6 +160,38 @@ export default function UserZeroMapView({ vm }: MapViewProps) {
                 </article>
               ))}
             </div>
+            {vm.gapsHidden > 0 && (
+              <p className={styles.gapsMore}>
+                {vm.gapsHidden} more like these. I&apos;ll raise them as we talk rather than list
+                them at you.
+              </p>
+            )}
+          </section>
+        )}
+
+        {hasContent && (
+          <section className={styles.section} aria-labelledby="stands">
+            <p id="stands" className={`kicker ${styles.sectionKicker}`}>
+              What would sharpen this
+            </p>
+            {vm.completeness.steps.length > 0 ? (
+              <div className={styles.steps}>
+                {vm.completeness.steps.map((step) => (
+                  <article key={step.id} className={styles.step}>
+                    <h3 className={styles.stepLabel}>{step.label}</h3>
+                    <p className={styles.stepDetail}>{step.detail}</p>
+                    <Link href={step.href} className={`text-btn ${styles.stepAction}`}>
+                      {step.id === 'sources' ? 'Add a source →' : 'Pick this up →'}
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.stepsNone}>
+                Nothing obvious. Everything I could ask about, I&apos;ve asked; everything you gave
+                me, I&apos;ve read. This is as sharp as it gets without new work to read.
+              </p>
+            )}
           </section>
         )}
 

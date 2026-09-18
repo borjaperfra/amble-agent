@@ -15,6 +15,7 @@ import {
   parseJsonArray,
   type EvidenceRow,
 } from './db/repo'
+import { preferencesAsLines, readPreferences } from './pipeline/preferences'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 
 const ASSESSMENT_TO_STRENGTH: Record<string, EvidenceStrength> = {
@@ -69,6 +70,25 @@ export interface GapViewItem {
   materiality: string
 }
 
+export interface NextStep {
+  id: string
+  label: string
+  detail: string
+  href: string
+}
+
+export interface MapCompleteness {
+  /** Capabilities several consistent pieces of evidence hold up. */
+  solid: number
+  /** Capabilities resting on a single mention. */
+  thin: number
+  openQuestions: number
+  answeredQuestions: number
+  sourcesRead: number
+  missingSources: string[]
+  steps: NextStep[]
+}
+
 export interface MapViewModel {
   userZero: boolean
   name: string | null
@@ -77,6 +97,9 @@ export interface MapViewModel {
   capabilities: CapabilityViewItem[]
   gaps: GapViewItem[]
   distinctive: string[] | null
+  /** Open questions beyond the handful shown. */
+  gapsHidden: number
+  completeness: MapCompleteness
   counts: {
     claims: number
     evidence: number
@@ -137,8 +160,18 @@ export function getMapViewModel(): MapViewModel {
     }
   })
 
-  const gaps: GapViewItem[] = uncertainties
+  // Sixteen gaps listed one under the other reads as a list of failures
+  // rather than a map. The material ones are shown; the rest are counted and
+  // the Rep raises them in conversation, which is where they belong anyway.
+  const MATERIALITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+  const openGaps = uncertainties
     .filter((uncertainty) => uncertainty.status === 'OPEN' && uncertainty.materiality !== 'LOW')
+    .sort(
+      (a, b) => (MATERIALITY_ORDER[a.materiality] ?? 3) - (MATERIALITY_ORDER[b.materiality] ?? 3),
+    )
+  const GAPS_SHOWN = 5
+  const gaps: GapViewItem[] = openGaps
+    .slice(0, GAPS_SHOWN)
     .map((uncertainty) => ({
       id: uncertainty.id,
       name: uncertainty.capability_id
@@ -148,6 +181,52 @@ export function getMapViewModel(): MapViewModel {
       explanation: uncertainty.description,
       materiality: uncertainty.materiality,
     }))
+
+  const solid = capabilityItems.filter(
+    (capability) => capability.strength === 'strong' || capability.strength === 'good',
+  ).length
+  const thin = capabilityItems.filter((capability) => capability.count <= 1).length
+
+  const openQuestions = uncertainties.filter(
+    (uncertainty) => uncertainty.status === 'OPEN' && uncertainty.resolvable_by_interview === 1,
+  ).length
+  const interview = getOrCreateInterview(candidate.id)
+  const answeredQuestions = listTurns(interview.id).filter((turn) => turn.answer !== null).length
+
+  const sources = listSources(candidate.id)
+  const readSources = sources.filter((source) => source.status === 'processed')
+  const missingSources = (['github', 'linkedin', 'website'] as const)
+    .filter((kind) => !sources.some((source) => source.type === kind && source.status !== 'failed'))
+    .map((kind) => (kind === 'github' ? 'GitHub' : kind === 'linkedin' ? 'LinkedIn' : 'a website'))
+
+  // Ranked by what it would actually change, and never more than three: a
+  // list of everything that could be better is a list nobody acts on.
+  const steps: NextStep[] = []
+  if (openQuestions > 0) {
+    steps.push({
+      id: 'interview',
+      label: answeredQuestions > 0 ? 'Keep talking to your Rep' : 'Talk to your Rep',
+      detail: `${openQuestions} ${openQuestions === 1 ? 'thing' : 'things'} I can't settle from your sources alone.`,
+      href: '/onboarding/interview',
+    })
+  }
+  if (missingSources.length > 0 && readSources.length < 3) {
+    steps.push({
+      id: 'sources',
+      label: `Add ${missingSources.slice(0, 2).join(' or ')}`,
+      detail:
+        'One source is one point of view. A second either corroborates it or contradicts it, and both are worth knowing.',
+      href: '/onboarding',
+    })
+  }
+  if (thin > 0) {
+    steps.push({
+      id: 'thin',
+      label: 'Fill in what rests on a single line',
+      detail: `${thin} ${thin === 1 ? 'capability is' : 'capabilities are'} held up by one mention each. That is not nothing, but it is not much.`,
+      href: '/onboarding/interview',
+    })
+  }
 
   const distinctiveNames =
     distinctiveIds && distinctiveIds.length >= 2
@@ -164,6 +243,16 @@ export function getMapViewModel(): MapViewModel {
     capabilities: capabilityItems,
     gaps,
     distinctive: distinctiveNames,
+    gapsHidden: Math.max(0, openGaps.length - GAPS_SHOWN),
+    completeness: {
+      solid,
+      thin,
+      openQuestions,
+      answeredQuestions,
+      sourcesRead: readSources.length,
+      missingSources,
+      steps: steps.slice(0, 3),
+    },
     counts: {
       claims: listClaims(candidate.id).length,
       evidence: evidence.length,
@@ -181,15 +270,25 @@ export function getListeningViewModel(): {
   listeningFor: string[]
   hasIntent: boolean
   intentConfirmed: boolean
+  /** The checkable half: what an offer can be measured against. */
+  criteria: string[]
+  notifyChannel: string | null
+  notifyEmail: string | null
+  notifyWhatsapp: string | null
 } {
   const candidate = getOrCreateCandidate()
   const intent = getLatestIntent(candidate.id)
+  const preferences = readPreferences(candidate.id)
   return {
     evidenceCount: listEvidence(candidate.id).length,
     capabilitiesCount: listCapabilities(candidate.id).length,
     listeningFor: intent ? parseJsonArray(intent.listening_for) : [],
     hasIntent: Boolean(intent),
     intentConfirmed: Boolean(intent?.confirmed_at),
+    criteria: preferencesAsLines(preferences),
+    notifyChannel: preferences.notifyChannel,
+    notifyEmail: preferences.notifyEmail,
+    notifyWhatsapp: preferences.notifyWhatsapp,
   }
 }
 

@@ -197,3 +197,64 @@
     margin-top: 80px;
   }
 }
+
+/* ── Where this stands ─────────────────────────────────────────────────
+   What the map rests on, and the two or three things that would change
+   it. Not a score: a score invites arguing with the number instead of
+   answering the question underneath it. */
+
+.rests {
+  margin-top: 14px;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 54ch;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.step {
+  padding: 28px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.step:last-child {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.stepLabel {
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.stepDetail {
+  margin-top: 8px;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 52ch;
+}
+
+.stepAction {
+  margin-top: 12px;
+  margin-left: -4px;
+}
+
+.stepsNone {
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 52ch;
+}
+
+.gapsMore {
+  margin-top: 24px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  max-width: 52ch;
+}

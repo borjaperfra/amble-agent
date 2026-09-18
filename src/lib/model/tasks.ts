@@ -149,6 +149,22 @@ function normalizeAssessment(raw: unknown): string {
   return ''
 }
 
+/**
+ * Internal ids the model likes to cite back at us. They are real and they
+ * are useful in a trace, but a candidate reading "Talent Engine was
+ * discontinued (ev_5ae44c8f6ee94bbb)" is being shown our filing system.
+ */
+const INTERNAL_ID = /\s*\(?(?:ev|clm|unc|src|turn|cap|run|job|intn)_[0-9a-f]{6,}\)?/g
+
+export function stripInternalIds(text: string): string {
+  return text
+    .replace(INTERNAL_ID, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+([.,;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 /** Keys that hold an identifier or an enum, never a sentence. */
 const NOT_PROSE = /^(id|ids|slug|kind|type|level|materiality|assessment|status|confidence)$|Ids?$/i
 
@@ -242,7 +258,7 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
       const materiality = ['HIGH', 'MEDIUM', 'LOW'].includes(u.materiality as string)
         ? (u.materiality as string)
         : 'MEDIUM'
-      return { description: description.trim().slice(0, 400), materiality }
+      return { description: stripInternalIds(description).slice(0, 400), materiality }
     })
     .filter((item): item is { description: string; materiality: string } => item !== null)
     .slice(0, 6)
@@ -251,7 +267,7 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
     slug: slug ?? normalizeSlug(resolvedName),
     assessment,
     evidenceIds,
-    reason: reason.trim().slice(0, 600),
+    reason: stripInternalIds(reason).slice(0, 600),
     uncertainties,
   }
 }

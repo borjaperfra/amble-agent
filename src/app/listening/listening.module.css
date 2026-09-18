@@ -8,7 +8,10 @@
 }
 
 .center {
-  flex: 1;
+  /* Only fills the screen when it IS the screen. With the deal and the
+     contact fields below it, growing to the full height opened a hole
+     between them. */
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -16,6 +19,10 @@
   text-align: center;
   gap: 32px;
   padding: 48px 0;
+}
+
+.centerFull {
+  flex: 1;
 }
 
 .arriving {
@@ -125,4 +132,118 @@
   .arriving {
     animation: none;
   }
+}
+
+/* ── What happens from here ────────────────────────────────────────────
+   The screen someone lands on after handing over their working life. It
+   owes them a plain account of what happens next, and a way to say where
+   to reach them. */
+
+.deal {
+  margin: 56px auto 0;
+  max-width: 58ch;
+  width: 100%;
+}
+
+.dealLead {
+  font-size: var(--text-body);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.dealList {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.dealItem {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+
+.criteria {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.criterion {
+  font-size: var(--text-body-sm);
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+  border: 1px solid var(--moss-soft);
+  border-radius: 999px;
+  padding: 6px 13px;
+}
+
+.reach {
+  margin: 48px auto 0;
+  max-width: 58ch;
+  width: 100%;
+}
+
+.reachChips {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reachChip {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-default) ease,
+    background var(--motion-default) ease,
+    color var(--motion-default) ease;
+}
+
+.reachChip:hover {
+  border-color: var(--moss-soft);
+}
+
+.reachChipOn {
+  border-color: var(--moss);
+  background: var(--moss-wash);
+  color: var(--moss-dark);
+  font-weight: 500;
+}
+
+.reachFields {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reachInput {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  width: min(320px, 100%);
+}
+
+.reachStatus {
+  margin-top: 12px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  min-height: 1.4em;
 }
