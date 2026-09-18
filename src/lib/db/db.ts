@@ -162,6 +162,24 @@ function createDb(): DatabaseSync {
       created_at TEXT NOT NULL
     );
 
+    -- Background work, on disk rather than in memory: a phone on a train
+    -- loses the connection for minutes at a time, and work that only exists
+    -- inside a running process dies with the request that started it.
+    CREATE TABLE IF NOT EXISTS jobs (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      kind TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      run_after TEXT NOT NULL,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS jobs_ready ON jobs (status, run_after);
+
     CREATE TABLE IF NOT EXISTS intent_profiles (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

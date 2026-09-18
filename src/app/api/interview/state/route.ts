@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { interviewProgress } from '@/lib/pipeline/interview'
-import { queueStatus } from '@/lib/pipeline/jobs'
+import { queueStatus, resumeQueue } from '@/lib/pipeline/jobs'
 
 export const runtime = 'nodejs'
 
@@ -15,6 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
   const candidate = getOrCreateCandidate()
+  resumeQueue()
   return NextResponse.json({
     progress: interviewProgress(candidate.id),
     queue: queueStatus(candidate.id),

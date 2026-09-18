@@ -55,10 +55,7 @@ export async function POST(request: Request) {
 
       // The profile summary and the first interview question don't block the
       // candidate any more: both run while they read what was just found.
-      enqueue('build_profile', candidate.id, async () => {
-        await buildDistinctiveProfile(candidate.id)
-        await buildDescriptor(candidate.id)
-      })
+      enqueue('build_profile', candidate.id)
       prefetchQuestion(candidate.id)
 
       return NextResponse.json({

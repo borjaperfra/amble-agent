@@ -561,4 +561,122 @@ export function confirmIntent(id: string): void {
     .run(now(), validUntil, id)
 }
 
+// ─── Background jobs ──────────────────────────────────────────────────────
+
+export type JobStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export interface JobRow {
+  id: string
+  candidate_id: string
+  kind: string
+  payload: string
+  status: JobStatus
+  attempts: number
+  run_after: string
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function insertJob(row: {
+  id: string
+  candidate_id: string
+  kind: string
+  payload: string
+}): JobRow {
+  const db = getDb()
+  const stamp = now()
+  db.prepare(
+    `INSERT INTO jobs (id, candidate_id, kind, payload, status, attempts, run_after, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', 0, ?, ?, ?)`,
+  ).run(row.id, row.candidate_id, row.kind, row.payload, stamp, stamp, stamp)
+  return db.prepare('SELECT * FROM jobs WHERE id = ?').get(row.id) as unknown as JobRow
+}
+
+/**
+ * The oldest job that is due, marked as running in the same breath.
+ *
+ * Planning the next question jumps the line. It is only ever queued when the
+ * candidate has nothing to look at, and it takes 8s where working an answer
+ * into the graph takes 40: letting it wait its turn is 40s of somebody
+ * staring at a spinner, and the graph catches up a minute later either way.
+ */
+export function claimNextJob(): JobRow | undefined {
+  const db = getDb()
+  const row = db
+    .prepare(
+      `SELECT * FROM jobs WHERE status = 'pending' AND run_after <= ?
+       ORDER BY CASE kind WHEN 'plan_question' THEN 0 ELSE 1 END, created_at
+       LIMIT 1`,
+    )
+    .get(now()) as unknown as JobRow | undefined
+  if (!row) return undefined
+  db.prepare(
+    `UPDATE jobs SET status = 'running', attempts = attempts + 1, updated_at = ? WHERE id = ?`,
+  ).run(now(), row.id)
+  return { ...row, status: 'running', attempts: row.attempts + 1 }
+}
+
+export function finishJob(id: string): void {
+  getDb()
+    .prepare(`UPDATE jobs SET status = 'done', last_error = NULL, updated_at = ? WHERE id = ?`)
+    .run(now(), id)
+}
+
+/** Put it back in the queue, not before the given moment. */
+export function retryJob(id: string, runAfter: Date, error: string): void {
+  getDb()
+    .prepare(`UPDATE jobs SET status = 'pending', run_after = ?, last_error = ?, updated_at = ? WHERE id = ?`)
+    .run(runAfter.toISOString(), error.slice(0, 500), now(), id)
+}
+
+export function failJob(id: string, error: string): void {
+  getDb()
+    .prepare(`UPDATE jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?`)
+    .run(error.slice(0, 500), now(), id)
+}
+
+/**
+ * Anything left running belongs to a process that is no longer there — a dev
+ * server restart, a crash, a deploy. Put it back rather than lose it.
+ */
+export function requeueStrandedJobs(): number {
+  const db = getDb()
+  const stranded = db
+    .prepare(`SELECT COUNT(*) AS n FROM jobs WHERE status = 'running'`)
+    .get() as unknown as { n: number }
+  if (stranded.n > 0) {
+    db.prepare(
+      `UPDATE jobs SET status = 'pending', run_after = ?, updated_at = ? WHERE status = 'running'`,
+    ).run(now(), now())
+  }
+  return stranded.n
+}
+
+export function listActiveJobs(candidateId: string): JobRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM jobs WHERE candidate_id = ? AND status IN ('pending', 'running')
+       ORDER BY run_after`,
+    )
+    .all(candidateId) as unknown as JobRow[]
+}
+
+export function listFailedJobs(candidateId: string, limit = 3): JobRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM jobs WHERE candidate_id = ? AND status = 'failed'
+       ORDER BY updated_at DESC LIMIT ?`,
+    )
+    .all(candidateId, limit) as unknown as JobRow[]
+}
+
+/** When the next job is due, across every candidate. */
+export function nextJobDueAt(): string | null {
+  const row = getDb()
+    .prepare(`SELECT MIN(run_after) AS due FROM jobs WHERE status = 'pending'`)
+    .get() as unknown as { due: string | null }
+  return row?.due ?? null
+}
+
 export { parseJsonArray }

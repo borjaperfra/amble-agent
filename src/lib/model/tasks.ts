@@ -149,6 +149,35 @@ function normalizeAssessment(raw: unknown): string {
   return ''
 }
 
+/** Keys that hold an identifier or an enum, never a sentence. */
+const NOT_PROSE = /^(id|ids|slug|kind|type|level|materiality|assessment|status|confidence)$|Ids?$/i
+
+/**
+ * The one piece of prose in a small object, whatever the model decided to
+ * call it this time.
+ *
+ * Without server-side JSON mode the field names drift between runs: a
+ * description came back as `text` once and as `whyItMatters` another time,
+ * and every one of those was dropped on the floor, which emptied the
+ * interview of anything to ask about. Try the names we know, then take the
+ * longest sentence-shaped value that is left rather than lose the answer
+ * over a key nobody predicted.
+ */
+function firstProse(value: Record<string, unknown>, preferred: string[], minLength = 3): string | null {
+  for (const key of preferred) {
+    const candidate = value[key]
+    if (typeof candidate === 'string' && candidate.trim().length >= minLength) return candidate.trim()
+  }
+  let best: string | null = null
+  for (const [key, candidate] of Object.entries(value)) {
+    if (NOT_PROSE.test(key) || typeof candidate !== 'string') continue
+    const text = candidate.trim()
+    if (text.length < Math.max(minLength, 12)) continue
+    if (!best || text.length > best.length) best = text
+  }
+  return best
+}
+
 function prettifySlug(slug: string): string {
   return slug
     .replace(/[_-]+/g, ' ')
@@ -200,16 +229,15 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
         return item.trim().length >= 3 ? { description: item.trim().slice(0, 400), materiality: 'MEDIUM' } : null
       }
       const u = (item ?? {}) as Record<string, unknown>
-      const description =
-        typeof u.description === 'string' && u.description.trim().length >= 3
-          ? u.description
-          : typeof u.uncertainty === 'string' && u.uncertainty.trim().length >= 3
-            ? u.uncertainty
-            : typeof u.statement === 'string' && u.statement.trim().length >= 3
-              ? u.statement
-              : typeof u.whyItMatters === 'string' && u.whyItMatters.trim().length >= 3
-                ? u.whyItMatters
-                : null
+      const description = firstProse(u, [
+        'description',
+        'uncertainty',
+        'statement',
+        'text',
+        'gap',
+        'question',
+        'whyItMatters',
+      ])
       if (!description) return null
       const materiality = ['HIGH', 'MEDIUM', 'LOW'].includes(u.materiality as string)
         ? (u.materiality as string)
@@ -236,13 +264,23 @@ export const assessCapabilitiesOutputSchema = z.preprocess(
       .map((item) => normalizeCapability(item))
       .filter((item): item is CapabilityAssessment => item !== null)
       .slice(0, 20)
-    // Carried only so the check below can see it; stripped again afterwards.
-    return { capabilities, offered: list.length }
+    const offeredUncertainties = list.reduce((total, item) => {
+      const raw = (item ?? {}) as { uncertainties?: unknown }
+      return total + (Array.isArray(raw.uncertainties) ? raw.uncertainties.length : 0)
+    }, 0)
+    const keptUncertainties = capabilities.reduce(
+      (total, capability) => total + capability.uncertainties.length,
+      0,
+    )
+    // Carried only so the checks below can see them; stripped again afterwards.
+    return { capabilities, offered: list.length, offeredUncertainties, keptUncertainties }
   },
   z
     .object({
       capabilities: z.array(capabilityAssessmentSchema).max(20),
       offered: z.number().optional(),
+      offeredUncertainties: z.number().optional(),
+      keptUncertainties: z.number().optional(),
     })
     // The model answering with capabilities that all fail normalization used to
     // pass as a clean run with nothing in it: no capabilities, no uncertainties,
@@ -251,6 +289,12 @@ export const assessCapabilitiesOutputSchema = z.preprocess(
     .refine((value) => value.capabilities.length > 0 || !value.offered, {
       message:
         'every capability in the response was unusable: each needs a name, an assessment level and a reason',
+    })
+    // An assessment with no uncertainties leaves the interview with nothing to
+    // ask about, so losing all of them to a renamed field has to be loud too.
+    .refine((value) => !value.offeredUncertainties || (value.keptUncertainties ?? 0) > 0, {
+      message:
+        'every uncertainty was unusable: each needs a description and a materiality of HIGH, MEDIUM or LOW',
     })
     .transform(({ capabilities }) => ({ capabilities })),
 )

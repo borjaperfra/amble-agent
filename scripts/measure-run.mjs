@@ -57,6 +57,28 @@ async function waitForServer() {
   throw new Error(`No dev server answering at ${BASE}. Run npm run dev first.`)
 }
 
+/**
+ * Ask for the next question, waiting out WAIT the way the browser does. The
+ * server plans on a queue and never blocks the request, so the waiting is
+ * here.
+ */
+async function nextQuestion(timeoutMs = 300_000) {
+  const startedAt = now()
+  let retried = false
+  for (;;) {
+    const plan = await api('/api/interview/next', { method: 'POST' })
+    if (plan.action !== 'WAIT') return { plan, waitedMs: now() - startedAt, retried }
+    if (plan.retrying && !retried) {
+      retried = true
+      console.log('    (the server is retrying after a failure — waiting it out)')
+    }
+    if (now() - startedAt > timeoutMs) {
+      throw new Error(`Still waiting for a question after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+  }
+}
+
 /** The candidate, played by the same model the pipeline uses. */
 async function answerAs(cvText, question, alreadyAsked) {
   const messages = [
@@ -158,9 +180,9 @@ for (const stage of ['sources', 'evidence', 'capabilities']) {
 
 // -- Interview ---------------------------------------------------------
 console.log()
-const firstStarted = now()
-let plan = await api('/api/interview/next', { method: 'POST' })
-const timeToFirst = now() - firstStarted
+const first = await nextQuestion()
+let plan = first.plan
+const timeToFirst = first.waitedMs
 console.log(`first question         ${s(timeToFirst)}`)
 
 const turns = []
@@ -190,9 +212,9 @@ while (plan?.action === 'ASK' && turns.length < MAX_TURNS) {
   if (saved.next) {
     plan = saved.next
   } else {
-    const askedAt = now()
-    plan = await api('/api/interview/next', { method: 'POST' })
-    waitMs = saveMs + (now() - askedAt)
+    const waited = await nextQuestion()
+    plan = waited.plan
+    waitMs = saveMs + waited.waitedMs
   }
 
   turns.push({

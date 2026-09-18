@@ -62,7 +62,8 @@ function readsAsDeclined(answer: string): boolean {
 // ─── Question queue ───────────────────────────────────────────────────────
 
 export interface NextQuestion {
-  action: 'ASK' | 'STOP'
+  /** WAIT: nothing to show yet, the queue is working on it. Ask again. */
+  action: 'ASK' | 'STOP' | 'WAIT'
   turnId?: string
   question?: string
   reason?: string
@@ -86,8 +87,32 @@ function asQuestion(turn: InterviewTurnRow): NextQuestion {
 }
 
 /**
- * The question the candidate should see now. Returns instantly when one was
- * planned ahead, which is the whole point of the buffer.
+ * The question the candidate should see now, without ever waiting on the
+ * model inside the request.
+ *
+ * A planned question comes back instantly, which is the point of the buffer.
+ * When there is none, the work goes on the queue and the answer is WAIT: the
+ * phone asks again in a couple of seconds rather than holding a connection
+ * open for a minute and a half, which is a connection a phone will drop.
+ */
+export function getQuestionWithoutWaiting(candidateId: string): NextQuestion {
+  const interview = getOrCreateInterview(candidateId)
+  const queued = unanswered(interview.id)
+  if (queued.length > 0) return asQuestion(queued[0])
+
+  if (interview.status === 'stopping' || answeredCount(interview.id) >= MAX_QUESTIONS) {
+    completeInterview(interview.id)
+    return { action: 'STOP', reason: 'I have what I need for now.' }
+  }
+
+  // Queues one if nothing is in flight, and is happy to be called again.
+  prefetchQuestion(candidateId)
+  return { action: 'WAIT', reason: 'Working out what to ask next.' }
+}
+
+/**
+ * The blocking version: plan here and now, and make the caller wait for it.
+ * Kept for anything that has no way to come back and ask again.
  */
 export async function getCurrentQuestion(candidateId: string): Promise<NextQuestion> {
   const interview = getOrCreateInterview(candidateId)
@@ -116,9 +141,24 @@ export function prefetchQuestion(candidateId: string): void {
   if (unanswered(interview.id).length > QUESTION_BUFFER) return
   if (answeredCount(interview.id) + unanswered(interview.id).length >= MAX_QUESTIONS) return
 
-  enqueue('plan_question', candidateId, async () => {
-    await planOneQuestion(candidateId)
-  })
+  enqueue('plan_question', candidateId)
+}
+
+/** The queue's side of prefetchQuestion. */
+export async function planQuestionJob(candidateId: string): Promise<void> {
+  await planOneQuestion(candidateId)
+}
+
+/**
+ * The queue's side of recordAnswer. Takes an id rather than the turn itself:
+ * the job may be picked up minutes later, by a different process, after a
+ * connection came back.
+ */
+export async function incorporateAnswerJob(candidateId: string, turnId: string): Promise<void> {
+  const turn = getTurn(turnId)
+  if (!turn) throw new Error(`Interview turn ${turnId} is gone.`)
+  if (turn.answer === null) throw new Error(`Interview turn ${turnId} has no answer to work from.`)
+  await incorporateAnswer(candidateId, turn, turn.answer)
 }
 
 /**
@@ -253,23 +293,34 @@ export interface AnswerAccepted {
 export function recordAnswer(candidateId: string, turnId: string, answerText: string): AnswerAccepted {
   const turn = getTurn(turnId)
   if (!turn) throw new Error('Interview turn not found.')
-  if (turn.answer !== null) throw new Error('This question has already been answered.')
+
+  if (turn.answer !== null) {
+    // A phone that lost signal mid-send sends it again when it comes back.
+    // The same answer arriving twice is the network stuttering, not a second
+    // answer, so hand back what the first one earned rather than an error.
+    if (turn.answer.trim() !== answerText.trim()) {
+      throw new Error('This question has already been answered.')
+    }
+    return { ok: true, next: whatIsWaiting(candidateId) }
+  }
 
   answerTurn(turnId, answerText)
 
   if (readsAsDeclined(answerText)) closeSubject(candidateId, turn)
 
-  enqueue('incorporate_answer', candidateId, async () => {
-    await incorporateAnswer(candidateId, turn, answerText)
-  })
+  enqueue('incorporate_answer', candidateId, { turnId })
 
-  const interview = getOrCreateInterview(candidateId)
-  const queued = unanswered(interview.id)
-  const next = queued.length > 0 ? asQuestion(queued[0]) : null
-
+  const next = whatIsWaiting(candidateId)
   prefetchQuestion(candidateId)
 
   return { ok: true, next }
+}
+
+/** The question already planned ahead, if there is one. */
+function whatIsWaiting(candidateId: string): NextQuestion | null {
+  const interview = getOrCreateInterview(candidateId)
+  const queued = unanswered(interview.id)
+  return queued.length > 0 ? asQuestion(queued[0]) : null
 }
 
 /**

@@ -17,12 +17,14 @@ interface Progress {
 }
 
 interface NextResponse {
-  action?: 'ASK' | 'STOP'
+  action?: 'ASK' | 'STOP' | 'WAIT'
   turnId?: string
   question?: string
   reason?: string
   progress?: Progress
   error?: string
+  /** The server is backing off after the model failed it. */
+  retrying?: boolean
 }
 
 interface AnswerResponse {
@@ -33,13 +35,24 @@ interface AnswerResponse {
 }
 
 type Phase = 'loading' | 'ask' | 'gotit' | 'complete'
+/** What the waiting screen is actually waiting for. */
+type Waiting = 'thinking' | 'retrying' | 'offline'
 
 const COMPLETION_LINE = 'I think I understand you pretty well now.'
 const VOICE_NOTICE =
   "Voice is simulated in this build — it doesn't transcribe. Use the text box below."
 
-// Plain fetch, no state: the mount effect awaits it before touching state, and
-// the event handlers reuse it through loadNext().
+const WAITING_LINE: Record<Waiting, string> = {
+  thinking: 'Deciding what to ask you next.',
+  retrying: 'That came back wrong. Trying again — nothing is lost.',
+  offline: 'No connection right now. Still trying — nothing is lost.',
+}
+
+/** How long to wait before asking again, by how many tries have failed. */
+const POLL_MS = 1500
+const OFFLINE_BACKOFF_MS = [2000, 4000, 8000, 15000, 30000]
+
+// Plain fetch, no state: the poll loop awaits it before touching state.
 async function fetchNextPlan(): Promise<{ data: NextResponse | null; failed?: string }> {
   try {
     const response = await fetch('/api/interview/next', { method: 'POST' })
@@ -49,7 +62,7 @@ async function fetchNextPlan(): Promise<{ data: NextResponse | null; failed?: st
     }
     return { data }
   } catch {
-    return { data: null, failed: "Your Rep couldn't be reached. Nothing has been lost." }
+    return { data: null }
   }
 }
 
@@ -63,6 +76,7 @@ export default function UserZeroInterviewFlow() {
   const [showWhy, setShowWhy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
+  const [waiting, setWaiting] = useState<Waiting>('thinking')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const finish = useCallback(() => {
@@ -93,26 +107,69 @@ export default function UserZeroInterviewFlow() {
     [finish],
   )
 
-  const loadNext = useCallback(async () => {
-    setPhase('loading')
+  const loadNext = useCallback(() => {
     setError(null)
-    const { data, failed } = await fetchNextPlan()
-    applyPlan(data, failed)
-  }, [applyPlan])
+    setWaiting('thinking')
+    setPhase('loading')
+  }, [])
 
-  // First question. The phase already starts at 'loading', so nothing is set
-  // before the fetch resolves, and a plan that lands after unmount is dropped.
+  /**
+   * While there is nothing to show, keep asking for it. The server plans on a
+   * queue and answers straight away, so this loop is what does the waiting —
+   * and it can wait through a tunnel: a request that never arrives is the
+   * connection, not a failure, so it backs off and tries again instead of
+   * dropping the candidate on an error screen.
+   */
   useEffect(() => {
+    if (phase !== 'loading') return
+
     let cancelled = false
-    async function loadFirst() {
-      const { data, failed } = await fetchNextPlan()
-      if (!cancelled) applyPlan(data, failed)
+    let timer: number | undefined
+    let offlineAttempts = 0
+
+    const later = (ms: number) => {
+      timer = window.setTimeout(() => {
+        if (!cancelled) void tick()
+      }, ms)
     }
-    void loadFirst()
+
+    async function tick(): Promise<void> {
+      const { data, failed } = await fetchNextPlan()
+      if (cancelled) return
+
+      if (!data && !failed) {
+        // Never reached the server at all.
+        setWaiting('offline')
+        const backoff =
+          OFFLINE_BACKOFF_MS[Math.min(offlineAttempts, OFFLINE_BACKOFF_MS.length - 1)]
+        offlineAttempts += 1
+        later(backoff)
+        return
+      }
+
+      offlineAttempts = 0
+
+      if (failed) {
+        applyPlan(null, failed)
+        return
+      }
+
+      if (data?.action === 'WAIT') {
+        setWaiting(data.retrying ? 'retrying' : 'thinking')
+        later(POLL_MS)
+        return
+      }
+
+      applyPlan(data)
+    }
+
+    void tick()
+
     return () => {
       cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
     }
-  }, [applyPlan])
+  }, [phase, applyPlan])
 
   useEffect(() => {
     if (phase === 'ask') textareaRef.current?.focus()
@@ -127,31 +184,42 @@ export default function UserZeroInterviewFlow() {
     setError(null)
     setAnswer('')
 
-    try {
-      const response = await fetch('/api/interview/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ turnId, answer: sent }),
-      })
-      const data = (await response.json()) as AnswerResponse
-      if (!response.ok) {
-        setAnswer(sent)
-        setError(data.error ?? "Your answer couldn't be saved. It is still here — send it again.")
-        setPhase('ask')
-        return
-      }
-      if (data.progress) setProgress(data.progress)
+    // Sending the same answer twice is safe — the server recognises it as the
+    // network stuttering — so a send that never arrives is worth repeating
+    // rather than handing back to someone on a moving train.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const response = await fetch('/api/interview/answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ turnId, answer: sent }),
+        })
+        const data = (await response.json()) as AnswerResponse
+        if (!response.ok) {
+          setAnswer(sent)
+          setError(data.error ?? "Your answer couldn't be saved. It is still here — send it again.")
+          setPhase('ask')
+          return
+        }
+        if (data.progress) setProgress(data.progress)
 
-      if (data.next) {
-        // Already waiting. Show it after a beat so the acknowledgement reads.
-        window.setTimeout(() => applyPlan(data.next ?? null), 550)
-      } else {
-        void loadNext()
+        if (data.next) {
+          // Already waiting. Show it after a beat so the acknowledgement reads.
+          const next = data.next
+          window.setTimeout(() => applyPlan(next), 550)
+        } else {
+          loadNext()
+        }
+        return
+      } catch {
+        if (attempt >= OFFLINE_BACKOFF_MS.length - 1) {
+          setAnswer(sent)
+          setError("Your answer couldn't be sent. It is still here — try again.")
+          setPhase('ask')
+          return
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, OFFLINE_BACKOFF_MS[attempt]))
       }
-    } catch {
-      setAnswer(sent)
-      setError("Your answer couldn't be sent. It is still here — try again.")
-      setPhase('ask')
     }
   }
 
@@ -188,7 +256,7 @@ export default function UserZeroInterviewFlow() {
               <p className="kicker">Your Rep</p>
             </div>
             <StatusDot />
-            <p className={styles.context}>Deciding what to ask you next.</p>
+            <p className={styles.context}>{WAITING_LINE[waiting]}</p>
           </div>
         )}
 
@@ -266,7 +334,7 @@ export default function UserZeroInterviewFlow() {
             <p className={styles.errorText} role="alert">
               {error}
             </p>
-            <button type="button" className="text-btn" onClick={() => void loadNext()}>
+            <button type="button" className="text-btn" onClick={loadNext}>
               Continue →
             </button>
           </div>
