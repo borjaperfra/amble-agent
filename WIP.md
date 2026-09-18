@@ -1,6 +1,6 @@
 # Dónde nos quedamos — 18 septiembre 2026
 
-Trabajo a medias, **sin commitear**. Todo está en el árbol, nada se pierde.
+Todo lo de hoy está commiteado (`5695d19`, `c54d6f8`, `bdda472`).
 Bórrame cuando esto esté cerrado.
 
 ## Cómo retomar
@@ -29,77 +29,82 @@ spec solo lo garantiza en qwen3.6 y gemma4.
 `qwen3.6` sí razona, con `chat_template_kwargs: { enable_thinking: true }`,
 por si algún día hay que comparar en serio.
 
+## Amble se usa desde el móvil
+
+Decidido el 18 de septiembre: el uso principal será desde el teléfono, y el
+destino es un agente de WhatsApp/Telegram. Eso manda sobre el diseño:
+
+- Nada de trabajo dentro de una petición. La cola vive en SQLite (tabla
+  `jobs`), reintenta sola (5 s, 20 s, 1 min, 3 min, 10 min) y recupera lo que
+  quedara a medias cuando el proceso muere.
+- `/api/interview/next` nunca espera al modelo: devuelve `WAIT` y encola. El
+  cliente vuelve a preguntar cada 1,5 s.
+- Mandar la misma respuesta dos veces es seguro; el servidor lo trata como
+  tartamudeo de red, así que el cliente reintenta solo sin perder lo escrito.
+- Planificar la pregunta se salta la cola: es lo único que el candidato está
+  esperando de verdad.
+
+**Lo que todavía bloquea:** `/api/onboarding/process`. Las tres etapas
+(sources, evidence, capabilities) siguen corriendo dentro de la petición, con
+48 s y 52 s medidos. Es el último sitio donde un túnel se lleva la sesión por
+delante. Convertirlas en jobs es el siguiente paso natural.
+
 ## El arnés de medición
 
 `scripts/measure-run.mjs` hace una sesión entera contra las rutas HTTP: sube
 el CV, lanza las tres etapas, y contesta la entrevista con respuestas que
 escribe el propio modelo haciendo del candidato del CV. Cronometra cada
-tramo, cuenta repeticiones literales, y al acabar vuelca claims, evidencias,
-capacidades, incertidumbres y latencia por tarea desde la base de datos.
-Deja la transcripción completa en `.amble-data/measure-run.json`.
+tramo, espera los `WAIT` como haría el navegador, marca las preguntas que se
+repiten literalmente, y al acabar vuelca claims, evidencias, capacidades,
+incertidumbres y latencia por tarea. Transcripción en
+`.amble-data/measure-run.json`.
 
-Las respuestas son sintéticas: sirven para juzgar ritmo, repetición y cuántas
-incertidumbres sobreviven al primer pase, no la calidad de lo que Amble
-aprende de una persona real.
-
-## Tres bugs que encontró, y su arreglo
-
-**1. La segunda pregunta salía palabra por palabra igual que la primera.**
-`planOneQuestion` solo miraba turnos *contestados* para la lista
-antirrepetición y para el guardia de casi-duplicados. La pregunta que el
-buffer prepara por adelantado era invisible, así que se planificaba contra el
-mismo terreno. Ahora las preguntas en cola cuentan como hechas, sus
-incertidumbres quedan reservadas, y un calco se descarta sin dar la
-entrevista por terminada (antes, una colisión del prefetch la cerraba).
-
-**2. Una conexión cortada mataba la etapa entera.** El bucle de reintentos de
-`provider.ts` solo cubría respuestas malas (JSON inválido, esquema, truncado);
-un fallo de transporte se lanzaba en seco. Ahora `ModelError` lleva
-`retryable`: red caída y HTTP 429/5xx se reintentan hasta 3 veces con espera
-creciente; 400/401/403 fallan al momento. El "tu respuesta anterior falló la
-validación" ya no se cuela cuando no hubo respuesta anterior. El error guarda
-el código de debajo (`ECONNRESET`, `ETIMEDOUT`…), no solo "fetch failed".
-
-**3. La evaluación de capacidades devolvía cero en silencio.** El modelo
-contestó `assessmentLevel` donde el normalizador esperaba `assessment`, así
-que *todas* las capacidades se descartaban una por una: 0 capacidades, 0
-incertidumbres, run marcado como correcto, y una entrevista preguntando
-genéricas al vacío. Ahora se aceptan los alias, y una lista que se normaliza
-hasta quedarse vacía es un fallo de esquema — se reintenta y luego falla a la
-vista, no pasa por buena.
+Las respuestas son sintéticas, y además llegan en diez segundos: un candidato
+real tarda más en escribir, así que la cola le da tiempo a preparar la
+siguiente pregunta y los tiempos reales serán mejores que los medidos.
 
 ## Números
 
-Primera sesión real (antes de esta tanda), CV de 4.313 caracteres:
+| | Primera sesión | Última tanda |
+| --- | --- | --- |
+| Claims del CV | 104 | 25 |
+| Capacidades | — | 8 |
+| Incertidumbres del primer pase | 56 | 16 |
+| Antes de la primera pregunta | 100 s | 26 s |
+| Respuesta → siguiente pregunta | 45 s de media | 0,1 s con la cola caliente |
+| Preguntas repetidas | 3 temas repetidos | 0 |
+| Preguntas hasta que el Rep para solo | — | 6 |
 
-| | |
-| --- | --- |
-| Antes de la primera pregunta | 100 s |
-| Entre respuesta y siguiente pregunta | 45 s de media, 116 s el peor |
-| Claims extraídos | 104 (el prompt pedía 10-40) |
-| Incertidumbres | 56 creadas, 42 abiertas al final |
-| Huecos mostrados en el Mapa | 35 |
+La última tanda se midió con la conexión de un tren: `plan_question` pasó de
+8,1 s a 23,7 s de media y un pico de 237 s entre pregunta y pregunta. Una de
+las 19 llamadas al modelo falló y se recuperó sola — la sesión no se rompió,
+que era justo lo que se buscaba. **Los tiempos hay que volver a tomarlos con
+wifi estable**; lo que sí es comparable es el resto de la tabla.
 
-Lo medido después, en tandas que se cortaron por la conexión del tren:
+## Cuatro bugs, todos de la misma familia
 
-| | |
-| --- | --- |
-| Claims extraídos | 25-34 |
-| Extracción | 28-61 s |
-| Capacidades | 38-48 s |
-| Antes de la primera pregunta | 4,7-6,4 s |
-| Entre respuesta y siguiente pregunta | 0,0-0,1 s con la cola caliente |
+Tres de ellos eran el mismo fallo con distinta ropa: el modelo nombra un
+campo como le parece y el normalizador lo tira al suelo en silencio.
 
-**Falta la tanda limpia de punta a punta**, con wifi estable, para confirmar
-las 6 preguntas seguidas sin repetir tema y cuántas incertidumbres deja el
-primer pase.
+1. **La segunda pregunta salía idéntica a la primera.** El planificador solo
+   miraba turnos contestados, así que la pregunta preparada por adelantado le
+   era invisible.
+2. **Una conexión cortada mataba la etapa entera.** El reintento del provider
+   solo cubría respuestas mal formadas, no fallos de transporte.
+3. **Las capacidades salían a cero en silencio** (`assessmentLevel` en vez de
+   `assessment`).
+4. **Las incertidumbres salían a cero en silencio** (`text` en vez de
+   `description`).
 
-## Siguiente paso exacto
+De 3 y 4 salió la regla: una lista que se normaliza hasta quedarse vacía es
+un fallo de esquema, no un resultado. Se reintenta y luego falla a la vista.
+Y el lector de prosa, cuando no reconoce ninguna llave, se queda con el campo
+de texto más largo del objeto en vez de perder la respuesta.
 
-1. `npm run dev`, borrar `.amble-data/`, y `npm run measure -- <cv.pdf>`
-   entero con conexión estable. Leer `.amble-data/measure-run.json`.
-2. Con esos números, decidir si el techo de 6 preguntas y el de 2
-   incertidumbres por capacidad son los correctos.
+## Siguiente paso
+
+1. Mover `/api/onboarding/process` a la cola, que es lo que queda bloqueando.
+2. Volver a medir con wifi estable para tener tiempos limpios.
 
 ## No empezado
 
@@ -115,8 +120,3 @@ de listening explicando qué pasa a partir de ahora, con el canal de aviso
 **Voz:** STT con Whisper contra `/audio/transcriptions`. Las variables ya
 están en `.env.example` pero todavía no las lee nadie. Límite del endpoint:
 25 MB y ~2 minutos por request, más devuelve 524.
-
-**Resistencia a la red mala:** los reintentos aguantan un corte de segundos,
-no un túnel de tres minutos. Si Amble se va a usar desde el móvil, la cola
-debería reencolar el trabajo fallido y la pantalla decir "reintentando" en vez
-de romper la sesión.
