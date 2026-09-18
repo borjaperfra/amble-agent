@@ -1,6 +1,6 @@
 # Dónde nos quedamos — 18 septiembre 2026
 
-Todo lo de hoy está commiteado (`5695d19`, `c54d6f8`, `bdda472`).
+Todo lo de hoy está commiteado, de `5695d19` a `442f355`.
 Bórrame cuando esto esté cerrado.
 
 ## Cómo retomar
@@ -44,15 +44,19 @@ destino es un agente de WhatsApp/Telegram. Eso manda sobre el diseño:
 - Planificar la pregunta se salta la cola: es lo único que el candidato está
   esperando de verdad.
 
-**Lo que todavía bloquea:** `/api/onboarding/process`. Las tres etapas
-(sources, evidence, capabilities) siguen corriendo dentro de la petición, con
-48 s y 52 s medidos. Es el último sitio donde un túnel se lleva la sesión por
-delante. Convertirlas en jobs es el siguiente paso natural.
+- El procesado del CV también corre en la cola, así que ya no queda ningún
+  trabajo dentro de una petición.
+
+Se probó solo, por accidente: el tren entró en zona muerta a mitad de una
+evaluación (ECONNRESET, luego ETIMEDOUT, luego ENOTFOUND — ni DNS). El job se
+fue a su cuarto intento, el CV siguió leído, y al volver la señal terminó
+solo. Nadie tocó nada.
 
 ## El arnés de medición
 
 `scripts/measure-run.mjs` hace una sesión entera contra las rutas HTTP: sube
-el CV, lanza las tres etapas, y contesta la entrevista con respuestas que
+el CV, lanza el procesado y lo sigue por `state`, y contesta la entrevista
+con respuestas que
 escribe el propio modelo haciendo del candidato del CV. Cronometra cada
 tramo, espera los `WAIT` como haría el navegador, marca las preguntas que se
 repiten literalmente, y al acabar vuelca claims, evidencias, capacidades,
