@@ -13,14 +13,41 @@ interface IntentGroup {
   values: string[]
 }
 
+interface Preferences {
+  salaryMin: number | null
+  salaryCurrency: string
+  workMode: 'onsite' | 'hybrid' | 'remote' | null
+  location: string | null
+  technologies: string[]
+  stages: string[]
+}
+
 interface IntentResponse {
   id?: string
   groups?: IntentGroup[]
   listeningFor?: string[]
   structured?: boolean
+  preferences?: Preferences
   error?: string
   unconfigured?: boolean
 }
+
+const EMPTY_PREFERENCES: Preferences = {
+  salaryMin: null,
+  salaryCurrency: 'EUR',
+  workMode: null,
+  location: null,
+  technologies: [],
+  stages: [],
+}
+
+const WORK_MODES: { value: NonNullable<Preferences['workMode']>; label: string }[] = [
+  { value: 'onsite', label: 'On-site' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'remote', label: 'Remote' },
+]
+
+const STAGE_OPTIONS = ['Pre-seed', 'Seed', 'Series A', 'Scale-up', 'Large company']
 
 type Phase = 'ask' | 'sending' | 'reveal'
 
@@ -36,6 +63,8 @@ export default function UserZeroIntentFlow() {
   const [editedGroups, setEditedGroups] = useState<IntentGroup[]>([])
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState(false)
+  const [preferences, setPreferences] = useState<Preferences>(EMPTY_PREFERENCES)
+  const [technologyDraft, setTechnologyDraft] = useState('')
 
   async function submit() {
     if (!answer.trim()) return
@@ -55,6 +84,7 @@ export default function UserZeroIntentFlow() {
       }
       setResult(data)
       setEditedGroups(data.groups ?? [])
+      setPreferences(data.preferences ?? EMPTY_PREFERENCES)
       setPhase('reveal')
     } catch {
       setError("Your intent couldn't be sent. It is still here — try again.")
@@ -62,11 +92,49 @@ export default function UserZeroIntentFlow() {
     }
   }
 
+  function togglePreference<K extends 'workMode'>(key: K, value: Preferences[K]) {
+    setPreferences((prev) => ({ ...prev, [key]: prev[key] === value ? null : value }))
+  }
+
+  function toggleInList(key: 'technologies' | 'stages', value: string) {
+    setPreferences((prev) => ({
+      ...prev,
+      [key]: prev[key].some((item) => item.toLowerCase() === value.toLowerCase())
+        ? prev[key].filter((item) => item.toLowerCase() !== value.toLowerCase())
+        : [...prev[key], value],
+    }))
+  }
+
+  function addTechnologies(raw: string) {
+    const parts = raw
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 1)
+    if (parts.length === 0) return
+    setPreferences((prev) => {
+      const existing = new Set(prev.technologies.map((item) => item.toLowerCase()))
+      const added = parts.filter((part) => !existing.has(part.toLowerCase()))
+      return { ...prev, technologies: [...prev.technologies, ...added].slice(0, 12) }
+    })
+    setTechnologyDraft('')
+  }
+
   async function confirm() {
     try {
       window.sessionStorage.setItem('amble-listening-activated', '1')
     } catch {
       // Session storage unavailable; the Listening screen still works.
+    }
+
+    try {
+      await fetch('/api/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      })
+    } catch {
+      // Best effort, like the confirmation below: the answer itself is
+      // already stored, and these can be set again from the Listening screen.
     }
     if (result?.id) {
       try {
@@ -197,6 +265,144 @@ export default function UserZeroIntentFlow() {
             </section>
           ))}
         </div>
+
+        <section className={styles.prefs} aria-label="What can be checked against an offer">
+          <p className="kicker">The checkable part</p>
+          <p className={styles.prefsLead}>
+            Your words above are what I understand. These are what I can hold an actual offer
+            against. Leave anything blank and I won&rsquo;t filter on it.
+          </p>
+
+          <div className={styles.fields}>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="pref-salary">
+                Worth a conversation from
+              </label>
+              <div className={styles.fieldRow}>
+                <input
+                  id="pref-salary"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1000}
+                  className={`${styles.input} ${styles.inputNarrow}`}
+                  placeholder="65000"
+                  value={preferences.salaryMin ?? ''}
+                  onChange={(event) =>
+                    setPreferences((prev) => ({
+                      ...prev,
+                      salaryMin: event.target.value === '' ? null : Number(event.target.value),
+                    }))
+                  }
+                />
+                <span className={styles.inputSuffix}>
+                  {preferences.salaryCurrency} gross a year
+                </span>
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>How you want to work</span>
+              <div className={styles.chips}>
+                {WORK_MODES.map((mode) => (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    className={`${styles.chip} ${preferences.workMode === mode.value ? styles.chipOn : ''}`}
+                    aria-pressed={preferences.workMode === mode.value}
+                    onClick={() => togglePreference('workMode', mode.value)}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="pref-location">
+                Based in or near
+              </label>
+              <input
+                id="pref-location"
+                type="text"
+                className={styles.input}
+                placeholder="Valencia, or anywhere in Spain"
+                value={preferences.location ?? ''}
+                onChange={(event) =>
+                  setPreferences((prev) => ({ ...prev, location: event.target.value || null }))
+                }
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="pref-tech">
+                Products, stacks or spaces you want to be in
+              </label>
+              {preferences.technologies.length > 0 && (
+                <div className={styles.chips}>
+                  {preferences.technologies.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`${styles.chip} ${styles.chipOn}`}
+                      aria-label={`Remove ${item}`}
+                      onClick={() => toggleInList('technologies', item)}
+                    >
+                      {item}
+                      <span className={styles.chipRemove} aria-hidden="true">
+                        ×
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <input
+                id="pref-tech"
+                type="text"
+                className={styles.input}
+                placeholder="Developer tools, B2B SaaS, product marketing"
+                value={technologyDraft}
+                onChange={(event) => setTechnologyDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ',') {
+                    event.preventDefault()
+                    addTechnologies(technologyDraft)
+                  }
+                }}
+                onBlur={() => addTechnologies(technologyDraft)}
+              />
+              <span className={styles.fieldHint}>Separate with commas.</span>
+            </div>
+
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Size of company</span>
+              <div className={styles.chips}>
+                {[
+                  ...STAGE_OPTIONS,
+                  ...preferences.stages.filter(
+                    (stage) =>
+                      !STAGE_OPTIONS.some((option) => option.toLowerCase() === stage.toLowerCase()),
+                  ),
+                ].map((stage) => {
+                  const on = preferences.stages.some(
+                    (item) => item.toLowerCase() === stage.toLowerCase(),
+                  )
+                  return (
+                    <button
+                      key={stage}
+                      type="button"
+                      className={`${styles.chip} ${on ? styles.chipOn : ''}`}
+                      aria-pressed={on}
+                      onClick={() => toggleInList('stages', stage)}
+                    >
+                      {stage}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
 
         <div className={styles.confirm}>
           <p className={styles.confirmQuestion}>Does this represent you?</p>

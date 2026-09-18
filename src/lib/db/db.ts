@@ -162,6 +162,24 @@ function createDb(): DatabaseSync {
       created_at TEXT NOT NULL
     );
 
+    -- What would actually make an opportunity worth a look, in terms that can
+    -- be checked against a real one. The free-text intent says "good economic
+    -- offer"; this says 65000 EUR, and only one of those can be matched.
+    CREATE TABLE IF NOT EXISTS preferences (
+      candidate_id TEXT PRIMARY KEY REFERENCES candidates(id),
+      salary_min INTEGER,
+      salary_currency TEXT,
+      work_mode TEXT,
+      location TEXT,
+      technologies TEXT NOT NULL DEFAULT '[]',
+      stages TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      notify_channel TEXT,
+      notify_email TEXT,
+      notify_whatsapp TEXT,
+      updated_at TEXT NOT NULL
+    );
+
     -- Background work, on disk rather than in memory: a phone on a train
     -- loses the connection for minutes at a time, and work that only exists
     -- inside a running process dies with the request that started it.

@@ -172,3 +172,109 @@
     font-size: var(--heading-lg);
   }
 }
+
+/* ── The checkable half ────────────────────────────────────────────────
+   The groups above are the candidate's own words. These are the fields an
+   opportunity can actually be measured against, so they look like a form
+   and not like prose. */
+
+.prefs {
+  margin-top: 48px;
+  border-top: 1px solid var(--border);
+  padding-top: 32px;
+}
+
+.prefsLead {
+  margin-top: 8px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  max-width: 54ch;
+}
+
+.fields {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fieldLabel {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.input {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  width: min(320px, 100%);
+}
+
+.inputNarrow {
+  width: 160px;
+}
+
+.inputSuffix {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-default) ease,
+    background var(--motion-default) ease,
+    color var(--motion-default) ease;
+}
+
+.chip:hover {
+  border-color: var(--moss-soft);
+}
+
+.chipOn {
+  border-color: var(--moss);
+  background: var(--moss-wash);
+  color: var(--moss-dark);
+  font-weight: 500;
+}
+
+.chipRemove {
+  margin-left: 8px;
+  color: var(--ink-tertiary);
+}
+
+.fieldHint {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}

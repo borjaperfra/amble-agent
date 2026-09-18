@@ -692,4 +692,56 @@ export function nextJobDueAt(kinds: string[]): string | null {
   return row?.due ?? null
 }
 
+// ─── Preferences ──────────────────────────────────────────────────────────
+
+export interface PreferencesRow {
+  candidate_id: string
+  salary_min: number | null
+  salary_currency: string | null
+  work_mode: string | null
+  location: string | null
+  technologies: string
+  stages: string
+  notes: string | null
+  notify_channel: string | null
+  notify_email: string | null
+  notify_whatsapp: string | null
+  updated_at: string
+}
+
+export function getPreferences(candidateId: string): PreferencesRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM preferences WHERE candidate_id = ?')
+    .get(candidateId) as unknown as PreferencesRow | undefined
+}
+
+/**
+ * Write only what was passed. A candidate filling in a salary must not wipe
+ * the notification channel they set on another screen, and the model
+ * pre-filling two fields must not clear the four it had nothing to say about.
+ */
+export function savePreferences(
+  candidateId: string,
+  patch: Partial<Omit<PreferencesRow, 'candidate_id' | 'updated_at'>>,
+): PreferencesRow {
+  const db = getDb()
+  db.prepare(
+    `INSERT INTO preferences (candidate_id, updated_at) VALUES (?, ?)
+     ON CONFLICT(candidate_id) DO NOTHING`,
+  ).run(candidateId, now())
+
+  const columns = Object.keys(patch) as (keyof typeof patch)[]
+  if (columns.length > 0) {
+    const assignments = columns.map((column) => `${column} = ?`).join(', ')
+    const values = columns.map((column) => patch[column] ?? null)
+    db.prepare(`UPDATE preferences SET ${assignments}, updated_at = ? WHERE candidate_id = ?`).run(
+      ...(values as (string | number | null)[]),
+      now(),
+      candidateId,
+    )
+  }
+
+  return getPreferences(candidateId) as PreferencesRow
+}
+
 export { parseJsonArray }

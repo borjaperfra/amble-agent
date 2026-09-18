@@ -7,6 +7,7 @@ import {
   type IntentRow,
 } from '../db/repo'
 import { runInterpretIntentTask } from '../model/tasks'
+import { applyExtractedPreferences, readPreferences, type Preferences } from './preferences'
 
 export interface IntentGroups {
   label: string
@@ -19,6 +20,8 @@ export interface IntentResult {
   groups: IntentGroups[]
   listeningFor: string[]
   structured: boolean
+  /** Pre-filled from the same answer, for the candidate to correct. */
+  preferences: Preferences
 }
 
 export async function interpretIntent(answerText: string): Promise<IntentResult> {
@@ -32,12 +35,17 @@ export async function interpretIntent(answerText: string): Promise<IntentResult>
       groups: JSON.stringify(data.groups),
       listening_for: JSON.stringify(data.listeningFor),
     })
+    // The same answer, reduced to what can be checked against a real job.
+    // Only the blanks: anything the candidate typed in themselves stands.
+    const preferences = applyExtractedPreferences(candidate.id, data.preferences)
+
     return {
       id: row.id,
       rawAnswer: answerText,
       groups: data.groups,
       listeningFor: data.listeningFor,
       structured: true,
+      preferences,
     }
   } catch {
     const row = insertIntent({
@@ -53,6 +61,7 @@ export async function interpretIntent(answerText: string): Promise<IntentResult>
       groups: [{ label: 'In your words', values: [answerText] }],
       listeningFor: [],
       structured: false,
+      preferences: readPreferences(candidate.id),
     }
   }
 }

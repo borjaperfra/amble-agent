@@ -438,17 +438,129 @@ const intentLabelSchema = z.enum([
   'Other',
 ])
 
-export const interpretIntentOutputSchema = z.object({
-  groups: z
-    .array(
-      z.object({
-        label: intentLabelSchema,
-        values: z.array(z.string().min(1).max(120)).min(1).max(6),
-      }),
-    )
-    .max(9),
-  listeningFor: z.array(z.string().min(1).max(60)).max(8),
-})
+/**
+ * A salary as a number, however it was written: 65000, "65k", "65.000 EUR",
+ * "€65,000". Anything under a thousand is read as thousands, because nobody
+ * means an annual salary of sixty-five euros.
+ */
+export function toAmount(raw: unknown): number | null {
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null
+  if (typeof raw !== 'string') return null
+
+  const text = raw.trim().toLowerCase()
+  // The first number only: "between 60k and 70k" is a floor of sixty
+  // thousand, not six million.
+  const match = text.match(/(\d[\d.,]*)\s*(k)?/)
+  if (!match) return null
+
+  // A dot or comma followed by exactly three digits is a thousands mark in
+  // one convention or the other; anything else is a decimal point.
+  const digits = match[1].replace(/[.,](?=\d{3}(\D|$))/g, '').replace(/,/g, '.')
+  const value = Number.parseFloat(digits)
+  if (!Number.isFinite(value) || value <= 0) return null
+
+  let amount = match[2] ? value * 1000 : value
+  // Nobody means an annual salary of sixty-five euros.
+  if (amount < 1000) amount *= 1000
+  // Turning a monthly figure they called monthly into a yearly one is
+  // arithmetic, not a guess.
+  if (/per month|a month|\/mo\b|monthly|al mes|mensual/.test(text)) amount *= 12
+  return Math.round(amount)
+}
+
+const WORK_MODES = ['onsite', 'hybrid', 'remote'] as const
+
+function normalizeWorkMode(raw: unknown): (typeof WORK_MODES)[number] | null {
+  if (typeof raw === 'boolean') return raw ? 'remote' : 'onsite'
+  if (typeof raw !== 'string') return null
+  const text = raw.trim().toLowerCase()
+  const exact = WORK_MODES.find((mode) => mode === text)
+  if (exact) return exact
+  if (/hybrid|mixed|mix|part.?remote|some days/.test(text)) return 'hybrid'
+  if (/remote|anywhere|distributed|wfh|teletrabajo/.test(text)) return 'remote'
+  if (/onsite|on.site|office|presencial|in.person/.test(text)) return 'onsite'
+  return null
+}
+
+function normalizeList(raw: unknown, limit = 12): string[] {
+  const source = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(/[,;\/]| and /i)
+      : []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of source) {
+    if (typeof item !== 'string') continue
+    const text = item.trim().slice(0, 60)
+    if (text.length < 2) continue
+    const key = text.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(text)
+    if (out.length >= limit) break
+  }
+  return out
+}
+
+function normalizePreferences(raw: unknown): {
+  salaryMin: number | null
+  salaryCurrency: string | null
+  workMode: string | null
+  location: string | null
+  technologies: string[]
+  stages: string[]
+} {
+  const p = (raw ?? {}) as Record<string, unknown>
+  const salaryMin = toAmount(
+    p.salaryMin ?? p.minSalary ?? p.salary_min ?? p.compensationMin ?? p.salary,
+  )
+  const currency = p.salaryCurrency ?? p.currency ?? p.salary_currency
+  const location = p.location ?? p.city ?? p.based ?? p.region
+
+  return {
+    salaryMin,
+    salaryCurrency:
+      typeof currency === 'string' && currency.trim().length > 0
+        ? currency.trim().toUpperCase().slice(0, 8)
+        : salaryMin !== null
+          ? 'EUR'
+          : null,
+    workMode: normalizeWorkMode(p.workMode ?? p.work_mode ?? p.remote ?? p.arrangement),
+    location:
+      typeof location === 'string' && location.trim().length > 1 ? location.trim().slice(0, 80) : null,
+    technologies: normalizeList(p.technologies ?? p.tech ?? p.tools ?? p.skills ?? p.domains),
+    stages: normalizeList(p.stages ?? p.stage ?? p.companyStage ?? p.companySize, 6),
+  }
+}
+
+export const interpretIntentOutputSchema = z.preprocess(
+  (raw) => {
+    const obj = (raw ?? {}) as Record<string, unknown>
+    return { ...obj, preferences: normalizePreferences(obj.preferences) }
+  },
+  z.object({
+    groups: z
+      .array(
+        z.object({
+          label: intentLabelSchema,
+          values: z.array(z.string().min(1).max(120)).min(1).max(6),
+        }),
+      )
+      .max(9),
+    listeningFor: z.array(z.string().min(1).max(60)).max(8),
+    // Only ever what the candidate actually said. Everything here is
+    // nullable because an empty field is honest and an invented one is not.
+    preferences: z.object({
+      salaryMin: z.number().nullable(),
+      salaryCurrency: z.string().nullable(),
+      workMode: z.string().nullable(),
+      location: z.string().nullable(),
+      technologies: z.array(z.string()),
+      stages: z.array(z.string()),
+    }),
+  }),
+)
 
 export type InterpretIntentOutput = z.infer<typeof interpretIntentOutputSchema>
 
@@ -736,20 +848,27 @@ ${JSON.stringify(params.capabilities, null, 1)}`
 }
 
 export function runInterpretIntentTask(params: { candidateId: string; answer: string }) {
-  const system = `You are Amble's intent interpretation engine, version 1. The candidate described what would make a professional opportunity worth considering. Structure what they said WITHOUT adding anything they didn't say.
+  const system = `You are Amble's intent interpretation engine, version 2. The candidate described what would make a professional opportunity worth considering. Structure what they said WITHOUT adding anything they didn't say.
 
 Rules:
 - Only use these labels: "Role", "Space", "Company", "Compensation", "Ownership", "Location", "Not interested in", "Other".
 - Values must be short items (1-6 words) faithfully derived from the answer. Never invent values, numbers or ranges they didn't state.
 - If they didn't mention compensation, do not create a Compensation group.
 - listeningFor: up to 8 short phrases summarizing what to listen for, strictly from the answer.
-- Respond ONLY with JSON: {"groups": [{"label": ..., "values": [...]}], "listeningFor": [...]}.`
+- preferences: the same answer reduced to what could be checked against a real job posting. Use null, or an empty array, for anything they did not state. NEVER guess a number.
+  - salaryMin: annual gross as a number, no currency symbol, no range. The bottom of a range if they gave one.
+  - salaryCurrency: ISO code, e.g. "EUR".
+  - workMode: exactly one of "onsite", "hybrid", "remote".
+  - location: the place they want to work from or near.
+  - technologies: tools, stacks, domains or kinds of product they named.
+  - stages: company stages or sizes they named, e.g. "seed", "scale-up", "large company".
+- Respond ONLY with JSON: {"groups": [{"label": ..., "values": [...]}], "listeningFor": [...], "preferences": {"salaryMin": ..., "salaryCurrency": ..., "workMode": ..., "location": ..., "technologies": [...], "stages": [...]}}.`
   const user = `CANDIDATE ANSWER:
 ${params.answer}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'interpret_intent',
-    version: 'v1',
+    version: 'v2',
     system,
     user,
     schema: interpretIntentOutputSchema,
