@@ -14,8 +14,16 @@
  * can be retried on a schedule, survives a restart, and can be picked up by
  * something that is not a web request at all — which is where this is going.
  *
- * Serial on purpose: these jobs read and write the same rows, and SQLite is a
- * single writer. Concurrency here would buy nothing and cost correctness.
+ * Two lanes, each serial. Planning the next question takes about five
+ * seconds; working an answer into the graph takes forty. One lane meant the
+ * candidate waited for both, because a queue only consults its order between
+ * jobs and never interrupts the one running. So the thing somebody is
+ * actually staring at gets a lane of its own.
+ *
+ * Within a lane it stays serial: these jobs read and write the same rows and
+ * SQLite takes one writer. Across lanes the planner may read a graph that is
+ * a minute out of date, which it already did when it ran first, and it is
+ * given the recent questions and answers directly either way.
  */
 
 import {
@@ -55,13 +63,36 @@ export interface JobPayloads {
 const BACKOFF_MS = [5_000, 20_000, 60_000, 180_000, 600_000]
 const MAX_ATTEMPTS = BACKOFF_MS.length + 1
 
+/** The candidate is watching this one. Everything else can take its time. */
+const LANES = {
+  interactive: ['plan_question'],
+  background: ['process_source', 'assess_capabilities', 'incorporate_answer', 'build_profile'],
+} as const satisfies Record<string, readonly JobKind[]>
+
+type Lane = keyof typeof LANES
+
+function laneOf(kind: JobKind): Lane {
+  return (LANES.interactive as readonly JobKind[]).includes(kind) ? 'interactive' : 'background'
+}
+
+interface LaneState {
+  draining: boolean
+  timer: NodeJS.Timeout | null
+}
+
 declare global {
-  var __ambleQueue: { draining: boolean; timer: NodeJS.Timeout | null; recovered: boolean } | undefined
+  var __ambleQueue: { lanes: Record<Lane, LaneState>; recovered: boolean } | undefined
 }
 
 function runtime() {
   if (!globalThis.__ambleQueue) {
-    globalThis.__ambleQueue = { draining: false, timer: null, recovered: false }
+    globalThis.__ambleQueue = {
+      lanes: {
+        interactive: { draining: false, timer: null },
+        background: { draining: false, timer: null },
+      },
+      recovered: false,
+    }
   }
   const state = globalThis.__ambleQueue
   if (!state.recovered) {
@@ -135,18 +166,18 @@ export function enqueue<K extends JobKind>(
     payload: JSON.stringify(payload),
     runAfter: delayMs > 0 ? new Date(Date.now() + delayMs) : undefined,
   })
-  void drain()
+  void drain(laneOf(kind))
   return id
 }
 
-async function drain(): Promise<void> {
-  const state = runtime()
+async function drain(lane: Lane): Promise<void> {
+  const state = runtime().lanes[lane]
   if (state.draining) return
   state.draining = true
 
   try {
     for (;;) {
-      const job = claimNextJob()
+      const job = claimNextJob([...LANES[lane]])
       if (!job) break
 
       try {
@@ -164,14 +195,14 @@ async function drain(): Promise<void> {
     }
   } finally {
     state.draining = false
-    scheduleNextWake()
+    scheduleNextWake(lane)
   }
 }
 
 /** Jobs waiting on a backoff need someone to come back for them. */
-function scheduleNextWake(): void {
-  const state = runtime()
-  const due = nextJobDueAt()
+function scheduleNextWake(lane: Lane): void {
+  const state = runtime().lanes[lane]
+  const due = nextJobDueAt([...LANES[lane]])
   if (state.timer) {
     clearTimeout(state.timer)
     state.timer = null
@@ -181,7 +212,7 @@ function scheduleNextWake(): void {
   const delay = Math.max(250, new Date(due).getTime() - Date.now())
   state.timer = setTimeout(() => {
     state.timer = null
-    void drain()
+    void drain(lane)
   }, delay)
   // Never hold the process open for a retry that can just as well happen on
   // the next request.
@@ -232,7 +263,7 @@ export function hasPendingKind(candidateId: string, kind: JobKind): boolean {
  */
 export async function waitForQueue(candidateId: string, timeoutMs = 120_000): Promise<boolean> {
   const startedAt = Date.now()
-  void drain()
+  resumeQueue()
   while (queueStatus(candidateId).busy) {
     if (Date.now() - startedAt > timeoutMs) return false
     await new Promise((resolve) => setTimeout(resolve, 250))
@@ -242,5 +273,6 @@ export async function waitForQueue(candidateId: string, timeoutMs = 120_000): Pr
 
 /** Pick up anything left over, whatever brought this process up. */
 export function resumeQueue(): void {
-  void drain()
+  void drain('interactive')
+  void drain('background')
 }

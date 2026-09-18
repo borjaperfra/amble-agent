@@ -228,6 +228,13 @@ export function queueWrite(write: DeferredWrite): void {
   }
 }
 
+/**
+ * Careful: this counts depth in a module-level variable, which assumes one
+ * writer at a time. The job queue now runs two lanes at once, so anything
+ * wrapped in here could swallow a write made by the other lane, or lose it on
+ * a rollback. Nothing calls it today. Before something does, it needs to hold
+ * the lanes apart — or the lanes need to stop overlapping.
+ */
 export function runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
   const db = getDb()
   const isOutermost = transactionDepth === 0

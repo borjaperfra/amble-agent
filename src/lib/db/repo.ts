@@ -604,22 +604,21 @@ export function insertJob(row: {
 }
 
 /**
- * The oldest job that is due, marked as running in the same breath.
- *
- * Planning the next question jumps the line. It is only ever queued when the
- * candidate has nothing to look at, and it takes 8s where working an answer
- * into the graph takes 40: letting it wait its turn is 40s of somebody
- * staring at a spinner, and the graph catches up a minute later either way.
+ * The oldest job of these kinds that is due, marked as running in the same
+ * breath. The caller passes the kinds because the queue runs in lanes: what
+ * the candidate is waiting for must not sit behind the graph work.
  */
-export function claimNextJob(): JobRow | undefined {
+export function claimNextJob(kinds: string[]): JobRow | undefined {
+  if (kinds.length === 0) return undefined
   const db = getDb()
+  const slots = kinds.map(() => '?').join(', ')
   const row = db
     .prepare(
       `SELECT * FROM jobs WHERE status = 'pending' AND run_after <= ?
-       ORDER BY CASE kind WHEN 'plan_question' THEN 0 ELSE 1 END, created_at
-       LIMIT 1`,
+       AND kind IN (${slots})
+       ORDER BY created_at LIMIT 1`,
     )
-    .get(now()) as unknown as JobRow | undefined
+    .get(now(), ...kinds) as unknown as JobRow | undefined
   if (!row) return undefined
   db.prepare(
     `UPDATE jobs SET status = 'running', attempts = attempts + 1, updated_at = ? WHERE id = ?`,
@@ -681,11 +680,15 @@ export function listFailedJobs(candidateId: string, limit = 3): JobRow[] {
     .all(candidateId, limit) as unknown as JobRow[]
 }
 
-/** When the next job is due, across every candidate. */
-export function nextJobDueAt(): string | null {
+/** When the next job of these kinds is due, across every candidate. */
+export function nextJobDueAt(kinds: string[]): string | null {
+  if (kinds.length === 0) return null
+  const slots = kinds.map(() => '?').join(', ')
   const row = getDb()
-    .prepare(`SELECT MIN(run_after) AS due FROM jobs WHERE status = 'pending'`)
-    .get() as unknown as { due: string | null }
+    .prepare(
+      `SELECT MIN(run_after) AS due FROM jobs WHERE status = 'pending' AND kind IN (${slots})`,
+    )
+    .get(...kinds) as unknown as { due: string | null }
   return row?.due ?? null
 }
 
