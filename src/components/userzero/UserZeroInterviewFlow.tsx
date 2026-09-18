@@ -40,7 +40,7 @@ type Waiting = 'thinking' | 'retrying' | 'offline'
 
 const COMPLETION_LINE = 'I think I understand you pretty well now.'
 const VOICE_NOTICE =
-  "Voice is simulated in this build — it doesn't transcribe. Use the text box below."
+  'Talk if you’d rather. It lands in the box for you to fix before sending — transcription mishears names and numbers.'
 
 const WAITING_LINE: Record<Waiting, string> = {
   thinking: 'Deciding what to ask you next.',
@@ -295,7 +295,12 @@ export default function UserZeroInterviewFlow() {
               />
               <div className={styles.answerActions}>
                 <div className={styles.recorderInline}>
-                  <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
+                  <VoiceRecorder
+                    live
+                    onCapture={(text) =>
+                      setAnswer((previous) => (previous ? `${previous.trim()} ${text}` : text))
+                    }
+                  />
                 </div>
                 <button
                   type="button"

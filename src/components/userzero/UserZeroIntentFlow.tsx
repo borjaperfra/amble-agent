@@ -179,13 +179,18 @@ export default function UserZeroIntentFlow() {
 
             {phase !== 'sending' && (
               <div className={styles.recorderArea}>
-                <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
+                <VoiceRecorder
+                  live
+                  onCapture={(text) =>
+                    setAnswer((previous) => (previous ? `${previous.trim()} ${text}` : text))
+                  }
+                />
               </div>
             )}
 
             <p className={styles.hint} role="status">
-              Voice is simulated in this build — it doesn&apos;t transcribe. Use the text box
-              below.
+              Talk if you&apos;d rather. It lands in the box below for you to fix before sending —
+              transcription mishears names and numbers.
             </p>
 
             <div className={styles.typingAreaIntent}>

@@ -54,6 +54,39 @@ function readPositiveInt(name: string, fallback: number | null): number | null {
   return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
+export interface SttConfig {
+  baseUrl: string
+  model: string
+  apiKey: string
+  /** ISO-639-1 hint, or empty to let the transcriber decide. */
+  language: string
+  /** The endpoint returns 524 past roughly two minutes, so we stop before it. */
+  maxSeconds: number
+  maxBytes: number
+}
+
+/**
+ * Speech to text. Falls back to the model key, since it is the same provider
+ * unless someone deliberately splits them.
+ */
+export function getSttConfig(): SttConfig | null {
+  const apiKey = process.env.AMBLE_STT_API_KEY?.trim() || process.env.AMBLE_MODEL_API_KEY?.trim()
+  const model = process.env.AMBLE_STT_MODEL?.trim()
+  if (!apiKey || !model) return null
+  return {
+    baseUrl: (
+      process.env.AMBLE_STT_BASE_URL?.trim() ||
+      process.env.AMBLE_MODEL_BASE_URL?.trim() ||
+      'https://api.helmcode.com/v1'
+    ).replace(/\/+$/, ''),
+    model,
+    apiKey,
+    language: process.env.AMBLE_STT_LANGUAGE?.trim() ?? '',
+    maxSeconds: readPositiveInt('AMBLE_STT_MAX_SECONDS', 110) ?? 110,
+    maxBytes: (readPositiveInt('AMBLE_STT_MAX_MB', 24) ?? 24) * 1024 * 1024,
+  }
+}
+
 export function getModelConfig(): ModelConfig | null {
   const apiKey = process.env.AMBLE_MODEL_API_KEY?.trim()
   const modelId = process.env.AMBLE_MODEL_ID?.trim()
