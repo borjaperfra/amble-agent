@@ -1,6 +1,6 @@
 # Dónde nos quedamos — 18 septiembre 2026
 
-Todo lo de hoy está commiteado, de `5695d19` a `a9773a6`.
+Todo lo de hoy está commiteado, de `5695d19` a `b558c68`.
 Bórrame cuando esto esté cerrado.
 
 ## Cómo retomar
@@ -105,10 +105,11 @@ un fallo de esquema, no un resultado. Se reintenta y luego falla a la vista.
 Y el lector de prosa, cuando no reconoce ninguna llave, se queda con el campo
 de texto más largo del objeto en vez de perder la respuesta.
 
-## Siguiente paso
+## Sobre los tiempos
 
-Volver a medir con wifi estable. Todos los tiempos de aquí se tomaron en un
-tren y el modelo pasó de 8 s a 24 s de media por esa razón, no por el código.
+Casi todos se tomaron con la conexión de un tren, y el modelo pasó de 8 s a
+24 s de media por eso, no por el código. Sirven para comparar entre sí, no
+como cifra absoluta.
 
 ## Hecho después de la tabla
 
@@ -143,8 +144,13 @@ trato y pregunta por dónde avisarte.
 la voz del resto de la app porque el acordado no está en el repo. Si aparece,
 se sustituye; la estructura ya está.
 
+**Voz:** el micro graba de verdad y manda el audio a Whisper; lo transcrito
+cae en la caja de respuesta para que lo corrijas antes de enviar. En las
+pantallas reales se toca para empezar y se toca para parar (mantener pulsado
+dos minutos no es razonable); el recorrido de fixture conserva su mímica. Se
+corta solo a los 110 s porque el endpoint devuelve 524 pasados ~2 minutos, y
+el audio no se guarda en ningún sitio.
+
 ## No empezado
 
-**Voz:** STT con Whisper contra `/audio/transcriptions`. Las variables ya
-están en `.env.example` pero todavía no las lee nadie. Límite del endpoint:
-25 MB y ~2 minutos por request, más devuelve 524.
+Nada de la lista original. Lo siguiente sale de la próxima sesión real.
