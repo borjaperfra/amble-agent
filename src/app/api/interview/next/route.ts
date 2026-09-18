@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
-import { planNextQuestion } from '@/lib/pipeline/interview'
+import { getCurrentQuestion, interviewProgress, prefetchQuestion } from '@/lib/pipeline/interview'
 import { ModelError } from '@/lib/model/provider'
 
 export const runtime = 'nodejs'
@@ -13,8 +13,10 @@ export async function POST() {
   }
   const candidate = getOrCreateCandidate()
   try {
-    const plan = await planNextQuestion(candidate.id)
-    return NextResponse.json(plan)
+    const plan = await getCurrentQuestion(candidate.id)
+    // Start planning the one after this while the candidate reads and answers.
+    if (plan.action === 'ASK') prefetchQuestion(candidate.id)
+    return NextResponse.json({ ...plan, progress: interviewProgress(candidate.id) })
   } catch (error) {
     if (error instanceof ModelNotConfiguredError) {
       return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })

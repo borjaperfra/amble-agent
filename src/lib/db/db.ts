@@ -141,6 +141,7 @@ function createDb(): DatabaseSync {
       ok INTEGER NOT NULL,
       error TEXT,
       raw_output TEXT,
+      reasoning_output TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -172,7 +173,20 @@ function createDb(): DatabaseSync {
       valid_until TEXT
     );
   `)
+  migrate(db)
   return db
+}
+
+/**
+ * Additive migrations for databases created before a column existed.
+ * CREATE TABLE IF NOT EXISTS leaves an older table untouched, so anything
+ * added after the first run has to be patched in here.
+ */
+function migrate(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(model_runs)').all() as unknown as { name: string }[]
+  if (!columns.some((column) => column.name === 'reasoning_output')) {
+    db.exec('ALTER TABLE model_runs ADD COLUMN reasoning_output TEXT;')
+  }
 }
 
 export function getDb(): DatabaseSync {

@@ -3,6 +3,8 @@ import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, listUnprocessedSources, listClaims } from '@/lib/db/repo'
 import { processSource } from '@/lib/pipeline/sources'
 import { claimsToEvidence, assessCapabilities, buildDistinctiveProfile, buildDescriptor } from '@/lib/pipeline/graph'
+import { enqueue } from '@/lib/pipeline/jobs'
+import { prefetchQuestion } from '@/lib/pipeline/interview'
 import { ModelNotConfiguredError } from '@/lib/features'
 
 export const runtime = 'nodejs'
@@ -50,6 +52,15 @@ export async function POST(request: Request) {
 
     if (stage === 'capabilities') {
       const result = await assessCapabilities(candidate.id)
+
+      // The profile summary and the first interview question don't block the
+      // candidate any more: both run while they read what was just found.
+      enqueue('build_profile', candidate.id, async () => {
+        await buildDistinctiveProfile(candidate.id)
+        await buildDescriptor(candidate.id)
+      })
+      prefetchQuestion(candidate.id)
+
       return NextResponse.json({
         stage,
         capabilitiesCount: result.capabilityCount,

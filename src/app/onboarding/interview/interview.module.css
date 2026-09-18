@@ -201,3 +201,74 @@
     padding-top: 8svh;
   }
 }
+
+/* ── Progress ─────────────────────────────────────────────────────────── */
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.progressTrack {
+  height: 2px;
+  width: 100%;
+  background: var(--border-soft);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  background: var(--ink-tertiary);
+  border-radius: 2px;
+  transition: width var(--motion-slow) var(--ease-standard);
+}
+
+.progressLabel {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+/* ── Answer area ──────────────────────────────────────────────────────── */
+/* Question, input and mic have to share one screen without scrolling, so the
+   stage stops centring vertically and the gaps tighten. */
+
+.answerArea {
+  width: 100%;
+  max-width: var(--conversation-max);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.answerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recorderInline {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-height: 760px) {
+  .stage {
+    justify-content: flex-start;
+    gap: 18px;
+    padding: 16px 0;
+  }
+
+  .question {
+    font-size: var(--heading-lg);
+  }
+
+  .answerTextarea {
+    min-height: 84px;
+  }
+}

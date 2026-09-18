@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
-import { incorporateAnswer } from '@/lib/pipeline/interview'
+import { interviewProgress, recordAnswer } from '@/lib/pipeline/interview'
 import { ModelError } from '@/lib/model/provider'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
 
 export async function POST(request: Request) {
   if (!isUserZero()) {
@@ -20,8 +19,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await incorporateAnswer(candidate.id, turnId, answer)
-    return NextResponse.json({ ok: true, ...result })
+    // Returns as soon as the answer is safely stored. Working out what it
+    // means for the graph happens on the queue.
+    const result = recordAnswer(candidate.id, turnId, answer)
+    return NextResponse.json({ ...result, progress: interviewProgress(candidate.id) })
   } catch (error) {
     if (error instanceof ModelNotConfiguredError) {
       return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 502 })
     }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Your answer could not be incorporated.' },
+      { error: error instanceof Error ? error.message : 'Your answer could not be saved.' },
       { status: 500 },
     )
   }

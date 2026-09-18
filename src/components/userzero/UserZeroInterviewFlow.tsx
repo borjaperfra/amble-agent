@@ -9,24 +9,49 @@ import VoiceRecorder from '@/components/VoiceRecorder'
 import { EvaluationControl } from './EvaluationControl'
 import styles from '@/app/onboarding/interview/interview.module.css'
 
+interface Progress {
+  asked: number
+  expected: number
+  remaining: number
+  complete: boolean
+}
+
 interface NextResponse {
   action?: 'ASK' | 'STOP'
   turnId?: string
   question?: string
   reason?: string
+  progress?: Progress
   error?: string
 }
 
 interface AnswerResponse {
   ok?: boolean
+  next?: NextResponse | null
+  progress?: Progress
   error?: string
 }
 
-type Phase = 'loading' | 'ask' | 'answering' | 'gotit' | 'complete'
+type Phase = 'loading' | 'ask' | 'gotit' | 'complete'
 
 const COMPLETION_LINE = 'I think I understand you pretty well now.'
 const VOICE_NOTICE =
   "Voice is simulated in this build — it doesn't transcribe. Use the text box below."
+
+// Plain fetch, no state: the mount effect awaits it before touching state, and
+// the event handlers reuse it through loadNext().
+async function fetchNextPlan(): Promise<{ data: NextResponse | null; failed?: string }> {
+  try {
+    const response = await fetch('/api/interview/next', { method: 'POST' })
+    const data = (await response.json()) as NextResponse
+    if (!response.ok) {
+      return { data: null, failed: data.error ?? "Your Rep couldn't plan the next question." }
+    }
+    return { data }
+  } catch {
+    return { data: null, failed: "Your Rep couldn't be reached. Nothing has been lost." }
+  }
+}
 
 export default function UserZeroInterviewFlow() {
   const router = useRouter()
@@ -37,7 +62,13 @@ export default function UserZeroInterviewFlow() {
   const [answer, setAnswer] = useState('')
   const [showWhy, setShowWhy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const finish = useCallback(() => {
+    setPhase('complete')
+    window.setTimeout(() => router.push('/me'), 1600)
+  }, [router])
 
   const applyPlan = useCallback(
     (data: NextResponse | null, failed?: string) => {
@@ -46,9 +77,9 @@ export default function UserZeroInterviewFlow() {
         setPhase('ask')
         return
       }
+      if (data.progress) setProgress(data.progress)
       if (data.action === 'STOP') {
-        setPhase('complete')
-        window.setTimeout(() => router.push('/me'), 2100)
+        finish()
         return
       }
       setTurnId(data.turnId ?? null)
@@ -59,87 +90,74 @@ export default function UserZeroInterviewFlow() {
       setError(null)
       setPhase('ask')
     },
-    [router],
+    [finish],
   )
 
   const loadNext = useCallback(async () => {
     setPhase('loading')
     setError(null)
-    try {
-      const response = await fetch('/api/interview/next', { method: 'POST' })
-      const data = (await response.json()) as NextResponse
-      if (!response.ok) {
-        setError(data.error ?? "Your Rep couldn't plan the next question.")
-        return
-      }
-      applyPlan(data)
-    } catch {
-      setError("Your Rep couldn't be reached. Nothing has been lost.")
-      setPhase('ask')
-      setQuestion((current) => current)
+    const { data, failed } = await fetchNextPlan()
+    applyPlan(data, failed)
+  }, [applyPlan])
+
+  // First question. The phase already starts at 'loading', so nothing is set
+  // before the fetch resolves, and a plan that lands after unmount is dropped.
+  useEffect(() => {
+    let cancelled = false
+    async function loadFirst() {
+      const { data, failed } = await fetchNextPlan()
+      if (!cancelled) applyPlan(data, failed)
+    }
+    void loadFirst()
+    return () => {
+      cancelled = true
     }
   }, [applyPlan])
 
   useEffect(() => {
-    const id = window.setTimeout(() => void loadNext(), 0)
-    return () => window.clearTimeout(id)
-  }, [loadNext])
-
-  useEffect(() => {
     if (phase === 'ask') textareaRef.current?.focus()
-  }, [phase])
-
-  async function loadNextAfterAnswer() {
-    setPhase('gotit')
-    const startedAt = Date.now()
-    let data: NextResponse | null = null
-    let failure: string | undefined
-    try {
-      const response = await fetch('/api/interview/next', { method: 'POST' })
-      data = (await response.json()) as NextResponse
-      if (!response.ok) {
-        failure = data.error ?? "Your Rep couldn't plan the next question."
-        data = null
-      }
-    } catch {
-      failure = "Your Rep couldn't be reached. Nothing has been lost."
-    }
-    const wait = Math.max(0, 800 - (Date.now() - startedAt))
-    window.setTimeout(() => {
-      if (failure) {
-        setError(failure)
-        setPhase('ask')
-      } else {
-        applyPlan(data)
-      }
-    }, wait)
-  }
+  }, [phase, question])
 
   async function submitAnswer() {
     if (!turnId || !answer.trim()) return
-    setPhase('answering')
+    const sent = answer
+    // Straight to the acknowledgement: the answer is stored server-side in one
+    // write, and the next question was planned while this one was being typed.
+    setPhase('gotit')
     setError(null)
+    setAnswer('')
+
     try {
       const response = await fetch('/api/interview/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ turnId, answer }),
+        body: JSON.stringify({ turnId, answer: sent }),
       })
       const data = (await response.json()) as AnswerResponse
       if (!response.ok) {
-        setError(
-          data.error ??
-            "Your answer couldn't be incorporated. It is still here — send it again.",
-        )
+        setAnswer(sent)
+        setError(data.error ?? "Your answer couldn't be saved. It is still here — send it again.")
         setPhase('ask')
         return
       }
-      void loadNextAfterAnswer()
+      if (data.progress) setProgress(data.progress)
+
+      if (data.next) {
+        // Already waiting. Show it after a beat so the acknowledgement reads.
+        window.setTimeout(() => applyPlan(data.next ?? null), 550)
+      } else {
+        void loadNext()
+      }
     } catch {
+      setAnswer(sent)
       setError("Your answer couldn't be sent. It is still here — try again.")
       setPhase('ask')
     }
   }
+
+  const asked = progress?.asked ?? 0
+  const expected = Math.max(progress?.expected ?? 0, asked)
+  const pct = expected > 0 ? Math.min(100, Math.round((asked / expected) * 100)) : 0
 
   return (
     <>
@@ -151,6 +169,19 @@ export default function UserZeroInterviewFlow() {
         }
       />
       <main className={styles.page}>
+        {progress && phase !== 'complete' && (
+          <div className={styles.progress}>
+            <div className={styles.progressTrack} aria-hidden="true">
+              <span className={styles.progressFill} style={{ width: `${pct}%` }} />
+            </div>
+            <p className={styles.progressLabel} role="status">
+              {progress.remaining > 0
+                ? `About ${progress.remaining} more ${progress.remaining === 1 ? 'question' : 'questions'}.`
+                : 'Almost done.'}
+            </p>
+          </div>
+        )}
+
         {phase === 'loading' && (
           <div className={styles.stage} role="status">
             <div className={styles.kickerCenter}>
@@ -164,10 +195,6 @@ export default function UserZeroInterviewFlow() {
         {phase === 'gotit' && (
           <div className={styles.stage} role="status">
             <p className={styles.gotit}>Got it.</p>
-            <div className={styles.workingArea}>
-              <StatusDot />
-              <span>Thinking about what to ask next.</span>
-            </div>
           </div>
         )}
 
@@ -177,55 +204,41 @@ export default function UserZeroInterviewFlow() {
           </div>
         )}
 
-        {(phase === 'ask' || phase === 'answering') && question && (
+        {phase === 'ask' && question && (
           <div className={`${styles.stage} ${styles.entrance}`}>
             <div className={styles.kickerCenter}>
               <p className="kicker">Your Rep</p>
             </div>
             <h1 className={styles.question}>{question}</h1>
 
-            {phase === 'answering' ? (
-              <div className={styles.workingArea} role="status">
-                <StatusDot />
-                <span>Updating what I understand about you...</span>
-              </div>
-            ) : (
-              <>
-                <div className={styles.recorderArea}>
-                  <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
-                </div>
-
-                <p className={styles.voiceNotice}>{VOICE_NOTICE}</p>
-              </>
-            )}
-
-            <div className={styles.typingArea}>
-              <label className={styles.typeLabel} htmlFor="interview-answer">
-                or type
-              </label>
+            <div className={styles.answerArea}>
               <textarea
                 id="interview-answer"
                 ref={textareaRef}
                 className={styles.answerTextarea}
                 value={answer}
-                rows={4}
-                placeholder="Take your time. Write it the way you'd say it."
-                disabled={phase === 'answering'}
+                rows={3}
+                placeholder="Write it the way you'd say it."
+                aria-label="Your answer"
                 onChange={(event) => setAnswer(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submitAnswer()
                 }}
               />
               <div className={styles.answerActions}>
+                <div className={styles.recorderInline}>
+                  <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
+                </div>
                 <button
                   type="button"
                   className="btn"
-                  disabled={!answer.trim() || phase === 'answering'}
+                  disabled={!answer.trim()}
                   onClick={() => void submitAnswer()}
                 >
-                  {phase === 'answering' ? 'Listening to your answer…' : 'Send'}
+                  Send
                 </button>
               </div>
+              <p className={styles.voiceNotice}>{VOICE_NOTICE}</p>
             </div>
 
             <div className={styles.whyArea}>

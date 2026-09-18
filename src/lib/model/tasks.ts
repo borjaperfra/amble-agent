@@ -67,7 +67,7 @@ function normalizeClaimArray(raw: unknown, defaultEpistemic: (typeof epistemicVa
   return raw
     .map((item) => normalizeClaim(item, defaultEpistemic))
     .filter((item): item is Record<string, unknown> => item !== null)
-    .slice(0, 120)
+    .slice(0, 50)
 }
 
 const normalizedClaim = z.object({
@@ -91,7 +91,7 @@ export const extractClaimsOutputSchema = z.preprocess(
   },
   z.object({
     candidateName: z.string().min(2).max(120).nullable(),
-    claims: z.array(normalizedClaim).max(120),
+    claims: z.array(normalizedClaim).max(50),
   }),
 )
 
@@ -170,7 +170,15 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
   const slug = typeof c.slug === 'string' && c.slug.trim().length >= 2 ? normalizeSlug(c.slug) : null
   if (!name && !slug) return null
   const resolvedName = (name ?? prettifySlug(slug as string)).slice(0, 60)
-  const assessment = normalizeAssessment(c.assessment ?? c.level ?? c.evidenceLevel)
+  const assessment = normalizeAssessment(
+    c.assessment ??
+      c.assessmentLevel ??
+      c.assessment_level ??
+      c.level ??
+      c.evidenceLevel ??
+      c.evidence_level ??
+      c.strength,
+  )
   if (!assessment) return null
   const rawEvidenceIds = c.evidenceIds ?? c.evidence ?? c.supportingEvidence ?? c.evidence_ids
   const evidenceIds = Array.isArray(rawEvidenceIds)
@@ -224,16 +232,27 @@ export const assessCapabilitiesOutputSchema = z.preprocess(
   (raw) => {
     const obj = (raw ?? {}) as { capabilities?: unknown }
     const list = Array.isArray(obj.capabilities) ? obj.capabilities : []
-    return {
-      capabilities: list
-        .map((item) => normalizeCapability(item))
-        .filter((item): item is CapabilityAssessment => item !== null)
-        .slice(0, 20),
-    }
+    const capabilities = list
+      .map((item) => normalizeCapability(item))
+      .filter((item): item is CapabilityAssessment => item !== null)
+      .slice(0, 20)
+    // Carried only so the check below can see it; stripped again afterwards.
+    return { capabilities, offered: list.length }
   },
-  z.object({
-    capabilities: z.array(capabilityAssessmentSchema).max(20),
-  }),
+  z
+    .object({
+      capabilities: z.array(capabilityAssessmentSchema).max(20),
+      offered: z.number().optional(),
+    })
+    // The model answering with capabilities that all fail normalization used to
+    // pass as a clean run with nothing in it: no capabilities, no uncertainties,
+    // and an interview left asking generic questions into the void. Treat it as
+    // what it is, a bad answer, so it is retried and then fails out loud.
+    .refine((value) => value.capabilities.length > 0 || !value.offered, {
+      message:
+        'every capability in the response was unusable: each needs a name, an assessment level and a reason',
+    })
+    .transform(({ capabilities }) => ({ capabilities })),
 )
 
 export type AssessCapabilitiesOutput = z.infer<typeof assessCapabilitiesOutputSchema>
@@ -249,7 +268,26 @@ export const reassessOutputSchema = z.preprocess(
         .map((item) => normalizeCapability(item))
         .filter((item): item is CapabilityAssessment => item !== null)
         .slice(0, 20),
-      uncertaintyUpdates: Array.isArray(obj.uncertaintyUpdates) ? obj.uncertaintyUpdates : [],
+      // Normalized rather than passed through: one update missing an id, or a
+      // note one character over the limit, used to fail the whole response and
+      // cost a full retry — around 30s of the candidate's time.
+      uncertaintyUpdates: (Array.isArray(obj.uncertaintyUpdates) ? obj.uncertaintyUpdates : [])
+        .map((item) => {
+          const u = (item ?? {}) as Record<string, unknown>
+          const id =
+            typeof u.id === 'string' && u.id.trim().length > 0
+              ? u.id.trim()
+              : typeof u.uncertaintyId === 'string' && u.uncertaintyId.trim().length > 0
+                ? u.uncertaintyId.trim()
+                : null
+          if (!id) return null
+          const rawStatus = typeof u.status === 'string' ? u.status.toUpperCase().replace(/\s+/g, '_') : ''
+          const status = ['OPEN', 'RESOLVED', 'ACCEPTED_UNKNOWN'].includes(rawStatus) ? rawStatus : 'OPEN'
+          const note = typeof u.note === 'string' ? u.note.trim().slice(0, 400) : null
+          return { id, status, note: note && note.length > 0 ? note : null }
+        })
+        .filter((item): item is { id: string; status: string; note: string | null } => item !== null)
+        .slice(0, 40),
       newUncertainties: newUncertainties
         .map((item): NewUncertainty | null => {
           const u = (item ?? {}) as Record<string, unknown>
@@ -388,7 +426,8 @@ export function runExtractClaimsTask(params: {
   const system = `You are Amble's claim extraction engine, version 1. You read professional source documents and extract discrete professional claims with strict provenance.
 ${EPISTEMIC_RULES}
 Claim types: "experience" (a role, employment or responsibility), "project" (a named project, product or repository), "metric" (a number or measurable outcome), "skill" (an asserted ability), "education", "other".
-Prefer many small, precise claims over few broad ones. Split compound statements. A normal CV yields 10-40 claims. Return an empty claims array ONLY if the document truly contains no professional content.
+One claim per distinct professional fact. Do NOT split a single fact across several claims: a role with three responsibilities is one claim about the role plus, at most, a claim for each responsibility that carries its own evidence. Never emit near-duplicates that differ only in wording.
+Aim for 15-40 claims. A four-page CV that yields more than 45 is being shredded, not read. Return an empty claims array ONLY if the document truly contains no professional content.
 Use EXACTLY these field names for every claim: "statement" (string), "claimType" (one of experience|project|metric|skill|education|other), "epistemicState" (SOURCE_FACT|USER_CLAIM), "sourceExcerpt" (verbatim quote from the content), "confidence" (number 0-1), "requiresConfirmation" (boolean), "possibleCapabilities" (string array, short snake_case suggestions).
 Respond ONLY with JSON: {"candidateName": string|null, "claims": [...]}`
   const user = `Source: ${params.sourceName} (type: ${params.sourceType})
@@ -405,6 +444,8 @@ ${params.content.slice(0, 60_000)}`
     user,
     schema: extractClaimsOutputSchema,
     temperature: 0.1,
+    // Mechanical extraction over a large document. Thinking here is slow and buys nothing.
+    reasoningEffort: 'low',
   })
 }
 
@@ -427,8 +468,8 @@ Rules:
 - Every capability you emit MUST link to at least one evidence ID you were given. A capability without evidence is forbidden.
 - Assessment levels: STRONG_EVIDENCE (multiple independent, corroborating evidence items), GOOD_EVIDENCE (several consistent items), SOME_EVIDENCE (a few items, narrow scope), LIMITED_EVIDENCE (essentially one weak or indirect item), CONTRADICTORY_EVIDENCE (evidence conflicts).
 - NEVER inflate: company-level facts do not prove personal ownership. A SOURCE_FACT about an employer supports capability claims only where the text explicitly connects the candidate.
-- Emit at most 12 capabilities. Quality over quantity. It is fine to emit few.
-- For each capability, include 0-3 uncertainties: things the evidence cannot yet establish (scope, ownership, scale, depth, recency). Set materiality HIGH when it materially changes how a company should read the capability.
+- Emit at most 8 capabilities. Quality over quantity. Merge near-duplicates into the broader one: "analytics" and "performance measurement" are one capability, not two.
+- For each capability, include AT MOST 2 uncertainties, and only genuinely material ones: things the evidence cannot yet establish (scope, ownership, scale, depth, recency). Set materiality HIGH when it materially changes how a company should read the capability.
 - reason must explain what the evidence shows, referencing its nature (e.g. "two independent sources describe...").
 - Respond ONLY with JSON: {"capabilities": [...]}.`
   const user = `EVIDENCE (${params.evidence.length} items):
@@ -453,6 +494,8 @@ ${JSON.stringify(
     user,
     schema: assessCapabilitiesOutputSchema,
     temperature: 0.2,
+    // Weighing what evidence does and does not prove. The core judgement call.
+    reasoningEffort: 'high',
   })
 }
 
@@ -508,6 +551,7 @@ ${JSON.stringify(params.openUncertainties, null, 1)}`
     user,
     schema: reassessOutputSchema,
     temperature: 0.2,
+    reasoningEffort: 'high',
   })
 }
 
@@ -519,11 +563,15 @@ export function runPlanNextQuestionTask(params: {
   recentTurns: { question: string; answer: string }[]
   questionsAsked: number
   minimumTarget: number
+  alreadyAsked: string[]
+  questionsRemaining: number
 }) {
   const system = `You are Amble's interview strategist, version 1. Your single goal: choose the ONE next question that most improves the accuracy of this professional representation — or declare STOP.
 
 Rules:
 - Only ask about genuine uncertainty. NEVER ask what the evidence already establishes.
+- NEVER revisit a subject you have already asked about. A question is a repeat if a reasonable person would answer it with "I already told you that" — rephrasing the same subject, narrowing it, or asking for a number you were already refused all count. Read ALREADY ASKED before choosing, and pick different ground.
+- You have a limited number of questions left. Spend them on different subjects, not on perfecting one.
 - The question must be SHORT and FOCUSED: one single question, maximum 40 words, plain sentences. Never multi-part checklists ("give me X, Y and Z"). Pick the single most valuable unknown.
 - Good questions resolve ownership, scope, scale, depth or contradictions, referencing one specific thing the Rep already knows ("You launched X at Y — what part was actually yours?").
 - Bad questions are generic ("tell me about your experience"), redundant, or laundry lists.
@@ -531,7 +579,11 @@ Rules:
 - reason: max 2 sentences.
 - Respond ONLY with JSON: {"action": "ASK"|"STOP", "question": string|null, "reason": string, "targetCapabilityIds": [], "targetUncertaintyIds": []}.`
   const user = `QUESTIONS ASKED SO FAR: ${params.questionsAsked}
+QUESTIONS REMAINING: ${params.questionsRemaining} — this is a short interview, not an interrogation.
 MINIMUM USEFUL INTERVIEW TARGET: ${params.minimumTarget} questions before stopping, unless remaining uncertainty is genuinely immaterial.
+
+ALREADY ASKED (never ask any of these again, in any rewording):
+${params.alreadyAsked.map((question, index) => `${index + 1}. ${question}`).join('\n') || '(nothing yet)'}
 
 CAPABILITIES AND CURRENT ASSESSMENTS:
 ${JSON.stringify(params.capabilities, null, 1)}
@@ -551,6 +603,7 @@ ${params.recentTurns.map((t) => `Q: ${t.question}\nA: ${t.answer}`).join('\n\n')
     user,
     schema: planNextQuestionOutputSchema,
     temperature: 0.3,
+    reasoningEffort: 'high',
   })
 }
 
@@ -582,6 +635,7 @@ ${params.answer}`
     user,
     schema: answerClaimsOutputSchema,
     temperature: 0.1,
+    reasoningEffort: 'low',
   })
 }
 
@@ -606,6 +660,7 @@ ${JSON.stringify(params.capabilities, null, 1)}`
     user,
     schema: distinctiveProfileOutputSchema,
     temperature: 0.2,
+    reasoningEffort: 'medium',
   })
 }
 
@@ -632,6 +687,7 @@ ${JSON.stringify(params.capabilities, null, 1)}`
     user,
     schema: descriptorOutputSchema,
     temperature: 0.2,
+    reasoningEffort: 'low',
   })
 }
 
@@ -654,5 +710,6 @@ ${params.answer}`
     user,
     schema: interpretIntentOutputSchema,
     temperature: 0.2,
+    reasoningEffort: 'medium',
   })
 }

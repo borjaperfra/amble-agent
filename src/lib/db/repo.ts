@@ -129,6 +129,7 @@ export interface ModelRunRow {
   ok: number
   error: string | null
   raw_output: string | null
+  reasoning_output: string | null
   created_at: string
 }
 
@@ -420,7 +421,7 @@ export function getUncertainty(id: string): UncertaintyRow | undefined {
 export function getOrCreateInterview(candidateId: string): InterviewRow {
   const db = getDb()
   const existing = db
-    .prepare("SELECT * FROM interviews WHERE candidate_id = ? AND status = 'active'")
+    .prepare("SELECT * FROM interviews WHERE candidate_id = ? AND status IN ('active', 'stopping')")
     .get(candidateId) as unknown as InterviewRow | undefined
   if (existing) return existing
   const id = newId('int')
@@ -437,6 +438,15 @@ export function completeInterview(id: string): void {
   getDb()
     .prepare("UPDATE interviews SET status = 'completed', completed_at = ? WHERE id = ?")
     .run(now(), id)
+}
+
+/**
+ * The planner decided there is nothing left worth asking, but questions
+ * already planned ahead may still be unanswered. The interview closes for
+ * real once that queue drains.
+ */
+export function markInterviewStopping(id: string): void {
+  getDb().prepare("UPDATE interviews SET status = 'stopping' WHERE id = ? AND status = 'active'").run(id)
 }
 
 export function listTurns(interviewId: string): InterviewTurnRow[] {
@@ -468,8 +478,8 @@ export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
   queueWrite(() =>
     getDb()
       .prepare(
-        `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output, reasoning_output, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         row.id,
         row.candidate_id,
@@ -484,6 +494,7 @@ export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
         row.ok,
         row.error,
         row.raw_output,
+        row.reasoning_output,
         now(),
       ),
   )

@@ -8,7 +8,6 @@ import {
   listUncertainties,
   newId,
   replaceDistinctiveProfile,
-  uncertaintyExistsByDescription,
   updateCandidateProfile,
   upsertCapability,
   linkCapabilityEvidence,
@@ -23,6 +22,10 @@ import {
   runDistinctiveProfileTask,
   type EvidenceForAssessment,
 } from '../model/tasks'
+import { isDuplicateUncertainty } from './uncertainty'
+
+/** A capability with more open questions than this is being interrogated. */
+const MAX_UNCERTAINTIES_PER_CAPABILITY = 2
 
 export function claimsToEvidence(candidateId: string): number {
   const claims = listClaimsWithoutEvidence(candidateId)
@@ -99,8 +102,18 @@ export async function assessCapabilities(
     upsertCapability(candidateId, capability.slug, capability.name, capability.assessment, capability.reason)
     linkCapabilityEvidence(candidateId, capability.slug, evidenceIds)
     evidenceLinked += evidenceIds.length
-    for (const uncertainty of capability.uncertainties) {
-      if (uncertaintyExistsByDescription(candidateId, uncertainty.description)) continue
+
+    // Only the material ones, only a couple per capability, and nothing that
+    // restates something already on the pile. A first pass that opens forty
+    // threads guarantees an interview that circles and a Map that reads as a
+    // list of failures.
+    const worthAsking = capability.uncertainties
+      .filter((uncertainty) => uncertainty.materiality !== 'LOW')
+      .slice(0, MAX_UNCERTAINTIES_PER_CAPABILITY)
+
+    for (const uncertainty of worthAsking) {
+      const existing = listUncertainties(candidateId, 'OPEN')
+      if (isDuplicateUncertainty(existing, uncertainty.description, capability.slug)) continue
       insertUncertainty({
         id: newId('unc'),
         candidate_id: candidateId,
@@ -109,7 +122,7 @@ export async function assessCapabilities(
         reason: null,
         materiality: uncertainty.materiality,
         status: 'OPEN',
-        resolvable_by_interview: uncertainty.materiality === 'LOW' ? 0 : 1,
+        resolvable_by_interview: 1,
       })
       uncertaintyCount++
     }
