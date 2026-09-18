@@ -1,7 +1,30 @@
 # Dónde nos quedamos — 18 septiembre 2026
 
-Todo lo de hoy está commiteado, de `5695d19` a `b558c68`.
-Bórrame cuando esto esté cerrado.
+Todo commiteado, de `5695d19` en adelante. Árbol limpio, `tsc` y `eslint` en
+verde. Bórrame cuando esto esté cerrado.
+
+## Lo siguiente, cuando retomemos
+
+**Una sesión real de Borja, entera, sin preparar nada antes.** Todo lo medido
+hasta ahora lleva respuestas sintéticas que el modelo escribe en diez
+segundos: una persona tarda más en escribir y contesta otras cosas. Es lo
+único que dirá si las preguntas valen la pena.
+
+Antes de esa sesión: borrar `.amble-data/`, que ahora tiene restos de pruebas
+(el intent dice "Would consider 50k", que salió de una llamada mía a la API).
+
+Y el agujero real del producto, que no es código de estas pantallas: **no
+llega nada**. No hay fuente de ofertas que cruzar contra las preferencias. La
+pantalla de listening lo dice en voz alta ("Nothing is arriving yet") en vez
+de disimularlo, pero ahí está.
+
+## Decidido, no volver a abrirlo
+
+- El copy de la pantalla de listening se revisó el 18 de septiembre y **se
+  queda como está**, incluidos los tres puntos de "FROM HERE". Repiten en
+  parte la promesa de la línea grande de arriba, y aun así se quedan: dicen la
+  mecánica concreta, que la promesa no dice.
+- Arrastrar ficheros está **probado por Borja en su navegador**, funciona.
 
 ## Cómo retomar
 
