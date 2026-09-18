@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import Header from '@/components/Header'
+import StatusDot from '@/components/StatusDot'
 import styles from '@/app/onboarding/onboarding.module.css'
 
 interface SourceItem {
@@ -21,13 +22,19 @@ export default function UserZeroOnboardingFlow() {
   const [githubHandle, setGithubHandle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState<string[]>([])
+  const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // dragleave fires for every child element the pointer crosses, so the depth
+  // has to be counted rather than toggled.
+  const dragDepth = useRef(0)
 
   const readableCount = sources.filter((source) => source.status === 'extracted').length
 
   async function addFile(file: File) {
     setBusy(true)
     setError(null)
+    setUploading((prev) => [...prev, file.name])
     try {
       const form = new FormData()
       form.append('file', file)
@@ -41,7 +48,14 @@ export default function UserZeroOnboardingFlow() {
     } catch {
       setError('The file could not be uploaded.')
     } finally {
+      setUploading((prev) => prev.filter((name) => name !== file.name))
       setBusy(false)
+    }
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    for (const file of Array.from(files)) {
+      await addFile(file)
     }
   }
 
@@ -72,7 +86,31 @@ export default function UserZeroOnboardingFlow() {
   return (
     <>
       <Header />
-      <main className={styles.page}>
+      <main
+        className={styles.page}
+        onDragEnter={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return
+          event.preventDefault()
+          dragDepth.current += 1
+          setDragging(true)
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'copy'
+        }}
+        onDragLeave={() => {
+          dragDepth.current = Math.max(0, dragDepth.current - 1)
+          if (dragDepth.current === 0) setDragging(false)
+        }}
+        onDrop={(event) => {
+          if (!event.dataTransfer.files.length) return
+          event.preventDefault()
+          dragDepth.current = 0
+          setDragging(false)
+          void addFiles(event.dataTransfer.files)
+        }}
+      >
         <h1 className={styles.title}>Let&rsquo;s build your Rep.</h1>
         <p className={styles.body}>
           {'Start with what already exists.\nI\u2019ll read it before asking you anything.'}
@@ -82,32 +120,44 @@ export default function UserZeroOnboardingFlow() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.txt,.md"
+            multiple
+            accept=".pdf,.docx,.txt,.md"
             className="visually-hidden"
-            aria-label="Upload your CV as PDF or text"
+            aria-label="Upload your CV as a PDF, Word or text file"
             onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) void addFile(file)
+              const files = event.target.files
+              if (files?.length) void addFiles(files)
               event.target.value = ''
             }}
           />
           <button
             type="button"
-            className={styles.fileDrop}
+            className={`${styles.fileDrop} ${dragging ? styles.fileDropActive : ''}`}
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
-            aria-label="Add your CV as a PDF or text file"
+            aria-label="Add your CV as a PDF, Word or text file"
           >
             <span className={styles.fileDropMain}>
               <span className={styles.fileDropLabel}>CV</span>
               <span className={styles.fileDropHint}>
-                {busy ? 'Reading...' : 'Upload a PDF or text file'}
+                {dragging
+                  ? 'Drop it here.'
+                  : busy
+                    ? 'Reading it...'
+                    : 'Drop a file here, or pick one. PDF, Word or text.'}
               </span>
             </span>
             <span className={styles.rowRight}>
               <span className={styles.rowAction}>Add →</span>
             </span>
           </button>
+
+          {uploading.map((name) => (
+            <div key={name} className={`${styles.uploadingRow} ${styles.enter}`} role="status">
+              <StatusDot />
+              <span>Reading {name}...</span>
+            </div>
+          ))}
 
           {sources.map((source) => (
             <div
@@ -212,6 +262,13 @@ export default function UserZeroOnboardingFlow() {
         )}
 
         <div className={styles.footer}>
+          <p className={styles.footerNote}>
+            {readableCount === 0
+              ? 'Add something I can read and the button wakes up.'
+              : readableCount === 1
+                ? "That's enough to start. Hit continue and I'll read it properly."
+                : `${readableCount} sources ready. Hit continue and I'll read them properly.`}
+          </p>
           <button
             type="button"
             className="btn"

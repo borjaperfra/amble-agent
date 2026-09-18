@@ -13,6 +13,7 @@ import {
   type SourceRow,
 } from '../db/repo'
 import { runExtractClaimsTask } from '../model/tasks'
+import { docxToText } from './docx'
 
 const MAX_CONTENT_CHARS = 60_000
 
@@ -69,17 +70,30 @@ export async function createFileSource(
   const id = newId('src')
   const extension = path.extname(originalName).toLowerCase()
   const isPdf = file.type === 'application/pdf' || extension === '.pdf'
+  const isDocx =
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    extension === '.docx'
   const isText = ['.txt', '.md', '.markdown'].includes(extension) || file.type.startsWith('text/')
   const textName = `${id}.txt`
   const storedPath = path.join(DATA_DIRECTORY, 'uploads', textName)
 
-  if (!isPdf && !isText) {
+  if (extension === '.doc') {
     return {
       id,
       name: originalName,
       type: 'cv',
       status: 'failed',
-      detail: 'I can only read PDF or plain text files in this build.',
+      detail: "That's the old Word format. Save it again as .docx or PDF and I can read it.",
+    }
+  }
+
+  if (!isPdf && !isDocx && !isText) {
+    return {
+      id,
+      name: originalName,
+      type: 'cv',
+      status: 'failed',
+      detail: 'I can read PDF, Word (.docx) and plain text in this build.',
     }
   }
 
@@ -88,12 +102,17 @@ export async function createFileSource(
   if (isPdf) {
     fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.original.pdf`), buffer)
   }
+  if (isDocx) {
+    fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.original.docx`), buffer)
+  }
 
   let content = ''
   try {
     if (isPdf) {
       const pages = await extractPdfText(buffer)
       content = pages.map((page, index) => `[page ${index + 1}] ${page}`).join('\n\n')
+    } else if (isDocx) {
+      content = docxToText(buffer)
     } else {
       content = buffer.toString('utf8')
     }
@@ -114,8 +133,9 @@ export async function createFileSource(
       name: originalName,
       type: 'cv',
       status: 'failed',
-      detail:
-        "I couldn't find enough readable text in this document. If it's scanned, try a text-based PDF or a plain text export.",
+      detail: isDocx
+        ? "I couldn't find readable text in this Word file. If it is mostly images or text boxes, try a PDF export."
+        : "I couldn't find enough readable text in this document. If it's scanned, try a text-based PDF or a plain text export.",
     }
   }
 
@@ -128,7 +148,11 @@ export async function createFileSource(
     name: originalName,
     uri: null,
     original_filename: originalName,
-    mime_type: isPdf ? 'application/pdf' : file.type || 'text/plain',
+    mime_type: isPdf
+      ? 'application/pdf'
+      : isDocx
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : file.type || 'text/plain',
     stored_path: textName,
     char_count: content.length,
     status: 'extracted',

@@ -50,6 +50,14 @@
   background: var(--moss-wash);
 }
 
+/* Dragging a file over the page. The whole page is a target, but only this
+   panel says so, because a page that lights up everywhere reads as an error. */
+.fileDropActive {
+  border-color: var(--moss);
+  border-style: dashed;
+  background: var(--moss-wash);
+}
+
 .fileDropConnected {
   border-color: var(--moss-soft);
   background: var(--moss-wash);
@@ -168,7 +176,32 @@
 .footer {
   margin-top: 64px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.footerNote {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  max-width: 34ch;
+}
+
+.uploadingRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  padding: 14px 0;
+}
+
+@media (max-width: 600px) {
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
 }
 
 @keyframes arrive {
