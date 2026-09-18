@@ -1,6 +1,6 @@
 # Dónde nos quedamos — 18 septiembre 2026
 
-Todo lo de hoy está commiteado, de `5695d19` a `442f355`.
+Todo lo de hoy está commiteado, de `5695d19` a `a9773a6`.
 Bórrame cuando esto esté cerrado.
 
 ## Cómo retomar
@@ -130,12 +130,20 @@ que cambia mientras lee, y DOCX sin dependencia nueva (un .docx es un ZIP y
 Node ya trae inflate). Probado con un .docx real: 10.962 caracteres, 37
 claims, 8 capacidades, 16 incertidumbres.
 
-## No empezado
+**Cierre:** el Mapa abre con una línea de sobre qué se sostiene (fuentes,
+evidencias, cuántas capacidades aguantan con evidencia buena, cuántas
+preguntas siguen abiertas) y cierra con dos o tres cosas que lo afilarían. Los
+huecos ya no se listan los dieciséis: se muestran cinco y se cuentan los
+demás. Las preferencias estructuradas (salario, forma de trabajo, sitio,
+producto, tamaño de empresa) las rellena el modelo de lo que ya dijiste y solo
+en los huecos — lo que tú escribas manda. La pantalla de listening explica el
+trato y pregunta por dónde avisarte.
 
-**Cierre:** completitud y siguientes pasos en el Mapa; preferencias
-estructuradas (salario, remoto, tecnologías, ubicación, etapa); y la pantalla
-de listening explicando qué pasa a partir de ahora, con el canal de aviso
-(WhatsApp / correo / ambos). El copy de esa pantalla ya está acordado.
+**El copy de la pantalla de listening es mío, no el acordado.** Lo escribí en
+la voz del resto de la app porque el acordado no está en el repo. Si aparece,
+se sustituye; la estructura ya está.
+
+## No empezado
 
 **Voz:** STT con Whisper contra `/audio/transcriptions`. Las variables ya
 están en `.env.example` pero todavía no las lee nadie. Límite del endpoint:
