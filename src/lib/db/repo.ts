@@ -583,13 +583,23 @@ export function insertJob(row: {
   candidate_id: string
   kind: string
   payload: string
+  /** Not before this moment. Defaults to now. */
+  runAfter?: Date
 }): JobRow {
   const db = getDb()
   const stamp = now()
   db.prepare(
     `INSERT INTO jobs (id, candidate_id, kind, payload, status, attempts, run_after, created_at, updated_at)
      VALUES (?, ?, ?, ?, 'pending', 0, ?, ?, ?)`,
-  ).run(row.id, row.candidate_id, row.kind, row.payload, stamp, stamp, stamp)
+  ).run(
+    row.id,
+    row.candidate_id,
+    row.kind,
+    row.payload,
+    row.runAfter ? row.runAfter.toISOString() : stamp,
+    stamp,
+    stamp,
+  )
   return db.prepare('SELECT * FROM jobs WHERE id = ?').get(row.id) as unknown as JobRow
 }
 

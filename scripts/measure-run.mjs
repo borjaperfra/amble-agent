@@ -165,18 +165,33 @@ const uploadStarted = now()
 const source = await api('/api/onboarding/sources', { method: 'POST', body: form })
 console.log(`upload                 ${s(now() - uploadStarted)}  ${JSON.stringify(source).slice(0, 140)}`)
 
+// Reading runs on the queue now: this starts it and then watches, the same
+// way the browser does.
+const processingStarted = now()
+const started = await api('/api/onboarding/process', { method: 'POST' })
+console.log(`start processing       ${s(now() - processingStarted)}  ${started.started.length} source(s) queued`)
+
 const stages = []
-for (const stage of ['sources', 'evidence', 'capabilities']) {
-  const started = now()
-  const body = await api('/api/onboarding/process', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stage }),
-  })
-  const elapsed = now() - started
-  stages.push({ stage, elapsed, body })
-  console.log(`process ${stage.padEnd(14)} ${s(elapsed)}  ${JSON.stringify(body).slice(0, 160)}`)
+let lastPhase = null
+let processingState = null
+for (;;) {
+  processingState = await api('/api/onboarding/state')
+  if (processingState.phase !== lastPhase) {
+    lastPhase = processingState.phase
+    stages.push({ stage: lastPhase, at: now() - processingStarted })
+    console.log(`  ${s(now() - processingStarted).padStart(6)}  ${lastPhase}`)
+  }
+  if (processingState.phase === 'done') break
+  if (processingState.phase === 'failed') {
+    throw new Error(`Processing failed: ${processingState.error}`)
+  }
+  if (now() - processingStarted > 900_000) throw new Error('Processing never finished')
+  await new Promise((resolve) => setTimeout(resolve, 1200))
 }
+const ingestElapsed = now() - processingStarted
+console.log(
+  `processing done        ${s(ingestElapsed)}  ${JSON.stringify(processingState.counts)}`,
+)
 
 // -- Interview ---------------------------------------------------------
 console.log()
@@ -234,7 +249,7 @@ while (plan?.action === 'ASK' && turns.length < MAX_TURNS) {
 // -- Report ------------------------------------------------------------
 const waits = turns.map((turn) => turn.waitMs)
 const avg = waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : 0
-const ingestMs = stages.reduce((total, entry) => total + entry.elapsed, 0)
+const ingestMs = ingestElapsed
 const db = counts()
 
 console.log()

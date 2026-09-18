@@ -334,21 +334,39 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
 
   updateSourceStatus(source.id, 'processed', null)
 
-  const discoveries = data.claims
-    .filter((claim) => claim.claimType === 'experience' || claim.claimType === 'project')
-    .slice(0, 6)
+  return {
+    sourceId: source.id,
+    sourceName: source.name,
+    claimsCount: data.claims.length,
+    discoveries: discoveriesFrom(
+      data.claims.map((claim) => ({ statement: claim.statement, claim_type: claim.claimType })),
+    ),
+  }
+}
+
+export interface Discovery {
+  title: string
+  meta: string
+}
+
+/**
+ * The handful of lines worth showing while a source is being read. Shaped
+ * from stored claims rather than from the model's reply, so the screen can be
+ * rebuilt by asking the server what it knows — which is what a phone that
+ * reconnects, or a chat transport with no page at all, has to do.
+ */
+export function discoveriesFrom(
+  claims: { statement: string; claim_type: string }[],
+  limit = 6,
+): Discovery[] {
+  return claims
+    .filter((claim) => claim.claim_type === 'experience' || claim.claim_type === 'project')
+    .slice(0, limit)
     .map((claim) => {
       const parts = claim.statement.split(/\s+(?:at|for|on)\s+/i)
       const title = parts.length > 1 ? parts[parts.length - 1].slice(0, 48) : claim.statement.slice(0, 48)
       return { title, meta: claim.statement.length > 64 ? `${claim.statement.slice(0, 64)}…` : claim.statement }
     })
-
-  return {
-    sourceId: source.id,
-    sourceName: source.name,
-    claimsCount: data.claims.length,
-    discoveries,
-  }
 }
 
 export function claimCapabilitySuggestions(possibleCapabilitiesJson: string): string[] {

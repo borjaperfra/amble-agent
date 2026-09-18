@@ -308,12 +308,14 @@ export function recordAnswer(candidateId: string, turnId: string, answerText: st
 
   if (readsAsDeclined(answerText)) closeSubject(candidateId, turn)
 
+  // Order matters. Queueing the graph work first starts it draining
+  // immediately, and the question the candidate is actually waiting for ends
+  // up behind a 20s job even though it jumps the line — the line is only
+  // consulted once the current job is done.
+  prefetchQuestion(candidateId)
   enqueue('incorporate_answer', candidateId, { turnId })
 
-  const next = whatIsWaiting(candidateId)
-  prefetchQuestion(candidateId)
-
-  return { ok: true, next }
+  return { ok: true, next: whatIsWaiting(candidateId) }
 }
 
 /** The question already planned ahead, if there is one. */

@@ -14,134 +14,179 @@ interface LogEntry {
   meta?: string
 }
 
-interface SourceItem {
+interface SourceState {
   id: string
   name: string
+  type: string
   status: string
+  detail: string | null
+  claims: number
+  discoveries: { title: string; meta: string }[]
 }
 
-interface StageResponse {
-  error?: string
-  unconfigured?: boolean
-  processed?: { name: string; claimsCount: number; discoveries: { title: string; meta: string }[] }[]
-  totalClaims?: number
-  evidenceCreated?: number
-  capabilitiesCount?: number
-  newUncertainties?: number
+interface StateResponse {
+  phase?: 'idle' | 'reading' | 'connecting' | 'done' | 'failed'
+  sources?: SourceState[]
+  counts?: { claims: number; evidence: number; capabilities: number; uncertainties: number }
+  queue?: { busy: boolean; retrying: boolean; nextAttemptAt: string | null }
+  error?: string | null
 }
+
+type Stage = 'starting' | 'reading' | 'connecting' | 'retrying' | 'offline' | 'done' | 'failed'
+
+const POLL_MS = 1200
+const OFFLINE_BACKOFF_MS = [2000, 4000, 8000, 15000, 30000]
 
 export default function UserZeroProcessingFlow() {
   const [entries, setEntries] = useState<LogEntry[]>([])
-  const [working, setWorking] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
+  const [stage, setStage] = useState<Stage>('starting')
+  const [readingNow, setReadingNow] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
-  const startedRef = useRef(false)
+  const [attempt, setAttempt] = useState(0)
+  const seenRef = useRef<Set<string>>(new Set())
 
-  function push(entry: Omit<LogEntry, 'key'>) {
-    setEntries((prev) => [...prev, { ...entry, key: `${entry.kind}-${Math.random().toString(36).slice(2)}` }])
-  }
+  /**
+   * The reading happens on a queue, so the screen is not a transcript of one
+   * long request any more: it asks the server what it knows and shows
+   * whatever is new. Lock the phone, lose signal, reload the page — the story
+   * picks up where it was rather than starting over or dying.
+   */
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    let offlineAttempts = 0
 
-  async function callStage(stage: string, sourceId?: string): Promise<StageResponse | null> {
-    try {
-      const response = await fetch('/api/onboarding/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sourceId ? { stage, sourceId } : { stage }),
-      })
-      const data = (await response.json()) as StageResponse
-      if (!response.ok) {
-        setFailure(data.error ?? 'Processing failed.')
-        return null
+    const later = (ms: number) => {
+      timer = window.setTimeout(() => {
+        if (!cancelled) void poll()
+      }, ms)
+    }
+
+    function absorb(data: StateResponse): void {
+      const seen = seenRef.current
+      const fresh: LogEntry[] = []
+
+      for (const source of data.sources ?? []) {
+        if (source.status !== 'processed') continue
+        source.discoveries.forEach((discovery, index) => {
+          const key = `${source.id}-d${index}`
+          if (seen.has(key)) return
+          seen.add(key)
+          fresh.push({ key, kind: 'discovery', title: discovery.title, meta: discovery.meta })
+        })
+        const summaryKey = `${source.id}-kept`
+        if (!seen.has(summaryKey)) {
+          seen.add(summaryKey)
+          fresh.push({
+            key: summaryKey,
+            kind: 'summary',
+            text: `I kept ${source.claims} statements from ${source.name}.`,
+          })
+        }
       }
-      return data
-    } catch {
-      setFailure('Processing failed: the server could not be reached.')
-      return null
+
+      const counts = data.counts
+      if (counts && counts.evidence > 0 && !seen.has('evidence')) {
+        seen.add('evidence')
+        fresh.push({
+          key: 'evidence',
+          kind: 'count',
+          text: `Grounded ${counts.evidence} pieces of evidence.`,
+        })
+      }
+      if (counts && counts.capabilities > 0 && !seen.has('capabilities')) {
+        seen.add('capabilities')
+        fresh.push({
+          key: 'capabilities',
+          kind: 'count',
+          text: `Found ${counts.capabilities} capabilities.`,
+        })
+      }
+
+      if (fresh.length > 0) setEntries((prev) => [...prev, ...fresh])
+
+      const next = (data.sources ?? []).find((source) => source.status === 'extracted')
+      setReadingNow(next?.name ?? null)
     }
-  }
 
-  function pause(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms))
-  }
-
-  async function run() {
-    setFailure(null)
-    setDone(false)
-
-    const listResponse = await fetch('/api/onboarding/sources')
-    const sources = (await listResponse.json()) as SourceItem[]
-    const pending = sources.filter((source) => source.status === 'extracted')
-    if (pending.length === 0) {
-      setFailure('There are no unread sources to process. Go back and add one.')
-      return
-    }
-
-    let keptStatements = 0
-
-    for (const source of pending) {
-      push({ kind: 'activity', text: `Reading ${source.name}...` })
-      setWorking(`Reading ${source.name}...`)
-      const result = await callStage('sources', source.id)
-      if (!result) {
-        setWorking(null)
+    async function poll(): Promise<void> {
+      let data: StateResponse
+      try {
+        const response = await fetch('/api/onboarding/state')
+        data = (await response.json()) as StateResponse
+        if (!response.ok) {
+          if (cancelled) return
+          setFailure(data.error ?? 'Processing failed.')
+          setStage('failed')
+          return
+        }
+      } catch {
+        if (cancelled) return
+        // Never reached the server. The work carries on without us.
+        setStage('offline')
+        const backoff =
+          OFFLINE_BACKOFF_MS[Math.min(offlineAttempts, OFFLINE_BACKOFF_MS.length - 1)]
+        offlineAttempts += 1
+        later(backoff)
         return
       }
-      for (const processed of result.processed ?? []) {
-        for (const discovery of processed.discoveries) {
-          push({ kind: 'discovery', title: discovery.title, meta: discovery.meta })
-          await pause(300)
-        }
-        keptStatements += processed.claimsCount
-        push({ kind: 'summary', text: `I kept ${processed.claimsCount} statements from ${processed.name}.` })
-        await pause(400)
+
+      if (cancelled) return
+      offlineAttempts = 0
+      absorb(data)
+
+      if (data.phase === 'done') {
+        setStage('done')
+        return
       }
+      if (data.phase === 'failed') {
+        setFailure(data.error ?? 'Processing failed.')
+        setStage('failed')
+        return
+      }
+      setStage(data.queue?.retrying ? 'retrying' : data.phase === 'connecting' ? 'connecting' : 'reading')
+      later(POLL_MS)
     }
 
-    if (keptStatements === 0) {
-      setWorking(null)
-      setFailure(
-        'I read your sources but could not extract a single professional statement. That is probably my failure, not yours. Try again, or use a plain text export.',
-      )
-      return
+    async function start(): Promise<void> {
+      try {
+        const response = await fetch('/api/onboarding/process', { method: 'POST' })
+        if (!response.ok) {
+          const data = (await response.json()) as { error?: string }
+          // Work already queued from an earlier visit is not a failure: the
+          // poll below will find it.
+          if (!cancelled && !data.error?.includes('no unread sources')) {
+            setFailure(data.error ?? 'Processing could not be started.')
+            setStage('failed')
+            return
+          }
+        }
+      } catch {
+        // Could not even ask. The poll will keep trying.
+      }
+      if (!cancelled) void poll()
     }
 
-    push({ kind: 'activity', text: 'Looking at what it all means...' })
-    setWorking('Looking at what it all means...')
-    const evidenceResult = await callStage('evidence')
-    if (!evidenceResult) {
-      setWorking(null)
-      return
+    void start()
+
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
     }
-    push({ kind: 'count', text: `Grounded ${evidenceResult.evidenceCreated ?? 0} pieces of evidence.` })
-    await pause(500)
+  }, [attempt])
 
-    push({ kind: 'activity', text: 'Connecting the dots...' })
-    setWorking('Connecting the dots...')
-    const capabilitiesResult = await callStage('capabilities')
-    if (!capabilitiesResult) {
-      setWorking(null)
-      return
-    }
-    push({ kind: 'count', text: `Found ${capabilitiesResult.capabilitiesCount ?? 0} capabilities.` })
-    await pause(500)
-
-    setWorking("Noting what I still don't know...")
-    const profileResult = await callStage('profile')
-    if (!profileResult) {
-      setWorking(null)
-      return
-    }
-
-    setWorking(null)
-    setDone(true)
-  }
-
-  useEffect(() => {
-    if (startedRef.current) return
-    startedRef.current = true
-    void run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const working =
+    stage === 'offline'
+      ? 'No connection. Your Rep keeps reading — still trying to hear back.'
+      : stage === 'retrying'
+        ? 'That came back wrong. Trying again — nothing is lost.'
+        : stage === 'connecting'
+          ? 'Connecting the dots...'
+          : stage === 'reading' || stage === 'starting'
+            ? readingNow
+              ? `Reading ${readingNow}...`
+              : 'Looking at what it all means...'
+            : null
 
   return (
     <>
@@ -179,24 +224,32 @@ export default function UserZeroProcessingFlow() {
           )}
         </div>
 
-        {failure && (
+        {stage === 'failed' && (
           <div className={styles.done}>
             <p className={styles.doneLine}>Something didn&apos;t work.</p>
             <p className={styles.doneDetail}>{failure}</p>
             <p className={styles.doneDetail}>Nothing has been invented to fill the gap.</p>
             <div className={styles.doneCta}>
-              <button type="button" className="btn" onClick={() => void run()}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setFailure(null)
+                  setStage('starting')
+                  setAttempt((value) => value + 1)
+                }}
+              >
                 Try again →
               </button>
             </div>
           </div>
         )}
 
-        {done && (
+        {stage === 'done' && (
           <div className={styles.done}>
             <p className={styles.doneLine}>I have the basics.</p>
             <p className={styles.doneDetail}>
-              {'There are a few things\nI\u2019d rather ask you myself.'}
+              {'There are a few things\nI’d rather ask you myself.'}
             </p>
             <div className={styles.doneCta}>
               <Link href="/onboarding/interview" className="btn">

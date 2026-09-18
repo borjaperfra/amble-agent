@@ -135,6 +135,26 @@ export async function assessCapabilities(
   }
 }
 
+/**
+ * Everything between "the sources are read" and "there is something to ask
+ * about": grounding the claims as evidence, working out capabilities, and
+ * lining up the summary and the first question behind it.
+ *
+ * Lives here as one unit so it can be a single job. Grounding evidence is
+ * instant and pointless to queue separately.
+ */
+export async function groundAndAssess(candidateId: string): Promise<CapabilityAssessmentResult> {
+  claimsToEvidence(candidateId)
+  const result = await assessCapabilities(candidateId)
+
+  const { enqueue } = await import('./jobs')
+  const { prefetchQuestion } = await import('./interview')
+  enqueue('build_profile', candidateId)
+  prefetchQuestion(candidateId)
+
+  return result
+}
+
 export async function buildDistinctiveProfile(candidateId: string): Promise<string[]> {
   const capabilities = listCapabilities(candidateId)
   const qualifying = capabilities

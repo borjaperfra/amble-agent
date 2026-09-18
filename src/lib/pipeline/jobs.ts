@@ -32,9 +32,16 @@ import {
   type JobRow,
 } from '../db/repo'
 
-export type JobKind = 'incorporate_answer' | 'plan_question' | 'build_profile'
+export type JobKind =
+  | 'process_source'
+  | 'assess_capabilities'
+  | 'incorporate_answer'
+  | 'plan_question'
+  | 'build_profile'
 
 export interface JobPayloads {
+  process_source: { sourceId: string }
+  assess_capabilities: Record<string, never>
   incorporate_answer: { turnId: string }
   plan_question: Record<string, never>
   build_profile: Record<string, never>
@@ -72,6 +79,27 @@ async function run(job: JobRow): Promise<void> {
   const payload = JSON.parse(job.payload || '{}') as Record<string, unknown>
 
   switch (job.kind as JobKind) {
+    case 'process_source': {
+      const { getSource } = await import('../db/repo')
+      const { processSource } = await import('./sources')
+      const source = getSource(String(payload.sourceId ?? ''))
+      if (!source) throw new Error(`Source ${payload.sourceId} is gone.`)
+      if (source.status === 'processed') return
+      await processSource(source, job.candidate_id)
+      return
+    }
+    case 'assess_capabilities': {
+      // The queue takes the oldest job that is *due*, so a source backing off
+      // after a failure would otherwise let this one overtake it and assess a
+      // candidate whose CV has not been read yet. Stand aside and come back.
+      if (hasPendingKind(job.candidate_id, 'process_source')) {
+        enqueue('assess_capabilities', job.candidate_id, {}, 5_000)
+        return
+      }
+      const { groundAndAssess } = await import('./graph')
+      await groundAndAssess(job.candidate_id)
+      return
+    }
     case 'incorporate_answer': {
       const { incorporateAnswerJob } = await import('./interview')
       await incorporateAnswerJob(job.candidate_id, String(payload.turnId ?? ''))
@@ -97,6 +125,7 @@ export function enqueue<K extends JobKind>(
   kind: K,
   candidateId: string,
   payload: JobPayloads[K] = {} as JobPayloads[K],
+  delayMs = 0,
 ): string {
   const id = newId('job')
   insertJob({
@@ -104,6 +133,7 @@ export function enqueue<K extends JobKind>(
     candidate_id: candidateId,
     kind,
     payload: JSON.stringify(payload),
+    runAfter: delayMs > 0 ? new Date(Date.now() + delayMs) : undefined,
   })
   void drain()
   return id
@@ -162,6 +192,8 @@ export interface QueueStatus {
   busy: boolean
   pending: number
   running: JobKind | null
+  /** Every kind in flight, running or waiting. */
+  kinds: JobKind[]
   /** Waiting out a backoff after something failed: worth saying out loud. */
   retrying: boolean
   /** When the next attempt is due, if one is waiting. */
@@ -180,6 +212,7 @@ export function queueStatus(candidateId: string): QueueStatus {
     busy: active.length > 0,
     pending: waiting.length,
     running: (running?.kind as JobKind) ?? null,
+    kinds: [...new Set(active.map((job) => job.kind as JobKind))],
     retrying: backingOff.length > 0,
     nextAttemptAt: backingOff[0]?.run_after ?? null,
     recentErrors: listFailedJobs(candidateId).map(

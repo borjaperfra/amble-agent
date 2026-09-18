@@ -1,84 +1,49 @@
 import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
-import { getOrCreateCandidate, listUnprocessedSources, listClaims } from '@/lib/db/repo'
-import { processSource } from '@/lib/pipeline/sources'
-import { claimsToEvidence, assessCapabilities, buildDistinctiveProfile, buildDescriptor } from '@/lib/pipeline/graph'
-import { enqueue } from '@/lib/pipeline/jobs'
-import { prefetchQuestion } from '@/lib/pipeline/interview'
-import { ModelNotConfiguredError } from '@/lib/features'
+import { getOrCreateCandidate, listSources, listUnprocessedSources } from '@/lib/db/repo'
+import { enqueue, hasPendingKind, queueStatus } from '@/lib/pipeline/jobs'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
 
-function guard(): NextResponse | null {
+/**
+ * Start the reading. Returns as soon as the work is on the queue.
+ *
+ * This used to run every stage inside the request: fifty seconds to read a
+ * CV, fifty more to work out capabilities, with the phone holding the
+ * connection open through both. A tunnel in the middle of that took the
+ * onboarding with it. Now the queue does the work, survives the connection,
+ * and /api/onboarding/state tells the screen how far it has got.
+ */
+export async function POST() {
   if (!isUserZero()) {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
-  return null
-}
-
-export async function POST(request: Request) {
-  const blocked = guard()
-  if (blocked) return blocked
 
   const candidate = getOrCreateCandidate()
-  const body = (await request.json().catch(() => ({}))) as { stage?: string; sourceId?: string }
-  const stage = body.stage
+  const sources = listUnprocessedSources(candidate.id)
 
-  try {
-    if (stage === 'sources') {
-      const all = listUnprocessedSources(candidate.id)
-      const sources = body.sourceId ? all.filter((source) => source.id === body.sourceId) : all
-      const processed: { name: string; claimsCount: number; discoveries: { title: string; meta: string }[] }[] = []
-      for (const source of sources) {
-        const result = await processSource(source, candidate.id)
-        processed.push({
-          name: result.sourceName,
-          claimsCount: result.claimsCount,
-          discoveries: result.discoveries,
-        })
-      }
-      return NextResponse.json({
-        stage,
-        processed,
-        totalClaims: listClaims(candidate.id).length,
-      })
-    }
-
-    if (stage === 'evidence') {
-      const created = claimsToEvidence(candidate.id)
-      return NextResponse.json({ stage, evidenceCreated: created })
-    }
-
-    if (stage === 'capabilities') {
-      const result = await assessCapabilities(candidate.id)
-
-      // The profile summary and the first interview question don't block the
-      // candidate any more: both run while they read what was just found.
-      enqueue('build_profile', candidate.id)
-      prefetchQuestion(candidate.id)
-
-      return NextResponse.json({
-        stage,
-        capabilitiesCount: result.capabilityCount,
-        newUncertainties: result.uncertaintyCount,
-      })
-    }
-
-    if (stage === 'profile') {
-      const distinctive = await buildDistinctiveProfile(candidate.id)
-      const descriptor = await buildDescriptor(candidate.id)
-      return NextResponse.json({ stage, distinctiveCount: distinctive.length, descriptor })
-    }
-
-    return NextResponse.json({ error: 'Unknown processing stage.' }, { status: 400 })
-  } catch (error) {
-    if (error instanceof ModelNotConfiguredError) {
-      return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
-    }
+  // Nothing to read and nothing to read from: that is the only real error.
+  // Everything already read is not — coming back to this screen after a
+  // reload, or a phone waking up mid-run, has to be harmless.
+  if (sources.length === 0 && listSources(candidate.id).length === 0) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Processing failed.' },
-      { status: 500 },
+      { error: 'There are no sources to read. Go back and add one.' },
+      { status: 400 },
     )
   }
+
+  for (const source of sources) {
+    enqueue('process_source', candidate.id, { sourceId: source.id })
+  }
+
+  // Queued behind the reading, and only once: the queue is serial, so by the
+  // time this runs every source is in.
+  if (sources.length > 0 && !hasPendingKind(candidate.id, 'assess_capabilities')) {
+    enqueue('assess_capabilities', candidate.id)
+  }
+
+  return NextResponse.json({
+    started: sources.map((source) => ({ id: source.id, name: source.name })),
+    queue: queueStatus(candidate.id),
+  })
 }
