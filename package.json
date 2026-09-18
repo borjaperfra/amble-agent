@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:model": "node --env-file=.env.local scripts/check-model.mjs",
+    "measure": "node --env-file=.env.local scripts/measure-run.mjs"
   },
   "dependencies": {
     "next": "16.3.5",
