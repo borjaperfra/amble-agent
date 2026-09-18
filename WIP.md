@@ -103,14 +103,30 @@ de texto más largo del objeto en vez de perder la respuesta.
 
 ## Siguiente paso
 
-1. Mover `/api/onboarding/process` a la cola, que es lo que queda bloqueando.
-2. Volver a medir con wifi estable para tener tiempos limpios.
+Volver a medir con wifi estable. Todos los tiempos de aquí se tomaron en un
+tren y el modelo pasó de 8 s a 24 s de media por esa razón, no por el código.
+
+## Hecho después de la tabla
+
+**La cola tiene dos carriles.** Planificar una pregunta tarda 5 s; meter una
+respuesta en el grafo, 40. Con un solo carril el candidato pagaba los dos,
+porque una cola solo consulta su orden *entre* trabajos y nunca interrumpe el
+que corre. Medido sobre seis preguntas: de 25,7 s de media y 52,8 s el peor,
+a **1,9 s y 3,4 s**. A cambio, el planificador puede leer un grafo un minuto
+desactualizado — ya lo hacía — y recibe las últimas preguntas y respuestas
+directamente, que es lo que evita que se repita.
+
+**El procesado también corre en la cola.** `POST /api/onboarding/process`
+encola y vuelve: 0,0 s donde antes eran 100. La pantalla pregunta a
+`/api/onboarding/state`, que se reconstruye de lo guardado, así que el móvil
+puede bloquearse, perder cobertura o recargar sin perder el hilo.
+
+**Entrada:** arrastrar ficheros sobre toda la página, varios a la vez, copy
+que cambia mientras lee, y DOCX sin dependencia nueva (un .docx es un ZIP y
+Node ya trae inflate). Probado con un .docx real: 10.962 caracteres, 37
+claims, 8 capacidades, 16 incertidumbres.
 
 ## No empezado
-
-**Entrada:** arrastrar ficheros, aceptar DOCX, punto verde animado, copy que
-cambia mientras lee, hallazgos apareciendo al vuelo, y un final que deje claro
-que hay que darle a continuar.
 
 **Cierre:** completitud y siguientes pasos en el Mapa; preferencias
 estructuradas (salario, remoto, tecnologías, ubicación, etapa); y la pantalla
