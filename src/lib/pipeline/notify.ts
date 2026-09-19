@@ -15,7 +15,7 @@
  * model that times out, with the same backoff and the same recovery.
  */
 
-import { getSmtpConfig, getTelegramConfig } from '@/lib/features'
+import { getSmtpConfig, getTelegramConfig, smtpProblem } from '@/lib/features'
 import { sendMail } from '@/lib/notify/smtp'
 import { sendTelegramMessage } from '@/lib/notify/telegram'
 import { getInterruptionFor, type InterruptionView } from '../opportunity-view'
@@ -257,9 +257,9 @@ function deliveryFor(notification: NotificationRow): (() => Promise<void>) | nul
 }
 
 function unconfiguredReason(channel: NotificationChannel): string {
-  if (channel === 'email') {
-    return 'No mail server is configured. Set AMBLE_SMTP_HOST and AMBLE_SMTP_FROM.'
-  }
+  // Say which part is missing. "Not configured" sends somebody to read the
+  // whole env file looking for the one line they left blank.
+  if (channel === 'email') return smtpProblem() ?? 'The mail server is not usable.'
   if (channel === 'telegram') {
     return 'No bot is configured. Set AMBLE_TELEGRAM_BOT_TOKEN.'
   }

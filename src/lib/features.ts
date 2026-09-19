@@ -146,12 +146,34 @@ export interface SmtpConfig {
  * thing from one that was delivered, and the person is entitled to know
  * which they have.
  */
-export function getSmtpConfig(): SmtpConfig | null {
+/**
+ * Why there is no mail server, when there is no mail server.
+ *
+ * Half-filled is the state that actually happens: the host and the user are
+ * pasted from a provider's setup page and the key comes later. Treating that
+ * as configured means every interruption queues, tries, fails authentication
+ * and retries for ten minutes — and the outbox says "failed", which reads
+ * like the message was rejected rather than never really set up.
+ */
+export function smtpProblem(): string | null {
   const host = process.env.AMBLE_SMTP_HOST?.trim()
-  if (!host) return null
+  if (!host) return 'No mail server. Set AMBLE_SMTP_HOST, and AMBLE_SMTP_FROM or _USER.'
+
+  const user = process.env.AMBLE_SMTP_USER?.trim()
+  if (!(process.env.AMBLE_SMTP_FROM?.trim() || user)) {
+    return 'The mail server has no sender. Set AMBLE_SMTP_FROM.'
+  }
+  if (user && !process.env.AMBLE_SMTP_PASSWORD?.trim()) {
+    return `${host} wants a login and AMBLE_SMTP_PASSWORD is empty. Paste the key.`
+  }
+  return null
+}
+
+export function getSmtpConfig(): SmtpConfig | null {
+  if (smtpProblem() !== null) return null
+  const host = process.env.AMBLE_SMTP_HOST!.trim()
   const user = process.env.AMBLE_SMTP_USER?.trim() || null
-  const from = process.env.AMBLE_SMTP_FROM?.trim() || user
-  if (!from) return null
+  const from = (process.env.AMBLE_SMTP_FROM?.trim() || user) as string
   const port = readPositiveInt('AMBLE_SMTP_PORT', 587) ?? 587
   return {
     host,

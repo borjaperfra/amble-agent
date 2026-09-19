@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import net from 'node:net'
 import { after, before, describe, it } from 'node:test'
 import { buildMessage, sendMail, SmtpError } from './smtp'
-import type { SmtpConfig } from '@/lib/features'
+import { getSmtpConfig, smtpProblem, type SmtpConfig } from '@/lib/features'
 
 interface FakeServer {
   port: number
@@ -139,6 +139,74 @@ describe('buildMessage', () => {
     assert.ok(
       encoded.split('\r\n').every((line) => line.length <= 76),
       'lines stay inside what SMTP will carry',
+    )
+  })
+})
+
+// ─── Half-configured is not configured ────────────────────────────────────
+
+describe('smtpProblem', () => {
+  const env = { ...process.env }
+  const withEnv = (vars: Record<string, string | undefined>) => {
+    process.env = { ...env, ...vars }
+    try {
+      return smtpProblem()
+    } finally {
+      process.env = env
+    }
+  }
+
+  it('says nothing is set up when nothing is', () => {
+    assert.match(withEnv({ AMBLE_SMTP_HOST: undefined }) ?? '', /AMBLE_SMTP_HOST/)
+  })
+
+  it('names the line that is still blank', () => {
+    // The state that actually happens: host and user pasted from the
+    // provider's setup page, key still on the clipboard.
+    const problem = withEnv({
+      AMBLE_SMTP_HOST: 'smtp.resend.com',
+      AMBLE_SMTP_USER: 'resend',
+      AMBLE_SMTP_FROM: 'rep@amble.test',
+      AMBLE_SMTP_PASSWORD: '',
+    })
+    assert.match(problem ?? '', /AMBLE_SMTP_PASSWORD/)
+    // And it must not count as configured: otherwise every interruption
+    // queues, fails authentication and retries for ten minutes, and the
+    // outbox reads "failed" as though the message had been rejected.
+    assert.equal(
+      (() => {
+        process.env = { ...env, AMBLE_SMTP_HOST: 'smtp.resend.com', AMBLE_SMTP_USER: 'resend', AMBLE_SMTP_PASSWORD: '' }
+        try {
+          return getSmtpConfig()
+        } finally {
+          process.env = env
+        }
+      })(),
+      null,
+    )
+  })
+
+  it('is happy once the key is there', () => {
+    assert.equal(
+      withEnv({
+        AMBLE_SMTP_HOST: 'smtp.resend.com',
+        AMBLE_SMTP_USER: 'resend',
+        AMBLE_SMTP_FROM: 'rep@amble.test',
+        AMBLE_SMTP_PASSWORD: 're_something',
+      }),
+      null,
+    )
+  })
+
+  it('does not demand a password from a relay that wants no login', () => {
+    assert.equal(
+      withEnv({
+        AMBLE_SMTP_HOST: 'localhost',
+        AMBLE_SMTP_USER: undefined,
+        AMBLE_SMTP_FROM: 'rep@amble.test',
+        AMBLE_SMTP_PASSWORD: undefined,
+      }),
+      null,
     )
   })
 })
