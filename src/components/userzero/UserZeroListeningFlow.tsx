@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import StatusDot from '@/components/StatusDot'
+import UserZeroInterruption from '@/components/userzero/UserZeroInterruption'
 import styles from '@/app/listening/listening.module.css'
+import type { InterruptionView } from '@/lib/opportunity-view'
+import type { CandidateResponse } from '@/domains/opportunity/types'
 
 interface ListeningVm {
   evidenceCount: number
@@ -23,14 +26,31 @@ type Channel = 'whatsapp' | 'email' | 'both'
 
 const activationMs = 2600
 
+/**
+ * How often the screen asks whether anything got through.
+ *
+ * The reading runs on the queue, so nothing can arrive as the answer to a
+ * request: the screen finds out afterwards, the same way it would find out
+ * from a message. Slow on purpose — this is a screen someone leaves open.
+ */
+const interruptionPollMs = 6000
+
 const CHANNELS: { value: Channel; label: string }[] = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'email', label: 'Email' },
   { value: 'both', label: 'Both' },
 ]
 
-export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
+export default function UserZeroListeningFlow({
+  vm,
+  interruption: initialInterruption,
+}: {
+  vm: ListeningVm
+  interruption: InterruptionView | null
+}) {
   const [phase, setPhase] = useState<Phase>('arriving')
+  const [interruption, setInterruption] = useState(initialInterruption)
+  const [answered, setAnswered] = useState<CandidateResponse | null>(null)
   const [returnState, setReturnState] = useState(false)
   const [channel, setChannel] = useState<Channel | null>((vm.notifyChannel as Channel) ?? null)
   const [email, setEmail] = useState(vm.notifyEmail ?? '')
@@ -68,6 +88,28 @@ export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
     return () => window.clearTimeout(id)
   }, [])
 
+  // Nothing can arrive as the answer to a request — the reading happens on
+  // the queue — so the screen asks every so often and goes on saying
+  // nothing until there is something to say.
+  useEffect(() => {
+    if (phase !== 'home' || interruption) return
+    const check = async () => {
+      try {
+        const response = await fetch('/api/opportunities/interruption')
+        if (!response.ok) return
+        const body = (await response.json()) as { interruption: InterruptionView | null }
+        if (body.interruption) {
+          setInterruption(body.interruption)
+          setAnswered(null)
+        }
+      } catch {
+        // Out of signal. Whatever it is will still be there next tick.
+      }
+    }
+    const id = window.setInterval(() => void check(), interruptionPollMs)
+    return () => window.clearInterval(id)
+  }, [phase, interruption])
+
   if (phase === 'arriving') {
     return (
       <>
@@ -86,7 +128,30 @@ export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
     <>
       <Header />
       <main className={styles.page}>
-        {returnState ? (
+        {interruption ? (
+          <UserZeroInterruption
+            interruption={interruption}
+            onAnswered={(response) => {
+              setInterruption(null)
+              setAnswered(response)
+            }}
+          />
+        ) : answered ? (
+          <div className={`${styles.center} ${styles.centerFull}`}>
+            <StatusDot label="Listening" />
+            <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>
+              {answered === 'HEAR_THEM_OUT'
+                ? 'Good. I’ve written that down.'
+                : 'Fine. That one’s gone.'}
+            </p>
+            <p className={styles.answeredNote}>
+              {answered === 'HEAR_THEM_OUT'
+                ? 'Nothing has gone to them. I can’t talk to a company on your behalf yet — when I can, this is where it starts.'
+                : 'I haven’t changed what I’m listening for. A no is about that job, not about the shape of what you want.'}
+            </p>
+            <p className={styles.arrivingLine}>I&rsquo;m still listening.</p>
+          </div>
+        ) : returnState ? (
           <div className={`${styles.center} ${styles.centerFull}`}>
             <StatusDot label="Listening" />
             <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>
@@ -126,7 +191,7 @@ export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
           </div>
         )}
 
-        {!returnState && (
+        {!returnState && !interruption && !answered && (
           <>
             <section className={styles.deal} aria-label="What happens from here">
               <p className="kicker">From here</p>
@@ -232,15 +297,17 @@ export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
           </Link>
         </div>
 
-        <div className={styles.fixtureToggle}>
-          <button
-            type="button"
-            className={`text-btn ${styles.fixtureToggleBtn}`}
-            onClick={() => setReturnState((value) => !value)}
-          >
-            {returnState ? 'View listening state' : 'View return state'}
-          </button>
-        </div>
+        {!interruption && !answered && (
+          <div className={styles.fixtureToggle}>
+            <button
+              type="button"
+              className={`text-btn ${styles.fixtureToggleBtn}`}
+              onClick={() => setReturnState((value) => !value)}
+            >
+              {returnState ? 'View listening state' : 'View return state'}
+            </button>
+          </div>
+        )}
       </main>
     </>
   )

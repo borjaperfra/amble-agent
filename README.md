@@ -72,6 +72,21 @@ Every call is recorded in `model_runs` with its latency, raw output and reasonin
 
 ## Developer trace
 
-With the flag active and `next dev` running: **http://localhost:3000/dev/user-zero** shows the full graph trace — sources, claims, evidence, capabilities, uncertainties, interview turns, model runs and evaluations.
+With the flag active and `next dev` running:
+
+- **http://localhost:3000/dev/user-zero** — the full graph trace: sources, claims, evidence, capabilities, uncertainties, interview turns, model runs and evaluations.
+- **http://localhost:3000/dev/opportunity-zero** — the opportunity lab. Label an opportunity before running it, then read what Amble did with it: the rubric, the four readings, what the model proposed, what the rules decided, and the audit trail. The label is written to its own table and nothing that builds a prompt reads it.
 
 Local data lives in `.amble-data/` (SQLite + uploaded sources). Delete the folder to reset the experiment.
+
+## Tests and measurement
+
+```bash
+npm test                      # node --test, no network and no real database
+npm run measure -- <cv.pdf>   # one full User Zero session over HTTP, timed
+npm run measure:opportunities # the ten opportunity fixtures, with next dev running
+```
+
+No test framework: Node 22 strips the types itself, and `scripts/test-resolve.mjs` resolves the `@/` alias and extensionless imports. Domain rules are tested with no database and no provider; the pipeline tests build a throwaway database in a temp directory and stub the four model calls.
+
+The measurement scripts are the opposite: they drive the real HTTP routes against a running dev server and a real model, and write their full transcript to `.amble-data/`.

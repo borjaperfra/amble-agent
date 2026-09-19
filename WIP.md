@@ -1,9 +1,9 @@
 # Dónde nos quedamos — 19 septiembre 2026
 
-Todo commiteado, de `5695d19` en adelante. Árbol limpio, `tsc` y `eslint` en
-verde. Bórrame cuando esto esté cerrado.
+Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
+`next build` y `npm test` en verde. Bórrame cuando esto esté cerrado.
 
-## Opportunity Zero — empezado el 19, a medio camino
+## Opportunity Zero — entero, y corrido una vez de verdad
 
 La pregunta: **¿sabe Amble cuándo una oportunidad merece interrumpirte?**
 
@@ -12,9 +12,10 @@ Es el primer experimento de match e interrupción, y no tapa el agujero de
 abajo (sigue sin llegar nada): responde a la otra mitad, si sabríamos qué
 hacer con una oferta el día que llegue.
 
-Estado: `tsc` y `eslint` en verde. **No se ha ejecutado ni una sola vez contra
-el modelo.** Falta `next build`, faltan los tests y falta la pantalla que lo
-enseña. Todo lo de "hecho" está escrito y compila; nada está probado.
+Estado: `tsc`, `eslint`, `next build` y `npm test` en verde, y las diez
+fixtures pasadas contra deepseek. Cero ruido, cero fallos, cero afirmaciones
+sin respaldo — y **cero interrupciones**, incluida la que estaba escrita para
+tener que salir. Los números y qué hacer con eso, más abajo.
 
 ### Hecho
 
@@ -43,20 +44,109 @@ enseña. Todo lo de "hecho" está escrito y compila; nada está probado.
   candidato de demo y sin imports a propósito (el harness es un `.mjs` y las
   carga directamente). No son diez buenos matches: son diez formas distintas
   de estar *casi* bien, que es lo que mide calibración.
+- **La pantalla del laboratorio** en `/dev/opportunity-zero`, que era lo único
+  que le faltaba al componente para dejar de ser huérfano.
+- **La interrupción en listening.** `GET /api/opportunities/interruption`
+  devuelve una o `null`; la pantalla la pide cada seis segundos y también se
+  renderiza en el servidor, para que quien abra la app desde un aviso caiga en
+  la cosa y no en seis segundos de "nothing worth bothering you with". HOLD e
+  IGNORE no llegan: el silencio es la respuesta normal.
+- **El arnés**, `scripts/measure-opportunities.mjs` y `npm run
+  measure:opportunities`: mete las diez por HTTP, espera la cola, y saca la
+  matriz, el caso por caso y las latencias por tarea.
+- **41 tests** con `node --test`, cero dependencias nuevas.
+  `scripts/test-resolve.mjs` es el hook que resuelve `@/` y los imports sin
+  extensión; Node 22 quita los tipos él solo. Los de dominio corren sin base
+  ni provider; los del pipeline montan una base de usar y tirar en un
+  directorio temporal y sustituyen las cuatro llamadas al modelo.
 
-### Falta
+  La promesa de la etiqueta ciega ya no se afirma, se comprueba: la etiqueta
+  lleva un token que no aparece en ningún otro sitio y el test construye los
+  cuatro prompts que el pipeline mandaría y lo busca en todos.
 
-- `src/app/dev/opportunity-zero/page.tsx`. El componente del laboratorio está
-  escrito pero huérfano: nadie lo renderiza todavía.
-- La interrupción en la pantalla de listening. Solo INTERRUPT llega al
-  candidato; HOLD e IGNORE no notifican nada, y eso es el producto, no una
-  etapa pendiente.
-- `scripts/measure-opportunities.mjs` y el script `measure:opportunities`.
-- Tests con `node --test` y un hook de resolución en `scripts/` (cero
-  dependencias nuevas). Ya comprobado que Node 22 hace type-stripping de `.ts`
-  y que `node:test` los carga; falta el hook para los imports `@/` y sin
-  extensión.
-- `next build` y una pasada real contra deepseek.
+### La primera pasada real — 19 de septiembre
+
+Diez fixtures, 32 llamadas al modelo, 643 s de reloj. Transcripción entera en
+`.amble-data/measure-opportunities.json`.
+
+| | INTERRUPT | HOLD | IGNORE |
+| --- | --- | --- | --- |
+| **YES** (1) | 0 | 1 | 0 |
+| **MAYBE** (3) | 0 | 3 | 0 |
+| **NO** (6) | 0 | 1 | 5 |
+
+| | |
+| --- | --- |
+| Ruido (NO × INTERRUPT) | 0 |
+| Fallos (YES × IGNORE) | 0 |
+| Afirmaciones sin respaldo | 0 |
+| Holds sin nada que preguntar | 0 |
+| Las reglas movieron al modelo | 1 de 10 |
+
+| tarea | llamadas | fallos | media | peor |
+| --- | --- | --- | --- | --- |
+| `opportunity_rubric` | 11 | 1 | 9,4 s | 19,4 s |
+| `opportunity_match` | 11 | 1 | 43,7 s | 68,7 s |
+| `opportunity_decision` | 10 | 0 | 5,1 s | 10,0 s |
+
+Los dos fallos se reintentaron solos y la tanda no se enteró.
+`opportunity_explanation` no sale en la tabla porque no llegó a correr ni una
+vez.
+
+**Lo que salió bien.** Los cinco NO que se cayeron se cayeron citando la
+razón, y la razón es la del candidato, no una intuición: *"tops out at 85.000
+EUR"*, *"es una agencia, y el candidato puso agencias entre lo que no
+quiere"*, *"cuatro días en Berlín, y remoto desde Valencia no era
+negociable"*. La enfermera salió por tres constraints a la vez. Nada de esto
+necesitó un modelo mejor: son las preferencias comprobadas contra la rúbrica.
+
+**Lo que no.** **Cero interrupciones, incluida `opp-strong-ai-infra`**, que se
+escribió con "si Amble no me enseña ésta, no funciona". Y no la tumbaron las
+reglas: el modelo mismo propuso HOLD. Las cuatro lecturas son buenas — seis
+aspectos de intent ALIGNED, "can write" SUPPORTED con ocho evidencias — y aun
+así se paró en que el anuncio no dice qué parte del roadmap es paid
+acquisition.
+
+### La única decisión abierta
+
+Un `UnknownItem` con materialidad HIGH veta una interrupción, venga de donde
+venga. Con eso INTERRUPT es casi inalcanzable: **siempre** falta algo
+material, porque el modelo genera desconocidos sin techo y se le da bien.
+
+De los tres que bloquearon la buena, uno es sobre la empresa (el mix de
+canales, legítimo) y otro es sobre *él*: "no sabemos si ha hecho crecer una
+audiencia de desarrolladores concretamente". Ese es raro de leer: no te
+contamos de un trabajo porque no estamos seguros de ti. Es justo lo que se
+resuelve con una frase suya, y es para lo que existe la entrevista.
+
+Tres formas de arreglarlo, sin preferencia mía:
+
+1. **Que solo bloqueen los desconocidos del lado `opportunity`.** Los del lado
+   `candidate` se van a la entrevista, o al bloque "lo que no sé todavía" de
+   la interrupción, que ya existe y ya se muestra.
+2. **Que solo bloquee un desconocido atado a un requisito REQUIRED o HIGH.**
+   Ahora mismo cualquier hueco HIGH suelto vale.
+3. **Dejarlo.** Y asumir que INTERRUPT se reserva a anuncios que no se callan
+   nada — pero entonces decirlo así en el copy, porque el producto promete un
+   mensaje y lo que da es silencio.
+
+Sea cual sea, el arnés ya está: se cambia la regla, se corre
+`npm run measure:opportunities` y se compara contra esta tabla. Los tests de
+`settleDecision` cubren el comportamiento de hoy, así que romperlos será
+deliberado.
+
+### Sobre `.amble-data/`
+
+El Intent Profile estaba contaminado ("Would consider 50k", suelo de 72k, que
+salió de una llamada suelta a la API) y las fixtures están escritas contra
+otra cosa. Antes de medir se reescribió **solo el intent y las preferencias**,
+por las rutas de verdad (`/api/intent` y confirmar, `PUT /api/preferences`):
+AI infra y developer tools, seed o Series A, remoto desde Valencia
+innegociable, 120k de suelo, equity, y no a agencias ni a performance puro. El
+grafo no se tocó: son las mismas 70 evidencias y 16 capacidades del CV.
+
+En la base hay ahora diez oportunidades con `provenance = fixture`. Quitarlas
+es borrar `.amble-data/`, que se lleva el grafo por delante.
 
 ### Decidido, no volver a abrirlo
 
@@ -90,8 +180,8 @@ hasta ahora lleva respuestas sintéticas que el modelo escribe en diez
 segundos: una persona tarda más en escribir y contesta otras cosas. Es lo
 único que dirá si las preguntas valen la pena.
 
-Antes de esa sesión: borrar `.amble-data/`, que ahora tiene restos de pruebas
-(el intent dice "Would consider 50k", que salió de una llamada mía a la API).
+Antes de esa sesión: borrar `.amble-data/`. El intent ya está limpio (arriba),
+pero la base sigue teniendo dentro las diez fixtures de Opportunity Zero.
 
 Y el agujero real del producto, que no es código de estas pantallas: **no
 llega nada**. No hay fuente de ofertas que cruzar contra las preferencias. La
@@ -111,12 +201,15 @@ a mano — pero contesta la otra mitad de la pregunta.
 
 ```bash
 cd C:\dev\amble
-npm run dev                 # http://localhost:3000
-npm run check:model         # comprueba el modelo en 2 llamadas cortas
-npm run measure -- <cv.pdf> # sesión entera por API, cronometrada
+npm test                      # 41 tests, sin red y sin base real
+npm run dev                   # http://localhost:3000
+npm run check:model           # comprueba el modelo en 2 llamadas cortas
+npm run measure -- <cv.pdf>   # sesión entera por API, cronometrada
+npm run measure:opportunities # las diez fixtures, con el dev levantado
 ```
 
 - Traza completa del grafo: http://localhost:3000/dev/user-zero
+- Laboratorio de oportunidades: http://localhost:3000/dev/opportunity-zero
 - Empezar de cero: borrar la carpeta `.amble-data/`
 - `.env.local` ya tiene la API key de Helmcode
 

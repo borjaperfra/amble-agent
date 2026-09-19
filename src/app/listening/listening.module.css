@@ -247,3 +247,194 @@
   color: var(--ink-tertiary);
   min-height: 1.4em;
 }
+
+/* ── The interruption ──────────────────────────────────────────────────
+   The screen that justifies every other one. It is allowed to be the
+   whole page: if something got through, nothing else on this screen
+   matters more than it. No score, no percentage, no "97% match" — what
+   is shown here is why, and the why is checkable. */
+
+.interruption {
+  margin: 40px auto 0;
+  max-width: 58ch;
+  width: 100%;
+  animation: enter 600ms var(--ease-standard) both;
+}
+
+.interruptionHeadline {
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.interruptionRole {
+  margin-top: 12px;
+  font-size: var(--text-body);
+  color: var(--ink-secondary);
+}
+
+.interruptionLink {
+  color: var(--moss-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.facts {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--paper-light);
+  border-radius: 999px;
+  padding: 6px 13px;
+}
+
+.factLabel {
+  font-size: var(--text-label);
+  color: var(--ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.factValue {
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+}
+
+.block {
+  margin-top: 36px;
+}
+
+.blockLead {
+  margin-top: 10px;
+  font-size: var(--text-body);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.claims {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.claim {
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+
+.claimText {
+  font-size: var(--text-body);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.evidence {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.evidenceItem {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+}
+
+.consider {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.considerItem {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  padding-left: 18px;
+  border-left: 1px solid var(--ochre-soft);
+}
+
+.answer {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.answerPrimary {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--paper-light);
+  background: var(--moss);
+  border: 1px solid var(--moss);
+  border-radius: 999px;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: background var(--motion-default) ease;
+}
+
+.answerPrimary:hover:not(:disabled) {
+  background: var(--moss-dark);
+}
+
+.answerSecondary {
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: border-color var(--motion-default) ease;
+}
+
+.answerSecondary:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+.answerPrimary:disabled,
+.answerSecondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.answerNote {
+  margin-top: 14px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  min-height: 1.4em;
+}
+
+.answeredNote {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  max-width: 34ch;
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interruption {
+    animation: none;
+  }
+}
