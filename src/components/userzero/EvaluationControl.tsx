@@ -3,8 +3,14 @@
 import { useState } from 'react'
 import styles from './evaluation.module.css'
 
+export type EvaluationTarget =
+  | 'capability'
+  | 'interview_question'
+  | 'opportunity_decision'
+  | 'opportunity_explanation'
+
 interface EvaluationControlProps {
-  targetType: 'capability' | 'interview_question'
+  targetType: EvaluationTarget
   targetId: string
   label: string
   verdicts: string[]

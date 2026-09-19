@@ -198,6 +198,110 @@ function createDb(): DatabaseSync {
 
     CREATE INDEX IF NOT EXISTS jobs_ready ON jobs (status, run_after);
 
+    -- ─── Opportunity Zero ────────────────────────────────────────────────
+    -- An opportunity arrives as raw text and leaves as one of three answers.
+    -- Every step in between is its own row, so the trail from what arrived to
+    -- what the candidate was told can be walked backwards.
+
+    CREATE TABLE IF NOT EXISTS opportunities (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      company TEXT NOT NULL,
+      role TEXT NOT NULL,
+      url TEXT,
+      raw_text TEXT NOT NULL,
+      provenance TEXT NOT NULL,
+      fixture_key TEXT,
+      status TEXT NOT NULL,
+      status_detail TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS opportunity_rubrics (
+      id TEXT PRIMARY KEY,
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      version TEXT NOT NULL,
+      rubric TEXT NOT NULL,
+      model_run_id TEXT,
+      latency_ms INTEGER,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS opportunity_assessments (
+      id TEXT PRIMARY KEY,
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      rubric_id TEXT NOT NULL REFERENCES opportunity_rubrics(id),
+      version TEXT NOT NULL,
+      hard_constraints TEXT NOT NULL,
+      evidence_match TEXT NOT NULL,
+      intent_match TEXT NOT NULL,
+      unknowns TEXT NOT NULL,
+      intent_references TEXT NOT NULL DEFAULT '[]',
+      model_run_id TEXT,
+      latency_ms INTEGER,
+      created_at TEXT NOT NULL
+    );
+
+    -- model_decision is what the model proposed; decision is what the domain
+    -- rules settled on. Keeping both is the only way to find out whether the
+    -- model can be trusted with this later, or whether the rules are wrong.
+    CREATE TABLE IF NOT EXISTS opportunity_decisions (
+      id TEXT PRIMARY KEY,
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      assessment_id TEXT NOT NULL REFERENCES opportunity_assessments(id),
+      version TEXT NOT NULL,
+      model_decision TEXT,
+      decision TEXT NOT NULL,
+      override_reason TEXT,
+      reason TEXT NOT NULL,
+      supporting_evidence_ids TEXT NOT NULL DEFAULT '[]',
+      supporting_intent_refs TEXT NOT NULL DEFAULT '[]',
+      material_unknowns TEXT NOT NULL DEFAULT '[]',
+      next_action_type TEXT NOT NULL,
+      next_action_question TEXT,
+      explanation TEXT,
+      unsupported_claims TEXT NOT NULL DEFAULT '[]',
+      model_run_id TEXT,
+      explanation_model_run_id TEXT,
+      latency_ms INTEGER,
+      created_at TEXT NOT NULL
+    );
+
+    -- A table of its own, deliberately. The blind human label is written
+    -- before Amble runs and must never travel with the row the pipeline
+    -- reads; keeping it apart makes that structural rather than a promise.
+    CREATE TABLE IF NOT EXISTS opportunity_labels (
+      id TEXT PRIMARY KEY,
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      label TEXT NOT NULL,
+      comment TEXT,
+      origin TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS opportunity_responses (
+      id TEXT PRIMARY KEY,
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      decision_id TEXT NOT NULL REFERENCES opportunity_decisions(id),
+      response TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    -- Append-only. Nothing in the codebase updates or deletes a row here.
+    CREATE TABLE IF NOT EXISTS audit_events (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      event TEXT NOT NULL,
+      detail TEXT,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS audit_by_subject ON audit_events (subject_type, subject_id);
+
     CREATE TABLE IF NOT EXISTS intent_profiles (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

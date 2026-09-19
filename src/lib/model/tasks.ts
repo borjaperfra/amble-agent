@@ -179,7 +179,7 @@ const NOT_PROSE = /^(id|ids|slug|kind|type|level|materiality|assessment|status|c
  * longest sentence-shaped value that is left rather than lose the answer
  * over a key nobody predicted.
  */
-function firstProse(value: Record<string, unknown>, preferred: string[], minLength = 3): string | null {
+export function firstProse(value: Record<string, unknown>, preferred: string[], minLength = 3): string | null {
   for (const key of preferred) {
     const candidate = value[key]
     if (typeof candidate === 'string' && candidate.trim().length >= minLength) return candidate.trim()
@@ -486,7 +486,7 @@ export function toAmount(raw: unknown): number | null {
 
 const WORK_MODES = ['onsite', 'hybrid', 'remote'] as const
 
-function normalizeWorkMode(raw: unknown): (typeof WORK_MODES)[number] | null {
+export function normalizeWorkMode(raw: unknown): (typeof WORK_MODES)[number] | null {
   if (typeof raw === 'boolean') return raw ? 'remote' : 'onsite'
   if (typeof raw !== 'string') return null
   const text = raw.trim().toLowerCase()
@@ -498,7 +498,7 @@ function normalizeWorkMode(raw: unknown): (typeof WORK_MODES)[number] | null {
   return null
 }
 
-function normalizeList(raw: unknown, limit = 12): string[] {
+export function normalizeList(raw: unknown, limit = 12): string[] {
   const source = Array.isArray(raw)
     ? raw
     : typeof raw === 'string'

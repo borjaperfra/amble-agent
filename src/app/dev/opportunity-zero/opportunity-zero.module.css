@@ -1,0 +1,368 @@
+/* Same instrument panel as /dev/user-zero: monospace, dense, no decoration.
+   It is a lab bench, not a screen anybody is meant to enjoy. */
+
+.page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+  font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.kicker {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--moss-dark);
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: 20px;
+  margin: 8px 0 4px;
+  font-weight: 600;
+}
+
+.question {
+  color: var(--ink-secondary);
+  margin: 0 0 20px;
+  max-width: 62ch;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  background: var(--paper-light);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 88px;
+}
+
+.statValue {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.statLabel {
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.section {
+  margin-top: 40px;
+}
+
+.h2 {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.card {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  background: var(--paper-light);
+}
+
+.warn {
+  border-color: var(--clay);
+  background: var(--clay-soft);
+}
+
+.monoStrong {
+  font-weight: 700;
+}
+
+.monoDim {
+  color: var(--ink-tertiary);
+}
+
+.monoId {
+  color: var(--moss-dark);
+  font-weight: 600;
+}
+
+.list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listItem {
+  padding-left: 12px;
+  border-left: 2px solid var(--border-soft);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  color: var(--ink-tertiary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.table td {
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+
+.errorCell {
+  color: var(--clay);
+}
+
+/* ── The form ─────────────────────────────────────────────────────────── */
+
+.form {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px 20px;
+  background: var(--paper-light);
+}
+
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 200px;
+}
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-tertiary);
+}
+
+.input,
+.textarea {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+}
+
+.textarea {
+  min-height: 160px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: 2px solid var(--moss-soft);
+  outline-offset: 1px;
+}
+
+.labelChips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--moss);
+}
+
+.chipOn {
+  background: var(--moss);
+  border-color: var(--moss);
+  color: var(--paper-light);
+}
+
+.blindNote {
+  color: var(--ink-tertiary);
+  margin: 6px 0 0;
+  max-width: 62ch;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.run {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border: 1px solid var(--moss);
+  border-radius: 6px;
+  background: var(--moss);
+  color: var(--paper-light);
+  cursor: pointer;
+}
+
+.run:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondary {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border: 1px solid var(--moss);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--moss-dark);
+  cursor: pointer;
+}
+
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status {
+  color: var(--ink-secondary);
+}
+
+.statusError {
+  color: var(--clay);
+}
+
+/* ── Decisions ────────────────────────────────────────────────────────── */
+
+.decisionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.badgeInterrupt {
+  background: var(--moss-soft);
+  border-color: var(--moss);
+  color: var(--moss-dark);
+}
+
+.badgeHold {
+  background: var(--ochre-soft);
+  border-color: var(--ochre);
+  color: var(--ochre);
+}
+
+.badgeIgnore {
+  background: var(--slate-soft);
+  border-color: var(--slate);
+  color: var(--slate);
+}
+
+.badgeLabel {
+  background: var(--paper-dark);
+}
+
+.override {
+  color: var(--clay);
+}
+
+.matrix {
+  border-collapse: collapse;
+}
+
+.matrix th,
+.matrix td {
+  border: 1px solid var(--border-soft);
+  padding: 6px 12px;
+  text-align: center;
+}
+
+.matrix th {
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.matrixRowHead {
+  text-align: left;
+  font-weight: 700;
+}
+
+.miss {
+  background: var(--clay-soft);
+  color: var(--clay);
+  font-weight: 700;
+}
+
+.hit {
+  background: var(--moss-wash);
+  font-weight: 700;
+}
+
+.detail {
+  margin-top: 8px;
+}
+
+.detail > summary {
+  cursor: pointer;
+  color: var(--moss-dark);
+  font-size: 12px;
+}
+
+.pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin: 8px 0 0;
+}

@@ -1,7 +1,87 @@
-# Dónde nos quedamos — 18 septiembre 2026
+# Dónde nos quedamos — 19 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio, `tsc` y `eslint` en
 verde. Bórrame cuando esto esté cerrado.
+
+## Opportunity Zero — empezado el 19, a medio camino
+
+La pregunta: **¿sabe Amble cuándo una oportunidad merece interrumpirte?**
+
+No es sourcing, no es el producto para empresas, no es un tablón de ofertas.
+Es el primer experimento de match e interrupción, y no tapa el agujero de
+abajo (sigue sin llegar nada): responde a la otra mitad, si sabríamos qué
+hacer con una oferta el día que llegue.
+
+Estado: `tsc` y `eslint` en verde. **No se ha ejecutado ni una sola vez contra
+el modelo.** Falta `next build`, faltan los tests y falta la pantalla que lo
+enseña. Todo lo de "hecho" está escrito y compila; nada está probado.
+
+### Hecho
+
+- **Dominio puro** en `src/domains/opportunity/`: `types.ts`, `rules.ts`,
+  `prompts.ts`. Cero dependencias de la base, del provider o de Next, para que
+  las reglas que protegen la atención se lean y se prueben solas.
+- **Cuatro tareas de modelo** en `src/lib/model/opportunity-tasks.ts`:
+  rúbrica → match → decisión → explicación. Cada una versionada, con
+  normalización tolerante: los nombres de campo se mueven entre runs, y una
+  lista que se normaliza hasta quedarse vacía falla y se reintenta — la misma
+  regla que salió de los cuatro bugs de User Zero.
+- **Esquema nuevo** en `db.ts`: `opportunities`, `opportunity_rubrics`,
+  `opportunity_assessments`, `opportunity_decisions`, `opportunity_labels`,
+  `opportunity_responses` y `audit_events` (append-only; el spec lo pedía en
+  §19 y no existía).
+- **Repo aparte** en `src/lib/db/opportunities.ts`. User Zero está congelado y
+  no se toca: un experimento que igual se tira no se mete en el fichero que
+  tiene la parte que funciona.
+- **Pipeline** en `src/lib/pipeline/opportunities.ts`, por etapas reanudables
+  sobre la cola (`evaluate_opportunity`, carril de fondo). Un reintento tras un
+  corte no vuelve a pagar la rúbrica.
+- **API**: `GET/POST /api/opportunities`, `POST /api/opportunities/[id]/response`.
+- **Vista del laboratorio** en `src/lib/opportunity-view.ts` y el componente
+  `OpportunityZeroLab.tsx`.
+- **Diez fixtures** en `src/fixtures/opportunities.ts`, escritas contra el
+  candidato de demo y sin imports a propósito (el harness es un `.mjs` y las
+  carga directamente). No son diez buenos matches: son diez formas distintas
+  de estar *casi* bien, que es lo que mide calibración.
+
+### Falta
+
+- `src/app/dev/opportunity-zero/page.tsx`. El componente del laboratorio está
+  escrito pero huérfano: nadie lo renderiza todavía.
+- La interrupción en la pantalla de listening. Solo INTERRUPT llega al
+  candidato; HOLD e IGNORE no notifican nada, y eso es el producto, no una
+  etapa pendiente.
+- `scripts/measure-opportunities.mjs` y el script `measure:opportunities`.
+- Tests con `node --test` y un hook de resolución en `scripts/` (cero
+  dependencias nuevas). Ya comprobado que Node 22 hace type-stripping de `.ts`
+  y que `node:test` los carga; falta el hook para los imports `@/` y sin
+  extensión.
+- `next build` y una pasada real contra deepseek.
+
+### Decidido, no volver a abrirlo
+
+- **El modelo propone, las reglas deciden.** Se guardan las dos
+  (`model_decision` frente a `decision` + `override_reason`). Es la única
+  forma de saber si algún día el modelo puede llevar esto solo, y la única de
+  notar cuándo las equivocadas son las reglas.
+- **Salario y modo de trabajo se comprueban en código** contra `preferences`.
+  Geografía, tipo de rol y los "no" del candidato los propone el modelo y
+  pasan por validación. Comparar strings de ciudades y llamarlo una decisión
+  sería una precisión que no tenemos.
+- **Lo que no se puede señalar no es un desajuste, es un desconocido.** Un
+  veredicto positivo sin un `evidenceId` real baja a UNKNOWN, nunca a
+  NOT_SUPPORTED. Que el modelo no cite no dice nada sobre la persona.
+- **INTERRUPT se gana dos veces**: evidencia material citada *y* alineación
+  con el intent citada. Una sola de las dos es HOLD.
+- **HOLD tiene que decir qué lo resolvería.** Si el modelo no da una acción
+  usable, el hueco que causó el hold ya lleva la pregunta dentro.
+- **La etiqueta ciega vive en su propia tabla.** Los constructores de prompt
+  son funciones puras cuyos argumentos no tienen campo para ella: se comprueba,
+  no se promete.
+- **Rechazar una oferta no toca el Intent Profile.** Un no es sobre ese puesto,
+  no sobre la forma de todo lo que quieres.
+- **La config del modelo sigue cerrada.** El prompt original decía "DeepSeek
+  V4.1 Flash"; no se toca nada, el provider ya abstrae eso.
 
 ## Lo siguiente, cuando retomemos
 
@@ -16,9 +96,10 @@ Antes de esa sesión: borrar `.amble-data/`, que ahora tiene restos de pruebas
 Y el agujero real del producto, que no es código de estas pantallas: **no
 llega nada**. No hay fuente de ofertas que cruzar contra las preferencias. La
 pantalla de listening lo dice en voz alta ("Nothing is arriving yet") en vez
-de disimularlo, pero ahí está.
+de disimularlo, pero ahí está. Opportunity Zero no lo tapa — mete las ofertas
+a mano — pero contesta la otra mitad de la pregunta.
 
-## Decidido, no volver a abrirlo
+## Decidido en User Zero, no volver a abrirlo
 
 - El copy de la pantalla de listening se revisó el 18 de septiembre y **se
   queda como está**, incluidos los tres puntos de "FROM HERE". Repiten en
@@ -176,4 +257,5 @@ el audio no se guarda en ningún sitio.
 
 ## No empezado
 
-Nada de la lista original. Lo siguiente sale de la próxima sesión real.
+Nada de la lista original de User Zero. Lo siguiente de ese lado sale de la
+próxima sesión real. Lo de Opportunity Zero está arriba.

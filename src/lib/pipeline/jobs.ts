@@ -46,6 +46,7 @@ export type JobKind =
   | 'incorporate_answer'
   | 'plan_question'
   | 'build_profile'
+  | 'evaluate_opportunity'
 
 export interface JobPayloads {
   process_source: { sourceId: string }
@@ -53,6 +54,7 @@ export interface JobPayloads {
   incorporate_answer: { turnId: string }
   plan_question: Record<string, never>
   build_profile: Record<string, never>
+  evaluate_opportunity: { opportunityId: string }
 }
 
 /**
@@ -66,7 +68,13 @@ const MAX_ATTEMPTS = BACKOFF_MS.length + 1
 /** The candidate is watching this one. Everything else can take its time. */
 const LANES = {
   interactive: ['plan_question'],
-  background: ['process_source', 'assess_capabilities', 'incorporate_answer', 'build_profile'],
+  background: [
+    'process_source',
+    'assess_capabilities',
+    'incorporate_answer',
+    'build_profile',
+    'evaluate_opportunity',
+  ],
 } as const satisfies Record<string, readonly JobKind[]>
 
 type Lane = keyof typeof LANES
@@ -145,6 +153,18 @@ async function run(job: JobRow): Promise<void> {
       const { buildDistinctiveProfile, buildDescriptor } = await import('./graph')
       await buildDistinctiveProfile(job.candidate_id)
       await buildDescriptor(job.candidate_id)
+      return
+    }
+    case 'evaluate_opportunity': {
+      const { evaluateOpportunity } = await import('./opportunities')
+      const { getOpportunity } = await import('../db/opportunities')
+      const id = String(payload.opportunityId ?? '')
+      const opportunity = getOpportunity(id)
+      if (!opportunity) throw new Error(`Opportunity ${id} is gone.`)
+      // Already answered. A retry that arrives late must not pay for a
+      // second reading, or leave a second decision behind it.
+      if (opportunity.status === 'decided') return
+      await evaluateOpportunity(id)
       return
     }
     default:

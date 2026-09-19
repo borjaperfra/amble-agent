@@ -7,6 +7,13 @@ export const runtime = 'nodejs'
 const CAPABILITY_VERDICTS = ['ACCURATE', 'PARTIALLY_ACCURATE', 'WRONG', 'UNSUPPORTED']
 const QUESTION_VERDICTS = ['USEFUL', 'REDUNDANT', 'IRRELEVANT']
 
+/**
+ * An interruption decision and the explanation that came with it are judged
+ * the same way a capability is: was it accurate, and could it point at what
+ * it claimed. Same verdicts, so the two experiments stay comparable.
+ */
+const OPPORTUNITY_VERDICTS = ['ACCURATE', 'PARTIALLY_ACCURATE', 'WRONG', 'UNSUPPORTED']
+
 export async function POST(request: Request) {
   if (!isUserZero()) {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
@@ -24,7 +31,10 @@ export async function POST(request: Request) {
       ? CAPABILITY_VERDICTS
       : body.targetType === 'interview_question'
         ? QUESTION_VERDICTS
-        : []
+        : body.targetType === 'opportunity_decision' ||
+            body.targetType === 'opportunity_explanation'
+          ? OPPORTUNITY_VERDICTS
+          : []
 
   if (!body.targetId || !allowed.includes(body.verdict ?? '')) {
     return NextResponse.json({ error: 'Invalid evaluation.' }, { status: 400 })
