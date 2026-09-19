@@ -9,28 +9,59 @@ El lado del candidato **funciona de punta a punta**: un CV se convierte en
 grafo, las ofertas entran solas de tres fuentes, la criba gratis tira lo que
 no cumple sin gastar nada, las reglas deciden, la interrupción sale por correo
 y el Rep pregunta cuando le falta algo, la respuesta entra al grafo y la
-oferta se vuelve a decidir. Y —desde hoy— esa respuesta **puede volver por
-Telegram**: se contesta al mensaje y ya está, sin abrir la app.
+oferta se vuelve a decidir. Y —desde hoy— esa respuesta **vuelve por
+Telegram**, por escrito o hablando: se contesta al mensaje y ya está, sin
+abrir la app. Corriendo de verdad, con bot y chat id configurados.
 
 El lado de la empresa **no existe**, y ahí es donde va esto: dos agentes que
 averiguan lo que necesitan el uno del otro antes de molestar a nadie. Las
 cinco decisiones que hacían falta para empezar están cerradas (§ más abajo).
 
-**Lo siguiente, por orden:**
+**Lo siguiente, por orden** (decidido el 19 por la noche, se retoma aquí):
 
-1. El lado de la empresa: empresa, apertura, su agente, y la conversación como
+1. **Todo lo que llegue del candidato es contexto del perfil.** Hoy solo se
+   incorpora al grafo lo que contesta a una pregunta abierta; un mensaje suyo
+   con nada abierto se guarda en `inbound_messages` con `nothing_pending` y no
+   hace nada más. Tiene que pasar por el mismo camino que una respuesta
+   —`incorporateAnswer` con su procedencia— de modo que contarle algo al Rep,
+   venga a cuento de lo que venga, lo sepa. Dos cosas que hay que decidir al
+   hacerlo: qué se le contesta ("apuntado" a secas se queda corto si acaba de
+   contar algo que cambia una decisión) y si un mensaje suelto puede disparar
+   una reevaluación de lo que está en HOLD, que es lo suyo pero cuesta
+   llamadas.
+2. **Que el onboarding pregunte una vez lo que se repite oferta tras oferta**
+   (propiedad, escala, presupuesto). Lo cuarto de su lista, y lo más grande:
+   toca la entrevista.
+3. El lado de la empresa: empresa, apertura, su agente, y la conversación como
    objeto con turnos y traza.
-2. La sesión real de Borja con User Zero, que sigue pendiente desde el 18.
+4. La sesión real de Borja con User Zero, que sigue pendiente desde el 18.
 
-**Lo suyo, cuando quiera:** el token de @BotFather —que ahora no es solo por
-dónde sale el aviso, sino por dónde vuelve la respuesta, y es lo único que
-falta para probar el bucle entero desde el móvil—, confirmar que el suelo de
-120k y el resto del Intent son los buenos (los escribí yo desde las fixtures),
-y contestar la pregunta de Ridgeline que quedó abierta.
+**Por escrito sigue siendo lo normal.** El audio es una vía más, no la vía: se
+contesta escribiendo por Telegram, escribiendo en la pantalla, o hablando.
 
-**Ojo al retomar:** el dev server quedó parado a propósito. Al levantarlo, la
-sincronización de fuentes se reprograma sola y puede traer ofertas nuevas y
-gastar llamadas al modelo — `AMBLE_SOURCE_SYNC_HOURS=6` en `.env.local`.
+**Lo suyo, cuando quiera:** verificar un dominio en Resend (sin eso el correo
+solo sale a su Gmail), confirmar que el suelo de 120k y el resto del Intent
+son los buenos (los escribí yo desde las fixtures), y decir si quiere que
+limpie las evidencias duplicadas que dejó el reintento (ver § de las ocho
+preguntas).
+
+**Ojo al retomar:**
+
+- El dev server quedó **parado a propósito**. Al levantarlo, la sincronización
+  de fuentes se reprograma sola y puede traer ofertas y gastar llamadas al
+  modelo: `AMBLE_SOURCE_SYNC_HOURS=6` en `.env.local`. Para probar sin eso,
+  `AMBLE_SOURCE_SYNC_HOURS= npm run dev` (vacío en el entorno gana a
+  `.env.local`).
+- **Telegram está configurado y vivo**: bot `@amble_rep_bot`, chat id
+  `5028804103` guardado en preferencias. En cuanto el server arranca, sondea
+  cada diez segundos. Cualquier cosa que decida el pipeline le llega al móvil
+  de verdad.
+- Quedó una oferta a medio evaluar, **Nomad Compute** (`opp_aabc6dc6d6ae4577`),
+  metida a mano para ver el idioma de punta a punta. Al levantar el server
+  retoma sola. Con las reglas nuevas debería preguntar poco o nada.
+- La red hasta `api.telegram.org` desde esta máquina va lenta a ratos y se
+  pasa del timeout de conexión de undici (10 s). Se recupera solo; si se
+  vuelve costumbre, hace falta un dispatcher propio.
 
 ## Opportunity Zero — entero, y ya interrumpe
 
