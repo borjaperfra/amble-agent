@@ -11,14 +11,8 @@
 
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import {
-  composeRawText,
-  rubricFromFeed,
-  summaryFrom,
-  summaryText,
-  workModelFor,
-  type ManfredSummary,
-} from './manfred'
+import { composeRawText, offerFromListing, workModelFor } from './manfred'
+import { rubricFromFeed, screenedText, type FeedOffer } from './types'
 import { deterministicHardConstraints } from '@/domains/opportunity/rules'
 
 const listed = {
@@ -63,35 +57,35 @@ const detail = {
   workingDayInfo: { isFullTime: true, hasFlexTime: true, annualHolidays: 25 },
 }
 
-const summary = summaryFrom(listed) as ManfredSummary
+const summary = offerFromListing(listed) as FeedOffer
 
 // ─── One listing ──────────────────────────────────────────────────────────
 
-describe('summaryFrom', () => {
+describe('offerFromListing', () => {
   it('reads the offer out of the list', () => {
     assert.ok(summary)
     assert.equal(summary.sourceRef, 'manfred:8476')
     assert.equal(summary.company, 'Halvard')
-    assert.equal(summary.position, 'Head of Growth & Community')
+    assert.equal(summary.role, 'Head of Growth & Community')
     assert.equal(summary.url, 'https://www.getmanfred.com/ofertas-empleo/8476/halvard-head-of-growth')
     assert.equal(summary.active, true)
   })
 
   it('takes money as whole euros and a glyph as a currency', () => {
-    assert.equal(summary.salaryFrom, 130_000)
-    assert.equal(summary.salaryTo, 150_000)
+    assert.equal(summary.salaryMin, 130_000)
+    assert.equal(summary.salaryMax, 150_000)
     assert.equal(summary.currency, 'EUR')
   })
 
   it('treats a salary of zero as not stated, because that is what it means', () => {
-    const quiet = summaryFrom({ ...listed, salaryFrom: 0, salaryTo: 0 })
-    assert.equal(quiet?.salaryFrom, null)
-    assert.equal(quiet?.salaryTo, null)
+    const quiet = offerFromListing({ ...listed, salaryFrom: 0, salaryTo: 0 })
+    assert.equal(quiet?.salaryMin, null)
+    assert.equal(quiet?.salaryMax, null)
   })
 
   it('treats zero equity as no equity rather than as a promise of none', () => {
     assert.equal(summary.equity, '0.8% – 1.2%')
-    assert.equal(summaryFrom({ ...listed, equityInf: 0, equitySup: 0 })?.equity, null)
+    assert.equal(offerFromListing({ ...listed, equityInf: 0, equitySup: 0 })?.equity, null)
   })
 
   it('keeps every location the offer lists', () => {
@@ -99,13 +93,13 @@ describe('summaryFrom', () => {
   })
 
   it('knows a closed offer when it sees one', () => {
-    assert.equal(summaryFrom({ ...listed, status: 'CLOSED' })?.active, false)
-    assert.equal(summaryFrom({ ...listed, status: 'CANCELLED' })?.active, false)
+    assert.equal(offerFromListing({ ...listed, status: 'CLOSED' })?.active, false)
+    assert.equal(offerFromListing({ ...listed, status: 'CANCELLED' })?.active, false)
   })
 
   it('gives up quietly on something that is not an offer', () => {
-    assert.equal(summaryFrom({ id: 1 }), null)
-    assert.equal(summaryFrom(null), null)
+    assert.equal(offerFromListing({ id: 1 }), null)
+    assert.equal(offerFromListing(null), null)
   })
 })
 
@@ -138,7 +132,7 @@ describe('composeRawText', () => {
 
   it('says a missing number is missing rather than leaving it out', () => {
     const quiet = composeRawText(
-      summaryFrom({ ...listed, salaryFrom: 0, salaryTo: 0, equityInf: 0, equitySup: 0 })!,
+      offerFromListing({ ...listed, salaryFrom: 0, salaryTo: 0, equityInf: 0, equitySup: 0 })!,
       {},
     )
     assert.match(quiet, /Salary: not stated/)
@@ -146,7 +140,7 @@ describe('composeRawText', () => {
   })
 
   it('says outright when an offer was never read past the list', () => {
-    const screened = summaryText(summary)
+    const screened = screenedText(summary)
     assert.match(screened, /130\.000 – 150\.000 EUR/)
     assert.match(screened, /Not read any further/)
   })
@@ -164,7 +158,7 @@ describe('the free screen', () => {
     stages: [],
   }
   const failuresFor = (raw: unknown) =>
-    deterministicHardConstraints(constraints, rubricFromFeed(summaryFrom(raw)!)).filter(
+    deterministicHardConstraints(constraints, rubricFromFeed(offerFromListing(raw)!)).filter(
       (check) => check.verdict === 'FAIL',
     )
 
@@ -192,7 +186,7 @@ describe('the free screen', () => {
   it('never fails an offer for being quiet about what it pays', () => {
     const checks = deterministicHardConstraints(
       constraints,
-      rubricFromFeed(summaryFrom({ ...listed, salaryFrom: 0, salaryTo: 0 })!),
+      rubricFromFeed(offerFromListing({ ...listed, salaryFrom: 0, salaryTo: 0 })!),
     )
     assert.equal(checks.find((check) => check.id === 'hc_salary')?.verdict, 'UNKNOWN')
   })

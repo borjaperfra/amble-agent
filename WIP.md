@@ -264,6 +264,44 @@ No lo he tocado: es un cambio de regla y merece su propia medición, y las
 diez fixtures no cubren este caso (todas son de su oficio). No cuesta nada
 mientras tanto — HOLD no llega al candidato.
 
+### Tres fuentes, una interfaz
+
+`FeedAdapter` en `src/lib/sources/types.ts`: `list()` y `rawText(offer)`, y el
+resto del pipeline no sabe de dónde vino nada. Manfred, Greenhouse y Ashby lo
+implementan, y `syncSource` es el mismo código para las tres.
+
+**Los ATS son los tableros donde las startups publican de verdad.** Casi nadie
+pone ofertas en su web: las pone en su ATS y empotra el tablón, y ese tablón
+sirve el mismo JSON en abierto porque así funciona el empotrado.
+
+```
+GET boards-api.greenhouse.io/v1/boards/{empresa}/jobs?content=true
+GET api.ashbyhq.com/posting-api/job-board/{empresa}?includeCompensation=true
+```
+
+Una petición por empresa, con el anuncio entero dentro: cero segundas vueltas.
+
+Y son honestamente peores que Manfred en lo que importa para la criba: **ni
+uno da salario de forma fiable**, y Greenhouse da la ubicación como texto
+libre ("Hybrid - London"). La tentación es leer eso como híbrido y llamarlo un
+hecho. No lo es, y suspender a alguien por un constraint que nadie declaró
+sería justo el error que las reglas están escritas para no cometer. El
+adaptador deja esos campos en null, el screen los deja en UNKNOWN y el anuncio
+lo lee el modelo.
+
+Así que la criba ahí es otra: `AMBLE_ATS_DEPARTMENTS` contra el departamento
+que da el propio tablón — dato de la fuente, no adivinanza nuestra sobre el
+título. Probado: Vercel 84 → 10, PostHog 9 → 1, y las once son de marketing o
+growth.
+
+**Un fallo que salió de probarlo.** La primera versión reprogramaba la
+sincronización de ATS sin parar: cada tablón deja su registro con su nombre
+(`greenhouse:vercel`), el planificador buscaba uno llamado `ats`, no lo
+encontraba, concluía que nunca había corrido y encolaba otra. Un bucle que lee
+dos tableros para siempre y que desde fuera parece que la app está ocupada.
+Ahora `syncAll` deja también un registro del grupo, que es el que lee el
+planificador. Las dos fuentes quedan programadas una sola vez, a seis horas.
+
 ### El aviso sale de la máquina
 
 La pantalla prometía "you get one message" y ese mensaje solo existía si

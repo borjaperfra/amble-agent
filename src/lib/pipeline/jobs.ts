@@ -49,6 +49,7 @@ export type JobKind =
   | 'evaluate_opportunity'
   | 'deliver_notification'
   | 'sync_manfred'
+  | 'sync_ats'
 
 export interface JobPayloads {
   process_source: { sourceId: string }
@@ -59,6 +60,7 @@ export interface JobPayloads {
   evaluate_opportunity: { opportunityId: string }
   deliver_notification: { notificationId: string }
   sync_manfred: { limit?: number; maxEvaluations?: number }
+  sync_ats: { limit?: number; maxEvaluations?: number }
 }
 
 /**
@@ -80,6 +82,7 @@ const LANES = {
     'evaluate_opportunity',
     'deliver_notification',
     'sync_manfred',
+    'sync_ats',
   ],
 } as const satisfies Record<string, readonly JobKind[]>
 
@@ -178,19 +181,30 @@ async function run(job: JobRow): Promise<void> {
       await deliverNotificationJob(String(payload.notificationId ?? ''))
       return
     }
-    case 'sync_manfred': {
-      const { syncManfredOffers, ensureManfredSyncScheduled } = await import('./manfred-sync')
+    case 'sync_manfred':
+    case 'sync_ats': {
+      const kind = job.kind as JobKind
+      const { syncAll, ensureSyncScheduled } = await import('./source-sync')
+      const { manfredAdapter } = await import('../sources/manfred')
+      const { configuredAtsAdapters, configuredDepartments } = await import('../sources/ats')
+      const options = {
+        limit: typeof payload.limit === 'number' ? payload.limit : undefined,
+        maxEvaluations:
+          typeof payload.maxEvaluations === 'number' ? payload.maxEvaluations : undefined,
+        departments: kind === 'sync_ats' ? configuredDepartments() : [],
+      }
       try {
-        await syncManfredOffers(job.candidate_id, {
-          limit: typeof payload.limit === 'number' ? payload.limit : undefined,
-          maxEvaluations:
-            typeof payload.maxEvaluations === 'number' ? payload.maxEvaluations : undefined,
-        })
+        await syncAll(
+          job.candidate_id,
+          kind === 'sync_ats' ? configuredAtsAdapters() : [manfredAdapter()],
+          options,
+          kind === 'sync_ats' ? 'ats' : 'manfred',
+        )
       } finally {
         // Before anything else can go wrong: a sync that fails and does not
         // put the next one on the queue stops listening for good, quietly,
         // which is the one failure this product cannot have.
-        ensureManfredSyncScheduled(job.candidate_id)
+        ensureSyncScheduled(job.candidate_id, kind)
       }
       return
     }

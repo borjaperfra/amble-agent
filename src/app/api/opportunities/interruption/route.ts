@@ -3,7 +3,7 @@ import { isUserZero } from '@/lib/features'
 import { getPendingInterruption } from '@/lib/opportunity-view'
 import { resumeQueue } from '@/lib/pipeline/jobs'
 import { getOrCreateCandidate } from '@/lib/db/repo'
-import { ensureManfredSyncScheduled } from '@/lib/pipeline/manfred-sync'
+import { ensureSyncScheduled } from '@/lib/pipeline/source-sync'
 
 export const runtime = 'nodejs'
 
@@ -24,6 +24,8 @@ export async function GET() {
   // The listening screen asks this every few seconds, which makes it the
   // cheapest heartbeat in the app: if the recurring sync is configured and
   // nothing is queued, this is where it gets put back on.
-  ensureManfredSyncScheduled(getOrCreateCandidate().id)
+  const candidateId = getOrCreateCandidate().id
+  ensureSyncScheduled(candidateId, 'sync_manfred')
+  ensureSyncScheduled(candidateId, 'sync_ats')
   return NextResponse.json({ interruption: getPendingInterruption() })
 }

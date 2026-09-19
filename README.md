@@ -41,7 +41,9 @@ Open http://localhost:3000. Building requires network access to `fonts.googleapi
 | `AMBLE_SMTP_FROM` / `AMBLE_SMTP_FROM_NAME` | What the message says it is from. Falls back to the user. |
 | `AMBLE_SMTP_IMPLICIT_TLS` | Force TLS from the first byte. Defaults to on for port 465. |
 | `AMBLE_BASE_URL` | Where the message tells them to go to answer. |
-| `AMBLE_MANFRED_SYNC_HOURS` | How often to look for new offers on its own. Empty or 0 means only when asked. |
+| `AMBLE_SOURCE_SYNC_HOURS` | How often to look for new offers on its own. Empty or 0 means only when asked. |
+| `AMBLE_ATS_BOARDS` | Company boards to read, e.g. `greenhouse:vercel,ashby:posthog`. |
+| `AMBLE_ATS_DEPARTMENTS` | Keep only what those boards file under one of these. Empty keeps everything. |
 
 Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly with a 503 — it never falls back to demo data.
 
@@ -103,7 +105,18 @@ No key and nothing private. The shape of that first call shapes the whole sync: 
 
 In practice that is 13 of 17 dropped for nothing and 4 downloaded. With about a minute of reasoning per offer, that screen is the difference between a click and a long afternoon. Whatever survives is capped by `maxEvaluations` per run.
 
-Set `AMBLE_MANFRED_SYNC_HOURS` and it goes on its own. There is no cron daemon: the queue already runs things later and survives restarts, so the sync puts the next one on the queue before it finishes, and the endpoints the screens poll put it back if it ever went missing. It runs while the server does.
+**From company boards.** `POST /api/sources/ats` reads the applicant tracking systems startups actually post to, which serve the same data as public JSON because that is how their embedded boards work:
+
+```
+GET boards-api.greenhouse.io/v1/boards/{company}/jobs?content=true
+GET api.ashbyhq.com/posting-api/job-board/{company}?includeCompensation=true
+```
+
+One request per company, posting included, so there is no second round trip at all. Which companies is a list in `AMBLE_ATS_BOARDS`, not a crawl: Amble is not trying to see every job in the world, it is watching the handful of places one person would actually go.
+
+Neither board states pay reliably and Greenhouse gives location as free text ("Hybrid - London"), so the free screen has almost nothing to work with there — and the adapter leaves those fields null rather than reading a hard constraint out of a string somebody typed. The triage instead is `AMBLE_ATS_DEPARTMENTS`, matched against the board's own department. In practice Vercel's 84 jobs become 10 and PostHog's 9 become 1.
+
+Set `AMBLE_SOURCE_SYNC_HOURS` and it goes on its own. There is no cron daemon: the queue already runs things later and survives restarts, so the sync puts the next one on the queue before it finishes, and the endpoints the screens poll put it back if it ever went missing. It runs while the server does.
 
 ## What gets sent
 
