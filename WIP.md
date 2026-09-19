@@ -421,6 +421,50 @@ lecturas y las llamadas al modelo, y deja el grafo, el intent y las
 preferencias donde estaban. `-- --all` se lleva también las de Manfred, que
 ahora mismo son 17.
 
+### Decidido el 19 sobre los dos agentes, no volver a abrirlo
+
+La dirección, en las palabras del propio spec (§1): **intent ↔ evidence ↔
+intent**, hasta llegar a Qualified Mutual Intent. Un agente por la empresa y
+su oferta, el Rep por la persona, y que sean ellos los que averigüen lo que
+necesitan el uno del otro antes de molestar a nadie.
+
+**La regla que lo hace valer algo: los agentes preguntan y responden, no
+deciden.** Las preguntas salen de los huecos que identificaron las reglas,
+las respuestas tienen que poder citarse, y la decisión la siguen tomando las
+reglas de cada lado por separado. Dos LLMs sueltos convergen en estar de
+acuerdo — ya lo medimos aquí: el modelo holdeaba todo hasta que las reglas y
+el prompt le pusieron la barra.
+
+1. **La escalera de divulgación.** Antes de que él diga nada, su Rep solo
+   responde y nunca ofrece: confirma o niega lo que la rúbrica pregunta, con
+   la evidencia detrás. Sus números no salen — a "¿cuál es su mínimo?" se
+   responde *"lo supera"*, nunca 120.000. Sin nombre, sin empresa actual, sin
+   ciudad. Cuando él dice adelante: nombre, historial y el Mapa. Nunca sin
+   pedirlo él: sus "no" tal cual los escribió, sus dudas sobre el empleo
+   actual, y las respuestas de la entrevista en bruto.
+2. **A un humano no se le molesta** hasta que la conversación esté terminada
+   o atascada en algo que solo esa persona puede contestar.
+3. **"Acordado" =** los hard constraints de los dos lados pasan y a ninguno le
+   queda un desconocido bloqueante. Es `decisionSignals` corrido dos veces,
+   una con las reglas de cada parte. Ningún agente declara el acuerdo.
+4. **El candidato no paga nada, nunca.** La empresa paga un precio del que
+   sale el coste; no hay factura por búsqueda. Consecuencia de ingeniería, no
+   de negocio: la criba gratis deja de ser un ahorro y pasa a ser la condición
+   de que los números salgan — una oferta contra doscientos Reps son
+   seiscientas llamadas al modelo si no se filtra antes con lo comprobable. El
+   techo por tanda (`maxEvaluations`) se queda, como control de coste.
+5. **No se rankea.** El §27 dice "Amble represents people. It doesn't rank
+   them". El agente de la empresa devuelve *"tres Reps quieren hablar"*, no
+   una lista ordenada con puntuaciones. Si algún día se quiere el orden, es
+   una decisión de producto grande y se discute entera.
+
+**Telegram antes que el correo entrante.** Contestar por correo exige o un
+túnel permanente (Resend Inbound es por webhook, tiene que llegar a la
+máquina) o parsear respuestas con texto citado y firmas. `getUpdates` de
+Telegram es sondeo desde nuestra máquina hacia fuera: ni URL pública, ni
+túnel, ni parseo. Es el único canal de dos direcciones que funciona con esto
+corriendo en un portátil.
+
 ### Decidido, no volver a abrirlo
 
 - **El modelo propone, las reglas deciden.** Se guardan las dos
