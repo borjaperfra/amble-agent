@@ -384,6 +384,46 @@ describe('the message that goes out', () => {
     assert.match(note.body, /Nothing has gone to the company/)
   })
 
+  it('sends what was written while there was nowhere to send it', async () => {
+    const opportunity = ingest('Halvard Resumed', 'test-notice-resume')
+    await pipeline.evaluateOpportunity(opportunity.id, runners())
+
+    const outbox = await import('../db/notifications')
+    const notify = await import('./notify')
+    assert.equal(
+      outbox.findNotification('opportunity', opportunity.id, 'email')?.status,
+      'unconfigured',
+    )
+
+    // Nothing moves while there is still nowhere to send it.
+    assert.equal(notify.resumeUnsentNotices(candidateId), 0)
+
+    // Now somebody pastes the key and picks a channel, which is exactly the
+    // order it happens in: the interruptions already exist by then.
+    preferences.writePreferences(candidateId, {
+      notifyChannels: ['email'],
+      notifyEmail: 'borja@example.com',
+    })
+    process.env.AMBLE_SMTP_HOST = 'smtp.example.test'
+    process.env.AMBLE_SMTP_USER = 'user'
+    process.env.AMBLE_SMTP_PASSWORD = 'key'
+    process.env.AMBLE_SMTP_FROM = 'rep@amble.test'
+
+    try {
+      assert.ok(notify.resumeUnsentNotices(candidateId) > 0, 'the waiting ones go back on the queue')
+      const note = outbox.findNotification('opportunity', opportunity.id, 'email')
+      assert.equal(note?.status, 'pending')
+      // With the address as it is now, not as it was when nobody had given one.
+      assert.equal(note?.address, 'borja@example.com')
+    } finally {
+      delete process.env.AMBLE_SMTP_HOST
+      delete process.env.AMBLE_SMTP_USER
+      delete process.env.AMBLE_SMTP_PASSWORD
+      delete process.env.AMBLE_SMTP_FROM
+      preferences.writePreferences(candidateId, { notifyChannels: [], notifyEmail: '' })
+    }
+  })
+
   it('does not write a second copy when the evaluation is run again', async () => {
     const opportunity = ingest('Halvard Twice', 'test-notice-twice')
     await pipeline.evaluateOpportunity(opportunity.id, runners())

@@ -4,6 +4,7 @@ import { getPendingInterruption } from '@/lib/opportunity-view'
 import { resumeQueue } from '@/lib/pipeline/jobs'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { ensureSyncScheduled } from '@/lib/pipeline/source-sync'
+import { resumeUnsentNotices } from '@/lib/pipeline/notify'
 
 export const runtime = 'nodejs'
 
@@ -27,5 +28,7 @@ export async function GET() {
   const candidateId = getOrCreateCandidate().id
   ensureSyncScheduled(candidateId, 'sync_manfred')
   ensureSyncScheduled(candidateId, 'sync_ats')
+  // And anything that was written while there was nowhere to send it.
+  resumeUnsentNotices(candidateId)
   return NextResponse.json({ interruption: getPendingInterruption() })
 }

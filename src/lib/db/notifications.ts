@@ -112,3 +112,27 @@ export function listNotifications(candidateId: string, limit = 50): Notification
     .prepare('SELECT * FROM notifications WHERE candidate_id = ? ORDER BY created_at DESC LIMIT ?')
     .all(candidateId, limit) as unknown as NotificationRow[]
 }
+
+/**
+ * Written, and never sent.
+ *
+ * `unconfigured` is not a dead end: the channel it was waiting for can be
+ * set up afterwards, which is exactly what happens the first time — every
+ * interruption decided before the mail server existed is sitting here.
+ */
+export function listUnsentNotifications(candidateId: string): NotificationRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM notifications
+       WHERE candidate_id = ? AND status IN ('unconfigured', 'failed')
+       ORDER BY created_at`,
+    )
+    .all(candidateId) as unknown as NotificationRow[]
+}
+
+/** Back on the queue, with whatever address is current. */
+export function markNotificationQueued(id: string, address: string): void {
+  getDb()
+    .prepare("UPDATE notifications SET status = 'pending', address = ?, last_error = NULL WHERE id = ?")
+    .run(address, id)
+}

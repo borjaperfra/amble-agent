@@ -30,6 +30,11 @@ export class TelegramError extends Error {
     this.name = 'TelegramError'
     this.code = code
   }
+
+  /** A blocked bot or a chat that does not exist will not fix itself. 429 will. */
+  get permanent(): boolean {
+    return this.code === 400 || this.code === 403 || this.code === 404
+  }
 }
 
 /**

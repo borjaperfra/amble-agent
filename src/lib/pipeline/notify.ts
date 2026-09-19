@@ -23,7 +23,9 @@ import { recordAuditEvent } from '../db/opportunities'
 import {
   getNotification,
   insertNotification,
+  listUnsentNotifications,
   markNotificationFailed,
+  markNotificationQueued,
   markNotificationSent,
   type NotificationChannel,
   type NotificationRow,
@@ -186,6 +188,37 @@ function record(
   return { notification: result.notification, created: result.created }
 }
 
+/**
+ * Send what was written while there was nowhere to send it.
+ *
+ * The first time a channel is configured, every interruption decided before
+ * that moment is sitting in the outbox marked `unconfigured`. Leaving them
+ * there would mean the setup only takes effect for the next opportunity,
+ * and the five already waiting would never arrive — which is a strange thing
+ * for a product whose whole promise is that it tells you.
+ *
+ * Safe to call as often as you like: a row only moves when its channel is
+ * configured now and there is an address to use, and the address is taken
+ * from the current preferences rather than whatever was true when it was
+ * written.
+ */
+export function resumeUnsentNotices(candidateId: string): number {
+  const preferences = readPreferences(candidateId)
+  let resumed = 0
+
+  for (const notification of listUnsentNotifications(candidateId)) {
+    const channel = notification.channel
+    if (!preferences.notifyChannels.includes(channel)) continue
+    const address = addressFor(preferences, channel)
+    if (!address || !configuredFor(channel)) continue
+
+    markNotificationQueued(notification.id, address)
+    enqueue('deliver_notification', candidateId, { notificationId: notification.id })
+    resumed += 1
+  }
+  return resumed
+}
+
 // ─── Getting it sent ──────────────────────────────────────────────────────
 
 /**
@@ -217,6 +250,10 @@ export async function deliverNotificationJob(notificationId: string): Promise<vo
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The message did not go out.'
     markNotificationFailed(notification.id, message, 'failed')
+    // Throwing is how a retry is asked for. A refusal is not a reason to ask
+    // for one: the server said no and will say no again, and four more
+    // attempts only bury the reason somebody needs to read.
+    if ((error as { permanent?: boolean }).permanent === true) return
     throw error
   }
 

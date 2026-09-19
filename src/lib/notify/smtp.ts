@@ -32,6 +32,16 @@ export class SmtpError extends Error {
     this.name = 'SmtpError'
     this.code = code
   }
+
+  /**
+   * A 5xx is the server saying no, not the server being busy — a bad
+   * recipient, a refused sender, a message it will never take. Retrying that
+   * for ten minutes achieves nothing except burying the reason under four
+   * more attempts. 4xx is "try later" and is exactly what the queue is for.
+   */
+  get permanent(): boolean {
+    return this.code !== null && this.code >= 500 && this.code < 600
+  }
 }
 
 interface Reply {

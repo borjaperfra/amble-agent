@@ -324,10 +324,37 @@ tenías la pestaña abierta. Ahora:
   y el outbox dice `unconfigured`. El silencio por accidente y el silencio a
   propósito no pueden parecerse.
 
-Falta la parte tuya: `AMBLE_SMTP_HOST` y compañía en `.env.local` (están
-documentados en `.env.example`). Ahora mismo hay cuatro filas en el outbox,
-dos interrupciones × dos canales, todas `unconfigured`. WhatsApp no tiene
-adaptador: se encola, se ve pendiente y no se manda.
+**Y sale de verdad.** Resend por SMTP, sin tocar código: `smtp.resend.com`,
+usuario `resend`, la API key de contraseña. Cinco interrupciones entregadas el
+19 a las 13:00.
+
+Tres cosas salieron de montarlo, y las tres son estados que solo aparecen
+cuando lo enchufas:
+
+- **Medio configurado.** Host y usuario pegados de la página del proveedor y
+  la key todavía en el portapapeles. Eso contaba como configurado, así que
+  cada aviso se encolaba, fallaba la autenticación y reintentaba diez minutos
+  dejando el outbox en `failed` — que se lee como "lo rechazaron", no como
+  "nunca llegó a estar montado". Ahora un usuario sin contraseña cuenta como
+  sin configurar y el motivo dice qué línea falta.
+- **Lo escrito antes de que hubiera dónde mandarlo.** Las cinco
+  interrupciones existían desde antes que el servidor de correo, en
+  `unconfigured`, y nada las devolvía a la cola: configurarlo solo habría
+  servido para la siguiente oportunidad. `resumeUnsentNotices` las recupera, y
+  coge la dirección de las preferencias de ahora, no de cuando se escribieron.
+- **Un 550 no es un corte de red.** Resend rechazó las primeras con *"you can
+  only send testing emails to your own email address"*, y la cola lo
+  reintentó como si fuera un fallo de transporte. Ahora un 5xx de SMTP (y un
+  400/403/404 de Telegram) se marca y se para: cuatro intentos más solo
+  entierran el motivo que alguien tiene que leer.
+
+Pendiente tuyo: **verificar un dominio en Resend**. Sin eso solo envía desde
+`onboarding@resend.dev` y solo a la dirección de la cuenta, que es la razón
+por la que el aviso apunta ahora a `borjaperezfrances@gmail.com` en vez de a
+`bperez@helmcode.com`.
+
+Telegram está escrito y probado pero aparcado: falta el token de @BotFather.
+WhatsApp sigue sin adaptador y la pantalla lo dice.
 
 ### Sobre `.amble-data/`
 
