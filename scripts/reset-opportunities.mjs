@@ -47,8 +47,12 @@ const ids = targets.map((row) => row.id)
 const holes = ids.map(() => '?').join(', ')
 const run = (sql) => db.prepare(sql).run(...ids).changes
 
-// Children first: the rows point back up, and the pragma is on.
+// Children first: the rows point back up, and the pragma is on. Questions
+// come before decisions because a question remembers which decision asked
+// it — which is exactly the link that made this script fail the first time
+// there was one.
 const counts = {
+  questions: run(`DELETE FROM opportunity_questions WHERE opportunity_id IN (${holes})`),
   responses: run(`DELETE FROM opportunity_responses WHERE opportunity_id IN (${holes})`),
   decisions: run(`DELETE FROM opportunity_decisions WHERE opportunity_id IN (${holes})`),
   assessments: run(`DELETE FROM opportunity_assessments WHERE opportunity_id IN (${holes})`),
@@ -60,9 +64,25 @@ const counts = {
   opportunities: run(`DELETE FROM opportunities WHERE id IN (${holes})`),
 }
 
+// Messages about things that no longer exist. There is no foreign key
+// holding these, which is exactly why they have to be swept by hand — and
+// why the first version left twelve rows pointing at questions that had
+// been deleted underneath them. An outbox full of rows about nothing is
+// worse than an empty one.
+counts.notifications = db
+  .prepare(
+    `DELETE FROM notifications
+     WHERE (about_type = 'opportunity' AND about_id IN (${holes}))
+        OR (about_type = 'question'
+            AND about_id NOT IN (SELECT id FROM opportunity_questions))`,
+  )
+  .run(...ids).changes
+
 // Anything still queued would come back looking for rows that are gone.
 counts.jobs = db
-  .prepare("DELETE FROM jobs WHERE kind = 'evaluate_opportunity'")
+  .prepare(
+    "DELETE FROM jobs WHERE kind IN ('evaluate_opportunity', 'incorporate_opportunity_answer')",
+  )
   .run().changes
 
 if (db.prepare('SELECT COUNT(*) AS n FROM opportunities').get().n === 0) {

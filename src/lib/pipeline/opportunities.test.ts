@@ -120,6 +120,75 @@ after(() => {
  * interruption it can point at. What the rules do with a good proposal is
  * as much a test as what they do with a bad one.
  */
+/**
+ * A reading that likes the job and is unsure about the person — the shape
+ * that produces a question rather than an answer.
+ */
+function holdingRunners() {
+  const base = runners()
+  return {
+    ...base,
+    match: async () => {
+      calls.match += 1
+      return {
+        data: {
+          hardConstraints: [],
+          evidenceMatch: [
+            {
+              requirementId: 'req_1',
+              requirement: 'Has grown a developer platform',
+              importance: 'REQUIRED' as const,
+              verdict: 'PARTIALLY_SUPPORTED' as const,
+              evidenceIds,
+              capabilityIds: ['cap_growth'],
+              note: 'Close, but the audience was not developers.',
+            },
+          ],
+          intentMatch: [
+            {
+              id: 'im_1',
+              aspect: 'Space',
+              verdict: 'ALIGNED' as const,
+              intentRefs: ['int_listening_1'],
+              note: 'They said AI infrastructure.',
+            },
+          ],
+          unknowns: [
+            {
+              id: 'unk_dev_community',
+              side: 'candidate' as const,
+              description: 'We do not know whether he has run a developer community.',
+              materiality: 'HIGH' as const,
+              resolvedBy: {
+                type: 'ASK_CANDIDATE' as const,
+                question: 'Have you built or run a developer community yourself?',
+              },
+              deterministic: false,
+            },
+          ],
+        },
+        modelRunId: 'run_match_hold',
+        latencyMs: 10,
+      }
+    },
+    decision: async () => {
+      calls.decision += 1
+      return {
+        data: {
+          decision: 'HOLD' as const,
+          reason: 'The job fits. Whether he has run a community is not settled.',
+          supportingEvidenceIds: evidenceIds,
+          supportingIntentReferences: ['int_listening_1'],
+          materialUnknowns: ['unk_dev_community'],
+          nextBestAction: { type: 'ASK_COMPANY' as const, question: 'What is the budget?' },
+        },
+        modelRunId: 'run_decision_hold',
+        latencyMs: 10,
+      }
+    },
+  } as unknown as Parameters<Pipeline['evaluateOpportunity']>[1]
+}
+
 function runners(rubricOverrides: Record<string, unknown> = {}) {
   return {
     rubric: async () => {
@@ -329,6 +398,75 @@ describe('evaluateOpportunity', () => {
       // there is anywhere to send it yet.
       'notification_queued',
     ])
+  })
+})
+
+// ─── A question, an answer, and a second opinion ──────────────────────────
+
+describe('the loop', () => {
+  it('asks the person when the gap is about them, and asks once', async () => {
+    const opportunity = ingest('Solenne', 'test-question')
+    const result = await pipeline.evaluateOpportunity(opportunity.id, holdingRunners())
+    assert.equal(result.decision, 'HOLD')
+
+    const questions = await import('./opportunity-questions')
+    const open = questions.questionsFor(opportunity.id)
+    assert.equal(open.length, 1)
+    assert.equal(open[0].question, 'Have you built or run a developer community yourself?')
+    // The company's question was the model's preference; the person's is the
+    // one that can move tonight, and it wins.
+    assert.equal(open[0].unknown_id, 'unk_dev_community')
+
+    // Evaluated again — a retry, a restart — and it must not ask twice.
+    await pipeline.evaluateOpportunity(opportunity.id, holdingRunners(), { reassess: true })
+    assert.equal(questions.questionsFor(opportunity.id).length, 1)
+  })
+
+  it('takes the answer, and takes it before anything can go wrong with it', async () => {
+    const opportunity = ingest('Solenne Answered', 'test-question-answer')
+    await pipeline.evaluateOpportunity(opportunity.id, holdingRunners())
+
+    const questions = await import('./opportunity-questions')
+    const [asked] = questions.questionsFor(opportunity.id)
+
+    const result = questions.answerQuestion(asked.id, '  I ran the Manfred Discord for two years.  ')
+    assert.deepEqual(result, { ok: true, questionId: asked.id })
+
+    const stored = questions.questionsFor(opportunity.id)[0]
+    assert.equal(stored.status, 'answered')
+    assert.equal(stored.answer, 'I ran the Manfred Discord for two years.')
+    assert.ok(stored.answered_at)
+
+    // And it is no longer in front of them. (Others may be: this candidate
+    // has unanswered questions from the tests above, which is the normal
+    // state — several opportunities can be waiting on different things.)
+    assert.notEqual(questions.openQuestionFor(candidateId)?.id, asked.id)
+  })
+
+  it('refuses an empty answer rather than recording a shrug as a fact', async () => {
+    const opportunity = ingest('Solenne Empty', 'test-question-empty')
+    await pipeline.evaluateOpportunity(opportunity.id, holdingRunners())
+    const questions = await import('./opportunity-questions')
+    const [asked] = questions.questionsFor(opportunity.id)
+
+    const result = questions.answerQuestion(asked.id, '   ')
+    assert.equal(result.ok, false)
+    assert.equal(questions.questionsFor(opportunity.id)[0].status, 'open')
+  })
+
+  it('reads the person again without paying to read the posting again', async () => {
+    const opportunity = ingest('Solenne Reassessed', 'test-question-reassess')
+    await pipeline.evaluateOpportunity(opportunity.id, holdingRunners())
+    const before = { ...calls }
+
+    // What happens after an answer: the job has not changed, they have.
+    const again = await pipeline.evaluateOpportunity(opportunity.id, runners(), { reassess: true })
+
+    assert.equal(calls.rubric, before.rubric, 'the posting is not read twice')
+    assert.ok(calls.match > before.match, 'but the person is')
+    assert.equal(again.decision, 'INTERRUPT', 'and the answer can change the answer')
+    assert.ok(again.ran.includes('match'))
+    assert.ok(!again.ran.includes('rubric'))
   })
 })
 

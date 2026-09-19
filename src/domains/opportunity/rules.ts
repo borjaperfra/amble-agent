@@ -607,6 +607,27 @@ export function settleNextAction(
 ): NextBestAction {
   if (decision !== 'HOLD') return { type: 'NONE', question: null }
 
+  // The one Amble can actually ask — but only when it is the one holding
+  // things up.
+  //
+  // Measured on the gap set: five holds out of five asked the company,
+  // somebody Amble cannot reach, so a hold could never move tonight.
+  // Preferring the person fixed that and immediately overshot: an offer
+  // that simply never said what it pays was answered with a question about
+  // developer audiences, which is a question nobody was waiting on.
+  //
+  // So: ask them when the gap about them is what the decision is resting
+  // on, or when nothing they made a condition of is missing. If the posting
+  // is silent about the salary floor they named, that is the question, and
+  // it is not one they can answer.
+  const asking = candidateGap(analysis, materialUnknowns)
+  const blocking = analysis.unknowns.filter(
+    (item) => item.materiality === 'HIGH' && item.deterministic,
+  )
+  if (asking && (materialUnknowns.includes(asking.id) || blocking.length === 0)) {
+    return { type: 'ASK_CANDIDATE', question: (asking.resolvedBy.question ?? '').trim() }
+  }
+
   const usable = proposed.type !== 'NONE' && (proposed.question ?? '').trim().length > 0
   if (usable) return { type: proposed.type, question: (proposed.question ?? '').trim() }
 
@@ -619,6 +640,38 @@ export function settleNextAction(
   if (firstWithQuestion) return firstWithQuestion.resolvedBy
 
   return { type: 'WAIT', question: null }
+}
+
+/**
+ * A gap about the person, worded as something they could answer tonight.
+ *
+ * Material ones first: if several things are unknown, the one already
+ * weighing on the decision is the one worth their evening.
+ */
+export function candidateGap(
+  analysis: MatchAnalysis,
+  materialUnknowns: readonly string[] = [],
+): UnknownItem | null {
+  const material = new Set(materialUnknowns)
+  const asking = analysis.unknowns.filter(
+    (item) => item.side === 'candidate' && (item.resolvedBy.question ?? '').trim().length > 0,
+  )
+  return (
+    asking.find((item) => material.has(item.id)) ??
+    asking.find((item) => item.materiality === 'HIGH') ??
+    asking[0] ??
+    null
+  )
+}
+
+/** Which unknown a candidate-side question came from, for the record. */
+export function unknownBehind(analysis: MatchAnalysis, question: string): UnknownItem | null {
+  const trimmed = question.trim()
+  return (
+    analysis.unknowns.find(
+      (item) => item.side === 'candidate' && (item.resolvedBy.question ?? '').trim() === trimmed,
+    ) ?? null
+  )
 }
 
 // ─── The explanation, audited ─────────────────────────────────────────────

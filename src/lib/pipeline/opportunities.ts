@@ -238,9 +238,21 @@ export interface EvaluationResult {
   ran: string[]
 }
 
+export interface EvaluateOptions {
+  /**
+   * Read the person again, keeping the posting's rubric.
+   *
+   * Used after they answer a question: the job has not changed, they have.
+   * Paying for the rubric a second time would be paying to read the same
+   * document twice.
+   */
+  reassess?: boolean
+}
+
 export async function evaluateOpportunity(
   opportunityId: string,
   runners: OpportunityRunners = defaultRunners,
+  options: EvaluateOptions = {},
 ): Promise<EvaluationResult> {
   const opportunity = getOpportunity(opportunityId)
   if (!opportunity) throw new Error(`Opportunity ${opportunityId} is gone.`)
@@ -286,7 +298,7 @@ export async function evaluateOpportunity(
   const context = candidateContext(candidateId)
 
   // ── Stage 2: the four readings ─────────────────────────────────────────
-  let assessmentRow = getLatestAssessment(opportunityId)
+  let assessmentRow = options.reassess ? undefined : getLatestAssessment(opportunityId)
   if (!assessmentRow) {
     const { data, modelRunId, latencyMs } = await runners.match({
       candidateId,
@@ -479,6 +491,22 @@ export async function evaluateOpportunity(
   if (settled.decision === 'INTERRUPT') {
     const { queueInterruptionNotice } = await import('./notify')
     queueInterruptionNotice(candidateId, opportunityId)
+  }
+
+  // A hold waiting on them is the one kind of hold that can move tonight.
+  if (settled.decision === 'HOLD' && settled.nextBestAction.type === 'ASK_CANDIDATE') {
+    const { askCandidate } = await import('./opportunity-questions')
+    const asked = askCandidate({
+      candidateId,
+      opportunityId,
+      decisionId: decisionRow.id,
+      analysis,
+      action: settled.nextBestAction,
+    })
+    if (asked?.created) {
+      const { queueQuestionNotice } = await import('./notify')
+      queueQuestionNotice(candidateId, asked.question.id)
+    }
   }
 
   return {

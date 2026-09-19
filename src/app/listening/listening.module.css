@@ -458,3 +458,56 @@
   border-radius: var(--radius-sm);
   padding: 1px 5px;
 }
+
+/* ── The question ──────────────────────────────────────────────────────
+   The smaller of the two things the Rep puts in front of anyone. It
+   borrows the interruption's width and none of its weight: no facts, no
+   evidence, no decision to make — just the thing it needs to know. */
+
+.question {
+  margin: 48px auto 0;
+  max-width: 54ch;
+  width: 100%;
+  animation: enter 600ms var(--ease-standard) both;
+}
+
+.questionText {
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-size: var(--heading-md);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+.questionWhy {
+  margin-top: 14px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  line-height: 1.6;
+}
+
+.questionInput {
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  width: 100%;
+  margin-top: 24px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.questionInput:focus {
+  outline: none;
+  border-color: var(--moss);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .question {
+    animation: none;
+  }
+}

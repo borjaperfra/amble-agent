@@ -119,6 +119,14 @@ Neither board states pay reliably and Greenhouse gives location as free text ("H
 
 Set `AMBLE_SOURCE_SYNC_HOURS` and it goes on its own. There is no cron daemon: the queue already runs things later and survives restarts, so the sync puts the next one on the queue before it finishes, and the endpoints the screens poll put it back if it ever went missing. It runs while the server does.
 
+## When the Rep asks you something
+
+A hold says what would resolve it. Until recently that was a dead end: the question sat in a column and nothing carried it anywhere, and five holds out of five were addressed to the company — somebody Amble cannot reach.
+
+Now, when the gap holding a decision up is about the person rather than about the job, the Rep asks them. The question goes out through the same outbox as an interruption and appears on the listening screen with much less weight than one. The answer is stored immediately, then read into the graph by the same path an interview answer takes — a claim with provenance, evidence, capabilities reassessed — and the opportunity is evaluated again. The posting has not changed, so its rubric is not paid for twice.
+
+It is deliberately the smallest version of something larger: a question leaves, an answer comes back, the graph changes, the decision is taken again. Putting an agent at the far end instead of a person changes the recipient, not the machinery.
+
 ## What gets sent
 
 Only an interruption is sent anywhere — never a HOLD, never a digest. The message is written to an outbox table the moment the decision exists, then delivered by the same queue that runs everything else, with the same backoff. It says exactly what the listening screen says, because two versions of why somebody is being interrupted is two products.

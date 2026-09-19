@@ -329,6 +329,34 @@ function createDb(): DatabaseSync {
       sent_at TEXT
     );
 
+    -- A question the Rep needs answered before it can decide.
+    --
+    -- Its own table rather than an interview turn: the interview is a flow
+    -- with a beginning and an end, and this is one thing asked about one
+    -- opportunity, months later, possibly while nothing else is happening.
+    -- The answer lands in the graph by the same path either way.
+    CREATE TABLE IF NOT EXISTS opportunity_questions (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      decision_id TEXT REFERENCES opportunity_decisions(id),
+      unknown_id TEXT,
+      question TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      answer TEXT,
+      evidence_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      answered_at TEXT
+    );
+
+    -- Asked once. A re-evaluation that reaches the same gap must not ask
+    -- again, and somebody who answered must never see it a second time.
+    CREATE UNIQUE INDEX IF NOT EXISTS opportunity_questions_once
+      ON opportunity_questions (opportunity_id, question);
+    CREATE INDEX IF NOT EXISTS opportunity_questions_open
+      ON opportunity_questions (candidate_id, status);
+
     CREATE UNIQUE INDEX IF NOT EXISTS notifications_once
       ON notifications (about_type, about_id, channel);
     CREATE INDEX IF NOT EXISTS notifications_by_candidate

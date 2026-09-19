@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import StatusDot from '@/components/StatusDot'
 import UserZeroInterruption from '@/components/userzero/UserZeroInterruption'
+import UserZeroQuestion, { type OpenQuestion } from '@/components/userzero/UserZeroQuestion'
 import styles from '@/app/listening/listening.module.css'
 import type { InterruptionView } from '@/lib/opportunity-view'
 import type { CandidateResponse } from '@/domains/opportunity/types'
@@ -52,16 +53,22 @@ const CHANNELS: { value: Channel; label: string; note?: string }[] = [
 export default function UserZeroListeningFlow({
   vm,
   interruption: initialInterruption,
+  question: initialQuestion,
 }: {
   vm: ListeningVm
   interruption: InterruptionView | null
+  question: OpenQuestion | null
 }) {
   // Something is already waiting, so there is nothing to arrive at: skip
   // straight to it. Sitting through "your Rep is listening" when your Rep
   // has already found something is the wrong screen, and it is also the one
   // someone opening a notification would land on.
-  const [phase, setPhase] = useState<Phase>(initialInterruption ? 'home' : 'arriving')
+  const [phase, setPhase] = useState<Phase>(
+    initialInterruption || initialQuestion ? 'home' : 'arriving',
+  )
   const [interruption, setInterruption] = useState(initialInterruption)
+  const [question, setQuestion] = useState(initialQuestion)
+  const [thanked, setThanked] = useState(false)
   const [answered, setAnswered] = useState<CandidateResponse | null>(null)
   const [returnState, setReturnState] = useState(false)
   const [channels, setChannels] = useState<Channel[]>(vm.notifyChannels as Channel[])
@@ -113,11 +120,19 @@ export default function UserZeroListeningFlow({
       try {
         const response = await fetch('/api/opportunities/interruption')
         if (!response.ok) return
-        const body = (await response.json()) as { interruption: InterruptionView | null }
+        const body = (await response.json()) as {
+          interruption: InterruptionView | null
+          question: OpenQuestion | null
+        }
         if (body.interruption) {
           setInterruption(body.interruption)
           setAnswered(null)
         }
+        // A question can arrive at any point, and can also disappear: an
+        // answer already given takes a minute to work through the graph,
+        // and it must not come back while it does.
+        setQuestion(body.question)
+        if (body.question) setThanked(false)
       } catch {
         // Out of signal. Whatever it is will still be there next tick.
       }
@@ -152,6 +167,23 @@ export default function UserZeroListeningFlow({
               setAnswered(response)
             }}
           />
+        ) : question ? (
+          <UserZeroQuestion
+            question={question}
+            onAnswered={() => {
+              setQuestion(null)
+              setThanked(true)
+            }}
+          />
+        ) : thanked ? (
+          <div className={`${styles.center} ${styles.centerFull}`}>
+            <StatusDot label="Listening" />
+            <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>Thank you. Noted.</p>
+            <p className={styles.answeredNote}>
+              I&rsquo;m working it into what I know about you. If it changes what I think of that
+              role, you&rsquo;ll hear from me; if it doesn&rsquo;t, you won&rsquo;t.
+            </p>
+          </div>
         ) : answered ? (
           <div className={`${styles.center} ${styles.centerFull}`}>
             <StatusDot label="Listening" />
@@ -207,7 +239,7 @@ export default function UserZeroListeningFlow({
           </div>
         )}
 
-        {!returnState && !interruption && !answered && (
+        {!returnState && !interruption && !answered && !question && !thanked && (
           <>
             <section className={styles.deal} aria-label="What happens from here">
               <p className="kicker">From here</p>
@@ -341,7 +373,7 @@ export default function UserZeroListeningFlow({
           </Link>
         </div>
 
-        {!interruption && !answered && (
+        {!interruption && !answered && !question && !thanked && (
           <div className={styles.fixtureToggle}>
             <button
               type="button"

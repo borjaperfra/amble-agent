@@ -19,7 +19,7 @@ import { getSmtpConfig, getTelegramConfig, smtpProblem } from '@/lib/features'
 import { sendMail } from '@/lib/notify/smtp'
 import { sendTelegramMessage } from '@/lib/notify/telegram'
 import { getInterruptionFor, type InterruptionView } from '../opportunity-view'
-import { recordAuditEvent } from '../db/opportunities'
+import { getOpportunity, getQuestion, recordAuditEvent } from '../db/opportunities'
 import {
   getNotification,
   insertNotification,
@@ -85,6 +85,36 @@ export function bodyFor(interruption: InterruptionView): string {
   return lines.join('\n')
 }
 
+/**
+ * A question is not an interruption, and must not read like one.
+ *
+ * An interruption says "this is worth your evening". This says "I need one
+ * thing before I can tell you whether it is" — a smaller ask, and it has to
+ * look smaller, or the second time one arrives nobody opens it.
+ */
+export function questionBodyFor(input: {
+  company: string
+  role: string
+  question: string
+  reason: string
+}): string {
+  return [
+    'One thing before I can say.',
+    '',
+    `Something came in for ${input.role} at ${input.company}, and it turns on a detail I cannot`,
+    'settle from what I already know about you:',
+    '',
+    input.question,
+    '',
+    'Answering takes a line. If the answer closes it, I will tell you what I decided;',
+    'if it does not, you will not hear about this one again.',
+    '',
+    `Answer here: ${baseUrl()}/listening`,
+    '',
+    'I have not told them anything, and nothing goes to them until you say so.',
+  ].join('\n')
+}
+
 // ─── Getting it queued ────────────────────────────────────────────────────
 
 export interface QueuedNotice {
@@ -134,6 +164,50 @@ export function queueInterruptionNotice(
     queued.push(notice)
     if (notice.created && deliverable) {
       enqueue('deliver_notification', candidateId, { notificationId: notice.notification.id })
+    }
+  }
+  return queued
+}
+
+/**
+ * The same envelope as an interruption, for a smaller thing.
+ *
+ * It travels the same way on purpose: one outbox, one delivery job, one set
+ * of retries. A second path for "small" messages is a second path to get
+ * wrong.
+ */
+export function queueQuestionNotice(candidateId: string, questionId: string): QueuedNotice[] {
+  const question = getQuestion(questionId)
+  if (!question) return []
+  const opportunity = getOpportunity(question.opportunity_id)
+  if (!opportunity) return []
+
+  const preferences = readPreferences(candidateId)
+  const subject = `Your Rep needs one thing: ${opportunity.role} at ${opportunity.company}`
+  const body = questionBodyFor({
+    company: opportunity.company,
+    role: opportunity.role,
+    question: question.question,
+    reason: question.reason,
+  })
+
+  const queued: QueuedNotice[] = []
+  for (const channel of preferences.notifyChannels) {
+    const address = addressFor(preferences, channel)
+    const deliverable = Boolean(address) && configuredFor(channel)
+    const result = insertNotification({
+      candidate_id: candidateId,
+      channel,
+      address,
+      subject,
+      body,
+      about_type: 'question',
+      about_id: questionId,
+      status: deliverable ? 'pending' : 'unconfigured',
+    })
+    queued.push({ notification: result.notification, created: result.created })
+    if (result.created && deliverable) {
+      enqueue('deliver_notification', candidateId, { notificationId: result.notification.id })
     }
   }
   return queued

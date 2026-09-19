@@ -48,6 +48,7 @@ export type JobKind =
   | 'build_profile'
   | 'evaluate_opportunity'
   | 'deliver_notification'
+  | 'incorporate_opportunity_answer'
   | 'sync_manfred'
   | 'sync_ats'
 
@@ -57,7 +58,8 @@ export interface JobPayloads {
   incorporate_answer: { turnId: string }
   plan_question: Record<string, never>
   build_profile: Record<string, never>
-  evaluate_opportunity: { opportunityId: string }
+  evaluate_opportunity: { opportunityId: string; reassess?: boolean }
+  incorporate_opportunity_answer: { questionId: string }
   deliver_notification: { notificationId: string }
   sync_manfred: { limit?: number; maxEvaluations?: number }
   sync_ats: { limit?: number; maxEvaluations?: number }
@@ -81,6 +83,7 @@ const LANES = {
     'build_profile',
     'evaluate_opportunity',
     'deliver_notification',
+    'incorporate_opportunity_answer',
     'sync_manfred',
     'sync_ats',
   ],
@@ -172,8 +175,15 @@ async function run(job: JobRow): Promise<void> {
       if (!opportunity) throw new Error(`Opportunity ${id} is gone.`)
       // Already answered. A retry that arrives late must not pay for a
       // second reading, or leave a second decision behind it.
-      if (opportunity.status === 'decided') return
-      await evaluateOpportunity(id)
+      const reassess = payload.reassess === true
+      // Already answered, and nothing about the person has changed since.
+      if (opportunity.status === 'decided' && !reassess) return
+      await evaluateOpportunity(id, undefined, { reassess })
+      return
+    }
+    case 'incorporate_opportunity_answer': {
+      const { incorporateQuestionAnswerJob } = await import('./opportunity-questions')
+      await incorporateQuestionAnswerJob(String(payload.questionId ?? ''))
       return
     }
     case 'deliver_notification': {

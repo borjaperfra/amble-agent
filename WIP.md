@@ -207,6 +207,55 @@ contaba como "ocupado" un trabajo programado dentro de cinco horas, así que
 el laboratorio se habría puesto a sondear cada dos segundos toda la tarde.
 Ahora solo cuenta lo que corre o vence en el próximo minuto.
 
+### El bucle: una pregunta que sale, vuelve y cambia la respuesta
+
+Esto es el paso uno hacia dos agentes hablando, y se construyó primero a
+propósito: **es la misma forma con un humano en el otro extremo**. Una
+pregunta sale, una respuesta vuelve, el grafo cambia y se decide otra vez.
+Poner un agente donde ahora hay una persona es cambiar el destinatario, no
+reescribir el sistema.
+
+- **`settleNextAction` prefiere la pregunta que Amble puede hacer.** Antes,
+  seis de seis holds preguntaban a la empresa — alguien a quien no puede
+  llegar — y el hold no podía moverse nunca.
+- **`opportunity_questions`**, tabla propia. No es un turno de entrevista: la
+  entrevista es un flujo con principio y final, y esto es una cosa sobre una
+  oferta, quizá meses después y sin nada más pasando. Índice único por
+  (oportunidad, pregunta): una reevaluación no vuelve a preguntar lo mismo.
+- **La respuesta entra por el mismo camino que la de la entrevista.**
+  `incorporateAnswer` se generalizó a un `AnswerSource`, así que la evidencia
+  lleva procedencia y sale en el Mapa igual que todo lo demás. Lo que alguien
+  le cuenta a su Rep es algo que su Rep sabe, venga por donde venga.
+- **Se guarda antes de nada.** Leerla al grafo tarda cuarenta segundos y una
+  llamada al modelo; perder lo que alguien escribió porque eso falle después
+  sería imperdonable.
+- **`reassess`**: se vuelve a leer a la persona sin volver a leer el anuncio.
+  El puesto no ha cambiado, él sí, y pagar la rúbrica dos veces es pagar por
+  leer el mismo documento dos veces.
+- **La pantalla y el aviso**: la pregunta va por el mismo outbox que la
+  interrupción, con el mismo reintento, y aparece en listening con mucho menos
+  peso que una interrupción — es una pregunta, no una decisión.
+
+**Y una corrección que solo salió al medir.** La primera versión prefería
+*cualquier* pregunta al candidato, así que a una oferta que sencillamente no
+decía lo que paga le preguntaba por audiencias de desarrolladores: algo que
+nadie estaba esperando y que además él no puede contestar. Ahora se le
+pregunta cuando el hueco sobre él es lo que sostiene la decisión, o cuando no
+falta nada que él pusiera como condición. Medido después: las de sueldo
+vuelven a preguntar a la empresa, y tres holds preguntan a la persona.
+
+**Ojo con la variabilidad.** `gap-scope-ambiguous` ha salido IGNORE en una
+tanda e INTERRUPT en las dos siguientes, con el mismo texto. Es el modelo a
+temperatura 0,2 en la etapa de match, no un cambio nuestro. Si se quiere
+comparar tandas en serio, hay que contar con eso.
+
+### Sobre leer la base con `readOnly`
+
+Perdí un rato diagnosticando un fallo que no existía: `new DatabaseSync(path,
+{ readOnly: true })` desde otro proceso devolvía una foto vieja mientras el
+dev server escribía en el WAL. Decía cero preguntas cuando había seis. Para
+mirar la base mientras la app corre, conexión normal.
+
 ### Las ofertas ya llegan solas
 
 **Manfred sí tiene API pública**, y es la que usa su propia página:

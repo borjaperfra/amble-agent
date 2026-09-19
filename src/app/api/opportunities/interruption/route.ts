@@ -5,6 +5,8 @@ import { resumeQueue } from '@/lib/pipeline/jobs'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { ensureSyncScheduled } from '@/lib/pipeline/source-sync'
 import { resumeUnsentNotices } from '@/lib/pipeline/notify'
+import { openQuestionFor } from '@/lib/pipeline/opportunity-questions'
+import { getOpportunity } from '@/lib/db/opportunities'
 
 export const runtime = 'nodejs'
 
@@ -30,5 +32,22 @@ export async function GET() {
   ensureSyncScheduled(candidateId, 'sync_ats')
   // And anything that was written while there was nowhere to send it.
   resumeUnsentNotices(candidateId)
-  return NextResponse.json({ interruption: getPendingInterruption() })
+  // The question travels with it: the screen that says "nothing worth
+  // bothering you with" is the same screen that has to say "one thing,
+  // though", and two endpoints for one screen is two things to get wrong.
+  const question = openQuestionFor(candidateId)
+  const about = question ? getOpportunity(question.opportunity_id) : null
+
+  return NextResponse.json({
+    interruption: getPendingInterruption(),
+    question: question
+      ? {
+          id: question.id,
+          question: question.question,
+          reason: question.reason,
+          company: about?.company ?? null,
+          role: about?.role ?? null,
+        }
+      : null,
+  })
 }

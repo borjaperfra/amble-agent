@@ -20,6 +20,7 @@ import {
   settleDecision,
   settleNextAction,
   structuralUnknowns,
+  unknownBehind,
   validateAnalysis,
   type CandidateConstraints,
   type CandidateSide,
@@ -631,6 +632,121 @@ describe('decisionSignals', () => {
     assert.equal(signals.interruptReady, false)
     // Still something pointing the right way, which is what keeps it alive.
     assert.equal(signals.positiveSignal, true)
+  })
+})
+
+describe('the question it can actually ask', () => {
+  const aboutThem = {
+    id: 'unk_dev_community',
+    side: 'candidate' as const,
+    description: 'We do not know whether he has run a developer community.',
+    materiality: 'HIGH' as const,
+    resolvedBy: {
+      type: 'ASK_CANDIDATE' as const,
+      question: 'Have you built or run a developer community yourself?',
+    },
+    deterministic: false,
+  }
+  const aboutThem2 = {
+    ...aboutThem,
+    id: 'unk_writing',
+    materiality: 'MEDIUM' as const,
+    description: 'It is unclear whether he wrote the pieces himself.',
+    resolvedBy: { type: 'ASK_CANDIDATE' as const, question: 'Did you write those yourself?' },
+  }
+  const aboutTheJob = {
+    id: 'unk_compensation',
+    side: 'opportunity' as const,
+    description: 'The posting does not state what it pays.',
+    materiality: 'HIGH' as const,
+    resolvedBy: { type: 'ASK_COMPANY' as const, question: 'What is the range?' },
+    deterministic: true,
+  }
+
+  it('asks the person when the gap about them is what is holding it up', () => {
+    // Measured on the gap set: five holds, five questions, all five to a
+    // company Amble cannot reach. A hold nobody can advance is a dead end.
+    const action = settleNextAction(
+      'HOLD',
+      analysisWith({ unknowns: [aboutThem] }),
+      ['unk_dev_community'],
+      { type: 'ASK_COMPANY', question: 'What is the budget?' },
+    )
+    assert.equal(action.type, 'ASK_CANDIDATE')
+    assert.equal(action.question, 'Have you built or run a developer community yourself?')
+  })
+
+  it('does not ask them about one thing while waiting on another', () => {
+    // The overshoot the first run produced: an offer that simply never said
+    // what it pays, answered with a question about developer audiences —
+    // which is not what anybody was waiting on, and not something they can
+    // answer anyway.
+    const action = settleNextAction(
+      'HOLD',
+      analysisWith({ unknowns: [aboutTheJob, aboutThem] }),
+      ['unk_compensation'],
+      { type: 'ASK_COMPANY', question: 'What is the range?' },
+    )
+    assert.equal(action.type, 'ASK_COMPANY')
+    assert.equal(action.question, 'What is the range?')
+  })
+
+  it('asks them once nothing they made a condition of is missing', () => {
+    const action = settleNextAction(
+      'HOLD',
+      analysisWith({ unknowns: [{ ...aboutTheJob, deterministic: false }, aboutThem] }),
+      [],
+      { type: 'NONE', question: null },
+    )
+    assert.equal(action.type, 'ASK_CANDIDATE')
+  })
+
+  it('asks about the gap that is actually weighing on the decision', () => {
+    const action = settleNextAction(
+      'HOLD',
+      analysisWith({ unknowns: [aboutThem2, aboutThem] }),
+      ['unk_writing'],
+      { type: 'NONE', question: null },
+    )
+    assert.equal(action.question, 'Did you write those yourself?')
+  })
+
+  it('picks the weightiest when none of them is cited', () => {
+    const action = settleNextAction(
+      'HOLD',
+      analysisWith({ unknowns: [aboutThem2, aboutThem] }),
+      [],
+      { type: 'NONE', question: null },
+    )
+    assert.equal(action.question, 'Have you built or run a developer community yourself?')
+  })
+
+  it('still asks the company when there is nothing to ask the person', () => {
+    const action = settleNextAction('HOLD', analysisWith({ unknowns: [aboutTheJob] }), [], {
+      type: 'NONE',
+      question: null,
+    })
+    assert.equal(action.type, 'ASK_COMPANY')
+    assert.equal(action.question, 'What is the range?')
+  })
+
+  it('asks nothing when the answer was not a hold', () => {
+    assert.deepEqual(
+      settleNextAction('INTERRUPT', analysisWith({ unknowns: [aboutThem] }), [], {
+        type: 'ASK_CANDIDATE',
+        question: 'Have you?',
+      }),
+      { type: 'NONE', question: null },
+    )
+  })
+
+  it('finds which gap a question came from, so the answer lands somewhere', () => {
+    const analysis = analysisWith({ unknowns: [aboutTheJob, aboutThem] })
+    assert.equal(
+      unknownBehind(analysis, 'Have you built or run a developer community yourself?')?.id,
+      'unk_dev_community',
+    )
+    assert.equal(unknownBehind(analysis, 'What is the range?'), null)
   })
 })
 

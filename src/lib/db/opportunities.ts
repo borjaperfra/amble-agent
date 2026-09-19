@@ -477,3 +477,94 @@ export function listOpportunityModelRuns(candidateId: string, limit = 200) {
     created_at: string
   }[]
 }
+
+// ─── Questions the Rep needs answered ─────────────────────────────────────
+
+export interface OpportunityQuestionRow {
+  id: string
+  candidate_id: string
+  opportunity_id: string
+  decision_id: string | null
+  unknown_id: string | null
+  question: string
+  reason: string
+  /** 'open' until answered, then 'answered'. 'dropped' when it stopped mattering. */
+  status: string
+  answer: string | null
+  evidence_ids: string
+  created_at: string
+  answered_at: string | null
+}
+
+/**
+ * Ask once. A re-evaluation that reaches the same gap finds the question
+ * already there and returns it rather than asking the same thing twice —
+ * which, from the other side, is the difference between a Rep and a form.
+ */
+export function insertQuestion(row: {
+  candidate_id: string
+  opportunity_id: string
+  decision_id: string | null
+  unknown_id: string | null
+  question: string
+  reason: string
+}): { question: OpportunityQuestionRow; created: boolean } {
+  const existing = getDb()
+    .prepare('SELECT * FROM opportunity_questions WHERE opportunity_id = ? AND question = ?')
+    .get(row.opportunity_id, row.question) as unknown as OpportunityQuestionRow | undefined
+  if (existing) return { question: existing, created: false }
+
+  const id = newId('oq')
+  getDb()
+    .prepare(
+      `INSERT INTO opportunity_questions
+         (id, candidate_id, opportunity_id, decision_id, unknown_id, question, reason, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+    )
+    .run(
+      id,
+      row.candidate_id,
+      row.opportunity_id,
+      row.decision_id,
+      row.unknown_id,
+      row.question,
+      row.reason,
+      now(),
+    )
+  return { question: getQuestion(id) as OpportunityQuestionRow, created: true }
+}
+
+export function getQuestion(id: string): OpportunityQuestionRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM opportunity_questions WHERE id = ?')
+    .get(id) as unknown as OpportunityQuestionRow | undefined
+}
+
+/** Oldest first: the one that has been waiting longest is the one to ask. */
+export function listOpenQuestions(candidateId: string): OpportunityQuestionRow[] {
+  return getDb()
+    .prepare(
+      "SELECT * FROM opportunity_questions WHERE candidate_id = ? AND status = 'open' ORDER BY created_at",
+    )
+    .all(candidateId) as unknown as OpportunityQuestionRow[]
+}
+
+export function listQuestionsFor(opportunityId: string): OpportunityQuestionRow[] {
+  return getDb()
+    .prepare('SELECT * FROM opportunity_questions WHERE opportunity_id = ? ORDER BY created_at')
+    .all(opportunityId) as unknown as OpportunityQuestionRow[]
+}
+
+export function recordQuestionAnswer(id: string, answer: string): void {
+  getDb()
+    .prepare(
+      "UPDATE opportunity_questions SET status = 'answered', answer = ?, answered_at = ? WHERE id = ?",
+    )
+    .run(answer, now(), id)
+}
+
+export function recordQuestionEvidence(id: string, evidenceIds: string[]): void {
+  getDb()
+    .prepare('UPDATE opportunity_questions SET evidence_ids = ? WHERE id = ?')
+    .run(JSON.stringify(evidenceIds), id)
+}

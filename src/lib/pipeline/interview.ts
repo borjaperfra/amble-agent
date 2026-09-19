@@ -158,7 +158,7 @@ export async function incorporateAnswerJob(candidateId: string, turnId: string):
   const turn = getTurn(turnId)
   if (!turn) throw new Error(`Interview turn ${turnId} is gone.`)
   if (turn.answer === null) throw new Error(`Interview turn ${turnId} has no answer to work from.`)
-  await incorporateAnswer(candidateId, turn, turn.answer)
+  await incorporateAnswer(candidateId, sourceFromTurn(turn), turn.answer)
 }
 
 /**
@@ -351,17 +351,46 @@ export interface IncorporatedAnswer {
   reassessedCapabilityIds: string[]
 }
 
+/**
+ * Where an answer came from.
+ *
+ * It used to be an interview turn, because that was the only place anyone
+ * ever answered anything. Now an opportunity can ask its own question — one
+ * the Rep needs settled before it can decide — and the answer has to land in
+ * the graph exactly the way an interview answer does: a claim, evidence with
+ * provenance, capabilities reassessed. Same path, different doorway.
+ */
+export interface AnswerSource {
+  /** What the evidence will point at as where it came from. */
+  id: string
+  question: string
+  reason: string
+  targetCapabilityIds: string[]
+  /** How the provenance line reads on anything this answer opens. */
+  label: string
+}
+
+export function sourceFromTurn(turn: InterviewTurnRow): AnswerSource {
+  return {
+    id: turn.id,
+    question: turn.question ?? '',
+    reason: turn.question_reason ?? '',
+    targetCapabilityIds: parseJsonArray(turn.target_capability_ids),
+    label: `interview turn ${turn.idx + 1}`,
+  }
+}
+
 export async function incorporateAnswer(
   candidateId: string,
-  turn: InterviewTurnRow,
+  source: AnswerSource,
   answerText: string,
 ): Promise<IncorporatedAnswer> {
-  const turnId = turn.id
+  const turnId = source.id
 
   const { data: answerData } = await runExtractAnswerClaimsTask({
     candidateId,
-    question: turn.question ?? '',
-    questionReason: turn.question_reason ?? '',
+    question: source.question,
+    questionReason: source.reason,
     answer: answerText,
   })
 
@@ -390,7 +419,7 @@ export async function incorporateAnswer(
     for (const slug of parseJsonArray(inserted.possible_capabilities)) suggestedSlugs.add(slug)
   }
 
-  const targetCapabilityIds = parseJsonArray(turn.target_capability_ids)
+  const targetCapabilityIds = source.targetCapabilityIds
   const capabilities = listCapabilities(candidateId)
   const scopedSlugs = [...suggestedSlugs, ...targetCapabilityIds].filter((slug) =>
     capabilities.some((capability) => capability.id === slug),
@@ -442,7 +471,7 @@ export async function incorporateAnswer(
       description: uncertainty.description,
       materiality: uncertainty.materiality,
     })),
-    question: turn.question ?? '',
+    question: source.question,
     answer: answerText,
   })
 
@@ -462,7 +491,7 @@ export async function incorporateAnswer(
     if (update.status === 'RESOLVED') resolvedUncertaintyIds.push(update.id)
   }
 
-  addNewUncertainties(candidateId, turn, reassessData.newUncertainties)
+  addNewUncertainties(candidateId, source, reassessData.newUncertainties)
 
   return { claimsCreated, evidenceCreated: evidenceIds.length, resolvedUncertaintyIds, reassessedCapabilityIds }
 }
@@ -475,7 +504,7 @@ export async function incorporateAnswer(
  */
 function addNewUncertainties(
   candidateId: string,
-  turn: InterviewTurnRow,
+  source: AnswerSource,
   incoming: { capabilitySlug?: string | null; description: string; materiality: string }[],
 ): void {
   const interview = getOrCreateInterview(candidateId)
@@ -500,7 +529,7 @@ function addNewUncertainties(
       candidate_id: candidateId,
       capability_id: capabilityId,
       description: candidate.description,
-      reason: `Discovered from interview turn ${turn.idx + 1}`,
+      reason: `Discovered from ${source.label}`,
       materiality: candidate.materiality,
       status: 'OPEN',
       resolvable_by_interview: 1,
