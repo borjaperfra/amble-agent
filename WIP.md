@@ -1,7 +1,34 @@
 # Dónde nos quedamos — 19 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (106) en verde. Bórrame cuando esto esté cerrado.
+
+## Si solo lees una cosa
+
+El lado del candidato **funciona de punta a punta**: un CV se convierte en
+grafo, las ofertas entran solas de tres fuentes, la criba gratis tira lo que
+no cumple sin gastar nada, las reglas deciden, la interrupción sale por correo
+y —desde hoy— el Rep pregunta cuando le falta algo, la respuesta entra al
+grafo y la oferta se vuelve a decidir.
+
+El lado de la empresa **no existe**, y ahí es donde va esto: dos agentes que
+averiguan lo que necesitan el uno del otro antes de molestar a nadie. Las
+cinco decisiones que hacían falta para empezar están cerradas (§ más abajo).
+
+**Lo siguiente, por orden:**
+
+1. Telegram de entrada — media sesión, y cierra el bucle sin salir del sofá.
+2. El lado de la empresa: empresa, apertura, su agente, y la conversación como
+   objeto con turnos y traza.
+3. La sesión real de Borja con User Zero, que sigue pendiente desde el 18.
+
+**Lo suyo, cuando quiera:** el token de @BotFather, confirmar que el suelo de
+120k y el resto del Intent son los buenos (los escribí yo desde las fixtures),
+y contestar la pregunta de Ridgeline que quedó abierta.
+
+**Ojo al retomar:** el dev server quedó parado a propósito. Al levantarlo, la
+sincronización de fuentes se reprograma sola y puede traer ofertas nuevas y
+gastar llamadas al modelo — `AMBLE_SOURCE_SYNC_HOURS=6` en `.env.local`.
 
 ## Opportunity Zero — entero, y ya interrumpe
 
