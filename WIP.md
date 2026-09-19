@@ -1,7 +1,7 @@
 # Dónde nos quedamos — 19 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (121) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (123) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -569,6 +569,29 @@ contra la única interrupción, que sin chat id no se llama a Telegram, la
 respuesta citada que va a su pregunta y no a la más vieja, la pregunta ya
 cerrada, el aviso de que ha elegido, y la notificación que se queda
 `obsolete`.
+
+### El Rep habla castellano, y se puede elegir
+
+El idioma vive en las preferencias (`language`, `es` por defecto) con un
+interruptor en la pantalla de escucha, y todo el texto sale de un diccionario
+en `src/lib/copy.ts` en vez de estar incrustado donde se envía. Cubre los
+mensajes (Telegram y correo), las respuestas del bot, la pantalla de escucha,
+la interrupción y la pregunta.
+
+**Lo que escribe el modelo también.** El titular, el porqué, la pregunta y el
+descriptor los escribe él, así que `languageInstruction()` va dentro del
+prompt de la explicación, la decisión, la entrevista, el descriptor y el
+intent. Sin eso, el sobre sale en castellano y el contenido en inglés — que es
+exactamente lo que se vio en el móvil antes de arreglarlo.
+
+**La extracción de claims no lleva idioma, a propósito.** La evidencia es casi
+una cita del documento: traducirla la aleja de lo que ponía. Consecuencia:
+mientras el grafo venga de un CV en inglés, la sección "POR QUÉ TÚ" cita en
+inglés dentro de un mensaje en castellano. Se arregla re-extrayendo el grafo,
+que cuesta llamadas al modelo y es decisión suya.
+
+**Sin traducir todavía:** onboarding, procesado, entrevista, intent, el Mapa y
+el laboratorio. Son otro rato largo y ninguno está en el bucle diario.
 
 ### Sobre `.amble-data/`
 

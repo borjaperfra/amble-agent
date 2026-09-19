@@ -9,6 +9,7 @@ import UserZeroQuestion, { type OpenQuestion } from '@/components/userzero/UserZ
 import styles from '@/app/listening/listening.module.css'
 import type { InterruptionView } from '@/lib/opportunity-view'
 import type { CandidateResponse } from '@/domains/opportunity/types'
+import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from '@/lib/copy'
 
 interface ListeningVm {
   evidenceCount: number
@@ -21,6 +22,7 @@ interface ListeningVm {
   notifyEmail: string | null
   notifyWhatsapp: string | null
   notifyTelegram: string | null
+  language: Language
 }
 
 type Phase = 'arriving' | 'home'
@@ -38,17 +40,138 @@ const activationMs = 2600
 const interruptionPollMs = 6000
 
 /**
+ * Las palabras de esta pantalla.
+ *
+ * Aquí y no en `lib/copy` porque aquello es lo que sale por el mensaje: si
+ * se mezclan, cambiar un botón obliga a leer los dos.
+ */
+const WORDS = {
+  es: {
+    arriving: 'Tu Rep está escuchando.',
+    thanks: 'Gracias. Apuntado.',
+    thanksNote:
+      'Lo estoy metiendo en lo que sé de ti. Si cambia lo que pienso de ese puesto, te aviso; si no, no.',
+    heardThemOut: 'Hecho, lo he apuntado.',
+    heardThemOutNote:
+      'No les he dicho nada. Todavía no puedo hablar con una empresa por ti; cuando pueda, empieza aquí.',
+    notForMe: 'Vale, fuera.',
+    notForMeNote:
+      'No he cambiado lo que escucho. Un no es sobre ese puesto, no sobre lo que buscas.',
+    nothingWorth: 'Nada que merezca molestarte.',
+    stillListening: 'Sigo escuchando.',
+    onlyInterrupt: 'Solo te interrumpo cuando algo merece tu atención.',
+    listeningForLabel: 'Ahora mismo escucho',
+    confirmIntent: 'Confirma qué tiene que escuchar tu Rep.',
+    noIntent: 'Todavía no le has dicho a tu Rep qué escuchar.',
+    changeIntent: 'Cambiar lo que escucho',
+    fromHere: 'A partir de aquí',
+    dealLead:
+      'Ya están entrando ofertas — de momento leo el tablón de Manfred. Casi ninguna llegará hasta ti. Ese es el trato.',
+    deal1:
+      'La comparo con lo que me dejaste dicho. Si no lo cumple, no te enteras: ni resumen ni "quizá también te interese".',
+    deal2:
+      'Si lo cumple, recibes un mensaje: qué es el puesto, qué paga y qué tienes tú que me hizo pensar que merecía tu rato.',
+    deal3: 'Tu Mapa se queda aquí. Nadie lo ve y no sale nada hasta que tú lo digas.',
+    reachAria: 'Cómo localizarte',
+    reachKicker: 'Cuando pase',
+    reachLead: '¿Dónde te aviso?',
+    emailPlaceholder: 'tu@correo.com',
+    emailAria: 'Correo',
+    telegramPlaceholder: 'Tu chat id',
+    telegramAria: 'Chat id de Telegram',
+    telegramHint: 'Escríbele al bot una vez y ejecuta ',
+    telegramHintEnd:
+      '; te dirá el número. A partir de ahí puedes contestarme respondiendo ahí mismo, sin volver a esta pantalla.',
+    whatsappPlaceholder: '+34 600 000 000',
+    whatsappAria: 'Número de WhatsApp',
+    languageKicker: 'Idioma',
+    languageAria: 'En qué idioma te hablo',
+    languageNote: 'Vale para los mensajes, esta pantalla y lo que escribe el modelo.',
+    saved: 'Guardado.',
+    notSaved: 'No se ha guardado. Prueba otra vez.',
+    offline: 'Ahora mismo no hay conexión. Habrá que guardarlo otra vez.',
+    pickOne: 'Elige uno y me lo quedo.',
+    repLabel: 'Tu Rep',
+    evidence: (count: number) => `${count} evidencias`,
+    capabilities: (count: number) => `${count} capacidades`,
+    mapLink: 'Ver tu Mapa Profesional →',
+    viewListening: 'Ver estado de escucha',
+    viewReturn: 'Ver estado de vuelta',
+    channels: { email: 'Correo', telegram: 'Telegram', whatsapp: 'WhatsApp' },
+    telegramNote: 'aquí sí se contesta',
+    whatsappNote: 'todavía no funciona',
+  },
+  en: {
+    arriving: 'Your Rep is listening.',
+    thanks: 'Thank you. Noted.',
+    thanksNote:
+      "I'm working it into what I know about you. If it changes what I think of that role, you'll hear from me; if it doesn't, you won't.",
+    heardThemOut: "Good. I've written that down.",
+    heardThemOutNote:
+      "Nothing has gone to them. I can't talk to a company on your behalf yet — when I can, this is where it starts.",
+    notForMe: "Fine. That one's gone.",
+    notForMeNote:
+      "I haven't changed what I'm listening for. A no is about that job, not about the shape of what you want.",
+    nothingWorth: 'Nothing worth bothering you with.',
+    stillListening: "I'm still listening.",
+    onlyInterrupt: "I'll only interrupt you when something deserves your attention.",
+    listeningForLabel: 'Currently listening for',
+    confirmIntent: 'Confirm what your Rep should listen for.',
+    noIntent: "You haven't told your Rep what to listen for yet.",
+    changeIntent: "Change what I'm listening for",
+    fromHere: 'From here',
+    dealLead:
+      "Offers have started arriving — I'm reading Manfred's board for now. Almost none of them will reach you. That is the deal.",
+    deal1:
+      'I hold it against what you left me with. If it does not clear that, you never hear about it — no digest, no "you might also like".',
+    deal2:
+      'If it does clear it, you get one message: what the role is, what it pays, and the specific thing about you that made me think it was worth your time.',
+    deal3: 'Your Map stays here. Nobody sees it, and nothing is sent anywhere, until you say so.',
+    reachAria: 'How to reach you',
+    reachKicker: 'When it happens',
+    reachLead: 'Where should I reach you?',
+    emailPlaceholder: 'you@example.com',
+    emailAria: 'Email address',
+    telegramPlaceholder: 'Your chat id',
+    telegramAria: 'Telegram chat id',
+    telegramHint: 'Message the bot once and run ',
+    telegramHintEnd:
+      '; it will tell you the number. After that you can answer me by replying there — you will not have to come back to this screen.',
+    whatsappPlaceholder: '+34 600 000 000',
+    whatsappAria: 'WhatsApp number',
+    languageKicker: 'Language',
+    languageAria: 'Which language I speak to you in',
+    languageNote: 'Applies to the messages, this screen, and what the model writes.',
+    saved: 'Saved.',
+    notSaved: "That didn't save. Try again.",
+    offline: 'No connection right now. It will need saving again.',
+    pickOne: 'Pick one and I will remember it.',
+    repLabel: 'Your Rep',
+    evidence: (count: number) => `${count} pieces of evidence`,
+    capabilities: (count: number) => `${count} capabilities`,
+    mapLink: 'View your Professional Map →',
+    viewListening: 'View listening state',
+    viewReturn: 'View return state',
+    channels: { email: 'Email', telegram: 'Telegram', whatsapp: 'WhatsApp' },
+    telegramNote: 'answers work here',
+    whatsappNote: 'not working yet',
+  },
+} as const
+
+const LANGUAGE_NAMES: Record<Language, string> = { es: 'Castellano', en: 'English' }
+
+/**
  * Pick as many as you like. It used to be one, with "Both" as the third
  * option, which worked while there were two of them.
  */
-const CHANNELS: { value: Channel; label: string; note?: string }[] = [
-  { value: 'email', label: 'Email' },
+const CHANNELS: Channel[] = [
+  'email',
   // The only one that comes back: an answer typed there lands here.
-  { value: 'telegram', label: 'Telegram', note: 'answers work here' },
+  'telegram',
   // Said out loud rather than quietly accepted: WhatsApp will not let me
   // start a conversation without a template approved in advance, so there is
   // nothing behind this one yet.
-  { value: 'whatsapp', label: 'WhatsApp', note: 'not working yet' },
+  'whatsapp',
 ]
 
 export default function UserZeroListeningFlow({
@@ -76,16 +199,26 @@ export default function UserZeroListeningFlow({
   const [email, setEmail] = useState(vm.notifyEmail ?? '')
   const [whatsapp, setWhatsapp] = useState(vm.notifyWhatsapp ?? '')
   const [telegram, setTelegram] = useState(vm.notifyTelegram ?? '')
+  const [language, setLanguage] = useState<Language>(vm.language)
   const [saved, setSaved] = useState<string | null>(null)
 
+  const words = WORDS[language] ?? WORDS[DEFAULT_LANGUAGE]
+
   async function saveReach(
-    next: Partial<{ channels: Channel[]; email: string; whatsapp: string; telegram: string }>,
+    next: Partial<{
+      channels: Channel[]
+      email: string
+      whatsapp: string
+      telegram: string
+      language: Language
+    }>,
   ) {
     const body = {
       notifyChannels: next.channels ?? channels,
       notifyEmail: next.email !== undefined ? next.email : email,
       notifyWhatsapp: next.whatsapp !== undefined ? next.whatsapp : whatsapp,
       notifyTelegram: next.telegram !== undefined ? next.telegram : telegram,
+      language: next.language ?? language,
     }
     try {
       const response = await fetch('/api/preferences', {
@@ -93,9 +226,9 @@ export default function UserZeroListeningFlow({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      setSaved(response.ok ? 'Saved.' : "That didn't save. Try again.")
+      setSaved(response.ok ? words.saved : words.notSaved)
     } catch {
-      setSaved('No connection right now. It will need saving again.')
+      setSaved(words.offline)
     }
   }
 
@@ -149,7 +282,7 @@ export default function UserZeroListeningFlow({
         <main className={styles.page}>
           <div className={`${styles.center} ${styles.centerFull}`} role="status">
             <StatusDot />
-            <p className={styles.arrivingLine}>Your Rep is listening.</p>
+            <p className={styles.arrivingLine}>{words.arriving}</p>
           </div>
         </main>
       </>
@@ -163,6 +296,7 @@ export default function UserZeroListeningFlow({
         {interruption ? (
           <UserZeroInterruption
             interruption={interruption}
+            language={language}
             onAnswered={(response) => {
               setInterruption(null)
               setAnswered(response)
@@ -171,6 +305,7 @@ export default function UserZeroListeningFlow({
         ) : question ? (
           <UserZeroQuestion
             question={question}
+            language={language}
             onAnswered={() => {
               setQuestion(null)
               setThanked(true)
@@ -179,43 +314,34 @@ export default function UserZeroListeningFlow({
         ) : thanked ? (
           <div className={`${styles.center} ${styles.centerFull}`}>
             <StatusDot label="Listening" />
-            <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>Thank you. Noted.</p>
-            <p className={styles.answeredNote}>
-              I&rsquo;m working it into what I know about you. If it changes what I think of that
-              role, you&rsquo;ll hear from me; if it doesn&rsquo;t, you won&rsquo;t.
-            </p>
+            <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>{words.thanks}</p>
+            <p className={styles.answeredNote}>{words.thanksNote}</p>
           </div>
         ) : answered ? (
           <div className={`${styles.center} ${styles.centerFull}`}>
             <StatusDot label="Listening" />
             <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>
-              {answered === 'HEAR_THEM_OUT'
-                ? 'Good. I’ve written that down.'
-                : 'Fine. That one’s gone.'}
+              {answered === 'HEAR_THEM_OUT' ? words.heardThemOut : words.notForMe}
             </p>
             <p className={styles.answeredNote}>
-              {answered === 'HEAR_THEM_OUT'
-                ? 'Nothing has gone to them. I can’t talk to a company on your behalf yet — when I can, this is where it starts.'
-                : 'I haven’t changed what I’m listening for. A no is about that job, not about the shape of what you want.'}
+              {answered === 'HEAR_THEM_OUT' ? words.heardThemOutNote : words.notForMeNote}
             </p>
-            <p className={styles.arrivingLine}>I&rsquo;m still listening.</p>
+            <p className={styles.arrivingLine}>{words.stillListening}</p>
           </div>
         ) : returnState ? (
           <div className={`${styles.center} ${styles.centerFull}`}>
             <StatusDot label="Listening" />
             <p className={`${styles.statusLine} ${styles.statusLineReturn}`}>
-              Nothing worth bothering you with.
+              {words.nothingWorth}
             </p>
-            <p className={styles.arrivingLine}>I&rsquo;m still listening.</p>
+            <p className={styles.arrivingLine}>{words.stillListening}</p>
           </div>
         ) : (
           <div className={styles.center}>
             <StatusDot label="Listening" />
-            <p className={styles.statusLine}>
-              I&rsquo;ll only interrupt you when something deserves your attention.
-            </p>
+            <p className={styles.statusLine}>{words.onlyInterrupt}</p>
             <div className={styles.listeningFor}>
-              <p className="kicker">Currently listening for</p>
+              <p className="kicker">{words.listeningForLabel}</p>
               {vm.listeningFor.length > 0 ? (
                 <div className={styles.listeningForValues}>
                   {vm.listeningFor.map((item) => (
@@ -226,14 +352,12 @@ export default function UserZeroListeningFlow({
                 </div>
               ) : (
                 <p className={styles.listeningForValue}>
-                  {vm.hasIntent
-                    ? 'Confirm what your Rep should listen for.'
-                    : 'You haven\u2019t told your Rep what to listen for yet.'}
+                  {vm.hasIntent ? words.confirmIntent : words.noIntent}
                 </p>
               )}
               <div className={styles.changeIntent}>
                 <Link href="/me/intent" className="text-btn">
-                  Change what I&rsquo;m listening for
+                  {words.changeIntent}
                 </Link>
               </div>
             </div>
@@ -243,24 +367,12 @@ export default function UserZeroListeningFlow({
         {!returnState && !interruption && !answered && !question && !thanked && (
           <>
             <section className={styles.deal} aria-label="What happens from here">
-              <p className="kicker">From here</p>
-              <p className={styles.dealLead}>
-                Offers have started arriving — I&rsquo;m reading Manfred&rsquo;s board for now.
-                Almost none of them will reach you. That is the deal.
-              </p>
+              <p className="kicker">{words.fromHere}</p>
+              <p className={styles.dealLead}>{words.dealLead}</p>
               <ul className={styles.dealList}>
-                <li className={styles.dealItem}>
-                  I hold it against what you left me with. If it doesn&rsquo;t clear that, you never
-                  hear about it — no digest, no &ldquo;you might also like&rdquo;.
-                </li>
-                <li className={styles.dealItem}>
-                  If it does clear it, you get one message: what the role is, what it pays, and the
-                  specific thing about you that made me think it was worth your time.
-                </li>
-                <li className={styles.dealItem}>
-                  Your Map stays here. Nobody sees it, and nothing is sent anywhere, until you say
-                  so.
-                </li>
+                <li className={styles.dealItem}>{words.deal1}</li>
+                <li className={styles.dealItem}>{words.deal2}</li>
+                <li className={styles.dealItem}>{words.deal3}</li>
               </ul>
               {vm.criteria.length > 0 && (
                 <>
@@ -275,29 +387,35 @@ export default function UserZeroListeningFlow({
               )}
             </section>
 
-            <section className={styles.reach} aria-label="How to reach you">
-              <p className="kicker">When it happens</p>
-              <p className={styles.dealLead}>Where should I reach you?</p>
+            <section className={styles.reach} aria-label={words.reachAria}>
+              <p className="kicker">{words.reachKicker}</p>
+              <p className={styles.dealLead}>{words.reachLead}</p>
               <div className={styles.reachChips}>
-                {CHANNELS.map((option) => {
-                  const on = channels.includes(option.value)
+                {CHANNELS.map((channel) => {
+                  const on = channels.includes(channel)
+                  const note =
+                    channel === 'telegram'
+                      ? words.telegramNote
+                      : channel === 'whatsapp'
+                        ? words.whatsappNote
+                        : null
                   return (
                     <button
-                      key={option.value}
+                      key={channel}
                       type="button"
                       className={`${styles.reachChip} ${on ? styles.reachChipOn : ''}`}
                       aria-pressed={on}
                       onClick={() => {
                         const next = on
-                          ? channels.filter((value) => value !== option.value)
-                          : [...channels, option.value]
+                          ? channels.filter((value) => value !== channel)
+                          : [...channels, channel]
                         setChannels(next)
                         setSaved(null)
                         void saveReach({ channels: next })
                       }}
                     >
-                      {option.label}
-                      {option.note ? <span className={styles.chipNote}> · {option.note}</span> : null}
+                      {words.channels[channel]}
+                      {note ? <span className={styles.chipNote}> · {note}</span> : null}
                     </button>
                   )
                 })}
@@ -308,8 +426,8 @@ export default function UserZeroListeningFlow({
                   <input
                     type="email"
                     className={styles.reachInput}
-                    placeholder="you@example.com"
-                    aria-label="Email address"
+                    placeholder={words.emailPlaceholder}
+                    aria-label={words.emailAria}
                     value={email}
                     onChange={(event) => {
                       setEmail(event.target.value)
@@ -325,8 +443,8 @@ export default function UserZeroListeningFlow({
                   <input
                     type="text"
                     className={styles.reachInput}
-                    placeholder="Your chat id"
-                    aria-label="Telegram chat id"
+                    placeholder={words.telegramPlaceholder}
+                    aria-label={words.telegramAria}
                     value={telegram}
                     onChange={(event) => {
                       setTelegram(event.target.value)
@@ -335,9 +453,9 @@ export default function UserZeroListeningFlow({
                     onBlur={() => void saveReach({})}
                   />
                   <p className={styles.reachHint}>
-                    Message the bot once and run <code>npm run telegram:whoami</code>; it will tell
-                    you the number. After that you can answer me by replying there &mdash; you
-                    won&rsquo;t have to come back to this screen.
+                    {words.telegramHint}
+                    <code>npm run telegram:whoami</code>
+                    {words.telegramHintEnd}
                   </p>
                 </div>
               )}
@@ -347,8 +465,8 @@ export default function UserZeroListeningFlow({
                   <input
                     type="tel"
                     className={styles.reachInput}
-                    placeholder="+34 600 000 000"
-                    aria-label="WhatsApp number"
+                    placeholder={words.whatsappPlaceholder}
+                    aria-label={words.whatsappAria}
                     value={whatsapp}
                     onChange={(event) => {
                       setWhatsapp(event.target.value)
@@ -359,19 +477,43 @@ export default function UserZeroListeningFlow({
                 </div>
               )}
 
+              <div className={styles.reachFields}>
+                <p className="kicker">{words.languageKicker}</p>
+                <div className={styles.reachChips} aria-label={words.languageAria}>
+                  {LANGUAGES.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`${styles.reachChip} ${
+                        language === option ? styles.reachChipOn : ''
+                      }`}
+                      aria-pressed={language === option}
+                      onClick={() => {
+                        setLanguage(option)
+                        setSaved(null)
+                        void saveReach({ language: option })
+                      }}
+                    >
+                      {LANGUAGE_NAMES[option]}
+                    </button>
+                  ))}
+                </div>
+                <p className={styles.reachHint}>{words.languageNote}</p>
+              </div>
+
               <p className={styles.reachStatus} role="status">
-                {saved ?? (channels.length === 0 ? 'Pick one and I will remember it.' : '')}
+                {saved ?? (channels.length === 0 ? words.pickOne : '')}
               </p>
             </section>
           </>
         )}
 
         <div className={styles.repSummary}>
-          <p className={styles.repLabel}>Your Rep</p>
-          <p className={styles.repCount}>{vm.evidenceCount} pieces of evidence</p>
-          <p className={styles.repCount}>{vm.capabilitiesCount} capabilities</p>
+          <p className={styles.repLabel}>{words.repLabel}</p>
+          <p className={styles.repCount}>{words.evidence(vm.evidenceCount)}</p>
+          <p className={styles.repCount}>{words.capabilities(vm.capabilitiesCount)}</p>
           <Link href="/me" className={`text-btn ${styles.repLink}`}>
-            View your Professional Map →
+            {words.mapLink}
           </Link>
         </div>
 
@@ -382,7 +524,7 @@ export default function UserZeroListeningFlow({
               className={`text-btn ${styles.fixtureToggleBtn}`}
               onClick={() => setReturnState((value) => !value)}
             >
-              {returnState ? 'View listening state' : 'View return state'}
+              {returnState ? words.viewListening : words.viewReturn}
             </button>
           </div>
         )}

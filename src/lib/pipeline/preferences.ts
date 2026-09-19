@@ -1,4 +1,5 @@
 import { getPreferences, parseJsonArray, savePreferences } from '../db/repo'
+import { asLanguage, DEFAULT_LANGUAGE, type Language } from '@/lib/copy'
 
 /**
  * What the candidate will take, in terms that can be checked against a real
@@ -32,6 +33,11 @@ export interface Preferences {
   notifyEmail: string | null
   notifyWhatsapp: string | null
   notifyTelegram: string | null
+  /**
+   * En qué idioma habla el Rep: los mensajes, la pantalla y lo que escribe
+   * el modelo. Es de la persona, no de la instalación, así que vive aquí.
+   */
+  language: Language
 }
 
 export const NOTIFY_CHANNELS = ['email', 'whatsapp', 'telegram'] as const
@@ -49,6 +55,7 @@ export const EMPTY_PREFERENCES: Preferences = {
   notifyEmail: null,
   notifyWhatsapp: null,
   notifyTelegram: null,
+  language: DEFAULT_LANGUAGE,
 }
 
 function asWorkMode(value: string | null): WorkMode | null {
@@ -88,6 +95,7 @@ export function readPreferences(candidateId: string): Preferences {
     notifyEmail: row.notify_email,
     notifyWhatsapp: row.notify_whatsapp,
     notifyTelegram: row.notify_telegram,
+    language: asLanguage(row.language) ?? DEFAULT_LANGUAGE,
   }
 }
 
@@ -132,6 +140,7 @@ export function writePreferences(candidateId: string, input: Record<string, unkn
   if ('notifyEmail' in input) patch.notify_email = trim(input.notifyEmail, 160)
   if ('notifyWhatsapp' in input) patch.notify_whatsapp = trim(input.notifyWhatsapp, 40)
   if ('notifyTelegram' in input) patch.notify_telegram = trim(input.notifyTelegram, 40)
+  if ('language' in input) patch.language = asLanguage(input.language) ?? DEFAULT_LANGUAGE
 
   const technologies = list(input.technologies, 12)
   if (technologies) patch.technologies = JSON.stringify(technologies)

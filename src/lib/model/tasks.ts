@@ -1,5 +1,19 @@
 import { z } from 'zod'
 import { runStructuredTask } from './provider'
+import { languageInstruction } from '@/lib/copy'
+import { readPreferences } from '../pipeline/preferences'
+
+/**
+ * En qué idioma tiene que escribir lo que esta persona va a leer.
+ *
+ * Solo se le dice a las tareas cuyo texto sale a la pantalla o al mensaje:
+ * la pregunta de la entrevista, el descriptor y cómo queda ordenado su
+ * intent. La extracción de claims no lo lleva a propósito — la evidencia es
+ * casi una cita del documento, y traducirla la aleja de lo que ponía.
+ */
+function writeFor(candidateId: string): string {
+  return languageInstruction(readPreferences(candidateId).language)
+}
 
 export const EVIDENCE_ASSESSMENTS = [
   'STRONG_EVIDENCE',
@@ -749,6 +763,7 @@ Rules:
 - Bad questions are generic ("tell me about your experience"), redundant, or laundry lists.
 - action STOP only when remaining open uncertainties are not material enough to justify the candidate's time.
 - reason: max 2 sentences.
+${writeFor(params.candidateId)}
 - Respond ONLY with JSON: {"action": "ASK"|"STOP", "question": string|null, "reason": string, "targetCapabilityIds": [], "targetUncertaintyIds": []}.`
   const user = `QUESTIONS ASKED SO FAR: ${params.questionsAsked}
 QUESTIONS REMAINING: ${params.questionsRemaining} — this is a short interview, not an interrogation.
@@ -847,6 +862,7 @@ Rules:
 - Maximum 12 words. No titles you weren't given. No superlatives. No adjectives about personality.
 - It must be true if all the listed capabilities are true, and imply nothing more.
 - Example shape: "Marketing, growth and community around technology."
+${writeFor(params.candidateId)}
 - Respond ONLY with JSON: {"descriptor": string}.`
   const user = `CANDIDATE: ${params.candidateName ?? '(name unknown)'}
 CAPABILITIES:
@@ -878,6 +894,7 @@ Rules:
   - location: the place they want to work from or near.
   - technologies: tools, stacks, domains or kinds of product they named.
   - stages: company stages or sizes they named, e.g. "seed", "scale-up", "large company".
+${writeFor(params.candidateId)}
 - Respond ONLY with JSON: {"groups": [{"label": ..., "values": [...]}], "listeningFor": [...], "preferences": {"salaryMin": ..., "salaryCurrency": ..., "workMode": ..., "location": ..., "technologies": [...], "stages": [...]}}.`
   const user = `CANDIDATE ANSWER:
 ${params.answer}`

@@ -1,0 +1,259 @@
+/**
+ * Todo lo que el Rep dice, en los dos idiomas.
+ *
+ * Estaba incrustado en el sitio donde se enviaba, que es lo normal hasta que
+ * hay dos idiomas: entonces cada frase está en un fichero distinto y cambiar
+ * el tono significa buscarlas todas. Aquí están juntas, y quien las manda
+ * solo elige idioma.
+ *
+ * Dos reglas que no son de traducción:
+ *
+ * - **El porqué es el mismo en los dos.** Se traduce cómo se dice, no lo que
+ *   se decide. La evidencia y los huecos salen del grafo y llegan aquí ya
+ *   escritos; esto solo pone los títulos y el sobre.
+ * - **Corto.** No es una carta comercial: es alguien que lleva un rato
+ *   trabajando por ti y te cuenta lo justo. Si una frase no dice nada que no
+ *   dijera la anterior, fuera.
+ */
+
+export const LANGUAGES = ['es', 'en'] as const
+export type Language = (typeof LANGUAGES)[number]
+
+export const DEFAULT_LANGUAGE: Language = 'es'
+
+export function asLanguage(value: unknown): Language | null {
+  return typeof value === 'string' && (LANGUAGES as readonly string[]).includes(value)
+    ? (value as Language)
+    : null
+}
+
+export interface RepCopy {
+  /** El asunto del correo, y lo primero que se ve en una notificación. */
+  interruptionSubject: (role: string, company: string) => string
+  questionSubject: (role: string, company: string) => string
+
+  /** Los títulos de las secciones del mensaje largo. */
+  posting: (url: string) => string
+  whyShowing: string
+  whyYou: string
+  whatToConsider: string
+  nothingSent: string
+
+  /** La pregunta, que es un mensaje mucho más pequeño. */
+  questionLead: (role: string, company: string) => string
+  questionTailScreen: (url: string) => string[]
+  questionTailReply: string[]
+  questionPromise: string
+
+  /** Cómo se contesta una interrupción, según por dónde llegó. */
+  answerOnScreen: (url: string) => string
+  answerByCommand: string
+
+  /** Por qué algo escrito no llegó a salir. */
+  stale: {
+    questionGone: string
+    answeredFirst: string
+    noLongerInterruption: string
+  }
+
+  /** Lo que contesta el bot cuando le escriben. */
+  bot: {
+    greeting: string[]
+    /** " — Head of Growth en Ridgeline AI" */
+    about: (role: string, company: string) => string
+    unreadable: string
+    noted: (about: string) => string[]
+    othersOpen: string[]
+    alreadyAnswered: (about: string) => string[]
+    needsYesNo: (about: string) => string[]
+    waitingOnYou: (role: string, company: string) => string[]
+    alreadyResponded: (about: string) => string
+    nothingOpen: string[]
+    nothingToYesNo: string
+    severalWaiting: (count: number, url: string) => string[]
+    heardThemOut: (about: string) => string[]
+    notForMe: (about: string) => string[]
+    couldNotWrite: (error: string) => string
+  }
+}
+
+const es: RepCopy = {
+  interruptionSubject: (role, company) => `Algo para ti: ${role} en ${company}`,
+  questionSubject: (role, company) => `Una cosa sobre ${role} en ${company}`,
+
+  posting: (url) => `El anuncio: ${url}`,
+  whyShowing: 'POR QUÉ TE LO ENSEÑO',
+  whyYou: 'POR QUÉ TÚ',
+  whatToConsider: 'LO QUE NO SÉ',
+  nothingSent: 'No les he dicho nada, y no lo haré hasta que tú lo digas.',
+
+  questionLead: (role, company) => `${role} en ${company}. Antes de decirte nada me falta una cosa:`,
+  questionTailScreen: (url) => [`Contéstame aquí: ${url}/listening`],
+  questionTailReply: ['Contéstame aquí, con lo que sea.'],
+  questionPromise: 'Si con eso lo cierro, te digo qué he decidido. No les he dicho nada.',
+
+  answerOnScreen: (url) => `Contéstame aquí: ${url}/listening`,
+  answerByCommand: 'Contesta /si y les escucho, /no y fuera.',
+
+  stale: {
+    questionGone: 'La pregunta de la que iba ya no está.',
+    answeredFirst: 'La contestó antes de que esto pudiera salir.',
+    noLongerInterruption: 'Ya la contestó, o ha dejado de ser una interrupción.',
+  },
+
+  bot: {
+    greeting: [
+      'Soy tu Rep.',
+      '',
+      'Leo lo que va saliendo y lo comparo con lo que me dijiste que quieres. Casi nada llega',
+      'hasta ti: ese es el trato. Cuando algo llega, te digo qué es, qué paga y qué tienes tú',
+      'que hace que merezca la pena.',
+      '',
+      'Contesta /si y les escucho, /no y fuera.',
+      '',
+      'Y si me falta algo para decidir, te pregunto. Respondes al mensaje y ya está.',
+    ],
+    about: (role, company) => ` — ${role} en ${company}`,
+    unreadable: 'Ahí no viene nada que pueda leer. Solo texto, de momento.',
+    noted: (about) => [`Apuntado${about}.`, '', 'Si cambia lo que pienso de ese puesto, te aviso.'],
+    othersOpen: ['', 'Hay más de una cosa abierta. Si querías otra, responde a su mensaje.'],
+    alreadyAnswered: (about) => [
+      `Esa ya la contestaste${about}.`,
+      '',
+      'Me guardo lo que has escrito, pero por sí solo no cambia nada.',
+    ],
+    needsYesNo: (about) => [`Esa${about} necesita un sí o un no.`, '', 'Contesta /si o /no.'],
+    waitingOnYou: (role, company) => [
+      `${role} en ${company} sigue esperándote.`,
+      '',
+      'Contesta /si y les escucho, /no y fuera.',
+    ],
+    alreadyResponded: (about) => `Esa ya me dijiste qué te parecía${about}.`,
+    nothingOpen: [
+      'Ahora mismo no hay nada abierto. Lo apunto y ahí se queda.',
+      '',
+      'Cuando necesite algo tuyo te lo pregunto aquí.',
+    ],
+    nothingToYesNo: 'No hay nada esperando un sí o un no. Ya te aviso cuando lo haya.',
+    severalWaiting: (count, url) => [
+      `Hay ${count} esperando y no sé cuál dices.`,
+      '',
+      `Responde al mensaje de esa, o las tienes aquí: ${url}/listening`,
+    ],
+    heardThemOut: (about) => [
+      `Hecho${about}.`,
+      '',
+      'No les he dicho nada: todavía no puedo hablar con una empresa por ti. Cuando pueda,',
+      'empieza aquí.',
+    ],
+    notForMe: (about) => [
+      `Fuera${about}.`,
+      '',
+      'No cambio lo que escucho por esto: un no es sobre ese puesto, no sobre lo que buscas.',
+    ],
+    couldNotWrite: (error) => `No he podido apuntarlo: ${error}`,
+  },
+}
+
+const en: RepCopy = {
+  interruptionSubject: (role, company) => `Something for you: ${role} at ${company}`,
+  questionSubject: (role, company) => `One thing about ${role} at ${company}`,
+
+  posting: (url) => `The posting: ${url}`,
+  whyShowing: "WHY I'M SHOWING YOU THIS",
+  whyYou: 'WHY YOU',
+  whatToConsider: "WHAT I DON'T KNOW",
+  nothingSent: 'Nothing has gone to them, and nothing will until you say so.',
+
+  questionLead: (role, company) =>
+    `${role} at ${company}. One thing before I can tell you anything:`,
+  questionTailScreen: (url) => [`Answer here: ${url}/listening`],
+  questionTailReply: ['Just reply to this message, in a line.'],
+  questionPromise: "If that closes it, I'll tell you what I decided. I haven't told them anything.",
+
+  answerOnScreen: (url) => `Answer here: ${url}/listening`,
+  answerByCommand: "Reply /yes and I'll hear them out, /no and it's gone.",
+
+  stale: {
+    questionGone: 'The question it was about is gone.',
+    answeredFirst: 'They answered it before this could be sent.',
+    noLongerInterruption: 'They answered it, or it is no longer an interruption.',
+  },
+
+  bot: {
+    greeting: [
+      "I'm your Rep.",
+      '',
+      'I read what goes past and hold it against what you told me you want. Almost none of it',
+      'reaches you: that is the deal. When something does, I tell you what it is, what it pays,',
+      'and what about you made it worth your evening.',
+      '',
+      "Reply /yes and I'll hear them out, /no and it's gone.",
+      '',
+      'And if I need something before I can decide, I ask. You reply, and that is it.',
+    ],
+    about: (role, company) => ` — ${role} at ${company}`,
+    unreadable: 'Nothing I can read came through. Text only, for now.',
+    noted: (about) => [
+      `Noted${about}.`,
+      '',
+      "If it changes what I think of that role, you'll hear from me.",
+    ],
+    othersOpen: ['', 'There is more than one thing open. If you meant another, reply to it.'],
+    alreadyAnswered: (about) => [
+      `You already answered that one${about}.`,
+      '',
+      "I've kept what you wrote, but on its own it changes nothing.",
+    ],
+    needsYesNo: (about) => [`That one${about} needs a yes or a no.`, '', 'Reply /yes or /no.'],
+    waitingOnYou: (role, company) => [
+      `${role} at ${company} is still waiting on you.`,
+      '',
+      "Reply /yes and I'll hear them out, /no and it's gone.",
+    ],
+    alreadyResponded: (about) => `You already told me what you thought of that one${about}.`,
+    nothingOpen: [
+      "Nothing is open right now. I've written that down and left it there.",
+      '',
+      "When I need something from you, I'll ask here.",
+    ],
+    nothingToYesNo: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
+    severalWaiting: (count, url) => [
+      `There are ${count} waiting, so I don't know which you mean.`,
+      '',
+      `Reply to that one's message, or they are here: ${url}/listening`,
+    ],
+    heardThemOut: (about) => [
+      `Done${about}.`,
+      '',
+      "Nothing has gone to them: I can't talk to a company on your behalf yet. When I can, it",
+      'starts here.',
+    ],
+    notForMe: (about) => [
+      `Gone${about}.`,
+      '',
+      "I haven't changed what I listen for. A no is about that job, not about what you want.",
+    ],
+    couldNotWrite: (error) => `I could not write that down: ${error}`,
+  },
+}
+
+const COPY: Record<Language, RepCopy> = { es, en }
+
+export function copyIn(language: Language = DEFAULT_LANGUAGE): RepCopy {
+  return COPY[language] ?? COPY[DEFAULT_LANGUAGE]
+}
+
+/**
+ * Lo que se le dice al modelo sobre en qué idioma escribir.
+ *
+ * El titular, el porqué y las preguntas los escribe el modelo, así que la
+ * mitad del producto está en su idioma y no en el nuestro. Cambiar el
+ * diccionario sin cambiar esto deja una pantalla en castellano con un
+ * titular en inglés.
+ */
+export function languageInstruction(language: Language = DEFAULT_LANGUAGE): string {
+  return language === 'es'
+    ? 'Write every word the person will read in Spanish (Spain), natural and brief, addressing them as "tú". Keep role titles, company names and technologies as they are written. JSON keys and ids stay exactly as specified, in English.'
+    : 'Write every word the person will read in English, natural and brief.'
+}

@@ -373,6 +373,9 @@ export async function evaluateOpportunity(
   const proposal = await runners.decision({
     candidateId,
     input: {
+      // La pregunta que salga de aquí se le manda tal cual, así que sale en
+      // su idioma y no en el del prompt.
+      language: readPreferences(candidateId).language,
       opportunity: { company: opportunity.company, role: opportunity.role },
       analysis,
     },
@@ -423,6 +426,9 @@ export async function evaluateOpportunity(
     const written = await runners.explanation({
       candidateId,
       input: {
+        // La explicación es lo único que lee entera, así que la escribe en
+        // su idioma. El resto de prompts no producen texto que nadie lea.
+        language: readPreferences(candidateId).language,
         opportunity: { company: opportunity.company, role: opportunity.role },
         rubric,
         analysis,

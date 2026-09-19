@@ -488,8 +488,8 @@ describe('getPendingInterruption', () => {
       'Ran growth for a developer tools company from 1,000 to 40,000 signups over three years.',
     ])
     // And what came out of the rubric, only where the posting said it.
-    assert.ok(pending.facts.some((fact) => fact.label === 'Pays'))
-    assert.ok(pending.facts.some((fact) => fact.label === 'Work' && fact.value === 'Remote'))
+    assert.ok(pending.facts.some((fact) => fact.label === 'Paga'))
+    assert.ok(pending.facts.some((fact) => fact.label === 'Cómo' && fact.value === 'En remoto'))
 
     pipeline.recordCandidateResponse(opportunity.id, 'NOT_FOR_ME')
     assert.notEqual(
@@ -516,10 +516,10 @@ describe('the message that goes out', () => {
     assert.equal(note.address, null)
 
     assert.match(note.subject, /Halvard Mail/)
-    assert.match(note.body, /Your Rep found something/)
+    assert.match(note.body, /POR QUÉ TE LO ENSEÑO/)
     // The evidence itself, so it is checkable by someone who never opens the app.
     assert.match(note.body, /a thousand users to forty thousand/)
-    assert.match(note.body, /Nothing has gone to the company/)
+    assert.match(note.body, /No les he dicho nada/)
   })
 
   it('sends what was written while there was nowhere to send it', async () => {
@@ -599,7 +599,7 @@ describe('the message that goes out', () => {
 
       const note = outbox.findNotification('question', question.id, 'email')
       assert.equal(note?.status, 'obsolete', 'it is not asked a second time')
-      assert.match(String(note?.last_error), /answered it before this could be sent/)
+      assert.match(String(note?.last_error), /La contestó antes de que esto pudiera salir/)
     } finally {
       delete process.env.AMBLE_SMTP_HOST
       delete process.env.AMBLE_SMTP_FROM

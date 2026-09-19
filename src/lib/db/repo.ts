@@ -707,6 +707,7 @@ export interface PreferencesRow {
   notify_email: string | null
   notify_whatsapp: string | null
   notify_telegram: string | null
+  language: string | null
   updated_at: string
 }
 

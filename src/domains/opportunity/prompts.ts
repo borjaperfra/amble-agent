@@ -9,6 +9,7 @@
  * field for a label. It can be checked rather than promised.
  */
 
+import { DEFAULT_LANGUAGE, languageInstruction, type Language } from '@/lib/copy'
 import type {
   Decision,
   IntentReference,
@@ -142,6 +143,12 @@ ${json(input.intentReferences)}`
 export const DECISION_VERSION = 'v2'
 
 export interface DecisionInput {
+  /**
+   * El idioma de la pregunta que salga de aquí. El resto de lo que decide
+   * esto no se lee nunca; `nextBestAction.question` sí, tal cual, en el
+   * mensaje que le llega.
+   */
+  language?: Language
   opportunity: { company: string; role: string }
   analysis: MatchAnalysis
 }
@@ -167,6 +174,8 @@ Principles:
 - Do not interrupt because it is plausible.
 - A HOLD must say what would resolve it. Pick the single most useful next action, and write the actual question.
 
+${languageInstruction(input.language ?? DEFAULT_LANGUAGE)} That applies to "reason" and to "nextBestAction.question", which is sent to them word for word.
+
 Respond ONLY with JSON: {"decision": "IGNORE"|"HOLD"|"INTERRUPT", "reason": one or two sentences in plain words, "supportingEvidenceIds": [evidence ids from the analysis], "supportingIntentReferences": [intent ref ids from the analysis], "materialUnknowns": [unknown ids from the analysis], "nextBestAction": {"type": "ASK_COMPANY"|"ASK_CANDIDATE"|"RESEARCH"|"WAIT"|"NONE", "question": string|null}}`
 
   const user = `OPPORTUNITY: ${input.opportunity.role} at ${input.opportunity.company}
@@ -191,6 +200,8 @@ ${json(input.analysis.unknowns)}`
 export const EXPLANATION_VERSION = 'v1'
 
 export interface ExplanationInput {
+  /** En qué idioma lo va a leer. Media explicación la escribe el modelo. */
+  language?: Language
   opportunity: { company: string; role: string }
   rubric: OpportunityRubric
   analysis: MatchAnalysis
@@ -216,6 +227,8 @@ Rules:
 - Never quote internal identifiers in the text. They go in the id arrays, not in the sentences.
 - headline: at most 10 words. whyShowing.text: one or two sentences. Each whyYou item: one sentence, at most two. Each whatToConsider item: one sentence, plainly stated, no reassurance.
 - 1 to 3 whyYou items. 1 to 3 whatToConsider items.
+
+${languageInstruction(input.language ?? DEFAULT_LANGUAGE)}
 
 Respond ONLY with JSON: {"headline": string, "whyShowing": {"text": string, "intentRefs": [...]}, "whyYou": [{"text": string, "evidenceIds": [...]}], "whatToConsider": [{"text": string, "unknownIds": [...]}]}`
 

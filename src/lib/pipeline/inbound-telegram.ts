@@ -19,6 +19,7 @@
  */
 
 import { getTelegramConfig, getTelegramPollIntervalMs, type TelegramConfig } from '@/lib/features'
+import { copyIn, type RepCopy } from '@/lib/copy'
 import type { CandidateResponse } from '@/domains/opportunity/types'
 import {
   fetchUpdates,
@@ -74,7 +75,7 @@ export function classifyMessage(raw: string): ClassifiedMessage {
 
   const word = match[1].toLowerCase()
   if (word === 'start' || word === 'help') return { command: word, text }
-  if (word === 'yes' || word === 'y') return { command: 'yes', text }
+  if (word === 'si' || word === 'yes' || word === 's') return { command: 'yes', text }
   if (word === 'no' || word === 'n') return { command: 'no', text }
   return { command: null, text }
 }
@@ -113,12 +114,13 @@ export function handleMessage(
   replyToMessageId: number | null = null,
 ): HandledMessage {
   const { command, text } = classifyMessage(raw)
+  const copy = copyIn(readPreferences(candidateId).language)
   const quoted = replyToMessageId
     ? (findNotificationByExternalId('telegram', String(replyToMessageId)) ?? null)
     : null
 
   if (command === 'start' || command === 'help') {
-    return { outcome: 'greeted', about: null, reply: GREETING }
+    return { outcome: 'greeted', about: null, reply: copy.bot.greeting.join('\n') }
   }
 
   if (command === 'yes' || command === 'no') {
@@ -126,6 +128,7 @@ export function handleMessage(
       candidateId,
       command === 'yes' ? 'HEAR_THEM_OUT' : 'NOT_FOR_ME',
       quoted,
+      copy,
     )
   }
 
@@ -134,17 +137,17 @@ export function handleMessage(
       outcome: 'ignored',
       about: null,
       detail: 'nothing readable in the message',
-      reply: 'That came through with nothing I can read. Text only, for now.',
+      reply: copy.bot.unreadable,
     }
   }
 
   if (quoted) {
-    const routed = answerQuoted(candidateId, quoted, text)
+    const routed = answerQuoted(candidateId, quoted, text, copy)
     if (routed) return routed
   }
 
   const open = listOpenQuestions(candidateId)
-  if (open.length > 0) return answerOne(open[0], text, open.length > 1)
+  if (open.length > 0) return answerOne(open[0], text, open.length > 1, copy)
 
   const pending = listPendingInterruptions(candidateId)
   if (pending.length === 1) {
@@ -153,22 +156,14 @@ export function handleMessage(
       outcome: 'ambiguous',
       about: { type: 'opportunity', id: opportunity.id },
       detail: 'words arrived while an interruption was waiting for a yes or a no',
-      reply: [
-        `${opportunity.role} at ${opportunity.company} is still waiting on you.`,
-        '',
-        "Reply /yes and I'll write down that you want to hear them out, /no and it's gone.",
-      ].join('\n'),
+      reply: copy.bot.waitingOnYou(opportunity.role, opportunity.company).join('\n'),
     }
   }
 
   return {
     outcome: 'nothing_pending',
     about: null,
-    reply: [
-      "Nothing is open right now, so I've written that down and left it there.",
-      '',
-      "When I need something from you I'll ask here, and whatever you send back is the answer.",
-    ].join('\n'),
+    reply: copy.bot.nothingOpen.join('\n'),
   }
 }
 
@@ -182,11 +177,12 @@ function answerQuoted(
   candidateId: string,
   quoted: NotificationRow,
   text: string,
+  copy: RepCopy,
 ): HandledMessage | null {
   if (quoted.about_type === 'question') {
     const question = getQuestion(quoted.about_id)
     if (!question) return null
-    if (question.status === 'open') return answerOne(question, text, false)
+    if (question.status === 'open') return answerOne(question, text, false, copy)
 
     // The one that actually happened: four messages arrive at once, three of
     // them about questions answered hours earlier on the screen, and nothing
@@ -196,11 +192,7 @@ function answerQuoted(
       outcome: 'already_settled',
       about: { type: 'question', id: question.id },
       detail: 'a reply to a question that was already answered',
-      reply: [
-        `You had already answered that one${about(question.opportunity_id)}, so it is closed.`,
-        '',
-        "I've kept what you just wrote, but on its own it doesn't change anything.",
-      ].join('\n'),
+      reply: copy.bot.alreadyAnswered(about(question.opportunity_id, copy)).join('\n'),
     }
   }
 
@@ -213,18 +205,14 @@ function answerQuoted(
         outcome: 'ambiguous',
         about: { type: 'opportunity', id: quoted.about_id },
         detail: 'words arrived where a yes or a no was needed',
-        reply: [
-          `That one${about(quoted.about_id)} needs a yes or a no from you.`,
-          '',
-          "Reply /yes and I'll write down that you want to hear them out, /no and it's gone.",
-        ].join('\n'),
+        reply: copy.bot.needsYesNo(about(quoted.about_id, copy)).join('\n'),
       }
     }
     return {
       outcome: 'already_settled',
       about: { type: 'opportunity', id: quoted.about_id },
       detail: 'a reply to an interruption that was already answered',
-      reply: `You already told me what you thought of that one${about(quoted.about_id)}.`,
+      reply: copy.bot.alreadyResponded(about(quoted.about_id, copy)),
     }
   }
 
@@ -243,6 +231,7 @@ function answerOne(
   question: OpportunityQuestionRow,
   text: string,
   othersOpen: boolean,
+  copy: RepCopy,
 ): HandledMessage {
   const result = answerQuestion(question.id, text)
   if (!result.ok) {
@@ -250,25 +239,14 @@ function answerOne(
       outcome: 'failed',
       about: { type: 'question', id: question.id },
       detail: result.error,
-      reply: `I could not write that down: ${result.error}`,
+      reply: copy.bot.couldNotWrite(result.error),
     }
   }
 
-  const lines = [
-    `Thank you. Noted${about(question.opportunity_id)}.`,
-    '',
-    // Word for word what the screen says once an answer is in. The same
-    // moment told two ways in two places is two products.
-    "I'm working it into what I know about you. If it changes what I think of that role,",
-    "you'll hear from me; if it doesn't, you won't.",
-  ]
-  if (othersOpen) {
-    lines.push(
-      '',
-      'There is more than one thing open. If you meant one of the others, reply to its',
-      "message and I'll put it there.",
-    )
-  }
+  // Lo mismo que dice la pantalla al contestar: el mismo momento contado de
+  // dos maneras son dos productos.
+  const lines = copy.bot.noted(about(question.opportunity_id, copy))
+  if (othersOpen) lines.push(...copy.bot.othersOpen)
 
   return {
     outcome: 'answered_question',
@@ -277,10 +255,10 @@ function answerOne(
   }
 }
 
-/** " — Head of Growth at Ridgeline AI", or nothing if it has gone. */
-function about(opportunityId: string): string {
+/** " — Head of Growth en Ridgeline AI", o nada si ya no está. */
+function about(opportunityId: string, copy: RepCopy): string {
   const opportunity = getOpportunity(opportunityId)
-  return opportunity ? ` — ${opportunity.role} at ${opportunity.company}` : ''
+  return opportunity ? copy.bot.about(opportunity.role, opportunity.company) : ''
 }
 
 /**
@@ -295,6 +273,7 @@ function respondToInterruption(
   candidateId: string,
   response: CandidateResponse,
   quoted: NotificationRow | null,
+  copy: RepCopy,
 ): HandledMessage {
   const pending = listPendingInterruptions(candidateId)
 
@@ -309,7 +288,7 @@ function respondToInterruption(
       return {
         outcome: 'nothing_pending',
         about: null,
-        reply: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
+        reply: copy.bot.nothingToYesNo,
       }
     }
 
@@ -318,12 +297,7 @@ function respondToInterruption(
         outcome: 'ambiguous',
         about: null,
         detail: `${pending.length} interruptions waiting`,
-        reply: [
-          `There are ${pending.length} waiting, so I don't know which one you mean.`,
-          '',
-          "Reply to the one you mean and I'll take it from there, or they are all on the",
-          `screen: ${baseUrl()}/listening`,
-        ].join('\n'),
+        reply: copy.bot.severalWaiting(pending.length, baseUrl()).join('\n'),
       }
     }
   }
@@ -335,7 +309,7 @@ function respondToInterruption(
       outcome: 'failed',
       about: { type: 'opportunity', id: opportunityId },
       detail: result.error,
-      reply: `I could not write that down: ${result.error}`,
+      reply: copy.bot.couldNotWrite(result.error),
     }
   }
 
@@ -343,35 +317,12 @@ function respondToInterruption(
     outcome: 'recorded_response',
     about: { type: 'opportunity', id: opportunityId },
     // Again, what the screen says. The medium changed, not the Rep.
-    reply:
-      response === 'HEAR_THEM_OUT'
-        ? [
-            `Good. I've written that down${about(opportunityId)}.`,
-            '',
-            "Nothing has gone to them. I can't talk to a company on your behalf yet — when I can,",
-            'this is where it starts.',
-          ].join('\n')
-        : [
-            `Fine. That one's gone${about(opportunityId)}.`,
-            '',
-            "I haven't changed what I'm listening for. A no is about that job, not about the shape",
-            'of what you want.',
-          ].join('\n'),
+    reply: (response === 'HEAR_THEM_OUT'
+      ? copy.bot.heardThemOut(about(opportunityId, copy))
+      : copy.bot.notForMe(about(opportunityId, copy))
+    ).join('\n'),
   }
 }
-
-const GREETING = [
-  "I'm your Rep.",
-  '',
-  'I read what comes past and hold it against what you told me you want. Almost none of it',
-  'reaches you — that is the deal. When something does, you get one message here: what the',
-  'role is, what it pays, and the specific thing about you that made it worth your evening.',
-  '',
-  "Reply /yes and I'll write down that you want to hear them out, /no and it's gone.",
-  '',
-  'And if I need one thing before I can tell you, I will ask. Reply to that message and',
-  'whatever you write is the answer — you never have to open anything.',
-].join('\n')
 
 // ─── Going and getting it ─────────────────────────────────────────────────
 

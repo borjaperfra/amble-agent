@@ -165,7 +165,7 @@ describe('an answer arriving from the phone', () => {
     const reply = sent()[0]?.body as { chat_id: string; text: string }
     assert.equal(reply.chat_id, CHAT)
     // It names the role: on a phone there may be four of these in flight.
-    assert.match(reply.text, /Thank you\. Noted — Head of Growth at Solenne\./)
+    assert.match(reply.text, /Apuntado — Head of Growth en Solenne\./)
 
     const row = inboundDb.findInboundMessage('telegram', '10')
     assert.equal(row?.outcome, 'answered_question')
@@ -210,7 +210,7 @@ describe('a message with nothing open', () => {
 
     await inbound.pollTelegram(candidateId)
     assert.equal(inboundDb.findInboundMessage('telegram', '30')?.outcome, 'nothing_pending')
-    assert.match(String((sent()[0]?.body as { text: string }).text), /Nothing is open right now/)
+    assert.match(String((sent()[0]?.body as { text: string }).text), /no hay nada abierto/)
   })
 
   it('answers /start with what this is, and eats nothing', async () => {
@@ -218,7 +218,7 @@ describe('a message with nothing open', () => {
 
     await inbound.pollTelegram(candidateId)
     assert.equal(inboundDb.findInboundMessage('telegram', '31')?.outcome, 'greeted')
-    assert.match(String((sent()[0]?.body as { text: string }).text), /I'm your Rep\./)
+    assert.match(String((sent()[0]?.body as { text: string }).text), /Soy tu Rep\./)
   })
 })
 
@@ -275,7 +275,7 @@ describe('a yes or a no about an interruption', () => {
     const row = inboundDb.findInboundMessage('telegram', '40')
     assert.equal(row?.outcome, 'recorded_response')
     assert.equal(row?.about_id, opportunityId)
-    assert.match(String((sent()[0]?.body as { text: string }).text), /That one's gone/)
+    assert.match(String((sent()[0]?.body as { text: string }).text), /Fuera — Head of Growth en Solenne/)
   })
 
   it('has nothing to say yes to once it has been answered', async () => {
@@ -285,7 +285,7 @@ describe('a yes or a no about an interruption', () => {
     assert.equal(inboundDb.findInboundMessage('telegram', '41')?.outcome, 'nothing_pending')
     assert.match(
       String((sent()[0]?.body as { text: string }).text),
-      /nothing waiting for a yes or a no/,
+      /No hay nada esperando un sí o un no/,
     )
   })
 })
@@ -380,7 +380,7 @@ describe('several messages in flight at once', () => {
     assert.equal(row?.about_id, second)
     assert.match(
       String((sent()[0]?.body as { text: string }).text),
-      /already answered that one — Head of Growth at Solenne/,
+      /Esa ya la contestaste — Head of Growth en Solenne/,
     )
     assert.equal(
       opportunities.getQuestion(first)?.status,
@@ -408,7 +408,30 @@ describe('several messages in flight at once', () => {
     assert.equal(opportunities.getQuestion(first)?.status, 'answered')
     assert.match(
       String((sent()[0]?.body as { text: string }).text),
-      /more than one thing open[\s\S]*reply to its/,
+      /más de una cosa abierta[\s\S]*responde a su mensaje/,
     )
+  })
+})
+
+describe('el idioma se elige', () => {
+  it('contesta en inglés cuando lo pide, sin cambiar nada más', async () => {
+    preferences.writePreferences(candidateId, { language: 'en' })
+    updates = [update(70, 'any news?')]
+
+    try {
+      await inbound.pollTelegram(candidateId)
+      // Sigue habiendo una pregunta abierta del bloque anterior, así que lo
+      // que prueba esto es el idioma, no la rama.
+      assert.match(String((sent()[0]?.body as { text: string }).text), /Noted — Head of Growth at Solenne/)
+    } finally {
+      preferences.writePreferences(candidateId, { language: 'es' })
+    }
+  })
+
+  it('vuelve al castellano igual de rápido', async () => {
+    updates = [update(71, '¿alguna novedad?')]
+
+    await inbound.pollTelegram(candidateId)
+    assert.match(String((sent()[0]?.body as { text: string }).text), /Apuntado|no hay nada abierto/)
   })
 })

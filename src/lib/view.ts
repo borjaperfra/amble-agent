@@ -1,3 +1,4 @@
+import type { Language } from '@/lib/copy'
 import {
   getDistinctiveProfile,
   getLatestIntent,
@@ -276,6 +277,8 @@ export function getListeningViewModel(): {
   notifyEmail: string | null
   notifyWhatsapp: string | null
   notifyTelegram: string | null
+  /** En qué idioma le habla el Rep: la pantalla lo necesita para todo. */
+  language: Language
 } {
   const candidate = getOrCreateCandidate()
   const intent = getLatestIntent(candidate.id)
@@ -291,6 +294,7 @@ export function getListeningViewModel(): {
     notifyEmail: preferences.notifyEmail,
     notifyWhatsapp: preferences.notifyWhatsapp,
     notifyTelegram: preferences.notifyTelegram,
+    language: preferences.language,
   }
 }
 

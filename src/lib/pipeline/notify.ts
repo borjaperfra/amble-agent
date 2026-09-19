@@ -16,6 +16,7 @@
  */
 
 import { getSmtpConfig, getTelegramConfig, smtpProblem } from '@/lib/features'
+import { copyIn, DEFAULT_LANGUAGE, type Language } from '@/lib/copy'
 import { sendMail } from '@/lib/notify/smtp'
 import { sendTelegramMessage } from '@/lib/notify/telegram'
 import { getInterruptionFor, type InterruptionView } from '../opportunity-view'
@@ -48,60 +49,64 @@ export function baseUrl(): string {
 
 // ─── What it says ─────────────────────────────────────────────────────────
 
-export function subjectFor(interruption: InterruptionView): string {
-  return `Your Rep found something: ${interruption.role} at ${interruption.company}`
+export function subjectFor(
+  interruption: InterruptionView,
+  language: Language = DEFAULT_LANGUAGE,
+): string {
+  return copyIn(language).interruptionSubject(interruption.role, interruption.company)
 }
 
 /**
- * The screen, in plain text.
+ * La pantalla, en texto.
  *
- * No HTML and no images. This is a letter from something that has been
- * quietly working on your behalf, and it should read like one — and it
- * should still read like one in a client that shows nothing but text.
+ * Sin HTML y sin imágenes. Esto es una nota de algo que lleva un rato
+ * trabajando por ti, y tiene que leerse como una nota — también en un
+ * cliente que solo enseña texto.
+ *
+ * Corto donde se puede y largo donde hace falta: la explicación es el
+ * producto, así que la evidencia va entera. Lo que se ha quitado son las
+ * frases que no dicen nada.
  */
 export function bodyFor(
   interruption: InterruptionView,
   channel: NotificationChannel = 'email',
+  language: Language = DEFAULT_LANGUAGE,
 ): string {
-  const lines: string[] = ['Your Rep found something.', '', interruption.headline, '']
+  const copy = copyIn(language)
+  const lines: string[] = [interruption.headline, '']
 
   lines.push(`${interruption.role} · ${interruption.company}`)
   for (const fact of interruption.facts) lines.push(`${fact.label}: ${fact.value}`)
-  if (interruption.url) lines.push(`The posting: ${interruption.url}`)
+  if (interruption.url) lines.push(copy.posting(interruption.url))
 
-  lines.push('', "WHY I'M SHOWING YOU THIS", interruption.whyShowing)
+  lines.push('', copy.whyShowing, interruption.whyShowing)
 
   if (interruption.whyYou.length > 0) {
-    lines.push('', 'WHY YOU')
+    lines.push('', copy.whyYou)
     for (const claim of interruption.whyYou) {
       lines.push(`- ${claim.text}`)
-      // The evidence itself, not a reference to it: it has to be checkable
-      // from the message, by someone who never opens the app.
+      // La evidencia, no una referencia a ella: tiene que poder comprobarse
+      // desde el mensaje, sin abrir nada.
       for (const statement of claim.evidence) lines.push(`    ${statement}`)
     }
   }
 
   if (interruption.whatToConsider.length > 0) {
-    lines.push('', "WHAT I DON'T KNOW YET")
+    lines.push('', copy.whatToConsider)
     for (const item of interruption.whatToConsider) lines.push(`- ${item}`)
   }
 
-  lines.push(
-    '',
-    ...howToAnswer(channel),
-    '',
-    'Nothing has gone to the company, and nothing will until you say so.',
-  )
+  lines.push('', ...howToAnswer(channel, language), '', copy.nothingSent)
 
   return lines.join('\n')
 }
 
 /**
- * A question is not an interruption, and must not read like one.
+ * Una pregunta no es una interrupción y no puede leerse como una.
  *
- * An interruption says "this is worth your evening". This says "I need one
- * thing before I can tell you whether it is" — a smaller ask, and it has to
- * look smaller, or the second time one arrives nobody opens it.
+ * Una interrupción dice "esto merece tu tarde". Esto dice "me falta una cosa
+ * para saber si la merece": es menos, y tiene que parecer menos, o la
+ * segunda vez que llegue una no la abre nadie.
  */
 export function questionBodyFor(input: {
   company: string
@@ -109,39 +114,32 @@ export function questionBodyFor(input: {
   question: string
   reason: string
   channel?: NotificationChannel
+  language?: Language
 }): string {
+  const copy = copyIn(input.language ?? DEFAULT_LANGUAGE)
   return [
-    'One thing before I can say.',
-    '',
-    `Something came in for ${input.role} at ${input.company}, and it turns on a detail I cannot`,
-    'settle from what I already know about you:',
+    copy.questionLead(input.role, input.company),
     '',
     input.question,
     '',
-    'Answering takes a line. If the answer closes it, I will tell you what I decided;',
-    'if it does not, you will not hear about this one again.',
-    '',
     ...(input.channel === 'telegram'
-      ? ['Just reply to this message. Whatever you write is the answer.']
-      : [`Answer here: ${baseUrl()}/listening`]),
-    '',
-    'I have not told them anything, and nothing goes to them until you say so.',
+      ? copy.questionTailReply
+      : copy.questionTailScreen(baseUrl())),
+    copy.questionPromise,
   ].join('\n')
 }
 
 /**
- * How to answer, which is the one part that depends on where it arrived.
+ * Cómo contestar, que es lo único que depende de por dónde llegó.
  *
- * Everything above this line is identical on every channel and has to stay
- * that way. This is the envelope: on Telegram the reply comes back the way
- * it came, and sending somebody to a laptop to type a yes they could have
- * typed with their thumb is the whole thing this was built to stop.
+ * Todo lo de arriba es idéntico en los dos canales y tiene que seguir
+ * siéndolo. Esto es el sobre: en Telegram la respuesta vuelve por donde
+ * vino, y mandar a alguien a un portátil a escribir un sí que podía escribir
+ * con el pulgar es justo lo que esto vino a quitar.
  */
-function howToAnswer(channel: NotificationChannel): string[] {
-  if (channel === 'telegram') {
-    return ["Reply /yes and I'll write down that you want to hear them out, /no and it's gone."]
-  }
-  return [`Answer here: ${baseUrl()}/listening`]
+function howToAnswer(channel: NotificationChannel, language: Language): string[] {
+  const copy = copyIn(language)
+  return [channel === 'telegram' ? copy.answerByCommand : copy.answerOnScreen(baseUrl())]
 }
 
 // ─── Getting it queued ────────────────────────────────────────────────────
@@ -167,6 +165,7 @@ export function queueInterruptionNotice(
   if (!interruption) return []
 
   const preferences = readPreferences(candidateId)
+  const language = preferences.language
   const channels: NotificationChannel[] = preferences.notifyChannels
 
   // They never said where. The interruption still exists and still shows on
@@ -174,7 +173,7 @@ export function queueInterruptionNotice(
   // rather than nothing, because "we never told you" needs a reason.
   if (channels.length === 0) {
     return [
-      record(candidateId, opportunityId, interruption, 'email', null, 'unconfigured'),
+      record(candidateId, opportunityId, interruption, 'email', null, 'unconfigured', language),
     ]
   }
 
@@ -189,6 +188,7 @@ export function queueInterruptionNotice(
       channel,
       address,
       deliverable ? 'pending' : 'unconfigured',
+      language,
     )
     queued.push(notice)
     if (notice.created && deliverable) {
@@ -212,7 +212,8 @@ export function queueQuestionNotice(candidateId: string, questionId: string): Qu
   if (!opportunity) return []
 
   const preferences = readPreferences(candidateId)
-  const subject = `Your Rep needs one thing: ${opportunity.role} at ${opportunity.company}`
+  const copy = copyIn(preferences.language)
+  const subject = copy.questionSubject(opportunity.role, opportunity.company)
 
   const queued: QueuedNotice[] = []
   for (const channel of preferences.notifyChannels) {
@@ -232,6 +233,7 @@ export function queueQuestionNotice(candidateId: string, questionId: string): Qu
         question: question.question,
         reason: question.reason,
         channel,
+        language: preferences.language,
       }),
       about_type: 'question',
       about_id: questionId,
@@ -270,13 +272,14 @@ function record(
   channel: NotificationChannel,
   address: string | null,
   status: 'pending' | 'unconfigured',
+  language: Language,
 ): QueuedNotice {
   const result = insertNotification({
     candidate_id: candidateId,
     channel,
     address,
-    subject: subjectFor(interruption),
-    body: bodyFor(interruption, channel),
+    subject: subjectFor(interruption, language),
+    body: bodyFor(interruption, channel, language),
     about_type: 'opportunity',
     about_id: opportunityId,
     status,
@@ -322,7 +325,7 @@ export function resumeUnsentNotices(candidateId: string): number {
     // question somebody already answered on the screen. They would answer it
     // again — carefully, because it was asked carefully — and be told there
     // was nothing open. Measured the hard way, on the first real run.
-    const reason = staleReason(notification, pending)
+    const reason = staleReason(notification, pending, preferences.language)
     if (reason) {
       markNotificationObsolete(notification.id, reason)
       continue
@@ -335,7 +338,7 @@ export function resumeUnsentNotices(candidateId: string): number {
     // The one line that depends on the channel is the line telling them how
     // to answer, and a message that arrives on Telegram saying "answer on
     // the screen" is the exact thing this was built to stop.
-    const rewritten = rebuild(notification)
+    const rewritten = rebuild(notification, preferences.language)
     if (rewritten && rewritten !== notification.body) {
       updateNotificationBody(notification.id, rewritten)
     }
@@ -357,17 +360,20 @@ export function resumeUnsentNotices(candidateId: string): number {
 function staleReason(
   notification: NotificationRow,
   pendingInterruptions: Set<string>,
+  language: Language,
 ): string | null {
+  const copy = copyIn(language)
+
   if (notification.about_type === 'question') {
     const question = getQuestion(notification.about_id)
-    if (!question) return 'The question it was about is gone.'
-    if (question.status !== 'open') return 'They answered it before this could be sent.'
+    if (!question) return copy.stale.questionGone
+    if (question.status !== 'open') return copy.stale.answeredFirst
     return null
   }
 
   if (notification.about_type === 'opportunity') {
     if (!pendingInterruptions.has(notification.about_id)) {
-      return 'They answered it, or it is no longer an interruption.'
+      return copy.stale.noLongerInterruption
     }
   }
   return null
@@ -380,10 +386,10 @@ function staleReason(
  * if the decision behind it is gone or has changed, the stored text stays as
  * it is rather than being quietly replaced with something else.
  */
-function rebuild(notification: NotificationRow): string | null {
+function rebuild(notification: NotificationRow, language: Language): string | null {
   if (notification.about_type === 'opportunity') {
     const interruption = getInterruptionFor(notification.about_id)
-    return interruption ? bodyFor(interruption, notification.channel) : null
+    return interruption ? bodyFor(interruption, notification.channel, language) : null
   }
 
   if (notification.about_type === 'question') {
@@ -396,6 +402,7 @@ function rebuild(notification: NotificationRow): string | null {
       question: question.question,
       reason: question.reason,
       channel: notification.channel,
+      language,
     })
   }
 

@@ -326,24 +326,24 @@ function buildInterruption(
     const pay = rubric.compensation
     if (pay && pay.min !== null) {
       facts.push({
-        label: 'Pays',
-        value: `${pay.min.toLocaleString('en-GB')}${pay.max ? ` – ${pay.max.toLocaleString('en-GB')}` : ''} ${pay.currency ?? 'EUR'}`,
+        label: 'Paga',
+        value: `${pay.min.toLocaleString('es-ES')}${pay.max ? ` – ${pay.max.toLocaleString('es-ES')}` : ''} ${pay.currency ?? 'EUR'}`,
       })
     }
     if (rubric.equity) facts.push({ label: 'Equity', value: rubric.equity })
     if (rubric.workModel) {
       facts.push({
-        label: 'Work',
+        label: 'Cómo',
         value:
           rubric.workModel === 'remote'
-            ? 'Remote'
+            ? 'En remoto'
             : rubric.workModel === 'hybrid'
-              ? 'Hybrid'
-              : 'On-site',
+              ? 'Híbrido'
+              : 'Presencial',
       })
     }
-    if (rubric.location) facts.push({ label: 'Based', value: rubric.location })
-    if (rubric.companyStage) facts.push({ label: 'Stage', value: rubric.companyStage })
+    if (rubric.location) facts.push({ label: 'Dónde', value: rubric.location })
+    if (rubric.companyStage) facts.push({ label: 'Etapa', value: rubric.companyStage })
   }
 
   return {

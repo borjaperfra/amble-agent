@@ -426,6 +426,11 @@ function migrate(db: DatabaseSync): void {
   if (!has('preferences', 'notify_telegram')) {
     db.exec('ALTER TABLE preferences ADD COLUMN notify_telegram TEXT;')
   }
+  if (!has('preferences', 'language')) {
+    // En qué idioma habla el Rep. Vive con las preferencias y no en una
+    // variable de entorno porque es de la persona, no de la instalación.
+    db.exec("ALTER TABLE preferences ADD COLUMN language TEXT;")
+  }
   if (!has('notifications', 'external_id')) {
     // Which message this became on the far side, so a reply that quotes it
     // can be traced back to what it was about. Telegram hands the id back

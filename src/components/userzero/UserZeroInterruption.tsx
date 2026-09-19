@@ -4,6 +4,37 @@ import { useState } from 'react'
 import styles from '@/app/listening/listening.module.css'
 import type { InterruptionView } from '@/lib/opportunity-view'
 import type { CandidateResponse } from '@/domains/opportunity/types'
+import { DEFAULT_LANGUAGE, type Language } from '@/lib/copy'
+
+/** Las palabras de esta pantalla. El porqué y la evidencia vienen ya escritos. */
+const WORDS = {
+  es: {
+    aria: 'Algo que ha encontrado tu Rep',
+    kicker: 'He encontrado algo',
+    posting: 'el anuncio →',
+    whyShowing: 'Por qué te lo enseño',
+    whyYou: 'Por qué tú',
+    whatToConsider: 'Lo que no sé',
+    hearThemOut: 'Que me cuenten',
+    notForMe: 'No es para mí',
+    note: 'Decidas lo que decidas, esto se queda entre tú y yo hasta que digas otra cosa.',
+    failed: 'No ha salido. Prueba otra vez.',
+    offline: 'Ahora mismo no hay conexión. No se ha enviado nada.',
+  },
+  en: {
+    aria: 'Something your Rep found',
+    kicker: 'Your Rep found something',
+    posting: 'the posting →',
+    whyShowing: "Why I'm showing you this",
+    whyYou: 'Why you',
+    whatToConsider: "What I don't know yet",
+    hearThemOut: "I'll hear them out",
+    notForMe: 'Not for me',
+    note: 'Either way, this stays between us until you say otherwise.',
+    failed: "That didn't go through. Try again.",
+    offline: 'No connection right now. Nothing was sent.',
+  },
+} as const
 
 /**
  * The one message the whole thing exists to send.
@@ -16,11 +47,14 @@ import type { CandidateResponse } from '@/domains/opportunity/types'
  */
 export default function UserZeroInterruption({
   interruption,
+  language = DEFAULT_LANGUAGE,
   onAnswered,
 }: {
   interruption: InterruptionView
+  language?: Language
   onAnswered: (response: CandidateResponse) => void
 }) {
+  const words = WORDS[language] ?? WORDS[DEFAULT_LANGUAGE]
   const [sending, setSending] = useState<CandidateResponse | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
 
@@ -34,20 +68,20 @@ export default function UserZeroInterruption({
         body: JSON.stringify({ response }),
       })
       if (!result.ok) {
-        setFailed("That didn't go through. Try again.")
+        setFailed(words.failed)
         setSending(null)
         return
       }
       onAnswered(response)
     } catch {
-      setFailed('No connection right now. Nothing was sent.')
+      setFailed(words.offline)
       setSending(null)
     }
   }
 
   return (
-    <section className={styles.interruption} aria-label="Something your Rep found">
-      <p className="kicker">Your Rep found something</p>
+    <section className={styles.interruption} aria-label={words.aria}>
+      <p className="kicker">{words.kicker}</p>
       <h1 className={styles.interruptionHeadline}>{interruption.headline}</h1>
       <p className={styles.interruptionRole}>
         {interruption.role} · {interruption.company}
@@ -60,7 +94,7 @@ export default function UserZeroInterruption({
               target="_blank"
               rel="noreferrer noopener"
             >
-              the posting →
+              {words.posting}
             </a>
           </>
         )}
@@ -78,13 +112,13 @@ export default function UserZeroInterruption({
       )}
 
       <div className={styles.block}>
-        <p className="kicker">Why I&rsquo;m showing you this</p>
+        <p className="kicker">{words.whyShowing}</p>
         <p className={styles.blockLead}>{interruption.whyShowing}</p>
       </div>
 
       {interruption.whyYou.length > 0 && (
         <div className={styles.block}>
-          <p className="kicker">Why you</p>
+          <p className="kicker">{words.whyYou}</p>
           <ul className={styles.claims}>
             {interruption.whyYou.map((claim, index) => (
               <li key={index} className={styles.claim}>
@@ -106,7 +140,7 @@ export default function UserZeroInterruption({
 
       {interruption.whatToConsider.length > 0 && (
         <div className={styles.block}>
-          <p className="kicker">What I don&rsquo;t know yet</p>
+          <p className="kicker">{words.whatToConsider}</p>
           <ul className={styles.consider}>
             {interruption.whatToConsider.map((item, index) => (
               <li key={index} className={styles.considerItem}>
@@ -124,7 +158,7 @@ export default function UserZeroInterruption({
           disabled={sending !== null}
           onClick={() => void answer('HEAR_THEM_OUT')}
         >
-          I&rsquo;ll hear them out
+          {words.hearThemOut}
         </button>
         <button
           type="button"
@@ -132,11 +166,11 @@ export default function UserZeroInterruption({
           disabled={sending !== null}
           onClick={() => void answer('NOT_FOR_ME')}
         >
-          Not for me
+          {words.notForMe}
         </button>
       </div>
       <p className={styles.answerNote} role="status">
-        {failed ?? 'Either way, this stays between us until you say otherwise.'}
+        {failed ?? words.note}
       </p>
     </section>
   )
