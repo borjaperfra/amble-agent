@@ -494,6 +494,10 @@ export interface OpportunityQuestionRow {
   evidence_ids: string
   created_at: string
   answered_at: string | null
+  /** Cuándo llegó al grafo. Null significa que todavía no, no que no vaya. */
+  incorporated_at: string | null
+  /** Cuándo salió en un mensaje, sola o acompañada. */
+  notified_at: string | null
 }
 
 /**
@@ -549,6 +553,23 @@ export function listOpenQuestions(candidateId: string): OpportunityQuestionRow[]
     .all(candidateId) as unknown as OpportunityQuestionRow[]
 }
 
+/**
+ * Todo lo que ha contestado, en orden, sea de la oferta que sea.
+ *
+ * Las preguntas se hacen por oferta, pero las respuestas son sobre él: lo
+ * que contó para una vale para la siguiente, y el agente que llegue después
+ * tiene que saberlo antes de abrir la boca.
+ */
+export function listAnsweredQuestions(candidateId: string): OpportunityQuestionRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM opportunity_questions
+       WHERE candidate_id = ? AND status = 'answered' AND answer IS NOT NULL
+       ORDER BY answered_at`,
+    )
+    .all(candidateId) as unknown as OpportunityQuestionRow[]
+}
+
 export function listQuestionsFor(opportunityId: string): OpportunityQuestionRow[] {
   return getDb()
     .prepare('SELECT * FROM opportunity_questions WHERE opportunity_id = ? ORDER BY created_at')
@@ -561,6 +582,29 @@ export function recordQuestionAnswer(id: string, answer: string): void {
       "UPDATE opportunity_questions SET status = 'answered', answer = ?, answered_at = ? WHERE id = ?",
     )
     .run(answer, now(), id)
+}
+
+/** Ya ha salido en un mensaje: no vuelve a salir en el siguiente. */
+export function markQuestionNotified(id: string): void {
+  getDb().prepare('UPDATE opportunity_questions SET notified_at = ? WHERE id = ?').run(now(), id)
+}
+
+/** Abiertas y todavía sin avisar. Lo que entra en el próximo mensaje. */
+export function listUnnotifiedQuestions(candidateId: string): OpportunityQuestionRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM opportunity_questions
+       WHERE candidate_id = ? AND status = 'open' AND notified_at IS NULL
+       ORDER BY created_at`,
+    )
+    .all(candidateId) as unknown as OpportunityQuestionRow[]
+}
+
+/** Entró al grafo, y no vuelve a entrar. */
+export function markQuestionIncorporated(id: string): void {
+  getDb()
+    .prepare('UPDATE opportunity_questions SET incorporated_at = ? WHERE id = ?')
+    .run(now(), id)
 }
 
 export function recordQuestionEvidence(id: string, evidenceIds: string[]): void {

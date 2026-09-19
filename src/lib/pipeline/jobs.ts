@@ -53,6 +53,7 @@ export type JobKind =
   | 'sync_manfred'
   | 'sync_ats'
   | 'poll_telegram'
+  | 'send_questions'
 
 export interface JobPayloads {
   process_source: { sourceId: string }
@@ -66,6 +67,7 @@ export interface JobPayloads {
   sync_manfred: { limit?: number; maxEvaluations?: number }
   sync_ats: { limit?: number; maxEvaluations?: number }
   poll_telegram: Record<string, never>
+  send_questions: Record<string, never>
 }
 
 /**
@@ -100,6 +102,7 @@ const LANES = {
     'incorporate_opportunity_answer',
     'sync_manfred',
     'sync_ats',
+    'send_questions',
   ],
 } as const satisfies Record<string, readonly JobKind[]>
 
@@ -207,6 +210,11 @@ async function run(job: JobRow): Promise<void> {
     case 'deliver_notification': {
       const { deliverNotificationJob } = await import('./notify')
       await deliverNotificationJob(String(payload.notificationId ?? ''))
+      return
+    }
+    case 'send_questions': {
+      const { queueQuestionDigest } = await import('./notify')
+      queueQuestionDigest(job.candidate_id)
       return
     }
     case 'poll_telegram': {
@@ -339,7 +347,7 @@ const SOON_MS = 60_000
  * Rep is working, when what it is doing is listening — the thing it is
  * supposed to be doing when nothing is happening.
  */
-const QUIET: readonly JobKind[] = ['poll_telegram']
+const QUIET: readonly JobKind[] = ['poll_telegram', 'send_questions']
 
 export function queueStatus(candidateId: string): QueueStatus {
   const active = listActiveJobs(candidateId).filter(

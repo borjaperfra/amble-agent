@@ -52,6 +52,14 @@ export interface CandidateUncertainty {
 }
 
 export interface MatchInput {
+  /**
+   * Preguntas que ya se le han hecho y ha contestado, con sus palabras.
+   *
+   * Sin esto cada oferta razona desde cero y vuelve a encontrar el mismo
+   * hueco: medido en real, cinco de ocho preguntas eran la misma, y dos de
+   * ellas llegaron después de que la contestara.
+   */
+  alreadyTold?: { question: string; answer: string }[]
   opportunity: { company: string; role: string }
   rubric: OpportunityRubric
   capabilities: CapabilityForMatch[]
@@ -105,6 +113,7 @@ Rules that matter more than anything else:
 - Every positive statement about what the person can do MUST cite evidenceIds from the list you were given. No evidence, no positive verdict.
 - Every statement about what the person wants MUST cite intentRefs from the list you were given. No reference, no conclusion.
 - Never infer a capability because it would make the match better.
+- WHAT THEY HAVE ALREADY TOLD ME is part of what is known about them, exactly like evidence. Never emit a candidate-side unknown about something already answered there, in any rewording. If an answer settles it only in part, the unknown must name the specific missing piece — a number, a date, a name — and never the question they already answered.
 
 Produce:
 
@@ -129,6 +138,9 @@ ${json(input.capabilities)}
 EVIDENCE (the only things you may cite for what the candidate can do):
 ${json(input.evidence)}
 
+WHAT THEY HAVE ALREADY TOLD ME (asked before, answered in their own words — this is known, never ask it again):
+${json(input.alreadyTold ?? [])}
+
 WHAT WE STILL DO NOT KNOW ABOUT THE CANDIDATE:
 ${json(input.openUncertainties)}
 
@@ -143,6 +155,8 @@ ${json(input.intentReferences)}`
 export const DECISION_VERSION = 'v2'
 
 export interface DecisionInput {
+  /** Lo que ya ha contestado. La pregunta que salga de aquí no puede repetirlo. */
+  alreadyTold?: { question: string; answer: string }[]
   /**
    * El idioma de la pregunta que salga de aquí. El resto de lo que decide
    * esto no se lee nunca; `nextBestAction.question` sí, tal cual, en el
@@ -173,12 +187,16 @@ Principles:
 - A strong capability match with nothing they want is not enough. A perfect fit with what they want and no evidence they can do it is not enough.
 - Do not interrupt because it is plausible.
 - A HOLD must say what would resolve it. Pick the single most useful next action, and write the actual question.
+- Never ask them something they have already answered. WHAT THEY HAVE ALREADY TOLD ME is what they have said in their own words; if the answer to your question is in there, in any wording, the gap is closed and the action is not ASK_CANDIDATE. Asking a person the same thing a fifth time is the fastest way to lose them.
 
 ${languageInstruction(input.language ?? DEFAULT_LANGUAGE)} That applies to "reason" and to "nextBestAction.question", which is sent to them word for word.
 
 Respond ONLY with JSON: {"decision": "IGNORE"|"HOLD"|"INTERRUPT", "reason": one or two sentences in plain words, "supportingEvidenceIds": [evidence ids from the analysis], "supportingIntentReferences": [intent ref ids from the analysis], "materialUnknowns": [unknown ids from the analysis], "nextBestAction": {"type": "ASK_COMPANY"|"ASK_CANDIDATE"|"RESEARCH"|"WAIT"|"NONE", "question": string|null}}`
 
   const user = `OPPORTUNITY: ${input.opportunity.role} at ${input.opportunity.company}
+
+WHAT THEY HAVE ALREADY TOLD ME (never ask any of this again):
+${json(input.alreadyTold ?? [])}
 
 HARD CONSTRAINTS:
 ${json(input.analysis.hardConstraints)}

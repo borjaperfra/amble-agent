@@ -107,6 +107,17 @@ export function findInboundMessage(
     .get(channel, externalId) as unknown as InboundRow | undefined
 }
 
+/**
+ * Lo que decía el audio.
+ *
+ * La fila se escribe antes de transcribir —es lo que evita tratar dos veces
+ * el mismo mensaje— así que el texto llega después. Se guarda porque es lo
+ * único que queda: del audio no se guarda nada.
+ */
+export function recordInboundTranscript(id: string, text: string): void {
+  getDb().prepare('UPDATE inbound_messages SET text = ? WHERE id = ?').run(text, id)
+}
+
 /** What it turned out to be, once it was handled. */
 export function settleInboundMessage(
   id: string,

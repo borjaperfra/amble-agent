@@ -107,6 +107,18 @@ export function getSourceSyncIntervalMs(): number | null {
   return Number.isFinite(value) && value > 0 ? Math.round(value * 3_600_000) : null
 }
 
+/**
+ * Cuánto se espera antes de mandar las preguntas que se han acumulado.
+ *
+ * Una tanda de ofertas se evalúa en unos minutos y cada una puede dejar una
+ * pregunta. Esperar diez minutos convierte cuatro avisos en uno; esperar
+ * mucho más retrasa una decisión que solo depende de una frase suya.
+ */
+export function getQuestionBatchMs(): number {
+  const minutes = readPositiveInt('AMBLE_QUESTION_BATCH_MINUTES', 10) ?? 10
+  return minutes * 60_000
+}
+
 export interface TelegramConfig {
   token: string
   timeoutMs: number

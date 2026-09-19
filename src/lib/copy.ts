@@ -39,6 +39,13 @@ export interface RepCopy {
   whatToConsider: string
   nothingSent: string
 
+  /** Varias preguntas en un mensaje: lo normal en cuanto entran dos ofertas. */
+  questionsSubject: (count: number) => string
+  questionsLead: (count: number) => string
+  questionItem: (role: string, company: string, question: string) => string[]
+  questionsTailReply: string[]
+  questionsTailScreen: (url: string) => string[]
+
   /** La pregunta, que es un mensaje mucho más pequeño. */
   questionLead: (role: string, company: string) => string
   questionTailScreen: (url: string) => string[]
@@ -62,6 +69,9 @@ export interface RepCopy {
     /** " — Head of Growth en Ridgeline AI" */
     about: (role: string, company: string) => string
     unreadable: string
+    /** No hay transcriptor montado, o el audio no se pudo leer. */
+    voiceProblem: (reason: string) => string
+    heard: (text: string) => string
     noted: (about: string) => string[]
     othersOpen: string[]
     alreadyAnswered: (about: string) => string[]
@@ -86,6 +96,16 @@ const es: RepCopy = {
   whyYou: 'POR QUÉ TÚ',
   whatToConsider: 'LO QUE NO SÉ',
   nothingSent: 'No les he dicho nada, y no lo haré hasta que tú lo digas.',
+
+  questionsSubject: (count) => `${count} cosas antes de decirte nada`,
+  questionsLead: (count) =>
+    `Me faltan ${count} cosas para decidir sobre lo que ha entrado. Van juntas para no ir molestándote de una en una:`,
+  questionItem: (role, company, question) => [`${role} · ${company}`, question],
+  questionsTailReply: [
+    'Contéstame en un solo mensaje, o mándame un audio y lo transcribo. Con una frase por cada',
+    'una vale.',
+  ],
+  questionsTailScreen: (url) => [`Contéstame aquí: ${url}/listening`],
 
   questionLead: (role, company) => `${role} en ${company}. Antes de decirte nada me falta una cosa:`,
   questionTailScreen: (url) => [`Contéstame aquí: ${url}/listening`],
@@ -114,7 +134,9 @@ const es: RepCopy = {
       'Y si me falta algo para decidir, te pregunto. Respondes al mensaje y ya está.',
     ],
     about: (role, company) => ` — ${role} en ${company}`,
-    unreadable: 'Ahí no viene nada que pueda leer. Solo texto, de momento.',
+    unreadable: 'Ahí no viene nada que pueda leer. Mándame texto o un audio.',
+    voiceProblem: (reason) => `No he podido con el audio: ${reason}`,
+    heard: (text) => `Te he entendido: «${text}»`,
     noted: (about) => [`Apuntado${about}.`, '', 'Si cambia lo que pienso de ese puesto, te aviso.'],
     othersOpen: ['', 'Hay más de una cosa abierta. Si querías otra, responde a su mensaje.'],
     alreadyAnswered: (about) => [
@@ -165,6 +187,16 @@ const en: RepCopy = {
   whatToConsider: "WHAT I DON'T KNOW",
   nothingSent: 'Nothing has gone to them, and nothing will until you say so.',
 
+  questionsSubject: (count) => `${count} things before I can tell you`,
+  questionsLead: (count) =>
+    `I need ${count} things to decide on what has come in. Together, so I am not pinging you one at a time:`,
+  questionItem: (role, company, question) => [`${role} · ${company}`, question],
+  questionsTailReply: [
+    'Answer in one message, or send a voice note and I will transcribe it. A sentence each is',
+    'plenty.',
+  ],
+  questionsTailScreen: (url) => [`Answer here: ${url}/listening`],
+
   questionLead: (role, company) =>
     `${role} at ${company}. One thing before I can tell you anything:`,
   questionTailScreen: (url) => [`Answer here: ${url}/listening`],
@@ -193,7 +225,9 @@ const en: RepCopy = {
       'And if I need something before I can decide, I ask. You reply, and that is it.',
     ],
     about: (role, company) => ` — ${role} at ${company}`,
-    unreadable: 'Nothing I can read came through. Text only, for now.',
+    unreadable: 'Nothing I can read came through. Send me text or a voice note.',
+    voiceProblem: (reason) => `I could not use that audio: ${reason}`,
+    heard: (text) => `What I heard: "${text}"`,
     noted: (about) => [
       `Noted${about}.`,
       '',

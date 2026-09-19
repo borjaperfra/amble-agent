@@ -19,6 +19,7 @@ import {
   listCapabilities,
   listCapabilityEvidenceIds,
   listEvidence,
+  listAnsweredTurns,
   listUncertainties,
   parseJsonArray,
 } from '../db/repo'
@@ -34,10 +35,12 @@ import {
   insertLabel,
   insertRubric,
   insertResponse,
+  listAnsweredQuestions,
   recordAuditEvent,
   updateOpportunityStatus,
   type OpportunityRow,
 } from '../db/opportunities'
+import { getQuestionBatchMs } from '@/lib/features'
 import { readPreferences } from './preferences'
 import { stripInternalIds } from '../model/tasks'
 import {
@@ -84,6 +87,15 @@ export interface CandidateContext {
   capabilities: CapabilityForMatch[]
   evidence: EvidenceForMatch[]
   openUncertainties: { id: string; description: string; materiality: string }[]
+  /**
+   * Lo que ya ha contestado, con sus palabras.
+   *
+   * Forma parte del perfil igual que la evidencia: si lo contó una vez, el
+   * agente de la siguiente oferta ya lo sabe. Sin esto cada oferta razona
+   * desde cero y vuelve al mismo hueco — medido en real, cinco de ocho
+   * preguntas eran la misma y dos llegaron después de contestarla.
+   */
+  alreadyTold: { question: string; answer: string }[]
 }
 
 /**
@@ -151,7 +163,33 @@ export function candidateContext(candidateId: string): CandidateContext {
       description: item.description,
       materiality: item.materiality,
     })),
+    alreadyTold: answeredQuestions(candidateId),
   }
+}
+
+/**
+ * Lo que ya le hemos preguntado y ha contestado.
+ *
+ * Recortado: una respuesta suya de hace tres meses sigue contando, pero un
+ * prompt con cuarenta respuestas enteras deja de leerse. Las veinte últimas
+ * y mil caracteres cada una es de sobra para que nadie repita una pregunta.
+ */
+export function answeredQuestions(
+  candidateId: string,
+): { question: string; answer: string }[] {
+  // La entrevista cuenta igual. Lo que contó el primer día es tan suyo como
+  // lo que contestó ayer por Telegram, y preguntárselo otra vez porque venía
+  // de otra pantalla es exactamente lo que no puede pasar.
+  const fromInterview = listAnsweredTurns(candidateId).map((turn) => ({
+    question: turn.question ?? '',
+    answer: (turn.answer ?? '').slice(0, 1000),
+  }))
+  const fromOffers = listAnsweredQuestions(candidateId).map((row) => ({
+    question: row.question,
+    answer: (row.answer ?? '').slice(0, 1000),
+  }))
+
+  return [...fromInterview, ...fromOffers].filter((item) => item.question.length > 0).slice(-30)
 }
 
 // ─── Ingestion ────────────────────────────────────────────────────────────
@@ -303,6 +341,7 @@ export async function evaluateOpportunity(
     const { data, modelRunId, latencyMs } = await runners.match({
       candidateId,
       input: {
+        alreadyTold: context.alreadyTold,
         opportunity: { company: opportunity.company, role: opportunity.role },
         rubric,
         capabilities: context.capabilities,
@@ -376,6 +415,7 @@ export async function evaluateOpportunity(
       // La pregunta que salga de aquí se le manda tal cual, así que sale en
       // su idioma y no en el del prompt.
       language: readPreferences(candidateId).language,
+      alreadyTold: context.alreadyTold,
       opportunity: { company: opportunity.company, role: opportunity.role },
       analysis,
     },
@@ -510,8 +550,14 @@ export async function evaluateOpportunity(
       action: settled.nextBestAction,
     })
     if (asked?.created) {
-      const { queueQuestionNotice } = await import('./notify')
-      queueQuestionNotice(candidateId, asked.question.id)
+      // No sale ya: se deja reposar unos minutos para que las preguntas de
+      // las demás ofertas de esta tanda salgan con ella, en un solo mensaje.
+      // Cuatro avisos en diez minutos son cuatro razones para dejar de mirar
+      // el móvil, y eso lo dijo él con esas palabras.
+      const { enqueue, hasQueuedKind } = await import('./jobs')
+      if (!hasQueuedKind(candidateId, 'send_questions')) {
+        enqueue('send_questions', candidateId, {}, getQuestionBatchMs())
+      }
     }
   }
 

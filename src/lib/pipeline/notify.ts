@@ -24,6 +24,8 @@ import {
   getOpportunity,
   getQuestion,
   listPendingInterruptions,
+  listUnnotifiedQuestions,
+  markQuestionNotified,
   recordAuditEvent,
 } from '../db/opportunities'
 import {
@@ -245,6 +247,102 @@ export function queueQuestionNotice(candidateId: string, questionId: string): Qu
     }
   }
   return queued
+}
+
+/**
+ * Todo lo que falta por preguntar, en un mensaje.
+ *
+ * Antes salía una pregunta por mensaje en cuanto existía. Con dos ofertas
+ * entrando a la vez eso son cuatro avisos en diez minutos, cada uno pidiendo
+ * una frase, y la respuesta razonable de cualquiera es dejar de mirar el
+ * móvil. Ahora se acumulan un rato y salen juntas: se contesta una vez, de
+ * una sentada, hablando si se quiere.
+ *
+ * El `about_id` es la lista de ids. Así dos tandas distintas son dos filas
+ * distintas en el outbox, y una respuesta que cita el mensaje sabe
+ * exactamente a qué preguntas contesta.
+ */
+export function queueQuestionDigest(candidateId: string): QueuedNotice[] {
+  const waiting = listUnnotifiedQuestions(candidateId)
+  if (waiting.length === 0) return []
+
+  const preferences = readPreferences(candidateId)
+  const copy = copyIn(preferences.language)
+  const items = waiting.map((question) => ({
+    question,
+    opportunity: getOpportunity(question.opportunity_id),
+  }))
+
+  const single = items.length === 1 ? items[0] : null
+  const subject =
+    single && single.opportunity
+      ? copy.questionSubject(single.opportunity.role, single.opportunity.company)
+      : copy.questionsSubject(items.length)
+
+  const queued: QueuedNotice[] = []
+  for (const channel of preferences.notifyChannels) {
+    const address = addressFor(preferences, channel)
+    const deliverable = Boolean(address) && configuredFor(channel)
+    const result = insertNotification({
+      candidate_id: candidateId,
+      channel,
+      address,
+      subject,
+      body:
+        single && single.opportunity
+          ? questionBodyFor({
+              company: single.opportunity.company,
+              role: single.opportunity.role,
+              question: single.question.question,
+              reason: single.question.reason,
+              channel,
+              language: preferences.language,
+            })
+          : digestBodyFor(items, channel, preferences.language),
+      about_type: 'questions',
+      about_id: waiting.map((question) => question.id).join(','),
+      status: deliverable ? 'pending' : 'unconfigured',
+    })
+    queued.push({ notification: result.notification, created: result.created })
+    if (result.created && deliverable) {
+      enqueue('deliver_notification', candidateId, { notificationId: result.notification.id })
+    }
+  }
+
+  for (const question of waiting) markQuestionNotified(question.id)
+  recordAuditEvent({
+    candidate_id: candidateId,
+    subject_type: 'candidate',
+    subject_id: candidateId,
+    event: 'questions_sent',
+    detail: { count: waiting.length, channels: preferences.notifyChannels },
+  })
+
+  return queued
+}
+
+function digestBodyFor(
+  items: { question: { question: string }; opportunity: { role: string; company: string } | undefined }[],
+  channel: NotificationChannel,
+  language: Language,
+): string {
+  const copy = copyIn(language)
+  const lines: string[] = [copy.questionsLead(items.length), '']
+
+  for (const item of items) {
+    if (!item.opportunity) continue
+    lines.push(
+      ...copy.questionItem(item.opportunity.role, item.opportunity.company, item.question.question),
+      '',
+    )
+  }
+
+  lines.push(
+    ...(channel === 'telegram' ? copy.questionsTailReply : copy.questionsTailScreen(baseUrl())),
+    '',
+    copy.nothingSent,
+  )
+  return lines.join('\n')
 }
 
 function addressFor(

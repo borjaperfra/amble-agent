@@ -426,6 +426,17 @@ function migrate(db: DatabaseSync): void {
   if (!has('preferences', 'notify_telegram')) {
     db.exec('ALTER TABLE preferences ADD COLUMN notify_telegram TEXT;')
   }
+  if (!has('opportunity_questions', 'notified_at')) {
+    // Cuándo salió en un mensaje. Las preguntas se acumulan y salen juntas,
+    // así que "existe" y "se la he mandado" dejan de ser lo mismo.
+    db.exec('ALTER TABLE opportunity_questions ADD COLUMN notified_at TEXT;')
+  }
+  if (!has('opportunity_questions', 'incorporated_at')) {
+    // Cuándo entró la respuesta al grafo. Sin esto, un reintento del trabajo
+    // —y hubo uno, tras un "empty response" del modelo— vuelve a extraer los
+    // mismos claims y deja dos evidencias por cada frase que dijo una vez.
+    db.exec('ALTER TABLE opportunity_questions ADD COLUMN incorporated_at TEXT;')
+  }
   if (!has('preferences', 'language')) {
     // En qué idioma habla el Rep. Vive con las preferencias y no en una
     // variable de entorno porque es de la persona, no de la instalación.

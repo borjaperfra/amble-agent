@@ -1,7 +1,7 @@
 # Dónde nos quedamos — 19 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (123) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (124) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -592,6 +592,56 @@ que cuesta llamadas al modelo y es decisión suya.
 
 **Sin traducir todavía:** onboarding, procesado, entrevista, intent, el Mapa y
 el laboratorio. Son otro rato largo y ninguno está en el bucle diario.
+
+### Ocho preguntas, cinco iguales — y lo que se cambió
+
+La primera sesión real por Telegram acabó con él diciendo que estaba harto de
+preguntas, y tenía razón. Las ocho que le llegaron, resumidas: si ha
+construido una audiencia de developers; qué hizo él en Asgard; si ha hecho
+marketing de una herramienta técnica; qué ha construido él y cómo se gana la
+credibilidad con developers; si ha gestionado presupuesto; si le vale paid
+acquisition; qué plataformas llevaba en la comunidad de Manfred; y cuánto de
+los 120k construyó él. **Cinco son la misma pregunta**, y la séptima y la
+octava llegaron después de que contestara que construyó una comunidad de 120k.
+
+Las causas, las dos mecánicas:
+
+- **Las preguntas eran por oferta.** Cada oferta razonaba desde cero y volvía
+  al mismo hueco. Sus respuestas sí entraban al grafo, pero nada le decía a la
+  siguiente que eso ya lo había contado.
+- **El índice que evitaba repetir comparaba el texto literal.** El modelo
+  reformula siempre, así que no paraba nada.
+
+Lo cambiado:
+
+1. **Lo que ha contestado es perfil.** `candidateContext` lleva ahora
+   `alreadyTold`: las respuestas de las ofertas **y las de la entrevista**, con
+   sus palabras. Va en el prompt de match y en el de decisión con la regla
+   escrita: lo que está ahí es conocido, no es un hueco, y no se vuelve a
+   preguntar en ninguna reformulación.
+2. **Un guardia determinista antes de preguntar.** `alreadyAnswered()` para la
+   pregunta si el hueco (`unknown_id`) ya se contestó o si el solape de
+   palabras con una contestada pasa de 0,6 —quitando las que no dicen de qué
+   va la pregunta—. Lo que se cuela de ahí lo para el prompt. Cada descarte
+   queda en el audit como `question_dropped_as_repeat`.
+3. **Todas juntas, en un mensaje.** Las preguntas se acumulan
+   (`AMBLE_QUESTION_BATCH_MINUTES`, 10 por defecto) y sale un solo aviso con
+   las que haya. Antes salía una por pregunta en cuanto existía: con dos
+   ofertas entrando a la vez, eso son cuatro avisos en diez minutos.
+4. **Se puede contestar hablando.** Una nota de voz por Telegram se descarga,
+   se transcribe con el mismo STT que la entrevista y sigue el mismo camino.
+   Del audio no se guarda nada; la transcripción queda en la fila y se le
+   enseña en el acuse, porque una transcripción mala que entra al grafo sin que
+   nadie la vea es peor que no entender nada.
+
+Y un bug de los caros, que salió mirando esto: **el trabajo que mete la
+respuesta al grafo no era idempotente**. Se reintentó una vez tras un "empty
+response" del modelo y dejó dos evidencias por cada frase que dijo una sola
+vez ("I owned a 100k marketing budget at Manfred" está dos veces). Ahora
+`incorporated_at` lo marca y un reintento solo vuelve a decidir.
+
+**Lo que no está hecho:** que el onboarding pregunte de una vez lo que se
+repite por oferta. Sigue siendo la siguiente.
 
 ### Sobre `.amble-data/`
 

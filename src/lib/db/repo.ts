@@ -449,6 +449,24 @@ export function markInterviewStopping(id: string): void {
   getDb().prepare("UPDATE interviews SET status = 'stopping' WHERE id = ? AND status = 'active'").run(id)
 }
 
+/**
+ * Todo lo que ha contestado en entrevista, de cualquier entrevista suya.
+ *
+ * Lo que contó ahí es sobre él, no sobre la entrevista: el lado de las
+ * ofertas tiene que saberlo antes de preguntar nada, o le pregunta lo mismo
+ * que ya contó el primer día.
+ */
+export function listAnsweredTurns(candidateId: string): InterviewTurnRow[] {
+  return getDb()
+    .prepare(
+      `SELECT t.* FROM interview_turns t
+       JOIN interviews i ON i.id = t.interview_id
+       WHERE i.candidate_id = ? AND t.answer IS NOT NULL AND t.question IS NOT NULL
+       ORDER BY t.answered_at`,
+    )
+    .all(candidateId) as unknown as InterviewTurnRow[]
+}
+
 export function listTurns(interviewId: string): InterviewTurnRow[] {
   return getDb()
     .prepare('SELECT * FROM interview_turns WHERE interview_id = ? ORDER BY idx ASC')

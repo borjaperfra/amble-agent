@@ -42,6 +42,13 @@ export interface InboundTelegramMessage {
    * reply UI fills it in, so it costs the person nothing.
    */
   replyToMessageId: number | null
+  /**
+   * A voice note, if that is what they sent.
+   *
+   * Three questions answered out loud take half a minute; typed, they take
+   * five. The file has to be fetched and transcribed before it is words.
+   */
+  voiceFileId: string | null
 }
 
 export class TelegramError extends Error {
@@ -192,6 +199,43 @@ export async function recentChats(
   return [...chats.values()]
 }
 
+/**
+ * El audio, en bytes.
+ *
+ * Telegram no manda el fichero: manda un id con el que se pide una ruta, y
+ * la ruta se descarga de otro host. Dos llamadas, y el token va en las dos,
+ * así que ninguna de las dos puede acabar en un mensaje de error.
+ */
+export async function fetchVoice(
+  config: TelegramConfig,
+  fileId: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const described = await fetch(
+    `${API}/bot${config.token}/getFile?file_id=${encodeURIComponent(fileId)}`,
+    { signal: AbortSignal.timeout(config.timeoutMs) },
+  ).catch(() => null)
+
+  const body = (await described?.json().catch(() => null)) as {
+    ok?: boolean
+    description?: string
+    result?: { file_path?: string }
+  } | null
+
+  const path = body?.ok === true ? body.result?.file_path : undefined
+  if (!path) {
+    throw new TelegramError(`Telegram would not hand over the audio: ${body?.description ?? '?'}`)
+  }
+
+  const file = await fetch(`${API}/file/bot${config.token}/${path}`, {
+    // Un audio de un minuto pesa poco, pero la red de este sitio es lenta a
+    // ratos y el timeout de los mensajes es demasiado corto para un fichero.
+    signal: AbortSignal.timeout(config.timeoutMs * 4),
+  }).catch(() => null)
+
+  if (!file?.ok) throw new TelegramError('The audio did not download.')
+  return { blob: await file.blob(), filename: path.split('/').pop() || 'voice.ogg' }
+}
+
 async function getUpdates(config: TelegramConfig, query: URLSearchParams): Promise<unknown[]> {
   const suffix = query.size > 0 ? `?${query}` : ''
   let response: Response
@@ -243,11 +287,18 @@ function asMessage(update: unknown): InboundTelegramMessage | null {
 
   const replyTo = (message?.reply_to_message as { message_id?: number } | undefined)?.message_id
 
+  // Una nota de voz, un audio adjunto o un vídeo redondo: los tres son
+  // alguien hablando, y los tres se transcriben igual.
+  const spoken = (message?.voice ?? message?.audio ?? message?.video_note) as
+    | { file_id?: string }
+    | undefined
+
   return {
     updateId,
     chatId: String(chat.id),
     sender,
     text: typeof message?.text === 'string' ? message.text : '',
     replyToMessageId: typeof replyTo === 'number' ? replyTo : null,
+    voiceFileId: typeof spoken?.file_id === 'string' ? spoken.file_id : null,
   }
 }

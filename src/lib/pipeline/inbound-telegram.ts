@@ -23,12 +23,15 @@ import { copyIn, type RepCopy } from '@/lib/copy'
 import type { CandidateResponse } from '@/domains/opportunity/types'
 import {
   fetchUpdates,
+  fetchVoice,
   sendTelegramMessage,
   type InboundTelegramMessage,
 } from '@/lib/notify/telegram'
+import { transcribeAudio, TranscriptionError } from '@/lib/model/transcribe'
 import {
   claimInboundMessage,
   lastInboundExternalId,
+  recordInboundTranscript,
   settleInboundMessage,
   type InboundOutcome,
 } from '../db/inbound'
@@ -369,6 +372,19 @@ export async function pollTelegram(candidateId: string): Promise<PollResult> {
   return result
 }
 
+/** Contestar no puede tumbar el paso: lo importante ya está guardado. */
+async function say(
+  config: TelegramConfig,
+  chatId: string,
+  text: string,
+): Promise<void> {
+  try {
+    await sendTelegramMessage(config, chatId, text)
+  } catch {
+    // El motivo queda en la fila; un acuse perdido no se reintenta.
+  }
+}
+
 async function handleOne(
   candidateId: string,
   chatId: string,
@@ -398,9 +414,30 @@ async function handleOne(
     return 'foreign'
   }
 
+  // Una nota de voz es una respuesta, y contestar tres cosas hablando es
+  // medio minuto contra cinco escribiendo. Del audio no se guarda nada: lo
+  // que queda es la transcripción, en la misma fila.
+  let text = message.text
+  if (text.trim().length === 0 && message.voiceFileId) {
+    const copy = copyIn(readPreferences(candidateId).language)
+    try {
+      const { blob, filename } = await fetchVoice(config, message.voiceFileId)
+      text = await transcribeAudio(blob, filename)
+      recordInboundTranscript(claim.message.id, text)
+    } catch (error) {
+      const reason =
+        error instanceof TranscriptionError || error instanceof Error
+          ? error.message
+          : 'no salió'
+      settleInboundMessage(claim.message.id, 'failed', null, reason)
+      await say(config, chatId, copy.bot.voiceProblem(reason))
+      return 'handled'
+    }
+  }
+
   let handled: HandledMessage
   try {
-    handled = handleMessage(candidateId, message.text, message.replyToMessageId)
+    handled = handleMessage(candidateId, text, message.replyToMessageId)
   } catch (error) {
     // The claim already says `failed`, so what they wrote is kept and the
     // reason sits next to it. One message nobody can read does not end the
@@ -420,12 +457,26 @@ async function handleOne(
     subject_type: handled.about?.type ?? 'inbound',
     subject_id: handled.about?.id ?? claim.message.id,
     event: 'inbound_message',
-    detail: { channel: 'telegram', outcome: handled.outcome, chars: message.text.length },
+    detail: {
+      channel: 'telegram',
+      outcome: handled.outcome,
+      chars: text.length,
+      spoken: Boolean(message.voiceFileId),
+    },
   })
 
   if (handled.reply) {
     try {
-      await sendTelegramMessage(config, chatId, handled.reply)
+      // Si vino hablando, se le enseña lo que se ha entendido: una
+      // transcripción mala que entra al grafo sin que nadie la vea es peor
+      // que no entender nada.
+      const spoken = message.voiceFileId && text.trim().length > 0
+      const copy = copyIn(readPreferences(candidateId).language)
+      await sendTelegramMessage(
+        config,
+        chatId,
+        spoken ? `${copy.bot.heard(text)}\n\n${handled.reply}` : handled.reply,
+      )
     } catch (error) {
       // The answer is in. Failing to say "noted" is not a reason to throw: a
       // retry would re-read updates that are already confirmed, so the work

@@ -19,6 +19,8 @@ import { unknownBehind } from '@/domains/opportunity/rules'
 import type { MatchAnalysis, NextBestAction } from '@/domains/opportunity/types'
 import {
   getOpportunity,
+  listAnsweredQuestions,
+  markQuestionIncorporated,
   getQuestion,
   insertQuestion,
   listOpenQuestions,
@@ -37,10 +39,69 @@ export interface AskedQuestion {
 }
 
 /**
- * Write the question down, once.
+ * Palabras que no dicen de qué va la pregunta.
  *
- * Asked at the moment the decision is settled rather than when somebody
- * opens a screen: the whole point is that they do not have to be looking.
+ * Sin quitarlas, dos preguntas cualesquiera comparten "what", "you", "the" y
+ * parecen la misma; con ellas quitadas, lo que queda es el tema.
+ */
+const NOISE = new Set([
+  'what', 'which', 'when', 'where', 'who', 'how', 'why', 'did', 'do', 'does', 'have', 'has',
+  'had', 'you', 'your', 'yours', 'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'at',
+  'for', 'with', 'that', 'this', 'it', 'is', 'are', 'was', 'were', 'be', 'been', 'ever',
+  'any', 'some', 'personally', 'about', 'from', 'by', 'as', 'if', 'can', 'could', 'would',
+  'qué', 'que', 'cuál', 'cual', 'cuando', 'cuándo', 'donde', 'dónde', 'quién', 'quien',
+  'cómo', 'como', 'por', 'para', 'con', 'una', 'uno', 'unos', 'unas', 'los', 'las', 'del',
+  'tu', 'tus', 'has', 'hiciste', 'hecho', 'eres', 'era', 'ser', 'estar', 'algún', 'alguna',
+])
+
+function subjectWords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && !NOISE.has(word)),
+  )
+}
+
+/**
+ * ¿Es esto lo mismo que ya contestó?
+ *
+ * Dos capas, porque ninguna basta sola. El hueco (`unknown_id`) lo pilla
+ * cuando el modelo le pone el mismo nombre; el solape de palabras pilla la
+ * reformulación. Lo que se cuela de las dos lo tiene que parar el prompt,
+ * que ahora recibe todo lo que ya ha contestado.
+ *
+ * Se mide contra las respuestas de TODAS las ofertas, no solo esta: las
+ * preguntas son por oferta, pero las respuestas son sobre él.
+ */
+export function alreadyAnswered(
+  candidateId: string,
+  question: string,
+  unknownId: string | null,
+): { question: string; overlap: number } | null {
+  const words = subjectWords(question)
+  if (words.size === 0) return null
+
+  for (const previous of listAnsweredQuestions(candidateId)) {
+    if (unknownId && previous.unknown_id === unknownId) {
+      return { question: previous.question, overlap: 1 }
+    }
+    const before = subjectWords(previous.question)
+    if (before.size === 0) continue
+    let shared = 0
+    for (const word of words) if (before.has(word)) shared += 1
+    const overlap = shared / Math.min(words.size, before.size)
+    if (overlap >= 0.6) return { question: previous.question, overlap }
+  }
+  return null
+}
+
+/**
+ * Write the question down, once — and only if it is not one they have
+ * already answered for some other opportunity.
  */
 export function askCandidate(input: {
   candidateId: string
@@ -56,6 +117,21 @@ export function askCandidate(input: {
   if (!opportunity) return null
 
   const unknown = unknownBehind(input.analysis, text)
+
+  // Ya lo contó. Preguntarlo otra vez —con otras palabras, por otra oferta—
+  // es la forma más rápida de perder a alguien, y pasó cinco veces de ocho
+  // antes de que esto existiera.
+  const repeat = alreadyAnswered(input.candidateId, text, unknown?.id ?? null)
+  if (repeat) {
+    recordAuditEvent({
+      candidate_id: input.candidateId,
+      subject_type: 'opportunity',
+      subject_id: input.opportunityId,
+      event: 'question_dropped_as_repeat',
+      detail: { question: text, answeredBefore: repeat.question, overlap: repeat.overlap },
+    })
+    return null
+  }
   const result = insertQuestion({
     candidate_id: input.candidateId,
     opportunity_id: input.opportunityId,
@@ -139,6 +215,17 @@ export async function incorporateQuestionAnswerJob(questionId: string): Promise<
   if (!question) throw new Error(`Question ${questionId} is gone.`)
   if (!question.answer) throw new Error(`Question ${questionId} has no answer to work from.`)
 
+  // Un reintento no vuelve a extraer los mismos claims: el trabajo ya se
+  // reintentó una vez en real, tras un "empty response", y dejó dos
+  // evidencias por cada frase que dijo una sola vez.
+  if (question.incorporated_at) {
+    enqueue('evaluate_opportunity', question.candidate_id, {
+      opportunityId: question.opportunity_id,
+      reassess: true,
+    })
+    return
+  }
+
   const incorporated = await incorporateAnswer(
     question.candidate_id,
     {
@@ -152,6 +239,7 @@ export async function incorporateQuestionAnswerJob(questionId: string): Promise<
   )
 
   recordQuestionEvidence(questionId, [])
+  markQuestionIncorporated(questionId)
   recordAuditEvent({
     candidate_id: question.candidate_id,
     subject_type: 'opportunity',

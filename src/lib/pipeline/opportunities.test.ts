@@ -124,7 +124,18 @@ after(() => {
  * A reading that likes the job and is unsure about the person — the shape
  * that produces a question rather than an answer.
  */
-function holdingRunners() {
+/**
+ * Cada llamada puede preguntar por un tema distinto, y hace falta: desde que
+ * una respuesta vale para todas las ofertas, repetir la misma pregunta en la
+ * siguiente prueba ya no crea una pregunta, la descarta.
+ */
+function holdingRunners(
+  gap = {
+    id: 'unk_dev_community',
+    description: 'We do not know whether he has run a developer community.',
+    question: 'Have you built or run a developer community yourself?',
+  },
+) {
   const base = runners()
   return {
     ...base,
@@ -155,14 +166,11 @@ function holdingRunners() {
           ],
           unknowns: [
             {
-              id: 'unk_dev_community',
+              id: gap.id,
               side: 'candidate' as const,
-              description: 'We do not know whether he has run a developer community.',
+              description: gap.description,
               materiality: 'HIGH' as const,
-              resolvedBy: {
-                type: 'ASK_CANDIDATE' as const,
-                question: 'Have you built or run a developer community yourself?',
-              },
+              resolvedBy: { type: 'ASK_CANDIDATE' as const, question: gap.question },
               deterministic: false,
             },
           ],
@@ -179,7 +187,7 @@ function holdingRunners() {
           reason: 'The job fits. Whether he has run a community is not settled.',
           supportingEvidenceIds: evidenceIds,
           supportingIntentReferences: ['int_listening_1'],
-          materialUnknowns: ['unk_dev_community'],
+          materialUnknowns: [gap.id],
           nextBestAction: { type: 'ASK_COMPANY' as const, question: 'What is the budget?' },
         },
         modelRunId: 'run_decision_hold',
@@ -443,9 +451,51 @@ describe('the loop', () => {
     assert.notEqual(questions.openQuestionFor(candidateId)?.id, asked.id)
   })
 
+  it('never asks a second time what he has already answered', async () => {
+    // Pasó de verdad: ocho preguntas, cinco eran la misma, y dos llegaron
+    // después de que la contestara. Las respuestas son sobre él, no sobre la
+    // oferta, así que valen para la siguiente sin volver a preguntar.
+    const questions = await import('./opportunity-questions')
+    const first = ingest('Solenne Repeat A', 'test-question-repeat-a')
+    await pipeline.evaluateOpportunity(
+      first.id,
+      holdingRunners({
+        id: 'unk_events',
+        description: 'We do not know whether he has run developer events.',
+        question: 'Have you run developer events, and at what scale?',
+      }),
+    )
+    const [asked] = questions.questionsFor(first.id)
+    questions.answerQuestion(asked.id, 'Yes, two conferences a year at Manfred, 400 people each.')
+
+    // Otra oferta, el mismo hueco con otras palabras.
+    const second = ingest('Solenne Repeat B', 'test-question-repeat-b')
+    await pipeline.evaluateOpportunity(
+      second.id,
+      holdingRunners({
+        id: 'unk_events_again',
+        description: 'Unclear whether he has run developer events.',
+        question: 'Have you run developer events before, and at what scale were they?',
+      }),
+    )
+
+    assert.equal(
+      questions.questionsFor(second.id).length,
+      0,
+      'the second opportunity asks nothing: he answered that already',
+    )
+  })
+
   it('refuses an empty answer rather than recording a shrug as a fact', async () => {
     const opportunity = ingest('Solenne Empty', 'test-question-empty')
-    await pipeline.evaluateOpportunity(opportunity.id, holdingRunners())
+    await pipeline.evaluateOpportunity(
+      opportunity.id,
+      holdingRunners({
+        id: 'unk_budget',
+        description: 'We do not know what budget he has owned.',
+        question: 'How big a marketing budget have you owned, and who signed it off?',
+      }),
+    )
     const questions = await import('./opportunity-questions')
     const [asked] = questions.questionsFor(opportunity.id)
 
@@ -456,7 +506,14 @@ describe('the loop', () => {
 
   it('reads the person again without paying to read the posting again', async () => {
     const opportunity = ingest('Solenne Reassessed', 'test-question-reassess')
-    await pipeline.evaluateOpportunity(opportunity.id, holdingRunners())
+    await pipeline.evaluateOpportunity(
+      opportunity.id,
+      holdingRunners({
+        id: 'unk_pricing',
+        description: 'We do not know whether he has priced a product.',
+        question: 'Have you set pricing for a product, and what did you change?',
+      }),
+    )
     const before = { ...calls }
 
     // What happens after an answer: the job has not changed, they have.
