@@ -303,6 +303,7 @@ function normalizeUnknowns(raw: unknown): unknown[] {
       description: body,
       materiality: oneOf(value.materiality ?? value.importance ?? value.weight, MATERIALITY, 'MEDIUM'),
       resolvedBy: normalizeResolvedBy(value.resolvedBy ?? value.resolved_by ?? value.nextAction, body),
+      deterministic: false,
     })
     if (out.length >= 10) break
   }
@@ -318,6 +319,7 @@ const unknownSchema = z.object({
     type: z.enum(NEXT_ACTIONS),
     question: z.string().max(300).nullable(),
   }),
+  deterministic: z.literal(false),
 })
 
 export const matchOutputSchema = z.preprocess(

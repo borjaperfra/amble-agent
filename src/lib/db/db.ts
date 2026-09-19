@@ -212,6 +212,9 @@ function createDb(): DatabaseSync {
       raw_text TEXT NOT NULL,
       provenance TEXT NOT NULL,
       fixture_key TEXT,
+      -- How the feed it came from names it, so a sync that runs every day
+      -- brings the same offer back without ingesting it twice.
+      source_ref TEXT,
       status TEXT NOT NULL,
       status_detail TEXT,
       created_at TEXT NOT NULL,
@@ -302,6 +305,34 @@ function createDb(): DatabaseSync {
 
     CREATE INDEX IF NOT EXISTS audit_by_subject ON audit_events (subject_type, subject_id);
 
+    -- The one message, on its way out.
+    --
+    -- Written before anything is sent and kept afterwards, so "we told you"
+    -- is a row rather than a belief. The unique index is the point: a job
+    -- that retries after a dropped connection must not send a second copy of
+    -- the same interruption, and the database is a better place to promise
+    -- that than the code that happens to call it.
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      channel TEXT NOT NULL,
+      address TEXT,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      about_type TEXT NOT NULL,
+      about_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      sent_at TEXT
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS notifications_once
+      ON notifications (about_type, about_id, channel);
+    CREATE INDEX IF NOT EXISTS notifications_by_candidate
+      ON notifications (candidate_id, created_at);
+
     CREATE TABLE IF NOT EXISTS intent_profiles (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),
@@ -323,10 +354,20 @@ function createDb(): DatabaseSync {
  * added after the first run has to be patched in here.
  */
 function migrate(db: DatabaseSync): void {
-  const columns = db.prepare('PRAGMA table_info(model_runs)').all() as unknown as { name: string }[]
-  if (!columns.some((column) => column.name === 'reasoning_output')) {
+  const has = (table: string, column: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[]).some(
+      (row) => row.name === column,
+    )
+
+  if (!has('model_runs', 'reasoning_output')) {
     db.exec('ALTER TABLE model_runs ADD COLUMN reasoning_output TEXT;')
   }
+  if (!has('opportunities', 'source_ref')) {
+    db.exec('ALTER TABLE opportunities ADD COLUMN source_ref TEXT;')
+  }
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS opportunities_by_source ON opportunities (candidate_id, source_ref);',
+  )
 }
 
 export function getDb(): DatabaseSync {

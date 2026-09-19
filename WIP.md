@@ -3,19 +3,20 @@
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
 `next build` y `npm test` en verde. Bórrame cuando esto esté cerrado.
 
-## Opportunity Zero — entero, y corrido una vez de verdad
+## Opportunity Zero — entero, y ya interrumpe
 
 La pregunta: **¿sabe Amble cuándo una oportunidad merece interrumpirte?**
 
 No es sourcing, no es el producto para empresas, no es un tablón de ofertas.
-Es el primer experimento de match e interrupción, y no tapa el agujero de
-abajo (sigue sin llegar nada): responde a la otra mitad, si sabríamos qué
-hacer con una oferta el día que llegue.
+Es el primer experimento de match e interrupción: si sabríamos qué hacer con
+una oferta el día que llegue. Desde hoy además llega alguna sola, que era la
+otra mitad del agujero.
 
-Estado: `tsc`, `eslint`, `next build` y `npm test` en verde, y las diez
-fixtures pasadas contra deepseek. Cero ruido, cero fallos, cero afirmaciones
-sin respaldo — y **cero interrupciones**, incluida la que estaba escrita para
-tener que salir. Los números y qué hacer con eso, más abajo.
+Estado: `tsc`, `eslint`, `next build` y `npm test` (70) en verde. Las diez
+fixtures corridas tres veces contra deepseek: cero ruido, cero fallos, cero
+afirmaciones sin respaldo, los seis NO fuera, y la que estaba escrita para
+tener que salir sale. Las ofertas entran solas desde Manfred y el aviso sale
+por correo. Los números, abajo.
 
 ### Hecho
 
@@ -63,90 +64,139 @@ tener que salir. Los números y qué hacer con eso, más abajo.
   La promesa de la etiqueta ciega ya no se afirma, se comprueba: la etiqueta
   lleva un token que no aparece en ningún otro sitio y el test construye los
   cuatro prompts que el pipeline mandaría y lo busca en todos.
+- **Una fuente de ofertas** (`src/lib/sources/manfred.ts` + `manfred-sync.ts`),
+  con criba gratis antes de gastar nada. Detalle abajo.
+- **El outbox y el envío por SMTP** (`src/lib/notify/smtp.ts`,
+  `src/lib/pipeline/notify.ts`), sin dependencias nuevas. Detalle abajo.
+- **`npm run reset:opportunities`**, para volver a medir sin borrar el grafo.
 
-### La primera pasada real — 19 de septiembre
+### Tres pasadas, y la tercera interrumpe
 
-Diez fixtures, 32 llamadas al modelo, 643 s de reloj. Transcripción entera en
-`.amble-data/measure-opportunities.json`.
+Las diez fixtures, corridas enteras contra deepseek tres veces el 19. La
+transcripción de la última está en `.amble-data/measure-opportunities.json`.
 
 | | INTERRUPT | HOLD | IGNORE |
 | --- | --- | --- | --- |
-| **YES** (1) | 0 | 1 | 0 |
-| **MAYBE** (3) | 0 | 3 | 0 |
-| **NO** (6) | 0 | 1 | 5 |
+| **YES** (1) | **1** | 0 | 0 |
+| **MAYBE** (3) | 1 | 2 | 0 |
+| **NO** (6) | 0 | 0 | 6 |
 
-| | |
-| --- | --- |
-| Ruido (NO × INTERRUPT) | 0 |
-| Fallos (YES × IGNORE) | 0 |
-| Afirmaciones sin respaldo | 0 |
-| Holds sin nada que preguntar | 0 |
-| Las reglas movieron al modelo | 1 de 10 |
+| | 1ª | 2ª | 3ª |
+| --- | --- | --- | --- |
+| Ruido (NO × INTERRUPT) | 0 | 0 | 0 |
+| Fallos (YES × IGNORE) | 0 | 0 | 0 |
+| NO que caen en IGNORE | 5 de 6 | 6 de 6 | 6 de 6 |
+| Interrupciones | 0 | 0 | **2** |
+| Afirmaciones sin respaldo | 0 | 0 | 0 |
+| Holds sin nada que preguntar | 0 | 0 | 0 |
 
-| tarea | llamadas | fallos | media | peor |
-| --- | --- | --- | --- | --- |
-| `opportunity_rubric` | 11 | 1 | 9,4 s | 19,4 s |
-| `opportunity_match` | 11 | 1 | 43,7 s | 68,7 s |
-| `opportunity_decision` | 10 | 0 | 5,1 s | 10,0 s |
+Latencias de la tercera: rúbrica 12,2 s de media, match 33,2 s, decisión
+4,5 s, explicación 9,4 s. Un fallo de red en once llamadas, recuperado solo.
 
-Los dos fallos se reintentaron solos y la tanda no se enteró.
-`opportunity_explanation` no sale en la tabla porque no llegó a correr ni una
-vez.
+**Qué cambió entre la una y la otra.** Dos cosas, y las dos son la misma:
+el modelo y las reglas no estaban usando la misma definición de "material".
 
-**Lo que salió bien.** Los cinco NO que se cayeron se cayeron citando la
-razón, y la razón es la del candidato, no una intuición: *"tops out at 85.000
-EUR"*, *"es una agencia, y el candidato puso agencias entre lo que no
-quiere"*, *"cuatro días en Berlín, y remoto desde Valencia no era
-negociable"*. La enfermera salió por tres constraints a la vez. Nada de esto
-necesitó un modelo mejor: son las preferencias comprobadas contra la rúbrica.
+1. **Solo bloquea un hueco en algo que la persona puso como condición.**
+   `UnknownItem` lleva ahora `deterministic`, igual que los hard constraints:
+   lo pone el código cuando el hueco cae sobre el sueldo, la presencia, el
+   sitio o la etapa — cosas que él nombró. Lo que el modelo *nota* que falta
+   sigue existiendo, sigue contándose y sale en la interrupción dentro de "lo
+   que no sé todavía"; simplemente ya no compra silencio. Efecto inmediato:
+   `opp-vp-engineering` dejó de ser HOLD y pasó a IGNORE, que es su etiqueta.
+2. **El prompt de decisión dice lo mismo** (`DECISION_VERSION` v2). Antes
+   leía "material missing information normally means HOLD" y el modelo, que
+   encuentra diez huecos en cualquier anuncio, holdeaba siempre. Ahora
+   distingue los dos tipos de hueco y dice en voz alta que la evidencia aquí
+   está graduada con honestidad: PARTIALLY_SUPPORTED es el aspecto normal de
+   un buen match, y SUPPORTED en todo no es la barra ni pasa nunca.
 
-**Lo que no.** **Cero interrupciones, incluida `opp-strong-ai-infra`**, que se
-escribió con "si Amble no me enseña ésta, no funciona". Y no la tumbaron las
-reglas: el modelo mismo propuso HOLD. Las cuatro lecturas son buenas — seis
-aspectos de intent ALIGNED, "can write" SUPPORTED con ocho evidencias — y aun
-así se paró en que el anuncio no dice qué parte del roadmap es paid
-acquisition.
+Con eso, `opp-strong-ai-infra` —la que se escribió con "si Amble no me enseña
+ésta, no funciona"— sale por fin. Y sale citando: cuatro evidencias del CV
+detrás de cada frase, los tres huecos que antes la tumbaban ahora abajo, como
+preguntas abiertas. Es exactamente la pantalla que el spec pedía en §17.
 
-### La única decisión abierta
+**Lo que hay que vigilar.** `opp-series-a-unclear-scope` también interrumpe, y
+su etiqueta era MAYBE ("partner closely with the CRO suele querer decir que el
+CRO manda"). No es ninguno de los dos errores que cuentan, pero es el borde:
+si en la próxima tanda aparecen más MAYBE arriba, la barra se ha aflojado
+demasiado. La medida está para eso.
 
-Un `UnknownItem` con materialidad HIGH veta una interrupción, venga de donde
-venga. Con eso INTERRUPT es casi inalcanzable: **siempre** falta algo
-material, porque el modelo genera desconocidos sin techo y se le da bien.
+### Las ofertas ya llegan solas
 
-De los tres que bloquearon la buena, uno es sobre la empresa (el mix de
-canales, legítimo) y otro es sobre *él*: "no sabemos si ha hecho crecer una
-audiencia de desarrolladores concretamente". Ese es raro de leer: no te
-contamos de un trabajo porque no estamos seguros de ti. Es justo lo que se
-resuelve con una frase suya, y es para lo que existe la entrevista.
+Manfred no tiene API pública —`/v2/manfredite/offer-filter` pide token— pero
+su `robots.txt` lo permite todo y publica `sitemap-offers.xml` con ~1.650
+ofertas activas, y cada página lleva el anuncio entero en `__NEXT_DATA__`:
+salario, % de remoto, ciudades, requisitos, secciones. Por la puerta de
+delante y sin llave.
 
-Tres formas de arreglarlo, sin preferencia mía:
+- `src/lib/sources/manfred.ts` lee el sitemap y las páginas. El parseo es puro
+  y está probado contra las rarezas que importan: el salario se guarda en
+  miles (35 son 35.000, y tomarlo literal lo suspendería todo), `remote` es un
+  porcentaje y no un modo, la moneda es un glifo, y las listas son `{id,item}`.
+- `src/lib/pipeline/manfred-sync.ts` sincroniza sobre la cola: una petición
+  cada vez con pausa, User-Agent que dice quién es, y una oferta ya guardada
+  no se vuelve a pedir (`source_ref` único por candidato).
+- **El filtro gratis primero.** Lo que el feed da como número —lo que paga,
+  cuánto es presencial— se comprueba en código con el mismo
+  `deterministicHardConstraints` que usa el pipeline después. Lo que no pasa
+  se guarda con el motivo y no cuesta ni una llamada. Con 1.650 ofertas y un
+  minuto de razonamiento cada una, esa criba es la diferencia entre un clic y
+  un día de cómputo.
+- `POST /api/sources/manfred` y un botón en el laboratorio. `maxEvaluations`
+  limita cuántas supervivientes se evalúan por tanda.
 
-1. **Que solo bloqueen los desconocidos del lado `opportunity`.** Los del lado
-   `candidate` se van a la entrevista, o al bloque "lo que no sé todavía" de
-   la interrupción, que ya existe y ya se muestra.
-2. **Que solo bloquee un desconocido atado a un requisito REQUIRED o HIGH.**
-   Ahora mismo cualquier hueco HIGH suelto vale.
-3. **Dejarlo.** Y asumir que INTERRUPT se reserva a anuncios que no se callan
-   nada — pero entonces decirlo así en el copy, porque el producto promete un
-   mensaje y lo que da es silencio.
+Probado de verdad: 25 leídas, **13 descartadas gratis** ("At least 120.000
+EUR. The posting tops out at 55.000 EUR. Works remote. The role is hybrid"),
+4 entraron, 2 evaluadas. Una salió IGNORE (Staff Mobile Engineer, no es su
+oficio) y otra HOLD (Senior Backend Engineer, requisitos todos sin soporte).
 
-Sea cual sea, el arnés ya está: se cambia la regla, se corre
-`npm run measure:opportunities` y se compara contra esta tabla. Los tests de
-`settleDecision` cubren el comportamiento de hoy, así que romperlos será
-deliberado.
+Ese HOLD es la pega a mirar: con el embudo abierto, HOLD se convierte en el
+cajón de "no es para ti pero es remoto y paga bien". No llega al candidato,
+así que solo cuesta cómputo — pero si crece, la regla que lo permite es
+`positiveSignal`, y habrá que apretarla.
+
+### El aviso sale de la máquina
+
+La pantalla prometía "you get one message" y ese mensaje solo existía si
+tenías la pestaña abierta. Ahora:
+
+- **Un outbox** (`notifications`), escrito en el momento en que existe la
+  decisión, con índice único sobre (sobre qué, por qué canal): un reintento
+  tras un corte no manda una segunda copia.
+- **Se entrega en la cola**, con el mismo backoff que todo lo que toca una
+  red. Un servidor de correo caído a medianoche es el mismo problema que un
+  modelo que expira.
+- **SMTP a pelo sobre `node:tls`**, sin dependencias: EHLO, STARTTLS, AUTH
+  PLAIN o LOGIN, y el cuerpo en base64 para que las líneas largas y los
+  puntos dejen de importar. Probado contra un servidor falso que habla el
+  protocolo de verdad en un puerto de verdad, incluidas las respuestas
+  multilínea y que **la contraseña no acaba nunca en `last_error`**.
+- **Dice lo mismo que la pantalla**, palabra por palabra: dos versiones de por
+  qué se interrumpe a alguien son dos productos.
+- **Sin servidor configurado no se inventa nada**: el mensaje se escribe igual
+  y el outbox dice `unconfigured`. El silencio por accidente y el silencio a
+  propósito no pueden parecerse.
+
+Falta la parte tuya: `AMBLE_SMTP_HOST` y compañía en `.env.local` (están
+documentados en `.env.example`). Ahora mismo hay cuatro filas en el outbox,
+dos interrupciones × dos canales, todas `unconfigured`. WhatsApp no tiene
+adaptador: se encola, se ve pendiente y no se manda.
 
 ### Sobre `.amble-data/`
 
 El Intent Profile estaba contaminado ("Would consider 50k", suelo de 72k, que
-salió de una llamada suelta a la API) y las fixtures están escritas contra
-otra cosa. Antes de medir se reescribió **solo el intent y las preferencias**,
-por las rutas de verdad (`/api/intent` y confirmar, `PUT /api/preferences`):
-AI infra y developer tools, seed o Series A, remoto desde Valencia
-innegociable, 120k de suelo, equity, y no a agencias ni a performance puro. El
-grafo no se tocó: son las mismas 70 evidencias y 16 capacidades del CV.
+salió de una llamada suelta a la API). Antes de medir se reescribió **solo el
+intent y las preferencias**, por las rutas de verdad (`/api/intent` y
+confirmar, `PUT /api/preferences`): AI infra y developer tools, seed o Series
+A, remoto desde Valencia innegociable, 120k de suelo, equity, y no a agencias
+ni a performance puro. El grafo no se tocó: las mismas 70 evidencias y 16
+capacidades del CV.
 
-En la base hay ahora diez oportunidades con `provenance = fixture`. Quitarlas
-es borrar `.amble-data/`, que se lleva el grafo por delante.
+Y ya no hay que borrar la carpeta para volver a medir:
+`npm run reset:opportunities` se lleva las oportunidades de fixture, sus
+lecturas y las llamadas al modelo, y deja el grafo, el intent y las
+preferencias donde estaban. `-- --all` se lleva también las de Manfred, que
+ahora mismo son 17.
 
 ### Decidido, no volver a abrirlo
 
@@ -183,11 +233,13 @@ segundos: una persona tarda más en escribir y contesta otras cosas. Es lo
 Antes de esa sesión: borrar `.amble-data/`. El intent ya está limpio (arriba),
 pero la base sigue teniendo dentro las diez fixtures de Opportunity Zero.
 
-Y el agujero real del producto, que no es código de estas pantallas: **no
-llega nada**. No hay fuente de ofertas que cruzar contra las preferencias. La
-pantalla de listening lo dice en voz alta ("Nothing is arriving yet") en vez
-de disimularlo, pero ahí está. Opportunity Zero no lo tapa — mete las ofertas
-a mano — pero contesta la otra mitad de la pregunta.
+El agujero de "no llega nada" está tapado a medias: Manfred entra sola, pero
+es una sola fuente y española. El copy de listening todavía dice "Nothing is
+arriving yet", y eso **ya no es verdad** en cuanto se sincroniza — hay que
+reescribirlo, y decidir si la pantalla cuenta cuántas ha mirado y descartado
+o si eso es exactamente el ruido que prometimos no hacer. Mi voto: no contar
+nada. El silencio es la respuesta, y un contador de "he mirado 1.650 ofertas
+por ti" es la métrica de vanidad que el spec prohíbe en §16.
 
 ## Decidido en User Zero, no volver a abrirlo
 
@@ -206,6 +258,13 @@ npm run dev                   # http://localhost:3000
 npm run check:model           # comprueba el modelo en 2 llamadas cortas
 npm run measure -- <cv.pdf>   # sesión entera por API, cronometrada
 npm run measure:opportunities # las diez fixtures, con el dev levantado
+npm run reset:opportunities   # quita las fixtures, deja el grafo
+```
+
+Para traer ofertas de Manfred: el botón del laboratorio, o
+
+```bash
+curl -X POST localhost:3000/api/sources/manfred   -H 'Content-Type: application/json' -d '{"limit":40,"maxEvaluations":10}'
 ```
 
 - Traza completa del grafo: http://localhost:3000/dev/user-zero

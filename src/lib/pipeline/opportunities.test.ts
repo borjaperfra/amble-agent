@@ -325,6 +325,9 @@ describe('evaluateOpportunity', () => {
       'decision_settled',
       'explanation_written',
       'decision_recorded',
+      // The message exists the moment the decision does, whether or not
+      // there is anywhere to send it yet.
+      'notification_queued',
     ])
   })
 })
@@ -356,6 +359,52 @@ describe('getPendingInterruption', () => {
       opportunity.id,
       'an answered interruption does not come back',
     )
+  })
+})
+
+// ─── The one message ──────────────────────────────────────────────────────
+
+describe('the message that goes out', () => {
+  it('says what the screen says, and is written even with nowhere to send it', async () => {
+    const opportunity = ingest('Halvard Mail', 'test-notice')
+    await pipeline.evaluateOpportunity(opportunity.id, runners())
+
+    const outbox = await import('../db/notifications')
+    const note = outbox.findNotification('opportunity', opportunity.id, 'email')
+    assert.ok(note, 'an interruption is written down whether or not it can be delivered')
+    // Nobody has said where to reach them, so there is nothing to send to —
+    // which is a different thing from a failure, and is recorded as one.
+    assert.equal(note.status, 'unconfigured')
+    assert.equal(note.address, null)
+
+    assert.match(note.subject, /Halvard Mail/)
+    assert.match(note.body, /Your Rep found something/)
+    // The evidence itself, so it is checkable by someone who never opens the app.
+    assert.match(note.body, /a thousand users to forty thousand/)
+    assert.match(note.body, /Nothing has gone to the company/)
+  })
+
+  it('does not write a second copy when the evaluation is run again', async () => {
+    const opportunity = ingest('Halvard Twice', 'test-notice-twice')
+    await pipeline.evaluateOpportunity(opportunity.id, runners())
+
+    const notify = await import('./notify')
+    const again = notify.queueInterruptionNotice(candidateId, opportunity.id)
+    assert.ok(again.length > 0)
+    assert.ok(
+      again.every((entry) => !entry.created),
+      'a retry after a restart must not mean a second message',
+    )
+  })
+
+  it('has nothing to send about an opportunity that was not an interruption', async () => {
+    const opportunity = ingest('Underpay Mail', 'test-notice-ignored')
+    await pipeline.evaluateOpportunity(
+      opportunity.id,
+      runners({ compensation: { min: 60_000, max: 70_000, currency: 'EUR', stated: null } }),
+    )
+    const outbox = await import('../db/notifications')
+    assert.equal(outbox.findNotification('opportunity', opportunity.id, 'email'), undefined)
   })
 })
 

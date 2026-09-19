@@ -47,6 +47,8 @@ export type JobKind =
   | 'plan_question'
   | 'build_profile'
   | 'evaluate_opportunity'
+  | 'deliver_notification'
+  | 'sync_manfred'
 
 export interface JobPayloads {
   process_source: { sourceId: string }
@@ -55,6 +57,8 @@ export interface JobPayloads {
   plan_question: Record<string, never>
   build_profile: Record<string, never>
   evaluate_opportunity: { opportunityId: string }
+  deliver_notification: { notificationId: string }
+  sync_manfred: { limit?: number; maxEvaluations?: number }
 }
 
 /**
@@ -74,6 +78,8 @@ const LANES = {
     'incorporate_answer',
     'build_profile',
     'evaluate_opportunity',
+    'deliver_notification',
+    'sync_manfred',
   ],
 } as const satisfies Record<string, readonly JobKind[]>
 
@@ -165,6 +171,20 @@ async function run(job: JobRow): Promise<void> {
       // second reading, or leave a second decision behind it.
       if (opportunity.status === 'decided') return
       await evaluateOpportunity(id)
+      return
+    }
+    case 'deliver_notification': {
+      const { deliverNotificationJob } = await import('./notify')
+      await deliverNotificationJob(String(payload.notificationId ?? ''))
+      return
+    }
+    case 'sync_manfred': {
+      const { syncManfredOffers } = await import('./manfred-sync')
+      await syncManfredOffers(job.candidate_id, {
+        limit: typeof payload.limit === 'number' ? payload.limit : undefined,
+        maxEvaluations:
+          typeof payload.maxEvaluations === 'number' ? payload.maxEvaluations : undefined,
+      })
       return
     }
     default:

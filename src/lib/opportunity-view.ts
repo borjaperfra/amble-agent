@@ -13,12 +13,14 @@ import {
   getLatestAssessment,
   getLatestDecision,
   getLatestRubric,
+  getOpportunity,
   getResponse,
   listAuditEvents,
   listOpportunities,
   listOpportunityModelRuns,
   listPendingInterruptions,
 } from './db/opportunities'
+import { listNotifications } from './db/notifications'
 import { queueStatus } from './pipeline/jobs'
 import type {
   Decision,
@@ -88,6 +90,18 @@ export interface OpportunityLabViewModel {
     unsupportedClaims: number
   }
   matrix: DecisionMatrixCell[]
+  /** What was sent, or why it was not. The promise was one message. */
+  notifications: {
+    id: string
+    channel: string
+    address: string | null
+    status: string
+    attempts: number
+    lastError: string | null
+    aboutId: string
+    createdAt: string
+    sentAt: string | null
+  }[]
   modelRuns: {
     id: string
     task: string
@@ -226,6 +240,17 @@ export function getOpportunityLabViewModel(): OpportunityLabViewModel {
       ),
     },
     matrix,
+    notifications: listNotifications(candidate.id).map((note) => ({
+      id: note.id,
+      channel: note.channel,
+      address: note.address,
+      status: note.status,
+      attempts: note.attempts,
+      lastError: note.last_error,
+      aboutId: note.about_id,
+      createdAt: note.created_at,
+      sentAt: note.sent_at,
+    })),
     modelRuns: listOpportunityModelRuns(candidate.id).map((run) => ({
       id: run.id,
       task: run.task,
@@ -266,13 +291,34 @@ export interface InterruptionView {
 export function getPendingInterruption(): InterruptionView | null {
   const candidate = getOrCreateCandidate()
   const pending = listPendingInterruptions(candidate.id)[0]
-  if (!pending) return null
+  return pending ? buildInterruption(candidate.id, pending.opportunity, pending.decision) : null
+}
 
-  const explanation = parse<Explanation | null>(pending.decision.explanation, null)
+/**
+ * The same view for one opportunity, answered or not.
+ *
+ * The message that goes out by email has to say what the screen says, word
+ * for word — two versions of why someone is being interrupted is two
+ * products. So both come through here.
+ */
+export function getInterruptionFor(opportunityId: string): InterruptionView | null {
+  const opportunity = getOpportunity(opportunityId)
+  if (!opportunity) return null
+  const decision = getLatestDecision(opportunityId)
+  if (!decision || decision.decision !== 'INTERRUPT') return null
+  return buildInterruption(opportunity.candidate_id, opportunity, decision)
+}
+
+function buildInterruption(
+  candidateId: string,
+  opportunity: { id: string; company: string; role: string; url: string | null },
+  decisionRow: { explanation: string | null },
+): InterruptionView | null {
+  const explanation = parse<Explanation | null>(decisionRow.explanation, null)
   if (!explanation) return null
 
-  const evidenceById = new Map(listEvidence(candidate.id).map((item) => [item.id, item.statement]))
-  const rubricRow = getLatestRubric(pending.opportunity.id)
+  const evidenceById = new Map(listEvidence(candidateId).map((item) => [item.id, item.statement]))
+  const rubricRow = getLatestRubric(opportunity.id)
   const rubric = rubricRow ? parse<OpportunityRubric | null>(rubricRow.rubric, null) : null
 
   const facts: { label: string; value: string }[] = []
@@ -301,10 +347,10 @@ export function getPendingInterruption(): InterruptionView | null {
   }
 
   return {
-    opportunityId: pending.opportunity.id,
-    company: pending.opportunity.company,
-    role: pending.opportunity.role,
-    url: pending.opportunity.url,
+    opportunityId: opportunity.id,
+    company: opportunity.company,
+    role: opportunity.role,
+    url: opportunity.url,
     headline: explanation.headline,
     whyShowing: explanation.whyShowing.text,
     whyYou: explanation.whyYou.map((claim) => ({

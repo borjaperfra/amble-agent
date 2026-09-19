@@ -20,9 +20,11 @@ export interface OpportunityRow {
   role: string
   url: string | null
   raw_text: string
-  /** 'manual' when pasted in, 'fixture' when it came from the test set. */
+  /** 'manual' when pasted in, 'fixture' from the test set, 'manfred' from the feed. */
   provenance: string
   fixture_key: string | null
+  /** The id the feed uses. Unique per candidate, so a resync brings it back rather than again. */
+  source_ref: string | null
   status: string
   status_detail: string | null
   created_at: string
@@ -117,13 +119,17 @@ export function insertOpportunity(row: {
   raw_text: string
   provenance: string
   fixture_key?: string | null
+  source_ref?: string | null
+  /** Screened out before any model saw it, with the reason in status_detail. */
+  status?: string
+  status_detail?: string | null
 }): OpportunityRow {
   const db = getDb()
   const id = newId('opp')
   const stamp = now()
   db.prepare(
-    `INSERT INTO opportunities (id, candidate_id, company, role, url, raw_text, provenance, fixture_key, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?)`,
+    `INSERT INTO opportunities (id, candidate_id, company, role, url, raw_text, provenance, fixture_key, source_ref, status, status_detail, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     row.candidate_id,
@@ -133,6 +139,9 @@ export function insertOpportunity(row: {
     row.raw_text,
     row.provenance,
     row.fixture_key ?? null,
+    row.source_ref ?? null,
+    row.status ?? 'received',
+    row.status_detail ?? null,
     stamp,
     stamp,
   )
@@ -159,6 +168,16 @@ export function findOpportunityByFixtureKey(
   return getDb()
     .prepare('SELECT * FROM opportunities WHERE candidate_id = ? AND fixture_key = ?')
     .get(candidateId, fixtureKey) as unknown as OpportunityRow | undefined
+}
+
+/** The same offer arriving from the feed again is the same offer. */
+export function findOpportunityBySourceRef(
+  candidateId: string,
+  sourceRef: string,
+): OpportunityRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM opportunities WHERE candidate_id = ? AND source_ref = ?')
+    .get(candidateId, sourceRef) as unknown as OpportunityRow | undefined
 }
 
 export function updateOpportunityStatus(

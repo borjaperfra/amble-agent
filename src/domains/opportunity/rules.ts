@@ -143,6 +143,11 @@ const PRESENCE: Record<WorkModel, number> = { remote: 0, hybrid: 1, onsite: 2 }
  * model thought to mention it. How material depends on the candidate: an
  * undisclosed salary matters to someone who named a floor and matters much
  * less to someone who never raised it.
+ *
+ * These are the only gaps that can stop an interruption, and they are marked
+ * `deterministic` to say so. Each one sits on something the candidate made a
+ * condition of, which is what makes it different in kind from the things the
+ * model notices are missing — those are worth saying, not worth silence.
  */
 export function structuralUnknowns(
   rubric: OpportunityRubric,
@@ -162,6 +167,7 @@ export function structuralUnknowns(
       description,
       materiality,
       resolvedBy: { type, question },
+      deterministic: true,
     })
 
   const compensationStated =
@@ -405,7 +411,7 @@ export function validateAnalysis(
   }
   for (const item of structuralUnknowns(rubric, side.constraints)) addUnknown(item)
   proposed.unknowns.forEach((item, index) => {
-    addUnknown({ ...item, id: item.id || `unk_model_${index + 1}` })
+    addUnknown({ ...item, id: item.id || `unk_model_${index + 1}`, deterministic: false })
   })
 
   return {
@@ -422,6 +428,8 @@ export interface DecisionSignals {
   hardFails: HardConstraintCheck[]
   /** Unknowns weighty enough to stop an interruption on their own. */
   blockingUnknowns: UnknownItem[]
+  /** Material gaps that travel with the interruption instead of stopping it. */
+  openQuestions: UnknownItem[]
   /** A material requirement met, with evidence behind it. */
   groundedSupport: EvidenceMatchItem[]
   alignedIntent: IntentMatchItem[]
@@ -433,7 +441,22 @@ export interface DecisionSignals {
 
 export function decisionSignals(analysis: MatchAnalysis): DecisionSignals {
   const hardFails = analysis.hardConstraints.filter((check) => check.verdict === 'FAIL')
-  const blockingUnknowns = analysis.unknowns.filter((item) => item.materiality === 'HIGH')
+
+  // Only a gap in something they made a condition of can buy silence. The
+  // first run of the ten fixtures showed why: the model finds material
+  // unknowns in every posting ever written, and letting each one veto an
+  // interruption meant nothing was ever worth their attention — including
+  // the fixture written to be unmissable. One of the three that stopped it
+  // was about *him*: we were not sure he had grown a developer audience
+  // specifically. Withholding a job from someone because we are unsure about
+  // them is backwards, and it is what the interview is for.
+  //
+  // The rest are not dropped. They ride into the message as what there is to
+  // consider, which is the part of the explanation that already exists for
+  // exactly this.
+  const material = analysis.unknowns.filter((item) => item.materiality === 'HIGH')
+  const blockingUnknowns = material.filter((item) => item.deterministic)
+  const openQuestions = material.filter((item) => !item.deterministic)
 
   const groundedSupport = analysis.evidenceMatch.filter(
     (item) =>
@@ -455,6 +478,7 @@ export function decisionSignals(analysis: MatchAnalysis): DecisionSignals {
   return {
     hardFails,
     blockingUnknowns,
+    openQuestions,
     groundedSupport,
     alignedIntent,
     misalignedIntent,
@@ -507,7 +531,7 @@ export function settleDecision(
     )
   } else if (proposed.decision === 'INTERRUPT') {
     if (signals.blockingUnknowns.length > 0) {
-      move('HOLD', `Material unknown: ${signals.blockingUnknowns[0].description}`)
+      move('HOLD', `Missing something they made a condition: ${signals.blockingUnknowns[0].description}`)
     } else if (!signals.interruptReady) {
       move(
         'HOLD',

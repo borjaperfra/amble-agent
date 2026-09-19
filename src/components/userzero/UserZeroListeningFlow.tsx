@@ -48,7 +48,11 @@ export default function UserZeroListeningFlow({
   vm: ListeningVm
   interruption: InterruptionView | null
 }) {
-  const [phase, setPhase] = useState<Phase>('arriving')
+  // Something is already waiting, so there is nothing to arrive at: skip
+  // straight to it. Sitting through "your Rep is listening" when your Rep
+  // has already found something is the wrong screen, and it is also the one
+  // someone opening a notification would land on.
+  const [phase, setPhase] = useState<Phase>(initialInterruption ? 'home' : 'arriving')
   const [interruption, setInterruption] = useState(initialInterruption)
   const [answered, setAnswered] = useState<CandidateResponse | null>(null)
   const [returnState, setReturnState] = useState(false)

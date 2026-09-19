@@ -87,6 +87,46 @@ export function getSttConfig(): SttConfig | null {
   }
 }
 
+export interface SmtpConfig {
+  host: string
+  port: number
+  user: string | null
+  password: string | null
+  /** What the message says it is from. Falls back to the login user. */
+  from: string
+  fromName: string
+  /** TLS from the first byte (465) rather than STARTTLS after EHLO (587). */
+  implicitTls: boolean
+  timeoutMs: number
+}
+
+/**
+ * Where the one message goes.
+ *
+ * Null when it is not set up, and the outbox says so out loud rather than
+ * pretending: a notification that was written and never sent is a different
+ * thing from one that was delivered, and the person is entitled to know
+ * which they have.
+ */
+export function getSmtpConfig(): SmtpConfig | null {
+  const host = process.env.AMBLE_SMTP_HOST?.trim()
+  if (!host) return null
+  const user = process.env.AMBLE_SMTP_USER?.trim() || null
+  const from = process.env.AMBLE_SMTP_FROM?.trim() || user
+  if (!from) return null
+  const port = readPositiveInt('AMBLE_SMTP_PORT', 587) ?? 587
+  return {
+    host,
+    port,
+    user,
+    password: process.env.AMBLE_SMTP_PASSWORD ?? null,
+    from,
+    fromName: process.env.AMBLE_SMTP_FROM_NAME?.trim() || 'Amble',
+    implicitTls: readBoolean('AMBLE_SMTP_IMPLICIT_TLS', port === 465),
+    timeoutMs: readPositiveInt('AMBLE_SMTP_TIMEOUT_MS', 20_000) ?? 20_000,
+  }
+}
+
 export function getModelConfig(): ModelConfig | null {
   const apiKey = process.env.AMBLE_MODEL_API_KEY?.trim()
   const modelId = process.env.AMBLE_MODEL_ID?.trim()

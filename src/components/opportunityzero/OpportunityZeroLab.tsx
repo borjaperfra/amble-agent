@@ -59,6 +59,7 @@ export default function OpportunityZeroLab({ initial }: { initial: OpportunityLa
   const [status, setStatus] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [sending, setSending] = useState(false)
+  const [pulling, setPulling] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -106,6 +107,36 @@ export default function OpportunityZeroLab({ initial }: { initial: OpportunityLa
       setStatus('No connection. Nothing was sent.')
     } finally {
       setSending(false)
+    }
+  }
+
+  /**
+   * Go and look at Manfred. The reading happens on the queue and the screen
+   * finds out afterwards, which is the same shape as everything else here.
+   */
+  async function pull() {
+    setPulling(true)
+    setFailed(false)
+    setStatus('Reading the feed. Offers that fail on pay or presence never reach the model.')
+    try {
+      const response = await fetch('/api/sources/manfred', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 40, maxEvaluations: 10 }),
+      })
+      const body = (await response.json()) as { error?: string; alreadyRunning?: boolean }
+      if (!response.ok) {
+        setFailed(true)
+        setStatus(body.error ?? 'The feed did not answer.')
+      } else if (body.alreadyRunning) {
+        setStatus('Already reading it.')
+      }
+      await refresh()
+    } catch {
+      setFailed(true)
+      setStatus('No connection. Nothing was fetched.')
+    } finally {
+      setPulling(false)
     }
   }
 
@@ -239,6 +270,14 @@ export default function OpportunityZeroLab({ initial }: { initial: OpportunityLa
             >
               Run Amble
             </button>
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={pulling}
+              onClick={() => void pull()}
+            >
+              Pull from Manfred
+            </button>
             <button type="button" className={styles.secondary} onClick={() => void refresh()}>
               Refresh
             </button>
@@ -291,6 +330,30 @@ export default function OpportunityZeroLab({ initial }: { initial: OpportunityLa
         {vm.opportunities.map((item) => (
           <OpportunityCard key={item.id} item={item} />
         ))}
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.h2}>What was sent</h2>
+        <div className={styles.card}>
+          {vm.notifications.length === 0 && (
+            <p className={styles.monoDim}>
+              Nothing to send yet. Only an interruption is ever sent anywhere.
+            </p>
+          )}
+          <ul className={styles.list}>
+            {vm.notifications.map((note) => (
+              <li key={note.id} className={styles.listItem}>
+                <span className={styles.monoDim}>{note.createdAt.slice(11, 19)}</span>{' '}
+                <span className={styles.monoId}>{note.channel}</span>{' '}
+                <span className={note.status === 'sent' ? styles.hit : styles.monoDim}>
+                  {note.status}
+                </span>{' '}
+                {note.address ?? '(nowhere to send it)'}
+                {note.lastError && <p className={styles.monoDim}>{note.lastError}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section className={styles.section}>
@@ -360,6 +423,12 @@ function OpportunityCard({ item }: { item: OpportunityTraceItem }) {
 
       {item.humanLabel?.comment && (
         <p className={styles.monoDim}>your note: {item.humanLabel.comment}</p>
+      )}
+
+      {/* Screened out by the free check on the feed's own numbers, before
+          anything reached a model. The reason is the point. */}
+      {item.status === 'screened_out' && item.statusDetail && (
+        <p className={styles.monoDim}>screened out: {item.statusDetail}</p>
       )}
 
       {decision && (

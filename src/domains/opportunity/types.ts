@@ -142,6 +142,16 @@ export interface UnknownItem {
   materiality: Materiality
   /** What would settle it. This is what makes HOLD an answer rather than a shrug. */
   resolvedBy: { type: NextActionType; question: string | null }
+  /**
+   * True when domain code worked this gap out from something the candidate
+   * made a condition of, rather than the model noticing it.
+   *
+   * It is the difference between "they never said what it pays, and you told
+   * me a number" and "the posting does not name your future manager". Only
+   * the first kind can stop an interruption; the second rides along in what
+   * there is to consider.
+   */
+  deterministic: boolean
 }
 
 export interface MatchAnalysis {

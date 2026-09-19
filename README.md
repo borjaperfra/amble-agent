@@ -35,6 +35,12 @@ Open http://localhost:3000. Building requires network access to `fonts.googleapi
 | `AMBLE_STT_MODEL` | Transcription model (`whisper`). Unset disables voice and leaves the text box. |
 | `AMBLE_STT_API_KEY` | Optional. Falls back to `AMBLE_MODEL_API_KEY`. |
 | `AMBLE_STT_LANGUAGE` | ISO-639-1 hint (`es`, `en`). Empty auto-detects. |
+| `AMBLE_SMTP_HOST` | Mail server for the one message. Empty means nothing is sent, and the outbox says so rather than pretending. |
+| `AMBLE_SMTP_PORT` | 587 (STARTTLS) or 465 (TLS from the first byte). Default 587. |
+| `AMBLE_SMTP_USER` / `AMBLE_SMTP_PASSWORD` | Both empty means no AUTH at all. |
+| `AMBLE_SMTP_FROM` / `AMBLE_SMTP_FROM_NAME` | What the message says it is from. Falls back to the user. |
+| `AMBLE_SMTP_IMPLICIT_TLS` | Force TLS from the first byte. Defaults to on for port 465. |
+| `AMBLE_BASE_URL` | Where the message tells them to go to answer. |
 
 Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly with a 503 — it never falls back to demo data.
 
@@ -79,12 +85,29 @@ With the flag active and `next dev` running:
 
 Local data lives in `.amble-data/` (SQLite + uploaded sources). Delete the folder to reset the experiment.
 
+## Where opportunities come from
+
+Two ways in, both landing in the same table and read by the same pipeline.
+
+**By hand**, pasted into the lab at `/dev/opportunity-zero`, which is how the ten calibration fixtures are run.
+
+**From Manfred**, via `POST /api/sources/manfred` or the button in the lab. Manfred publishes `sitemap-offers.xml` and allows everything in `robots.txt`, and each offer page carries the whole posting as JSON — salary, remote share, locations, requirements. No key and no private endpoint is touched. The sync reads one page at a time with a pause between them, never re-fetches an offer it already stored, and identifies itself in the User-Agent.
+
+What the feed states as numbers is checked in code before anything reaches a model: an offer paying under the floor, or asking for more presence than the candidate will give, is stored with the reason and never costs a call. With ~1,600 offers in the sitemap and about a minute of reasoning each, that screen is the difference between a click and a day of compute. Whatever survives it is capped by `maxEvaluations` per run.
+
+## What gets sent
+
+Only an interruption is sent anywhere — never a HOLD, never a digest. The message is written to an outbox table the moment the decision exists, then delivered by the same queue that runs everything else, with the same backoff. It says exactly what the listening screen says, because two versions of why somebody is being interrupted is two products.
+
+SMTP is spoken directly over `node:tls` (no dependency). With no mail server configured the message is still written and the outbox reads `unconfigured`: silence by accident and silence on purpose must not look the same.
+
 ## Tests and measurement
 
 ```bash
 npm test                      # node --test, no network and no real database
 npm run measure -- <cv.pdf>   # one full User Zero session over HTTP, timed
 npm run measure:opportunities # the ten opportunity fixtures, with next dev running
+npm run reset:opportunities   # clear the opportunities, keep the graph
 ```
 
 No test framework: Node 22 strips the types itself, and `scripts/test-resolve.mjs` resolves the `@/` alias and extensionless imports. Domain rules are tested with no database and no provider; the pipeline tests build a throwaway database in a temp directory and stub the four model calls.

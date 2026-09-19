@@ -474,6 +474,13 @@ export async function evaluateOpportunity(
     detail: { decisionId: decisionRow.id, decision: settled.decision },
   })
 
+  // Only an interruption is sent anywhere. A hold that quietly emailed
+  // somebody would be the digest this product exists not to be.
+  if (settled.decision === 'INTERRUPT') {
+    const { queueInterruptionNotice } = await import('./notify')
+    queueInterruptionNotice(candidateId, opportunityId)
+  }
+
   return {
     opportunityId,
     decision: settled.decision,

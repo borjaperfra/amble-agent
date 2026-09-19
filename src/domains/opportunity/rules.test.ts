@@ -334,6 +334,26 @@ describe('validateAnalysis', () => {
     assert.equal(salary[0].deterministic, true)
   })
 
+  it('never lets a model-proposed gap pass itself off as a condition', () => {
+    const analysis = validateAnalysis(
+      proposed({
+        unknowns: [
+          {
+            id: 'unk_manager',
+            side: 'opportunity',
+            description: 'The posting does not name who the role reports to.',
+            materiality: 'HIGH',
+            resolvedBy: { type: 'ASK_COMPANY', question: 'Who would I report to?' },
+            deterministic: true,
+          },
+        ],
+      }),
+      side,
+      rubric(),
+    )
+    assert.equal(analysis.unknowns.find((item) => item.id === 'unk_manager')?.deterministic, false)
+  })
+
   it('keeps the canonical id for a gap the model worded its own way', () => {
     const analysis = validateAnalysis(
       proposed({
@@ -344,6 +364,7 @@ describe('validateAnalysis', () => {
             description: 'The posting does not state what it pays!',
             materiality: 'HIGH',
             resolvedBy: { type: 'ASK_COMPANY', question: 'What does it pay?' },
+            deterministic: false,
           },
         ],
       }),
@@ -405,6 +426,7 @@ describe('settleDecision', () => {
       description: 'The posting does not state what it pays.',
       materiality: 'HIGH',
       resolvedBy: { type: 'ASK_COMPANY', question: 'What is the base salary range?' },
+      deterministic: true,
     }
     const settled = settleDecision(
       analysisWith({
@@ -459,6 +481,7 @@ describe('settleDecision', () => {
             description: 'The posting does not say whether this is remote.',
             materiality: 'HIGH',
             resolvedBy: { type: 'ASK_COMPANY', question: 'Is this role remote?' },
+            deterministic: true,
           },
         ],
       }),
@@ -474,6 +497,75 @@ describe('settleDecision', () => {
       proposal({ materialUnknowns: ['unk_invented'] }),
     )
     assert.deepEqual(settled.materialUnknowns, [])
+  })
+})
+
+describe('what a gap is allowed to do', () => {
+  const noticedByTheModel: UnknownItem = {
+    id: 'unk_channel_mix',
+    side: 'opportunity',
+    description: 'The posting does not say how much of the roadmap is paid acquisition.',
+    materiality: 'HIGH',
+    resolvedBy: { type: 'ASK_COMPANY', question: 'What share of it is paid acquisition?' },
+    deterministic: false,
+  }
+  const aboutThePerson: UnknownItem = {
+    id: 'unk_dev_audience',
+    side: 'candidate',
+    description: 'We do not know whether he has grown a developer audience specifically.',
+    materiality: 'HIGH',
+    resolvedBy: { type: 'ASK_CANDIDATE', question: 'Have you grown a developer audience?' },
+    deterministic: false,
+  }
+
+  it('lets an interruption through over gaps the model merely noticed', () => {
+    const settled = settleDecision(
+      analysisWith({
+        evidenceMatch: [groundedRequirement],
+        intentMatch: [alignedAspect],
+        unknowns: [noticedByTheModel, aboutThePerson],
+      }),
+      proposal(),
+    )
+    // This is the fix for the first real run, where ten fixtures produced no
+    // interruption at all: every posting is missing something material, and
+    // one of the three gaps that bought silence was about him rather than
+    // about the job.
+    assert.equal(settled.decision, 'INTERRUPT')
+    assert.equal(settled.overrideReason, null)
+  })
+
+  it('still stops on a gap in something they made a condition of', () => {
+    const settled = settleDecision(
+      analysisWith({
+        evidenceMatch: [groundedRequirement],
+        intentMatch: [alignedAspect],
+        unknowns: [
+          {
+            id: 'unk_work_model',
+            side: 'opportunity',
+            description: 'The posting does not say whether this is remote, hybrid or on-site.',
+            materiality: 'HIGH',
+            resolvedBy: { type: 'ASK_COMPANY', question: 'Is this role remote?' },
+            deterministic: true,
+          },
+        ],
+      }),
+      proposal(),
+    )
+    assert.equal(settled.decision, 'HOLD')
+    assert.match(settled.overrideReason ?? '', /made a condition/)
+  })
+
+  it('separates the two, so what does not stop it can still be said', () => {
+    const signals = decisionSignals(
+      analysisWith({ unknowns: [noticedByTheModel, aboutThePerson] }),
+    )
+    assert.equal(signals.blockingUnknowns.length, 0)
+    assert.deepEqual(
+      signals.openQuestions.map((item) => item.id),
+      ['unk_channel_mix', 'unk_dev_audience'],
+    )
   })
 })
 
@@ -502,6 +594,7 @@ describe('settleNextAction', () => {
           description: 'Equity is not mentioned.',
           materiality: 'MEDIUM',
           resolvedBy: { type: 'ASK_COMPANY', question: 'Is there equity, and on what terms?' },
+          deterministic: true,
         },
       ],
     })

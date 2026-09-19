@@ -139,7 +139,7 @@ ${json(input.intentReferences)}`
 
 // ─── 3. The four readings → a proposed decision ───────────────────────────
 
-export const DECISION_VERSION = 'v1'
+export const DECISION_VERSION = 'v2'
 
 export interface DecisionInput {
   opportunity: { company: string; role: string }
@@ -159,8 +159,11 @@ Three states:
 Principles:
 - Amble is not trying to find as many matches as possible. It is protecting someone's attention. Silence is the default, not the failure.
 - A hard constraint that genuinely FAILED normally means IGNORE.
-- Missing information is not evidence of mismatch. Material missing information normally means HOLD.
-- INTERRUPT needs both sides. A strong capability match with nothing they want is not enough. A perfect fit with what they want and no evidence they can do it is not enough.
+- Missing information is not evidence of mismatch.
+- Not every gap is a reason for silence. An unknown marked "deterministic": true sits on something this person made a condition of — what it pays, how much of it is on site, where it is — and a HIGH one of those normally means HOLD. An unknown marked "deterministic": false is something the reading noticed. Those are worth saying and are shown to them as what to consider; they are not, on their own, a reason to say nothing.
+- Evidence here is graded honestly rather than generously, so PARTIALLY_SUPPORTED is what a real match usually looks like. SUPPORTED across the board is not the bar and almost never happens.
+- INTERRUPT needs both sides, each pointed at something real: at least one REQUIRED or HIGH requirement met by evidence with ids behind it, and at least one ALIGNED intent aspect with ids behind it. Both present and nothing MISALIGNED is enough. Do not also require that nothing is unknown.
+- A strong capability match with nothing they want is not enough. A perfect fit with what they want and no evidence they can do it is not enough.
 - Do not interrupt because it is plausible.
 - A HOLD must say what would resolve it. Pick the single most useful next action, and write the actual question.
 
