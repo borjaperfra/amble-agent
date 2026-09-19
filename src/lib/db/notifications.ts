@@ -10,7 +10,7 @@
 import { getDb } from './db'
 import { newId, now } from './repo'
 
-export type NotificationChannel = 'email' | 'whatsapp'
+export type NotificationChannel = 'email' | 'whatsapp' | 'telegram'
 
 /**
  * `unconfigured` is a real outcome, not a failure. There is a difference

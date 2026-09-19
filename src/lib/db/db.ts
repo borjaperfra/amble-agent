@@ -177,6 +177,7 @@ function createDb(): DatabaseSync {
       notify_channel TEXT,
       notify_email TEXT,
       notify_whatsapp TEXT,
+      notify_telegram TEXT,
       updated_at TEXT NOT NULL
     );
 
@@ -361,6 +362,9 @@ function migrate(db: DatabaseSync): void {
 
   if (!has('model_runs', 'reasoning_output')) {
     db.exec('ALTER TABLE model_runs ADD COLUMN reasoning_output TEXT;')
+  }
+  if (!has('preferences', 'notify_telegram')) {
+    db.exec('ALTER TABLE preferences ADD COLUMN notify_telegram TEXT;')
   }
   if (!has('opportunities', 'source_ref')) {
     db.exec('ALTER TABLE opportunities ADD COLUMN source_ref TEXT;')

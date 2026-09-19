@@ -706,6 +706,7 @@ export interface PreferencesRow {
   notify_channel: string | null
   notify_email: string | null
   notify_whatsapp: string | null
+  notify_telegram: string | null
   updated_at: string
 }
 

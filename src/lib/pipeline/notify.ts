@@ -15,8 +15,9 @@
  * model that times out, with the same backoff and the same recovery.
  */
 
-import { getSmtpConfig } from '@/lib/features'
+import { getSmtpConfig, getTelegramConfig } from '@/lib/features'
 import { sendMail } from '@/lib/notify/smtp'
+import { sendTelegramMessage } from '@/lib/notify/telegram'
 import { getInterruptionFor, type InterruptionView } from '../opportunity-view'
 import { recordAuditEvent } from '../db/opportunities'
 import {
@@ -105,14 +106,7 @@ export function queueInterruptionNotice(
   if (!interruption) return []
 
   const preferences = readPreferences(candidateId)
-  const channels: NotificationChannel[] =
-    preferences.notifyChannel === 'both'
-      ? ['email', 'whatsapp']
-      : preferences.notifyChannel === 'email'
-        ? ['email']
-        : preferences.notifyChannel === 'whatsapp'
-          ? ['whatsapp']
-          : []
+  const channels: NotificationChannel[] = preferences.notifyChannels
 
   // They never said where. The interruption still exists and still shows on
   // the screen; there is simply nowhere to send it, and that is worth a row
@@ -125,9 +119,8 @@ export function queueInterruptionNotice(
 
   const queued: QueuedNotice[] = []
   for (const channel of channels) {
-    const address =
-      channel === 'email' ? preferences.notifyEmail : preferences.notifyWhatsapp
-    const deliverable = channel === 'email' && Boolean(address) && getSmtpConfig() !== null
+    const address = addressFor(preferences, channel)
+    const deliverable = Boolean(address) && configuredFor(channel)
     const notice = record(
       candidateId,
       opportunityId,
@@ -142,6 +135,24 @@ export function queueInterruptionNotice(
     }
   }
   return queued
+}
+
+function addressFor(
+  preferences: ReturnType<typeof readPreferences>,
+  channel: NotificationChannel,
+): string | null {
+  if (channel === 'email') return preferences.notifyEmail
+  if (channel === 'telegram') return preferences.notifyTelegram
+  return preferences.notifyWhatsapp
+}
+
+/** Whether there is anything on the server end of this channel at all. */
+function configuredFor(channel: NotificationChannel): boolean {
+  if (channel === 'email') return getSmtpConfig() !== null
+  if (channel === 'telegram') return getTelegramConfig() !== null
+  // WhatsApp needs a provider and a template Meta approved in advance. It is
+  // written down and left unsent rather than pretended away.
+  return false
 }
 
 function record(
@@ -190,35 +201,19 @@ export async function deliverNotificationJob(notificationId: string): Promise<vo
   if (!notification) throw new Error(`Notification ${notificationId} is gone.`)
   if (notification.status === 'sent') return
 
-  if (notification.channel !== 'email') {
-    markNotificationFailed(
-      notification.id,
-      `There is no way to send a ${notification.channel} message yet.`,
-      'unconfigured',
-    )
-    return
-  }
   if (!notification.address) {
     markNotificationFailed(notification.id, 'No address to send it to.', 'unconfigured')
     return
   }
 
-  const config = getSmtpConfig()
-  if (!config) {
-    markNotificationFailed(
-      notification.id,
-      'No mail server is configured. Set AMBLE_SMTP_HOST and AMBLE_SMTP_FROM.',
-      'unconfigured',
-    )
+  const send = deliveryFor(notification)
+  if (!send) {
+    markNotificationFailed(notification.id, unconfiguredReason(notification.channel), 'unconfigured')
     return
   }
 
   try {
-    await sendMail(config, {
-      to: notification.address,
-      subject: notification.subject,
-      text: notification.body,
-    })
+    await send()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The message did not go out.'
     markNotificationFailed(notification.id, message, 'failed')
@@ -233,4 +228,40 @@ export async function deliverNotificationJob(notificationId: string): Promise<vo
     event: 'notification_sent',
     detail: { channel: notification.channel, attempts: notification.attempts + 1 },
   })
+}
+
+/**
+ * How this one would actually go out, or null if there is no way to.
+ *
+ * Each channel gets exactly one place where it is sent, and the shape of the
+ * message never changes between them: what the screen says, word for word.
+ * Only the envelope differs.
+ */
+function deliveryFor(notification: NotificationRow): (() => Promise<void>) | null {
+  const address = notification.address
+  if (!address) return null
+
+  if (notification.channel === 'email') {
+    const config = getSmtpConfig()
+    return config
+      ? () => sendMail(config, { to: address, subject: notification.subject, text: notification.body })
+      : null
+  }
+
+  if (notification.channel === 'telegram') {
+    const config = getTelegramConfig()
+    return config ? () => sendTelegramMessage(config, address, notification.body) : null
+  }
+
+  return null
+}
+
+function unconfiguredReason(channel: NotificationChannel): string {
+  if (channel === 'email') {
+    return 'No mail server is configured. Set AMBLE_SMTP_HOST and AMBLE_SMTP_FROM.'
+  }
+  if (channel === 'telegram') {
+    return 'No bot is configured. Set AMBLE_TELEGRAM_BOT_TOKEN.'
+  }
+  return 'WhatsApp needs a provider and a template approved in advance. Nothing is sent yet.'
 }

@@ -438,3 +438,23 @@
     animation: none;
   }
 }
+
+.chipNote {
+  color: var(--ink-tertiary);
+  font-size: var(--text-label);
+}
+
+.reachHint {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+  max-width: 46ch;
+}
+
+.reachHint code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  background: var(--paper-dark);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}

@@ -16,13 +16,14 @@ interface ListeningVm {
   hasIntent: boolean
   intentConfirmed: boolean
   criteria: string[]
-  notifyChannel: string | null
+  notifyChannels: string[]
   notifyEmail: string | null
   notifyWhatsapp: string | null
+  notifyTelegram: string | null
 }
 
 type Phase = 'arriving' | 'home'
-type Channel = 'whatsapp' | 'email' | 'both'
+type Channel = 'email' | 'telegram' | 'whatsapp'
 
 const activationMs = 2600
 
@@ -35,10 +36,17 @@ const activationMs = 2600
  */
 const interruptionPollMs = 6000
 
-const CHANNELS: { value: Channel; label: string }[] = [
-  { value: 'whatsapp', label: 'WhatsApp' },
+/**
+ * Pick as many as you like. It used to be one, with "Both" as the third
+ * option, which worked while there were two of them.
+ */
+const CHANNELS: { value: Channel; label: string; note?: string }[] = [
   { value: 'email', label: 'Email' },
-  { value: 'both', label: 'Both' },
+  { value: 'telegram', label: 'Telegram' },
+  // Said out loud rather than quietly accepted: WhatsApp will not let me
+  // start a conversation without a template approved in advance, so there is
+  // nothing behind this one yet.
+  { value: 'whatsapp', label: 'WhatsApp', note: 'not working yet' },
 ]
 
 export default function UserZeroListeningFlow({
@@ -56,16 +64,20 @@ export default function UserZeroListeningFlow({
   const [interruption, setInterruption] = useState(initialInterruption)
   const [answered, setAnswered] = useState<CandidateResponse | null>(null)
   const [returnState, setReturnState] = useState(false)
-  const [channel, setChannel] = useState<Channel | null>((vm.notifyChannel as Channel) ?? null)
+  const [channels, setChannels] = useState<Channel[]>(vm.notifyChannels as Channel[])
   const [email, setEmail] = useState(vm.notifyEmail ?? '')
   const [whatsapp, setWhatsapp] = useState(vm.notifyWhatsapp ?? '')
+  const [telegram, setTelegram] = useState(vm.notifyTelegram ?? '')
   const [saved, setSaved] = useState<string | null>(null)
 
-  async function saveReach(next: Partial<{ channel: Channel | null; email: string; whatsapp: string }>) {
+  async function saveReach(
+    next: Partial<{ channels: Channel[]; email: string; whatsapp: string; telegram: string }>,
+  ) {
     const body = {
-      notifyChannel: next.channel !== undefined ? next.channel : channel,
+      notifyChannels: next.channels ?? channels,
       notifyEmail: next.email !== undefined ? next.email : email,
       notifyWhatsapp: next.whatsapp !== undefined ? next.whatsapp : whatsapp,
+      notifyTelegram: next.telegram !== undefined ? next.telegram : telegram,
     }
     try {
       const response = await fetch('/api/preferences', {
@@ -234,25 +246,31 @@ export default function UserZeroListeningFlow({
               <p className="kicker">When it happens</p>
               <p className={styles.dealLead}>Where should I reach you?</p>
               <div className={styles.reachChips}>
-                {CHANNELS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`${styles.reachChip} ${channel === option.value ? styles.reachChipOn : ''}`}
-                    aria-pressed={channel === option.value}
-                    onClick={() => {
-                      const next = channel === option.value ? null : option.value
-                      setChannel(next)
-                      setSaved(null)
-                      void saveReach({ channel: next })
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                {CHANNELS.map((option) => {
+                  const on = channels.includes(option.value)
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`${styles.reachChip} ${on ? styles.reachChipOn : ''}`}
+                      aria-pressed={on}
+                      onClick={() => {
+                        const next = on
+                          ? channels.filter((value) => value !== option.value)
+                          : [...channels, option.value]
+                        setChannels(next)
+                        setSaved(null)
+                        void saveReach({ channels: next })
+                      }}
+                    >
+                      {option.label}
+                      {option.note ? <span className={styles.chipNote}> · {option.note}</span> : null}
+                    </button>
+                  )
+                })}
               </div>
 
-              {(channel === 'email' || channel === 'both') && (
+              {channels.includes('email') && (
                 <div className={styles.reachFields}>
                   <input
                     type="email"
@@ -269,7 +287,28 @@ export default function UserZeroListeningFlow({
                 </div>
               )}
 
-              {(channel === 'whatsapp' || channel === 'both') && (
+              {channels.includes('telegram') && (
+                <div className={styles.reachFields}>
+                  <input
+                    type="text"
+                    className={styles.reachInput}
+                    placeholder="Your chat id"
+                    aria-label="Telegram chat id"
+                    value={telegram}
+                    onChange={(event) => {
+                      setTelegram(event.target.value)
+                      setSaved(null)
+                    }}
+                    onBlur={() => void saveReach({})}
+                  />
+                  <p className={styles.reachHint}>
+                    Message the bot once and run <code>npm run telegram:whoami</code>; it will tell
+                    you the number.
+                  </p>
+                </div>
+              )}
+
+              {channels.includes('whatsapp') && (
                 <div className={styles.reachFields}>
                   <input
                     type="tel"
@@ -287,7 +326,7 @@ export default function UserZeroListeningFlow({
               )}
 
               <p className={styles.reachStatus} role="status">
-                {saved ?? (channel === null ? 'Pick one and I will remember it.' : '')}
+                {saved ?? (channels.length === 0 ? 'Pick one and I will remember it.' : '')}
               </p>
             </section>
           </>

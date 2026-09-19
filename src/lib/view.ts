@@ -272,9 +272,10 @@ export function getListeningViewModel(): {
   intentConfirmed: boolean
   /** The checkable half: what an offer can be measured against. */
   criteria: string[]
-  notifyChannel: string | null
+  notifyChannels: string[]
   notifyEmail: string | null
   notifyWhatsapp: string | null
+  notifyTelegram: string | null
 } {
   const candidate = getOrCreateCandidate()
   const intent = getLatestIntent(candidate.id)
@@ -286,9 +287,10 @@ export function getListeningViewModel(): {
     hasIntent: Boolean(intent),
     intentConfirmed: Boolean(intent?.confirmed_at),
     criteria: preferencesAsLines(preferences),
-    notifyChannel: preferences.notifyChannel,
+    notifyChannels: preferences.notifyChannels,
     notifyEmail: preferences.notifyEmail,
     notifyWhatsapp: preferences.notifyWhatsapp,
+    notifyTelegram: preferences.notifyTelegram,
   }
 }
 

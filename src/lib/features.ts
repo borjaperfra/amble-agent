@@ -107,6 +107,24 @@ export function getSourceSyncIntervalMs(): number | null {
   return Number.isFinite(value) && value > 0 ? Math.round(value * 3_600_000) : null
 }
 
+export interface TelegramConfig {
+  token: string
+  timeoutMs: number
+}
+
+/**
+ * A bot token, and that is the whole setup.
+ *
+ * No template to get approved, no business verification, no number to
+ * provision — which is why the interruption arrives here in full and arrives
+ * on WhatsApp as a link to it.
+ */
+export function getTelegramConfig(): TelegramConfig | null {
+  const token = process.env.AMBLE_TELEGRAM_BOT_TOKEN?.trim()
+  if (!token) return null
+  return { token, timeoutMs: readPositiveInt('AMBLE_TELEGRAM_TIMEOUT_MS', 15_000) ?? 15_000 }
+}
+
 export interface SmtpConfig {
   host: string
   port: number

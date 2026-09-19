@@ -40,6 +40,7 @@ Open http://localhost:3000. Building requires network access to `fonts.googleapi
 | `AMBLE_SMTP_USER` / `AMBLE_SMTP_PASSWORD` | Both empty means no AUTH at all. |
 | `AMBLE_SMTP_FROM` / `AMBLE_SMTP_FROM_NAME` | What the message says it is from. Falls back to the user. |
 | `AMBLE_SMTP_IMPLICIT_TLS` | Force TLS from the first byte. Defaults to on for port 465. |
+| `AMBLE_TELEGRAM_BOT_TOKEN` | Bot token from @BotFather. Empty means nothing is sent there. |
 | `AMBLE_BASE_URL` | Where the message tells them to go to answer. |
 | `AMBLE_SOURCE_SYNC_HOURS` | How often to look for new offers on its own. Empty or 0 means only when asked. |
 | `AMBLE_ATS_BOARDS` | Company boards to read, e.g. `greenhouse:vercel,ashby:posthog`. |
@@ -122,7 +123,9 @@ Set `AMBLE_SOURCE_SYNC_HOURS` and it goes on its own. There is no cron daemon: t
 
 Only an interruption is sent anywhere — never a HOLD, never a digest. The message is written to an outbox table the moment the decision exists, then delivered by the same queue that runs everything else, with the same backoff. It says exactly what the listening screen says, because two versions of why somebody is being interrupted is two products.
 
-SMTP is spoken directly over `node:tls` (no dependency). With no mail server configured the message is still written and the outbox reads `unconfigured`: silence by accident and silence on purpose must not look the same.
+Three channels, picked on the listening screen. **Telegram** gets the whole thing — headline, why it is being shown, the evidence behind each claim, what is still unknown — because it has no templates and no approvals: a bot token is the entire setup (`npm run telegram:whoami` finds your chat id). **Email** gets the same text over SMTP, spoken directly over `node:tls` with no dependency. **WhatsApp** is offered and does not work yet, and says so on the screen: Meta will not let a business start a conversation without a template approved in advance, so the message there could only ever be a line and a link, and the explanation is the product.
+
+With a channel picked but nothing configured behind it, the message is still written and the outbox reads `unconfigured`: silence by accident and silence on purpose must not look the same.
 
 ## Tests and measurement
 
@@ -132,6 +135,7 @@ npm run measure -- <cv.pdf>   # one full User Zero session over HTTP, timed
 npm run measure:opportunities # the ten calibration fixtures, with next dev running
 npm run measure:gaps          # the eight gap fixtures
 npm run reset:opportunities   # clear the opportunities, keep the graph
+npm run telegram:whoami       # which chat id is yours
 ```
 
 Two fixture sets, measured apart. **Calibration** is ten different ways of being nearly right, and its numbers are the two errors that matter: NO × INTERRUPT is noise, YES × IGNORE is a miss. **Gaps** is eight offers that all fit, each missing or contradicting exactly one thing, and its number is whether a hold asks the one right question. Averaging them together would hide both.
