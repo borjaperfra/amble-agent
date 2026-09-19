@@ -3,6 +3,7 @@ import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { findOpportunityByFixtureKey } from '@/lib/db/opportunities'
 import { ingestOpportunity } from '@/lib/pipeline/opportunities'
+import { ensureManfredSyncScheduled } from '@/lib/pipeline/manfred-sync'
 import { enqueue, queueStatus, resumeQueue } from '@/lib/pipeline/jobs'
 import { getOpportunityLabViewModel } from '@/lib/opportunity-view'
 import { HUMAN_LABELS, type HumanLabel } from '@/domains/opportunity/types'
@@ -15,6 +16,7 @@ export async function GET() {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
   resumeQueue()
+  ensureManfredSyncScheduled(getOrCreateCandidate().id)
   return NextResponse.json(getOpportunityLabViewModel())
 }
 

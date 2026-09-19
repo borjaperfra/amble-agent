@@ -41,6 +41,7 @@ Open http://localhost:3000. Building requires network access to `fonts.googleapi
 | `AMBLE_SMTP_FROM` / `AMBLE_SMTP_FROM_NAME` | What the message says it is from. Falls back to the user. |
 | `AMBLE_SMTP_IMPLICIT_TLS` | Force TLS from the first byte. Defaults to on for port 465. |
 | `AMBLE_BASE_URL` | Where the message tells them to go to answer. |
+| `AMBLE_MANFRED_SYNC_HOURS` | How often to look for new offers on its own. Empty or 0 means only when asked. |
 
 Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly with a 503 — it never falls back to demo data.
 
@@ -102,6 +103,8 @@ No key and nothing private. The shape of that first call shapes the whole sync: 
 
 In practice that is 13 of 17 dropped for nothing and 4 downloaded. With about a minute of reasoning per offer, that screen is the difference between a click and a long afternoon. Whatever survives is capped by `maxEvaluations` per run.
 
+Set `AMBLE_MANFRED_SYNC_HOURS` and it goes on its own. There is no cron daemon: the queue already runs things later and survives restarts, so the sync puts the next one on the queue before it finishes, and the endpoints the screens poll put it back if it ever went missing. It runs while the server does.
+
 ## What gets sent
 
 Only an interruption is sent anywhere — never a HOLD, never a digest. The message is written to an outbox table the moment the decision exists, then delivered by the same queue that runs everything else, with the same backoff. It says exactly what the listening screen says, because two versions of why somebody is being interrupted is two products.
@@ -113,9 +116,12 @@ SMTP is spoken directly over `node:tls` (no dependency). With no mail server con
 ```bash
 npm test                      # node --test, no network and no real database
 npm run measure -- <cv.pdf>   # one full User Zero session over HTTP, timed
-npm run measure:opportunities # the ten opportunity fixtures, with next dev running
+npm run measure:opportunities # the ten calibration fixtures, with next dev running
+npm run measure:gaps          # the eight gap fixtures
 npm run reset:opportunities   # clear the opportunities, keep the graph
 ```
+
+Two fixture sets, measured apart. **Calibration** is ten different ways of being nearly right, and its numbers are the two errors that matter: NO × INTERRUPT is noise, YES × IGNORE is a miss. **Gaps** is eight offers that all fit, each missing or contradicting exactly one thing, and its number is whether a hold asks the one right question. Averaging them together would hide both.
 
 No test framework: Node 22 strips the types itself, and `scripts/test-resolve.mjs` resolves the `@/` alias and extensionless imports. Domain rules are tested with no database and no provider; the pipeline tests build a throwaway database in a temp directory and stub the four model calls.
 

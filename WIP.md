@@ -121,6 +121,92 @@ CRO manda"). No es ninguno de los dos errores que cuentan, pero es el borde:
 si en la próxima tanda aparecen más MAYBE arriba, la barra se ha aflojado
 demasiado. La medida está para eso.
 
+### El conjunto de huecos — ocho que encajan, cada una rota por un sitio
+
+`npm run measure:gaps`. Ocho ofertas que **todas** deberían interesarle:
+growth o marketing, AI infra o developer tools, early stage, remoto, por
+encima del suelo, con equity, ninguna agencia ni performance. Lo que se mide
+aquí no es si distingue un casi-match — eso es el otro conjunto — sino si,
+cuando falta algo, **pregunta lo que hay que preguntar**.
+
+| | INTERRUPT | HOLD | IGNORE |
+| --- | --- | --- | --- |
+| **YES** (1) | 1 | 0 | 0 |
+| **MAYBE** (7) | 0 | 5 | 2 |
+
+Los cinco HOLD preguntaron, y preguntaron bien:
+
+- sin sueldo → *"What is the base salary range for this Head of Growth role,
+  and can you employ someone based in Valencia?"*
+- sin modelo de trabajo → *"…could someone perform it fully remotely from
+  Valencia without relocating or attending a weekly office?"*
+- "competitive" → *"What is the base salary range and currency?"*
+- en dólares → *"Is the 145,000-165,000 denominated in USD or EUR, and is that
+  base before bonus?"*
+- sin etapa → RESEARCH: *"What stage is Corbel at, how much has it raised, and
+  how many people are on the team today?"*
+
+Cero holds sin pregunta, cero afirmaciones sin respaldo.
+
+**Los dos MAYBE que salieron IGNORE son la discusión.** Ninguno es de los dos
+errores que cuentan, pero en los dos habría sido mejor preguntar que callar:
+
+- `gap-contradictory-location` dice "FULLY REMOTE" arriba y "cuatro días en la
+  oficina de Madrid" abajo. La rúbrica lo resolvió en silencio por lo estricto
+  (híbrido) y se cayó por constraint. Protege, sí — pero una contradicción no
+  es un dato, es una pregunta.
+- `gap-scope-ambiguous` se titula Head of Growth y describe a un jefe de SDRs.
+  El modelo propuso HOLD y **las reglas lo bajaron a IGNORE**, porque el
+  propio modelo había propuesto un hard constraint trazable ("reporta al CEO y
+  manda en todo") que fallaba. Defendible, y aun así: preguntar de qué puesto
+  hablamos habría costado una frase.
+
+**Y lo más importante que enseña este conjunto: cero `ASK_CANDIDATE`.** Las
+cinco preguntas van a la empresa o a una búsqueda — a alguien con quien Amble
+no puede hablar. La única pregunta que Amble *sí* puede hacer, a él, no se usó
+ni una vez, ni siquiera en `gap-about-the-candidate`, que está escrita para
+provocarla (el anuncio no calla nada; lo que falta es saber si él ha llevado
+una comunidad). Ahí salió INTERRUPT, con la duda abajo, en "lo que no sé
+todavía" — que es coherente con su etiqueta YES, pero no es el bucle.
+
+Cerrar ese bucle —preguntar, incorporar la respuesta al grafo, volver a
+evaluar— es lo siguiente de Opportunity Zero, y la maquinaria ya existe: es la
+entrevista. Falta unir `ASK_CANDIDATE` con una `uncertainty` y volver a correr
+la oportunidad cuando se resuelva.
+
+**De regalo, una prueba que no buscaba:** a mitad de la tanda se cayó el DNS.
+26 de 34 llamadas a la rúbrica fallaron con ENOTFOUND, la cola reintentó con
+su backoff y terminó las ocho sola. Nadie tocó nada.
+
+### Un HOLD también necesita evidencia
+
+La regla que salió de las ofertas reales, ya aplicada: si los requisitos
+materiales del puesto se evaluaron y **ninguno** está soportado por evidencia
+citable, un HOLD propuesto baja a IGNORE. Esperar no convierte a un marketero
+en backend, y ninguna respuesta de la empresa lo cambia.
+
+Con cuidado de no romper lo otro: si el anuncio no dice qué pide (el caso de
+`opp-thin-posting`), los requisitos no se han evaluado y el hold se queda,
+porque ahí el hueco sí es de la empresa. La tanda de calibración salió
+idéntica a la anterior, que era la comprobación.
+
+### Mirar solo, sin cron
+
+`AMBLE_MANFRED_SYNC_HOURS=6` y va sola. No hay demonio: la cola ya sabe correr
+algo más tarde y sobrevivir a un reinicio, así que la sincronización pone la
+siguiente en la cola antes de terminar — en un `finally`, porque una
+sincronización que falla y no reprograma deja de escuchar para siempre y en
+silencio, que es el único fallo que este producto no puede tener. Y los dos
+endpoints que las pantallas ya sondean la vuelven a poner si desapareciera.
+
+Corre mientras corra el servidor, que para algo que se usa desde el móvil es
+lo mismo.
+
+Eso destapó un fallo que llevaba ahí desde el principio: `queueStatus.busy`
+contaba como "ocupado" un trabajo programado dentro de cinco horas, así que
+el laboratorio se habría puesto a sondear cada dos segundos toda la tarde.
+Ahora solo cuenta lo que corre o vence en el próximo minuto.
+
 ### Las ofertas ya llegan solas
 
 **Manfred sí tiene API pública**, y es la que usa su propia página:

@@ -87,6 +87,23 @@ export function getSttConfig(): SttConfig | null {
   }
 }
 
+/**
+ * How often to go and look for new offers, in hours. Unset or zero means
+ * never on its own, and the button in the lab is the only way in.
+ *
+ * There is no cron daemon here and there does not need to be: the queue
+ * already knows how to run something later and survive a restart, so a
+ * recurring sync is a job that puts the next one on the queue before it
+ * finishes. It runs while the server does, which for something used from a
+ * phone is the same thing.
+ */
+export function getManfredSyncIntervalMs(): number | null {
+  const hours = process.env.AMBLE_MANFRED_SYNC_HOURS?.trim()
+  if (!hours) return null
+  const value = Number.parseFloat(hours)
+  return Number.isFinite(value) && value > 0 ? Math.round(value * 3_600_000) : null
+}
+
 export interface SmtpConfig {
   host: string
   port: number

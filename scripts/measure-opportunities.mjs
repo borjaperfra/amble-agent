@@ -20,11 +20,26 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { opportunityFixtures } from '../src/fixtures/opportunities.ts'
+import { gapFixtures, opportunityFixtures } from '../src/fixtures/opportunities.ts'
 
 const BASE = process.env.AMBLE_MEASURE_BASE ?? 'http://localhost:3000'
 const TIMEOUT_MS = Number.parseInt(process.env.AMBLE_MEASURE_TIMEOUT_MS ?? '', 10) || 1_800_000
-const only = process.argv.slice(2).filter((arg) => !arg.startsWith('-'))
+const args = process.argv.slice(2)
+const only = args.filter((arg) => !arg.startsWith('-'))
+
+/**
+ * Two sets, measured apart.
+ *
+ * The calibration set asks whether Amble can tell a near-miss from a match,
+ * and its numbers are the two errors. The gap set is all matches, and its
+ * number is whether a hold asks the one right question. Averaging them
+ * together would hide both.
+ */
+const set = args.includes('--gaps')
+  ? 'gaps'
+  : args.includes('--all')
+    ? 'all'
+    : 'calibration'
 
 const s = (ms) => `${(ms / 1000).toFixed(1)}s`
 const now = () => Date.now()
@@ -64,9 +79,12 @@ async function waitForServer() {
 // -- Set up ------------------------------------------------------------
 await waitForServer()
 
+const pool =
+  set === 'gaps' ? gapFixtures : set === 'all' ? [...opportunityFixtures, ...gapFixtures] : opportunityFixtures
+
 const fixtures = only.length
-  ? opportunityFixtures.filter((fixture) => only.some((key) => fixture.key.includes(key)))
-  : opportunityFixtures
+  ? pool.filter((fixture) => only.some((key) => fixture.key.includes(key)))
+  : pool
 
 if (fixtures.length === 0) {
   console.error(`No fixture matches ${only.join(', ')}.`)
@@ -85,6 +103,7 @@ console.log(`server        ${BASE}`)
 console.log(
   `against       ${vm.capabilitiesCount} capabilities, ${vm.evidenceCount} pieces of evidence`,
 )
+console.log(`set           ${set}`)
 console.log(`fixtures      ${fixtures.length}`)
 console.log()
 
@@ -215,13 +234,24 @@ console.log(
 console.log(
   `Misses  (YES x IGNORE)     ${misses.length}${misses.length ? `  ${misses.map((row) => row.key).join(', ')}` : ''}`,
 )
+const holds = decided.filter((row) => row.decision === 'HOLD')
+const asked = holds.filter((row) => Boolean(row.nextBestAction?.question))
 console.log(`Rules overrode the model   ${overrides.length} of ${decided.length}`)
+console.log(
+  `Holds that asked something ${asked.length} of ${holds.length}${
+    holds.length ? `  (${[...new Set(asked.map((row) => row.nextBestAction.type))].join(', ')})` : ''
+  }`,
+)
 console.log(`Unsupported claims         ${unsupported}  (target: 0)`)
 console.log(`Holds with nothing to ask  ${holdsWithoutQuestion.length}  (target: 0)`)
 console.log(`Undecided                  ${rows.length - decided.length}`)
 
+// Only this run's calls. The table is otherwise a mix of every evaluation
+// the database has ever held, including whatever the feed brought in
+// yesterday, and the averages stop meaning anything.
+const startedAtIso = new Date(startedAt).toISOString()
 const byTask = new Map()
-for (const run of vm.modelRuns) {
+for (const run of vm.modelRuns.filter((run) => run.createdAt >= startedAtIso)) {
   const entry = byTask.get(run.task) ?? { calls: 0, failures: 0, total: 0, worst: 0 }
   entry.calls += 1
   if (!run.ok) entry.failures += 1

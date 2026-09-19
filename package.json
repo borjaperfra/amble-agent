@@ -11,6 +11,7 @@
     "measure": "node --env-file=.env.local scripts/measure-run.mjs",
     "reset:opportunities": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/reset-opportunities.mjs",
     "measure:opportunities": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/measure-opportunities.mjs",
+    "measure:gaps": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/measure-opportunities.mjs --gaps",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/test-setup.mjs --test \"src/**/*.test.ts\""
   },
   "dependencies": {

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
 import { getPendingInterruption } from '@/lib/opportunity-view'
 import { resumeQueue } from '@/lib/pipeline/jobs'
+import { getOrCreateCandidate } from '@/lib/db/repo'
+import { ensureManfredSyncScheduled } from '@/lib/pipeline/manfred-sync'
 
 export const runtime = 'nodejs'
 
@@ -19,5 +21,9 @@ export async function GET() {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
   resumeQueue()
+  // The listening screen asks this every few seconds, which makes it the
+  // cheapest heartbeat in the app: if the recurring sync is configured and
+  // nothing is queued, this is where it gets put back on.
+  ensureManfredSyncScheduled(getOrCreateCandidate().id)
   return NextResponse.json({ interruption: getPendingInterruption() })
 }

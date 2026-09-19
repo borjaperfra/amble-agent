@@ -432,6 +432,14 @@ export interface DecisionSignals {
   openQuestions: UnknownItem[]
   /** A material requirement met, with evidence behind it. */
   groundedSupport: EvidenceMatchItem[]
+  /**
+   * Whether the job's material requirements were assessed at all. A posting
+   * that states nothing is a different situation from one this person
+   * cannot do, and only the second is a reason to stop.
+   */
+  evidenceAssessed: boolean
+  /** Material requirements with anything positive and cited behind them. */
+  supportedMaterial: EvidenceMatchItem[]
   alignedIntent: IntentMatchItem[]
   misalignedIntent: IntentMatchItem[]
   /** Anything at all pointing the right way. */
@@ -458,9 +466,16 @@ export function decisionSignals(analysis: MatchAnalysis): DecisionSignals {
   const blockingUnknowns = material.filter((item) => item.deterministic)
   const openQuestions = material.filter((item) => !item.deterministic)
 
-  const groundedSupport = analysis.evidenceMatch.filter(
+  const materialRequirements = analysis.evidenceMatch.filter((item) =>
+    isMaterial(item.importance),
+  )
+  const groundedSupport = materialRequirements.filter(
+    (item) => item.verdict === 'SUPPORTED' && item.evidenceIds.length > 0,
+  )
+  const supportedMaterial = materialRequirements.filter(
     (item) =>
-      item.verdict === 'SUPPORTED' && item.evidenceIds.length > 0 && isMaterial(item.importance),
+      (item.verdict === 'SUPPORTED' || item.verdict === 'PARTIALLY_SUPPORTED') &&
+      item.evidenceIds.length > 0,
   )
   const anySupport = analysis.evidenceMatch.some(
     (item) =>
@@ -480,6 +495,8 @@ export function decisionSignals(analysis: MatchAnalysis): DecisionSignals {
     blockingUnknowns,
     openQuestions,
     groundedSupport,
+    evidenceAssessed: materialRequirements.length > 0,
+    supportedMaterial,
     alignedIntent,
     misalignedIntent,
     positiveSignal: anySupport || alignedIntent.length > 0 || softAlignment,
@@ -547,6 +564,15 @@ export function settleDecision(
     // way and nothing material is missing, there is nothing to wait for.
     if (!signals.positiveSignal && signals.blockingUnknowns.length === 0) {
       move('IGNORE', 'Nothing supports it and nothing is missing that would change that.')
+    } else if (signals.evidenceAssessed && signals.supportedMaterial.length === 0) {
+      // The other way a hold can be empty, and the one real offers found:
+      // remote, well paid, the right stage — and a job this person has no
+      // evidence of being able to do. That is not a gap the company can
+      // close by answering a question. It is a different job.
+      move(
+        'IGNORE',
+        'Nothing this job materially asks for is supported by evidence we can point at. Waiting would not change that.',
+      )
     }
   } else if (signals.positiveSignal && signals.blockingUnknowns.length > 0) {
     move('HOLD', `Not a mismatch, a gap: ${signals.blockingUnknowns[0].description}`)

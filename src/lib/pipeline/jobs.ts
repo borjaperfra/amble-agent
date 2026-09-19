@@ -179,12 +179,19 @@ async function run(job: JobRow): Promise<void> {
       return
     }
     case 'sync_manfred': {
-      const { syncManfredOffers } = await import('./manfred-sync')
-      await syncManfredOffers(job.candidate_id, {
-        limit: typeof payload.limit === 'number' ? payload.limit : undefined,
-        maxEvaluations:
-          typeof payload.maxEvaluations === 'number' ? payload.maxEvaluations : undefined,
-      })
+      const { syncManfredOffers, ensureManfredSyncScheduled } = await import('./manfred-sync')
+      try {
+        await syncManfredOffers(job.candidate_id, {
+          limit: typeof payload.limit === 'number' ? payload.limit : undefined,
+          maxEvaluations:
+            typeof payload.maxEvaluations === 'number' ? payload.maxEvaluations : undefined,
+        })
+      } finally {
+        // Before anything else can go wrong: a sync that fails and does not
+        // put the next one on the queue stops listening for good, quietly,
+        // which is the one failure this product cannot have.
+        ensureManfredSyncScheduled(job.candidate_id)
+      }
       return
     }
     default:
@@ -273,17 +280,28 @@ export interface QueueStatus {
   recentErrors: string[]
 }
 
+/** A minute out is still "any moment now". Five hours out is not. */
+const SOON_MS = 60_000
+
 export function queueStatus(candidateId: string): QueueStatus {
   const active = listActiveJobs(candidateId)
   const running = active.find((job) => job.status === 'running')
   const waiting = active.filter((job) => job.status === 'pending')
   const backingOff = waiting.filter((job) => job.attempts > 0)
 
+  // A recurring sync sits on the queue for hours between runs. Counting it
+  // as work in progress would leave every screen polling every two seconds
+  // all afternoon, waiting for something that is not happening yet.
+  const soon = active.filter(
+    (job) =>
+      job.status === 'running' || new Date(job.run_after).getTime() - Date.now() < SOON_MS,
+  )
+
   return {
-    busy: active.length > 0,
-    pending: waiting.length,
+    busy: soon.length > 0,
+    pending: soon.filter((job) => job.status === 'pending').length,
     running: (running?.kind as JobKind) ?? null,
-    kinds: [...new Set(active.map((job) => job.kind as JobKind))],
+    kinds: [...new Set(soon.map((job) => job.kind as JobKind))],
     retrying: backingOff.length > 0,
     nextAttemptAt: backingOff[0]?.run_after ?? null,
     recentErrors: listFailedJobs(candidateId).map(
@@ -294,6 +312,17 @@ export function queueStatus(candidateId: string): QueueStatus {
 
 export function hasPendingKind(candidateId: string, kind: JobKind): boolean {
   return listActiveJobs(candidateId).some((job) => job.kind === kind)
+}
+
+/**
+ * Waiting, as opposed to waiting or running. A job that wants to put its own
+ * successor on the queue has to ask this one: it is itself still running,
+ * and would otherwise always find a reason not to.
+ */
+export function hasQueuedKind(candidateId: string, kind: JobKind): boolean {
+  return listActiveJobs(candidateId).some(
+    (job) => job.kind === kind && job.status === 'pending',
+  )
 }
 
 /**

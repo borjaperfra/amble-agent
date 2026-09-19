@@ -208,3 +208,162 @@ Requirements: you have built a developer audience, you are technical enough to b
 Berlin, four days on site, relocation support available. 130.000 - 145.000 euros plus equity.`,
   },
 ]
+
+/**
+ * The gap set.
+ *
+ * Eight offers that all fit: growth or marketing leadership, AI
+ * infrastructure or developer tools, early stage, remote, at or above the
+ * floor, equity, and not one of them an agency or a paid-acquisition job. On
+ * the calibration set the question was whether Amble can tell a near-miss
+ * from a match. Here it is not — every one of these should be interesting.
+ *
+ * What each is missing, or gets wrong, is the test. One thing per fixture,
+ * so that when the answer is HOLD there is exactly one right question to ask
+ * and it is obvious whether Amble asked it. That question is the product: a
+ * hold that cannot say what would end it is a shrug.
+ *
+ * The labels are mostly MAYBE on purpose. Somebody who wants this job still
+ * would not say yes without knowing what it pays.
+ */
+export const gapFixtures: OpportunityFixture[] = [
+  {
+    key: 'gap-no-salary',
+    company: 'Runik',
+    role: 'Head of Growth',
+    url: null,
+    shape: 'Right in every way, says nothing about pay',
+    blindLabel: 'MAYBE',
+    blindComment: 'I want this. Tell me the number before I spend an evening on it.',
+    rawText: `Runik is building the observability layer for teams running open models in production. Seed funded, fourteen people, both founders were infrastructure engineers before this.
+
+We are hiring our first Head of Growth, reporting to the CEO. You would own how developers find us, what they read when they get here, the community, and the story we tell. No one above you in marketing, and the budget and the roadmap for it are yours.
+
+Requirements: you have grown a developer audience before, you are comfortable with infrastructure concepts, and you write well.
+
+Fully remote across Europe. Meaningful equity on a four-year vest.`,
+  },
+  {
+    key: 'gap-no-work-model',
+    company: 'Palomar Systems',
+    role: 'Head of Growth & Community',
+    url: null,
+    shape: 'Right in every way, never says whether it is remote',
+    blindLabel: 'MAYBE',
+    blindComment: 'Remote is not negotiable for me. If it is not remote this conversation is over.',
+    rawText: `Palomar Systems runs a GPU scheduling platform used by teams fine-tuning open models. Series A, twenty-two people, developer-first from day one.
+
+We are looking for a Head of Growth & Community as our first senior marketing hire, reporting directly to the CEO. You will own developer acquisition, technical content, the community, and how we talk about ourselves. The budget is yours.
+
+Requirements: experience growing a technical audience, comfort close to infrastructure, strong writing.
+
+135.000 - 155.000 euros plus 0,7% - 1% equity on a four-year vest. Offices in Barcelona and Lisbon.`,
+  },
+  {
+    key: 'gap-competitive-salary',
+    company: 'Thornwell',
+    role: 'Founding Head of Marketing',
+    url: null,
+    shape: 'Says something about pay that is not a number',
+    blindLabel: 'MAYBE',
+    blindComment: 'Competitive has meant below my number every single time.',
+    rawText: `Thornwell is the deployment layer for AI agents: developers ship agents to us and we handle sandboxing, rollback and observability. Pre-Series A, sixteen people, and our users are developers.
+
+We are hiring our founding marketing person. You would own positioning, the developer community, the docs experience, launches, and the story we tell. You would report to the CEO and be the first non-engineering voice in the room.
+
+Requirements: you have taken a technical product to a technical audience, you are comfortable close to infrastructure, and you write well.
+
+Fully remote, European timezones. Meaningful founding equity. Compensation is competitive and benchmarked against European seed-stage rates.`,
+  },
+  {
+    key: 'gap-usd-salary',
+    company: 'Ridgeline AI',
+    role: 'Head of Growth',
+    url: null,
+    shape: 'Pays well, but in a currency the floor is not in',
+    blindLabel: 'MAYBE',
+    blindComment: 'Is that above or below my number? I do not know without a rate.',
+    rawText: `Ridgeline AI builds the routing layer for inference across providers. Seed stage, eighteen people, US-incorporated with a European team.
+
+We are hiring a Head of Growth to own developer acquisition end to end: content, community, docs, launches and the narrative. You report to the CEO and own the budget.
+
+Requirements: you have grown a developer audience, you are technical enough to be credible, and you write.
+
+Fully remote, European timezones. 145,000 - 165,000 USD plus 0.6% - 1% equity on a four-year vest.`,
+  },
+  {
+    key: 'gap-contradictory-location',
+    company: 'Vessel Compute',
+    role: 'Head of Growth & Developer Relations',
+    url: null,
+    shape: 'Contradicts itself about where the work happens',
+    blindLabel: 'MAYBE',
+    blindComment: 'It says remote at the top and four days in an office at the bottom. Which one?',
+    rawText: `Vessel Compute runs European inference infrastructure for teams that cannot send data outside the EU. Series A, twenty-six people.
+
+FULLY REMOTE — work from anywhere in Europe.
+
+We are hiring a Head of Growth & Developer Relations, our first senior marketing hire, reporting to the CEO. You own developer acquisition, content, community and the narrative, along with the budget.
+
+Requirements: you have grown a developer audience, you are comfortable with infrastructure, and you write well.
+
+How we work: our culture depends on being in the same room, so the team is in the Madrid office four days a week. Fridays are yours.
+
+130.000 - 150.000 euros plus 0,8% equity.`,
+  },
+  {
+    key: 'gap-scope-ambiguous',
+    company: 'Harlow Data',
+    role: 'Head of Growth',
+    url: null,
+    shape: 'The title and the body describe two different jobs',
+    blindLabel: 'MAYBE',
+    blindComment: 'Head of Growth on the tin, SDR manager in the description. Which am I offered?',
+    rawText: `Harlow Data provides the vector layer for retrieval systems. Series A, thirty-one people, strong developer adoption.
+
+We are hiring a Head of Growth, reporting to the CRO.
+
+You will build and manage a team of four SDRs, own the outbound sequences, run weekly pipeline reviews, and be accountable for qualified meetings booked per quarter. You will work with the CRO on territory planning and quota setting.
+
+There is also a content and community side to the role that you would shape over time.
+
+Requirements: experience leading a pipeline-generation team, comfort with technical products, strong analytics.
+
+Fully remote within Europe. 125.000 - 140.000 euros plus equity.`,
+  },
+  {
+    key: 'gap-unknown-stage',
+    company: 'Corbel',
+    role: 'VP Marketing',
+    url: null,
+    shape: 'Says nothing about how big or how funded the company is',
+    blindLabel: 'MAYBE',
+    blindComment: 'Early stage was the whole point. This could be nine people or nine hundred.',
+    rawText: `Corbel builds developer tooling for local model workflows: run, evaluate and ship open models without leaving your laptop.
+
+We are hiring a VP Marketing to own the whole function — positioning, the developer community, content, launches and the narrative. You report to the CEO and own the budget and the roadmap for it.
+
+Requirements: you have marketed a technical product to developers, you are comfortable with the subject matter, and you can write.
+
+Fully remote across Europe. 130.000 - 150.000 euros plus meaningful equity on a four-year vest.`,
+  },
+  {
+    key: 'gap-about-the-candidate',
+    company: 'Solenne',
+    role: 'Head of Community & Growth',
+    url: null,
+    shape: 'Nothing missing on their side; the gap is in what we know about him',
+    blindLabel: 'YES',
+    blindComment:
+      'Nothing missing on their side. If Amble is unsure about me, it should ask me, not go quiet.',
+    rawText: `Solenne runs an EU-based inference platform with an OpenAI-compatible endpoint. Seed funded, seventeen people, and both founders are infrastructure engineers.
+
+We are hiring a Head of Community & Growth, our first senior marketing hire, reporting to the CEO. You own the whole picture: how developers find us, the docs experience, the community, and the story we tell about European AI infrastructure. The budget and the roadmap are yours, and there will be no one above you in marketing for a long time.
+
+What this role really turns on is community. We expect you to have run a developer community before — a Discord, a forum, a meetup series, something with your name on it — and to be able to point at what it became.
+
+Requirements: you have grown a developer audience, you have built a community with your own hands, you are comfortable with infrastructure concepts, and you write.
+
+Fully remote, anywhere in Europe. 132.000 - 152.000 euros plus 0,9% - 1,3% equity on a four-year vest.`,
+  },
+]

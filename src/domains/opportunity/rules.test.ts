@@ -470,6 +470,56 @@ describe('settleDecision', () => {
     assert.equal(settled.decision, 'IGNORE')
   })
 
+  it('drops a hold on a job the person has no evidence of being able to do', () => {
+    // The case real offers produced: a backend role for a marketer, held
+    // because it is remote, pays well and is the right stage. No answer from
+    // the company turns that into a job they can do.
+    const settled = settleDecision(
+      analysisWith({
+        evidenceMatch: [
+          { ...groundedRequirement, verdict: 'NOT_SUPPORTED', evidenceIds: [], capabilityIds: [] },
+        ],
+        intentMatch: [alignedAspect],
+      }),
+      proposal({ decision: 'HOLD' }),
+    )
+    assert.equal(settled.decision, 'IGNORE')
+    assert.match(settled.overrideReason ?? '', /materially asks for/)
+  })
+
+  it('keeps holding when the posting is the thing that said nothing', () => {
+    // A thin posting states no requirements, so the evidence side was never
+    // assessed. That is a gap the company can close, not a mismatch.
+    const settled = settleDecision(
+      analysisWith({
+        intentMatch: [alignedAspect],
+        unknowns: [
+          {
+            id: 'unk_compensation',
+            side: 'opportunity',
+            description: 'The posting does not state what it pays.',
+            materiality: 'HIGH',
+            resolvedBy: { type: 'ASK_COMPANY', question: 'What does it pay?' },
+            deterministic: true,
+          },
+        ],
+      }),
+      proposal({ decision: 'HOLD' }),
+    )
+    assert.equal(settled.decision, 'HOLD')
+  })
+
+  it('keeps holding when something material is partly supported', () => {
+    const settled = settleDecision(
+      analysisWith({
+        evidenceMatch: [{ ...groundedRequirement, verdict: 'PARTIALLY_SUPPORTED' }],
+        intentMatch: [alignedAspect],
+      }),
+      proposal({ decision: 'HOLD' }),
+    )
+    assert.equal(settled.decision, 'HOLD')
+  })
+
   it('will not drop something that is only missing information', () => {
     const settled = settleDecision(
       analysisWith({

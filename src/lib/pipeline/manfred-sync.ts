@@ -17,6 +17,7 @@
  * this is.
  */
 
+import { getManfredSyncIntervalMs } from '@/lib/features'
 import { deterministicHardConstraints } from '@/domains/opportunity/rules'
 import type { HardConstraintCheck } from '@/domains/opportunity/types'
 import {
@@ -28,10 +29,11 @@ import {
 import {
   findOpportunityBySourceRef,
   insertOpportunity,
+  listAuditEvents,
   recordAuditEvent,
 } from '../db/opportunities'
 import { readPreferences } from './preferences'
-import { enqueue } from './jobs'
+import { enqueue, hasQueuedKind } from './jobs'
 
 export interface ManfredSyncOptions {
   /** How many new offers to take this time, screened ones included. */
@@ -163,7 +165,44 @@ export async function syncManfredOffers(
     }
   }
 
+  recordAuditEvent({
+    candidate_id: candidateId,
+    subject_type: 'source',
+    subject_id: 'manfred',
+    event: 'source_synced',
+    detail: {
+      live: result.liveOffers,
+      alreadyKnown: result.alreadyKnown,
+      screenedOut: result.screenedOut,
+      imported: result.imported,
+      queued: result.queued,
+      waiting: result.waiting,
+      unreadable: result.unreadable,
+    },
+  })
+
   return result
+}
+
+// ─── Keeping it listening ─────────────────────────────────────────────────
+
+/**
+ * Make sure there is a next one on the queue, and only one.
+ *
+ * Called after every sync and from the endpoints the screens poll, so the
+ * schedule survives a restart, a crash mid-sync, and a laptop that was shut
+ * for three days — the first request after it comes back finds nothing
+ * queued and nothing synced recently, and goes immediately.
+ */
+export function ensureManfredSyncScheduled(candidateId: string): void {
+  const intervalMs = getManfredSyncIntervalMs()
+  if (intervalMs === null) return
+  if (hasQueuedKind(candidateId, 'sync_manfred')) return
+
+  const history = listAuditEvents('source', 'manfred')
+  const last = history[history.length - 1]
+  const since = last ? Date.now() - new Date(last.created_at).getTime() : Number.POSITIVE_INFINITY
+  enqueue('sync_manfred', candidateId, {}, since >= intervalMs ? 0 : intervalMs - since)
 }
 
 function reasonFor(failed: HardConstraintCheck[]): string {
