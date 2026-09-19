@@ -4,6 +4,7 @@ import { getOrCreateCandidate } from '@/lib/db/repo'
 import { findOpportunityByFixtureKey } from '@/lib/db/opportunities'
 import { ingestOpportunity } from '@/lib/pipeline/opportunities'
 import { ensureSyncScheduled } from '@/lib/pipeline/source-sync'
+import { ensureInboundPolling } from '@/lib/pipeline/inbound-telegram'
 import { enqueue, queueStatus, resumeQueue } from '@/lib/pipeline/jobs'
 import { getOpportunityLabViewModel } from '@/lib/opportunity-view'
 import { HUMAN_LABELS, type HumanLabel } from '@/domains/opportunity/types'
@@ -19,6 +20,7 @@ export async function GET() {
   const candidateId = getOrCreateCandidate().id
   ensureSyncScheduled(candidateId, 'sync_manfred')
   ensureSyncScheduled(candidateId, 'sync_ats')
+  ensureInboundPolling(candidateId)
   return NextResponse.json(getOpportunityLabViewModel())
 }
 

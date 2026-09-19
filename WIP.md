@@ -1,15 +1,16 @@
 # Dónde nos quedamos — 19 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (106) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (117) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
 El lado del candidato **funciona de punta a punta**: un CV se convierte en
 grafo, las ofertas entran solas de tres fuentes, la criba gratis tira lo que
 no cumple sin gastar nada, las reglas deciden, la interrupción sale por correo
-y —desde hoy— el Rep pregunta cuando le falta algo, la respuesta entra al
-grafo y la oferta se vuelve a decidir.
+y el Rep pregunta cuando le falta algo, la respuesta entra al grafo y la
+oferta se vuelve a decidir. Y —desde hoy— esa respuesta **puede volver por
+Telegram**: se contesta al mensaje y ya está, sin abrir la app.
 
 El lado de la empresa **no existe**, y ahí es donde va esto: dos agentes que
 averiguan lo que necesitan el uno del otro antes de molestar a nadie. Las
@@ -17,12 +18,13 @@ cinco decisiones que hacían falta para empezar están cerradas (§ más abajo).
 
 **Lo siguiente, por orden:**
 
-1. Telegram de entrada — media sesión, y cierra el bucle sin salir del sofá.
-2. El lado de la empresa: empresa, apertura, su agente, y la conversación como
+1. El lado de la empresa: empresa, apertura, su agente, y la conversación como
    objeto con turnos y traza.
-3. La sesión real de Borja con User Zero, que sigue pendiente desde el 18.
+2. La sesión real de Borja con User Zero, que sigue pendiente desde el 18.
 
-**Lo suyo, cuando quiera:** el token de @BotFather, confirmar que el suelo de
+**Lo suyo, cuando quiera:** el token de @BotFather —que ahora no es solo por
+dónde sale el aviso, sino por dónde vuelve la respuesta, y es lo único que
+falta para probar el bucle entero desde el móvil—, confirmar que el suelo de
 120k y el resto del Intent son los buenos (los escribí yo desde las fixtures),
 y contestar la pregunta de Ridgeline que quedó abierta.
 
@@ -465,8 +467,67 @@ Pendiente tuyo: **verificar un dominio en Resend**. Sin eso solo envía desde
 por la que el aviso apunta ahora a `borjaperezfrances@gmail.com` en vez de a
 `bperez@helmcode.com`.
 
-Telegram está escrito y probado pero aparcado: falta el token de @BotFather.
-WhatsApp sigue sin adaptador y la pantalla lo dice.
+Telegram está escrito y probado —ahora también de entrada, § más abajo— pero
+aparcado: falta el token de @BotFather. WhatsApp sigue sin adaptador y la
+pantalla lo dice.
+
+### Y la respuesta vuelve sola, por Telegram
+
+Hasta hoy todos los bucles acababan en una pantalla. La pregunta salía por
+correo diciendo "answer here" y contestar era encontrar la pestaña, que es
+justo lo que este producto dice que te ahorra. La interrupción tenía el mismo
+problema por el otro lado: el mensaje llega al móvil y el sí vive en el
+portátil.
+
+Ahora Telegram es de ida y vuelta. Se contesta al mensaje y esa respuesta
+entra al grafo por el mismo camino de siempre, la oferta se vuelve a decidir,
+y la app no se abre en ningún momento. **Nada nuevo decide nada**: esto es un
+transporte, y le pasa lo que recibe a las dos funciones que ya existían
+(`answerQuestion` y `recordCandidateResponse`).
+
+Importa más allá de la comodidad. Al otro extremo de este bucle va a haber
+otro agente, no una persona, y una máquina que solo funciona con una pestaña
+abierta nunca fue un bucle.
+
+Lo que hubo que decidir, y por qué:
+
+- **El orden de lectura.** Un comando es un comando; lo demás, si hay una
+  pregunta abierta, es la respuesta entera y sin parsear. `/yes` y `/no`
+  contestan una interrupción **solo como comandos**: con una pregunta abierta,
+  "yes, for about two years" es una respuesta, y leer su primera palabra como
+  un veredicto sobre otra oferta le cuesta la tarde a alguien. Si no hay nada
+  abierto, el mensaje se acusa recibo y no se actúa sobre él.
+- **Dos interrupciones esperando = no se adivina.** Un "sí" pelado no dice
+  cuál, y apuntar una decisión sobre un puesto en el que no estaba pensando es
+  peor que pedirle que mire la pantalla. Lo dice y pone el enlace.
+- **Todo mensaje se escribe antes de tocarlo**, incluido el de un
+  desconocido. Telegram reenvía un update hasta que un offset lo confirma, así
+  que la misma respuesta puede llegar dos veces —un reinicio entre la
+  confirmación y el envío— y **dos veces sería dos evidencias de una sola
+  frase**. El índice único sobre (canal, update id) es donde se promete eso, no
+  en el bucle que toque sondear.
+- **Solo el chat configurado.** El usuario de un bot es público y cualquiera
+  puede escribirle. A un desconocido no se le contesta: explicarle qué es esto
+  sería una conversación, y aquí no hay nadie para tenerla.
+- **No se sondea hasta que hay chat id.** No es solo higiene: preguntar con
+  offset le dice a Telegram que puede olvidar esos updates, y el chat id se
+  averigua justamente leyéndolos con `npm run telegram:whoami`. Un poller
+  arrancado antes se comería el mensaje del que depende el alta.
+- **Carril propio en la cola.** Detrás de una evaluación serían sesenta
+  segundos entre que contesta y Amble se entera; en el carril interactivo se
+  pondría por delante de la pregunta que está mirando, cada diez segundos. Y
+  queda fuera de `queueStatus`: un trabajo que vuelve a tocar cada diez
+  segundos para siempre haría que todas las pantallas dijeran "trabajando" todo
+  el día, cuando lo que está haciendo es escuchar.
+- **El cuerpo del mensaje cambia en una línea, y solo en una.** Por correo
+  sigue diciendo "Answer here: …"; por Telegram, "contesta a este mensaje" o
+  "/yes y /no". Lo de arriba —el porqué, la evidencia, lo que no se sabe— es
+  idéntico en los dos, que era la regla.
+
+Escrito y probado contra una API falsa (`inbound-telegram.test.ts`, once
+casos: la respuesta que entra, el update repetido, el chat ajeno, el `/start`,
+el `/no` contra la única interrupción, y que sin chat id no se llama a
+Telegram). **Sin correr contra Telegram de verdad todavía**: falta el token.
 
 ### Sobre `.amble-data/`
 
@@ -589,7 +650,7 @@ de vanidad que el spec prohíbe en §16.
 
 ```bash
 cd C:\dev\amble
-npm test                      # 41 tests, sin red y sin base real
+npm test                      # 117 tests, sin red y sin base real
 npm run dev                   # http://localhost:3000
 npm run check:model           # comprueba el modelo en 2 llamadas cortas
 npm run measure -- <cv.pdf>   # sesión entera por API, cronometrada
@@ -602,6 +663,11 @@ Para traer ofertas de Manfred: el botón del laboratorio, o
 ```bash
 curl -X POST localhost:3000/api/sources/manfred   -H 'Content-Type: application/json' -d '{"limit":40,"maxEvaluations":10}'
 ```
+
+Para probar Telegram de ida y vuelta: token en `.env.local`,
+`npm run telegram:whoami` para sacar el chat id, pegarlo en la pantalla de
+listening, y a partir de ahí contestarle al bot. Sin chat id guardado no se
+sondea nada, a propósito.
 
 - Traza completa del grafo: http://localhost:3000/dev/user-zero
 - Laboratorio de oportunidades: http://localhost:3000/dev/opportunity-zero

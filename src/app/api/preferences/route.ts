@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { readPreferences, writePreferences } from '@/lib/pipeline/preferences'
+import { ensureInboundPolling } from '@/lib/pipeline/inbound-telegram'
 
 export const runtime = 'nodejs'
 
@@ -27,5 +28,9 @@ export async function PUT(request: Request) {
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ error: 'Nothing to save.' }, { status: 400 })
   }
-  return NextResponse.json(writePreferences(candidate.id, body))
+  const saved = writePreferences(candidate.id, body)
+  // Typing the chat id here is what starts the listening. Waiting for a
+  // restart to act on it would make the setup feel broken for ten minutes.
+  ensureInboundPolling(candidate.id)
+  return NextResponse.json(saved)
 }

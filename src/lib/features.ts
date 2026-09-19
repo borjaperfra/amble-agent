@@ -125,6 +125,26 @@ export function getTelegramConfig(): TelegramConfig | null {
   return { token, timeoutMs: readPositiveInt('AMBLE_TELEGRAM_TIMEOUT_MS', 15_000) ?? 15_000 }
 }
 
+/**
+ * How often to go and ask Telegram whether they wrote back, in seconds.
+ *
+ * There is no webhook and there does not need to be: a webhook needs a
+ * public URL, and this runs on a laptop. Asking is cheap — one request that
+ * usually comes back empty — and it is the only arrangement where the loop
+ * closes without a tunnel.
+ *
+ * Nothing polls until there is a chat id in the preferences. That is not
+ * only a guard against reading somebody else's messages: asking with an
+ * offset tells Telegram it may forget those updates, and the chat id is
+ * found by messaging the bot and running `npm run telegram:whoami`. A poller
+ * running before then would eat the very message that setup depends on.
+ */
+export function getTelegramPollIntervalMs(): number {
+  const seconds = readPositiveInt('AMBLE_TELEGRAM_POLL_SECONDS', 10) ?? 10
+  // A poll every second is a poll that spends the day waking the queue.
+  return Math.max(5, seconds) * 1000
+}
+
 export interface SmtpConfig {
   host: string
   port: number

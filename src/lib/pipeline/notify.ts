@@ -34,7 +34,7 @@ import { readPreferences } from './preferences'
 import { enqueue } from './jobs'
 
 /** Where the message tells them to go to answer. */
-function baseUrl(): string {
+export function baseUrl(): string {
   return (process.env.AMBLE_BASE_URL?.trim() || 'http://localhost:3000').replace(/\/+$/, '')
 }
 
@@ -51,7 +51,10 @@ export function subjectFor(interruption: InterruptionView): string {
  * quietly working on your behalf, and it should read like one — and it
  * should still read like one in a client that shows nothing but text.
  */
-export function bodyFor(interruption: InterruptionView): string {
+export function bodyFor(
+  interruption: InterruptionView,
+  channel: NotificationChannel = 'email',
+): string {
   const lines: string[] = ['Your Rep found something.', '', interruption.headline, '']
 
   lines.push(`${interruption.role} · ${interruption.company}`)
@@ -77,7 +80,7 @@ export function bodyFor(interruption: InterruptionView): string {
 
   lines.push(
     '',
-    `Answer here: ${baseUrl()}/listening`,
+    ...howToAnswer(channel),
     '',
     'Nothing has gone to the company, and nothing will until you say so.',
   )
@@ -97,6 +100,7 @@ export function questionBodyFor(input: {
   role: string
   question: string
   reason: string
+  channel?: NotificationChannel
 }): string {
   return [
     'One thing before I can say.',
@@ -109,10 +113,27 @@ export function questionBodyFor(input: {
     'Answering takes a line. If the answer closes it, I will tell you what I decided;',
     'if it does not, you will not hear about this one again.',
     '',
-    `Answer here: ${baseUrl()}/listening`,
+    ...(input.channel === 'telegram'
+      ? ['Just reply to this message. Whatever you write is the answer.']
+      : [`Answer here: ${baseUrl()}/listening`]),
     '',
     'I have not told them anything, and nothing goes to them until you say so.',
   ].join('\n')
+}
+
+/**
+ * How to answer, which is the one part that depends on where it arrived.
+ *
+ * Everything above this line is identical on every channel and has to stay
+ * that way. This is the envelope: on Telegram the reply comes back the way
+ * it came, and sending somebody to a laptop to type a yes they could have
+ * typed with their thumb is the whole thing this was built to stop.
+ */
+function howToAnswer(channel: NotificationChannel): string[] {
+  if (channel === 'telegram') {
+    return ["Reply /yes and I'll write down that you want to hear them out, /no and it's gone."]
+  }
+  return [`Answer here: ${baseUrl()}/listening`]
 }
 
 // ─── Getting it queued ────────────────────────────────────────────────────
@@ -184,12 +205,6 @@ export function queueQuestionNotice(candidateId: string, questionId: string): Qu
 
   const preferences = readPreferences(candidateId)
   const subject = `Your Rep needs one thing: ${opportunity.role} at ${opportunity.company}`
-  const body = questionBodyFor({
-    company: opportunity.company,
-    role: opportunity.role,
-    question: question.question,
-    reason: question.reason,
-  })
 
   const queued: QueuedNotice[] = []
   for (const channel of preferences.notifyChannels) {
@@ -200,7 +215,16 @@ export function queueQuestionNotice(candidateId: string, questionId: string): Qu
       channel,
       address,
       subject,
-      body,
+      // Same question, same reason, and only the last line differs: on
+      // Telegram the answer comes back by replying, and nothing sends them
+      // to a screen to type what they could type where they are.
+      body: questionBodyFor({
+        company: opportunity.company,
+        role: opportunity.role,
+        question: question.question,
+        reason: question.reason,
+        channel,
+      }),
       about_type: 'question',
       about_id: questionId,
       status: deliverable ? 'pending' : 'unconfigured',
@@ -244,7 +268,7 @@ function record(
     channel,
     address,
     subject: subjectFor(interruption),
-    body: bodyFor(interruption),
+    body: bodyFor(interruption, channel),
     about_type: 'opportunity',
     about_id: opportunityId,
     status,

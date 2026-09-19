@@ -43,7 +43,8 @@ const interruptionPollMs = 6000
  */
 const CHANNELS: { value: Channel; label: string; note?: string }[] = [
   { value: 'email', label: 'Email' },
-  { value: 'telegram', label: 'Telegram' },
+  // The only one that comes back: an answer typed there lands here.
+  { value: 'telegram', label: 'Telegram', note: 'answers work here' },
   // Said out loud rather than quietly accepted: WhatsApp will not let me
   // start a conversation without a template approved in advance, so there is
   // nothing behind this one yet.
@@ -335,7 +336,8 @@ export default function UserZeroListeningFlow({
                   />
                   <p className={styles.reachHint}>
                     Message the bot once and run <code>npm run telegram:whoami</code>; it will tell
-                    you the number.
+                    you the number. After that you can answer me by replying there &mdash; you
+                    won&rsquo;t have to come back to this screen.
                   </p>
                 </div>
               )}

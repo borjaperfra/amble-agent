@@ -362,6 +362,38 @@ function createDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS notifications_by_candidate
       ON notifications (candidate_id, created_at);
 
+    -- What came back the other way.
+    --
+    -- A message the candidate sent to the bot, written down before anything
+    -- is done about it. Telegram hands the same update over again until an
+    -- offset confirms it, and a confirmation lost to a restart must not turn
+    -- one answer into two answers: the unique index is where that is
+    -- promised, rather than in whichever loop happens to be polling.
+    --
+    -- It also keeps what was said. A message that arrives while nothing is
+    -- open, or from a chat that is not theirs, is still a thing somebody
+    -- typed, and throwing it away would leave no way to find out why their
+    -- reply seemed to go nowhere.
+    CREATE TABLE IF NOT EXISTS inbound_messages (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      channel TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      chat_id TEXT NOT NULL,
+      sender TEXT,
+      text TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      about_type TEXT,
+      about_id TEXT,
+      detail TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS inbound_messages_once
+      ON inbound_messages (channel, external_id);
+    CREATE INDEX IF NOT EXISTS inbound_messages_by_candidate
+      ON inbound_messages (candidate_id, created_at);
+
     CREATE TABLE IF NOT EXISTS intent_profiles (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

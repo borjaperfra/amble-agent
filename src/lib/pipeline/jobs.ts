@@ -14,11 +14,12 @@
  * can be retried on a schedule, survives a restart, and can be picked up by
  * something that is not a web request at all — which is where this is going.
  *
- * Two lanes, each serial. Planning the next question takes about five
+ * Three lanes, each serial. Planning the next question takes about five
  * seconds; working an answer into the graph takes forty. One lane meant the
  * candidate waited for both, because a queue only consults its order between
  * jobs and never interrupts the one running. So the thing somebody is
- * actually staring at gets a lane of its own.
+ * actually staring at gets a lane of its own, and so does listening for a
+ * reply — which has to be quick without ever getting in front of them.
  *
  * Within a lane it stays serial: these jobs read and write the same rows and
  * SQLite takes one writer. Across lanes the planner may read a graph that is
@@ -51,6 +52,7 @@ export type JobKind =
   | 'incorporate_opportunity_answer'
   | 'sync_manfred'
   | 'sync_ats'
+  | 'poll_telegram'
 
 export interface JobPayloads {
   process_source: { sourceId: string }
@@ -63,6 +65,7 @@ export interface JobPayloads {
   deliver_notification: { notificationId: string }
   sync_manfred: { limit?: number; maxEvaluations?: number }
   sync_ats: { limit?: number; maxEvaluations?: number }
+  poll_telegram: Record<string, never>
 }
 
 /**
@@ -73,9 +76,20 @@ export interface JobPayloads {
 const BACKOFF_MS = [5_000, 20_000, 60_000, 180_000, 600_000]
 const MAX_ATTEMPTS = BACKOFF_MS.length + 1
 
-/** The candidate is watching this one. Everything else can take its time. */
+/**
+ * The candidate is watching the interactive one. Everything else can take
+ * its time — except listening for a reply, which gets a lane of its own.
+ *
+ * It is one short request that usually comes back empty, and it must not
+ * queue behind an evaluation: a minute between somebody answering on their
+ * phone and Amble noticing is a minute of a loop that was built so nobody
+ * has to sit and wait. It must not get in front of the interview's next
+ * question either, which is what putting it in the interactive lane would
+ * do every ten seconds.
+ */
 const LANES = {
   interactive: ['plan_question'],
+  inbound: ['poll_telegram'],
   background: [
     'process_source',
     'assess_capabilities',
@@ -92,7 +106,10 @@ const LANES = {
 type Lane = keyof typeof LANES
 
 function laneOf(kind: JobKind): Lane {
-  return (LANES.interactive as readonly JobKind[]).includes(kind) ? 'interactive' : 'background'
+  for (const [lane, kinds] of Object.entries(LANES)) {
+    if ((kinds as readonly JobKind[]).includes(kind)) return lane as Lane
+  }
+  return 'background'
 }
 
 interface LaneState {
@@ -110,6 +127,7 @@ function runtime() {
       lanes: {
         interactive: { draining: false, timer: null },
         background: { draining: false, timer: null },
+        inbound: { draining: false, timer: null },
       },
       recovered: false,
     }
@@ -189,6 +207,11 @@ async function run(job: JobRow): Promise<void> {
     case 'deliver_notification': {
       const { deliverNotificationJob } = await import('./notify')
       await deliverNotificationJob(String(payload.notificationId ?? ''))
+      return
+    }
+    case 'poll_telegram': {
+      const { pollTelegramJob } = await import('./inbound-telegram')
+      await pollTelegramJob(job.candidate_id)
       return
     }
     case 'sync_manfred':
@@ -307,8 +330,21 @@ export interface QueueStatus {
 /** A minute out is still "any moment now". Five hours out is not. */
 const SOON_MS = 60_000
 
+/**
+ * Work nobody is waiting for the end of.
+ *
+ * Checking whether they wrote back is due again every ten seconds forever,
+ * which by any honest reading of the column is "about to run". Counting it
+ * would leave every screen polling every two seconds all day and saying the
+ * Rep is working, when what it is doing is listening — the thing it is
+ * supposed to be doing when nothing is happening.
+ */
+const QUIET: readonly JobKind[] = ['poll_telegram']
+
 export function queueStatus(candidateId: string): QueueStatus {
-  const active = listActiveJobs(candidateId)
+  const active = listActiveJobs(candidateId).filter(
+    (job) => !QUIET.includes(job.kind as JobKind),
+  )
   const running = active.find((job) => job.status === 'running')
   const waiting = active.filter((job) => job.status === 'pending')
   const backingOff = waiting.filter((job) => job.attempts > 0)
@@ -368,4 +404,5 @@ export async function waitForQueue(candidateId: string, timeoutMs = 120_000): Pr
 export function resumeQueue(): void {
   void drain('interactive')
   void drain('background')
+  void drain('inbound')
 }

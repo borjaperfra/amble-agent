@@ -135,6 +135,14 @@ Three channels, picked on the listening screen. **Telegram** gets the whole thin
 
 With a channel picked but nothing configured behind it, the message is still written and the outbox reads `unconfigured`: silence by accident and silence on purpose must not look the same.
 
+## What comes back
+
+Telegram is also the only channel that comes back, and that is what closes the loop. A question arrives on a phone; the reply to it is the answer. Nothing has to be opened, nothing is parsed out of a quoted email, and there is no tunnel: `getUpdates` is Amble asking Telegram from behind whatever network the laptop is on, every ten seconds, on a queue lane of its own so it neither waits behind a minute-long evaluation nor gets in front of the question somebody is staring at.
+
+A reply is read in the order of what is waiting. `/start` and `/help` say what this is. `/yes` and `/no` answer an interruption — only as commands, because when a question is open "yes, for about two years" is an answer and reading its first word as a verdict on some other job would cost somebody an evening. Otherwise, if a question is open, the whole message is its answer, unparsed, and it goes into the graph by the same path as one typed on the screen. With two interruptions waiting, a bare yes is refused and says why: guessing would record a decision about a job they were not thinking of.
+
+Every message is written down before it is acted on, including a stranger's, and the unique index over (channel, update id) is what stops an update that Telegram hands over twice from becoming two sets of evidence out of one sentence. Only the configured chat is acted on at all — a bot's username is public. And nothing polls until that chat id is saved, because asking with an offset tells Telegram it may forget those updates, and `npm run telegram:whoami` is how the chat id is found in the first place.
+
 ## Tests and measurement
 
 ```bash

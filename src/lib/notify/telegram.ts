@@ -12,7 +12,12 @@
  * behind each claim, and what is still unknown. So this is where the message
  * goes until WhatsApp is worth the paperwork.
  *
- * No dependency: it is one POST.
+ * It is also the only channel that comes back. Email in the other direction
+ * needs a webhook, a public URL and a tunnel that stays up; Telegram is us
+ * asking, from behind whatever network the laptop is on. So the answer to a
+ * question can arrive without anybody opening the app.
+ *
+ * No dependency: a POST to send, a GET to listen.
  */
 
 import type { TelegramConfig } from '@/lib/features'
@@ -21,6 +26,16 @@ const API = 'https://api.telegram.org'
 
 /** Telegram refuses anything longer, and refusing is better than truncating. */
 export const TELEGRAM_LIMIT = 4096
+
+/** A message somebody sent to the bot, as far as Amble cares. */
+export interface InboundTelegramMessage {
+  /** Telegram's cursor. Confirming it is how an update stops coming back. */
+  updateId: number
+  chatId: string
+  /** Whatever the chat calls itself, for the trace. Never used to decide. */
+  sender: string
+  text: string
+}
 
 export class TelegramError extends Error {
   readonly code: number | null
@@ -99,38 +114,122 @@ export async function sendTelegramMessage(
 }
 
 /**
+ * What has arrived since the last one we wrote down.
+ *
+ * This is the only two-way channel that works from a laptop. Email in the
+ * other direction needs a webhook, which needs a public URL and a tunnel
+ * that stays up; `getUpdates` is us asking Telegram, from behind whatever
+ * network we happen to be on.
+ *
+ * `offset` is a confirmation, not a filter: asking for updates from N tells
+ * Telegram that everything before N is safely ours and it may forget it. So
+ * the offset comes from what is in the database, never from a number held
+ * in this process — a reply confirmed by a poll that then died would be a
+ * reply nobody ever reads.
+ */
+export async function fetchUpdates(
+  config: TelegramConfig,
+  offset: number | null,
+): Promise<InboundTelegramMessage[]> {
+  const query = new URLSearchParams({
+    // Ask and come back. A long poll on a serial lane is a lane held open,
+    // and a request that outlives its own timeout is a request that fails.
+    timeout: '0',
+    allowed_updates: '["message"]',
+  })
+  if (offset !== null) query.set('offset', String(offset))
+
+  const updates = await getUpdates(config, query)
+  const messages: InboundTelegramMessage[] = []
+  for (const update of updates) {
+    const message = asMessage(update)
+    if (!message) continue
+    messages.push(message)
+  }
+  return messages
+}
+
+/**
  * Who has written to the bot.
  *
  * A chat id is not something a person knows about themselves; it exists once
  * they message the bot. This reads the updates so the setup script can say
  * "that was you" instead of asking somebody to find a number.
+ *
+ * Deliberately without an offset: this is somebody setting the bot up, and
+ * confirming the updates here would mean the first message they send is the
+ * one that disappears.
  */
 export async function recentChats(
   config: TelegramConfig,
 ): Promise<{ id: string; name: string; text: string }[]> {
-  const response = await fetch(`${API}/bot${config.token}/getUpdates`, {
-    signal: AbortSignal.timeout(config.timeoutMs),
-  })
+  const updates = await getUpdates(config, new URLSearchParams())
+  const chats = new Map<string, { id: string; name: string; text: string }>()
+  for (const update of updates) {
+    const message = asMessage(update)
+    if (!message) continue
+    chats.set(message.chatId, {
+      id: message.chatId,
+      name: message.sender || message.chatId,
+      text: message.text,
+    })
+  }
+  return [...chats.values()]
+}
+
+async function getUpdates(config: TelegramConfig, query: URLSearchParams): Promise<unknown[]> {
+  const suffix = query.size > 0 ? `?${query}` : ''
+  let response: Response
+  try {
+    response = await fetch(`${API}/bot${config.token}/getUpdates${suffix}`, {
+      signal: AbortSignal.timeout(config.timeoutMs),
+    })
+  } catch (error) {
+    throw new TelegramError(
+      `Could not reach Telegram: ${error instanceof Error ? error.message : 'no answer'}`,
+    )
+  }
+
   const body = (await response.json().catch(() => null)) as {
     ok?: boolean
+    error_code?: number
     description?: string
     result?: unknown[]
   } | null
 
   if (body?.ok !== true) {
-    throw new TelegramError(`Telegram refused it: ${body?.description ?? response.status}`)
+    throw new TelegramError(
+      `Telegram refused it: ${body?.error_code ?? response.status} ${body?.description ?? ''}`.trim(),
+      body?.error_code ?? response.status,
+    )
   }
+  return body.result ?? []
+}
 
-  const chats = new Map<string, { id: string; name: string; text: string }>()
-  for (const entry of body.result ?? []) {
-    const message = (entry as { message?: Record<string, unknown> }).message
-    const chat = message?.chat as Record<string, unknown> | undefined
-    if (!chat || chat.id === undefined) continue
-    const id = String(chat.id)
-    const name = [chat.first_name, chat.last_name, chat.username ? `@${chat.username}` : null]
-      .filter(Boolean)
-      .join(' ')
-    chats.set(id, { id, name: name || id, text: String(message?.text ?? '') })
+/**
+ * One update, as far as we care about it.
+ *
+ * Anything that is not a text message in a chat is dropped here — an edited
+ * message, a photo, somebody joining. Dropping it still costs its update id,
+ * which is what keeps the cursor moving past things we will never read.
+ */
+function asMessage(update: unknown): InboundTelegramMessage | null {
+  const entry = update as { update_id?: number; message?: Record<string, unknown> }
+  const updateId = entry?.update_id
+  if (typeof updateId !== 'number') return null
+
+  const message = entry.message
+  const chat = message?.chat as Record<string, unknown> | undefined
+  if (!chat || chat.id === undefined) return null
+
+  const sender = [chat.first_name, chat.last_name, chat.username ? `@${chat.username}` : null]
+    .filter(Boolean)
+    .join(' ')
+
+  return {
+    updateId,
+    chatId: String(chat.id),
+    sender,
+    text: typeof message?.text === 'string' ? message.text : '',
   }
-  return [...chats.values()]
 }

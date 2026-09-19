@@ -4,6 +4,7 @@ import { getPendingInterruption } from '@/lib/opportunity-view'
 import { resumeQueue } from '@/lib/pipeline/jobs'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { ensureSyncScheduled } from '@/lib/pipeline/source-sync'
+import { ensureInboundPolling } from '@/lib/pipeline/inbound-telegram'
 import { resumeUnsentNotices } from '@/lib/pipeline/notify'
 import { openQuestionFor } from '@/lib/pipeline/opportunity-questions'
 import { getOpportunity } from '@/lib/db/opportunities'
@@ -30,6 +31,9 @@ export async function GET() {
   const candidateId = getOrCreateCandidate().id
   ensureSyncScheduled(candidateId, 'sync_manfred')
   ensureSyncScheduled(candidateId, 'sync_ats')
+  // And the other direction: if a Telegram chat is set up, somebody should
+  // be listening for the answer whether or not this tab stays open.
+  ensureInboundPolling(candidateId)
   // And anything that was written while there was nowhere to send it.
   resumeUnsentNotices(candidateId)
   // The question travels with it: the screen that says "nothing worth
