@@ -256,6 +256,42 @@ Perdí un rato diagnosticando un fallo que no existía: `new DatabaseSync(path,
 dev server escribía en el WAL. Decía cero preguntas cuando había seis. Para
 mirar la base mientras la app corre, conexión normal.
 
+### Y corrió con respuestas suyas de verdad — 19 de septiembre, 14:44
+
+Tres preguntas contestadas por Borja en la pantalla. Lo que pasó:
+
+- **14 evidencias nuevas**, todas `USER_CLAIM`, que es lo correcto: lo ha dicho
+  él y nadie lo ha corroborado. Tres incertidumbres del grafo, resueltas.
+- Y lo que contestó **no estaba en el CV**: una comunidad de más de 120.000
+  desarrolladores en Manfred, y que ahora mismo hace marketing de developers
+  en Helmcode con una plataforma de inferencia. El grafo no lo sabía porque el
+  CV no lo dice. Exactamente el hueco que el sistema había señalado.
+
+**Ninguna decisión cambió a INTERRUPT, y está bien que no cambiara.** Es lo
+que enseña la tanda:
+
+| oferta | antes | después | qué la bloquea ahora |
+| --- | --- | --- | --- |
+| Palomar | HOLD, preguntándole a él | HOLD | `unk_work_model` → **ASK_COMPANY**: ¿se puede en remoto desde Valencia? |
+| Corbel | HOLD, preguntándole a él | HOLD | `unk_company_stage` → **RESEARCH**: ¿en qué etapa está? |
+| Ridgeline | HOLD, preguntándole a él | HOLD | ninguno determinista → **ASK_CANDIDATE**, segunda pregunta |
+
+Dos de tres **se movieron de él a la empresa**: sus respuestas cerraron el
+lado del candidato y lo que queda no es suyo. La tercera siguió la
+conversación con una segunda pregunta, que salió por correo sola.
+
+O sea que el bucle hace lo que tiene que hacer, y al hacerlo deja el
+argumento del lado de la empresa sobre la mesa: **Amble está haciendo
+preguntas que nadie puede contestar, y las está haciendo a quien toca.** Solo
+que al otro lado no hay nadie.
+
+**Una pega de calidad, no de mecánica.** El extractor parte una frase suya en
+claims finísimas: "Personally produced content", "Personally produced video
+product", "Personally wrote articles", "Personally handled mailing" — cuatro
+evidencias donde hay una idea. Es el mismo `extract_answer_claims` que usa la
+entrevista, y User Zero está congelado, así que no lo he tocado. Pero
+evidencia fina es evidencia débil, y se nota al citarla.
+
 ### Las ofertas ya llegan solas
 
 **Manfred sí tiene API pública**, y es la que usa su propia página:
