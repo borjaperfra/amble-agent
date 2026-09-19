@@ -1,7 +1,7 @@
 # Dónde nos quedamos — 19 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (117) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (121) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -524,10 +524,51 @@ Lo que hubo que decidir, y por qué:
   "/yes y /no". Lo de arriba —el porqué, la evidencia, lo que no se sabe— es
   idéntico en los dos, que era la regla.
 
-Escrito y probado contra una API falsa (`inbound-telegram.test.ts`, once
-casos: la respuesta que entra, el update repetido, el chat ajeno, el `/start`,
-el `/no` contra la única interrupción, y que sin chat id no se llama a
-Telegram). **Sin correr contra Telegram de verdad todavía**: falta el token.
+### Y corrió de verdad — 19 de septiembre, 18:30
+
+Token puesto (@amble_rep_bot), chat id guardado por la ruta de siempre, y el
+bucle entero cerrado desde el móvil: contestó por Telegram, entraron **siete
+evidencias nuevas** al grafo, Ridgeline se volvió a decidir y **salió una
+pregunta nueva** —la de si ha gestionado presupuesto— que llegó al mismo chat.
+Eso es la ida y la vuelta funcionando sin abrir la app.
+
+Y enseñó dos fallos que ninguna prueba con API falsa iba a enseñar, los dos de
+la misma familia: **cuatro mensajes en vuelo a la vez**.
+
+- **Se reenviaron preguntas ya contestadas.** Al guardar el chat id,
+  `resumeUnsentNotices` sacó las cinco notificaciones que estaban esperando
+  desde antes de que hubiera bot — y tres eran preguntas que él ya había
+  contestado en la pantalla horas antes. Las contestó otra vez, con cuidado, y
+  el Rep le dijo que no había nada abierto. Ahora una notificación sin enviar
+  se comprueba antes de salir y, si lo que preguntaba ya está resuelto, pasa a
+  `obsolete` con el motivo. Sigue sin borrarse: "no te avisé" necesita
+  respuesta, y "me avisaste de algo que ya había hecho" también.
+- **No se sabía a qué mensaje contestaba.** La respuesta se aplicaba a la
+  pregunta abierta más antigua, así que con cuatro en vuelo tres habrían
+  acabado en el sitio equivocado. Telegram manda `reply_to_message` gratis
+  cuando usas su botón de responder: ahora el outbox guarda el `message_id` de
+  lo que envió (`notifications.external_id`) y la respuesta se encamina por
+  ahí. Si citan una pregunta ya cerrada se lo dice, nombrándola, en vez de
+  tragarse la respuesta. Y cuando no citan nada y hay más de una abierta,
+  contesta la más antigua **y avisa de que ha tenido que elegir**.
+
+De paso, el acuse de recibo ahora dice cuál: "Thank you. Noted — Head of
+Growth at Ridgeline AI". En una pantalla solo hay una pregunta delante; en un
+chat puede haber cuatro de hace horas.
+
+**Ojo con la red.** Conectar con `api.telegram.org` desde aquí tarda a veces
+cinco segundos y alguna vez se pasa del timeout de conexión de undici (10 s,
+que no es el nuestro de 15 s). Un aviso tardó cinco intentos en salir. La cola
+lo reintenta y el sondeo vuelve en diez segundos, así que se recupera solo,
+pero si se vuelve costumbre habrá que subir el timeout de conexión con un
+dispatcher propio.
+
+Trece casos en `inbound-telegram.test.ts` y uno en `opportunities.test.ts`: la
+respuesta que entra, el update repetido, el chat ajeno, el `/start`, el `/no`
+contra la única interrupción, que sin chat id no se llama a Telegram, la
+respuesta citada que va a su pregunta y no a la más vieja, la pregunta ya
+cerrada, el aviso de que ha elegido, y la notificación que se queda
+`obsolete`.
 
 ### Sobre `.amble-data/`
 

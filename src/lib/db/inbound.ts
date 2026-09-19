@@ -29,6 +29,8 @@ export type InboundOutcome =
   | 'recorded_response'
   | 'greeted'
   | 'nothing_pending'
+  /** A reply to something that had already been dealt with. */
+  | 'already_settled'
   | 'ambiguous'
   | 'ignored'
   | 'failed'

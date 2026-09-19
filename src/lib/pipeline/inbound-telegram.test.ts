@@ -107,6 +107,18 @@ function update(id: number, text: string, chatId = CHAT) {
   }
 }
 
+/** The same, but as a reply to one of ours — what tapping "reply" produces. */
+function replyTo(id: number, text: string, messageId: number) {
+  return {
+    update_id: id,
+    message: {
+      chat: { id: Number(CHAT), first_name: 'Borja' },
+      text,
+      reply_to_message: { message_id: messageId },
+    },
+  }
+}
+
 function sent() {
   return calls.filter((call) => call.url.includes('/sendMessage'))
 }
@@ -152,7 +164,8 @@ describe('an answer arriving from the phone', () => {
 
     const reply = sent()[0]?.body as { chat_id: string; text: string }
     assert.equal(reply.chat_id, CHAT)
-    assert.match(reply.text, /Thank you\. Noted\./)
+    // It names the role: on a phone there may be four of these in flight.
+    assert.match(reply.text, /Thank you\. Noted — Head of Growth at Solenne\./)
 
     const row = inboundDb.findInboundMessage('telegram', '10')
     assert.equal(row?.outcome, 'answered_question')
@@ -291,5 +304,111 @@ describe('with no chat set up', () => {
     assert.equal(calls.length, 0)
 
     preferences.writePreferences(candidateId, { notifyTelegram: CHAT })
+  })
+})
+
+/**
+ * Four messages went out at once on the first real run, three of them about
+ * questions answered hours earlier on a screen. Everything below is that
+ * morning, written down so it cannot happen twice.
+ */
+describe('several messages in flight at once', () => {
+  let first: string
+  let second: string
+  let secondMessageId: string
+
+  before(async () => {
+    const notifications = await import('../db/notifications')
+
+    first = opportunities.insertQuestion({
+      candidate_id: candidateId,
+      opportunity_id: opportunityId,
+      decision_id: null,
+      unknown_id: null,
+      question: 'How do you earn credibility with developer audiences?',
+      reason: 'Solenne sells to developers.',
+    }).question.id
+
+    second = opportunities.insertQuestion({
+      candidate_id: candidateId,
+      opportunity_id: opportunityId,
+      decision_id: null,
+      unknown_id: null,
+      question: 'Have you marketed an inference platform before?',
+      reason: 'The posting turns on it.',
+    }).question.id
+
+    // What the outbox looks like once that question has gone out: the row
+    // knows which Telegram message it became.
+    const notice = notifications.insertNotification({
+      candidate_id: candidateId,
+      channel: 'telegram',
+      address: CHAT,
+      subject: 'Your Rep needs one thing',
+      body: 'Have you marketed an inference platform before?',
+      about_type: 'question',
+      about_id: second,
+      status: 'sent',
+    })
+    secondMessageId = '900'
+    notifications.setNotificationExternalId(notice.notification.id, secondMessageId)
+  })
+
+  it('answers the one they replied to, not the oldest one open', async () => {
+    updates = [replyTo(60, 'Yes, at Helmcode right now.', Number(secondMessageId))]
+
+    await inbound.pollTelegram(candidateId)
+
+    assert.equal(opportunities.getQuestion(second)?.status, 'answered')
+    assert.equal(
+      opportunities.getQuestion(first)?.status,
+      'open',
+      'the older one is untouched: they said which they meant',
+    )
+  })
+
+  it('says a question is closed instead of eating the answer', async () => {
+    // The same message quoted again, now that it has been answered. Before
+    // this, the reply was "nothing is open right now" — after somebody had
+    // sat and answered it a second time.
+    updates = [replyTo(61, 'Also the Manfred community.', Number(secondMessageId))]
+
+    await inbound.pollTelegram(candidateId)
+
+    const row = inboundDb.findInboundMessage('telegram', '61')
+    assert.equal(row?.outcome, 'already_settled')
+    assert.equal(row?.about_id, second)
+    assert.match(
+      String((sent()[0]?.body as { text: string }).text),
+      /already answered that one — Head of Growth at Solenne/,
+    )
+    assert.equal(
+      opportunities.getQuestion(first)?.status,
+      'open',
+      'and the one that is genuinely open stays open',
+    )
+  })
+
+  it('tells them how to pick when it had to guess', async () => {
+    // Two open and no quote: it takes the oldest, which is a guess, and a
+    // guess has to be said out loud or the answer lands somewhere they
+    // cannot see.
+    opportunities.insertQuestion({
+      candidate_id: candidateId,
+      opportunity_id: opportunityId,
+      decision_id: null,
+      unknown_id: null,
+      question: 'Which of those did you run end to end?',
+      reason: 'Two of them overlap.',
+    })
+    updates = [update(62, 'Mostly content and video.')]
+
+    await inbound.pollTelegram(candidateId)
+
+    assert.equal(opportunities.getQuestion(first)?.status, 'answered')
+    assert.match(
+      String((sent()[0]?.body as { text: string }).text),
+      /more than one thing open[\s\S]*reply to its/,
+    )
   })
 })

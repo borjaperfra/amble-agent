@@ -31,8 +31,17 @@ import {
   settleInboundMessage,
   type InboundOutcome,
 } from '../db/inbound'
-import { listAuditEvents, listPendingInterruptions, recordAuditEvent } from '../db/opportunities'
-import { answerQuestion, openQuestionFor } from './opportunity-questions'
+import {
+  getOpportunity,
+  getQuestion,
+  listAuditEvents,
+  listOpenQuestions,
+  listPendingInterruptions,
+  recordAuditEvent,
+  type OpportunityQuestionRow,
+} from '../db/opportunities'
+import { findNotificationByExternalId, type NotificationRow } from '../db/notifications'
+import { answerQuestion } from './opportunity-questions'
 import { recordCandidateResponse } from './opportunities'
 import { baseUrl } from './notify'
 import { readPreferences } from './preferences'
@@ -83,24 +92,41 @@ export interface HandledMessage {
 /**
  * What the words are worth here, in the order of what is waiting.
  *
- * The order is the whole of it. A command is a command. Otherwise, if a
- * question is open, whatever they wrote is its answer — all of it, unparsed,
- * because the extractor downstream reads a sentence better than a regular
- * expression does. Only when nothing is open does a message become something
- * to acknowledge rather than act on.
+ * The first question is which message they are replying to. Telegram's own
+ * reply UI puts that in the update for free, and it is what makes several
+ * things in flight at once safe: on the first real run four messages went
+ * out at once, and without the quote every answer after the first was either
+ * filed against the oldest open question or told there was nothing open.
+ *
+ * After that the order is the whole of it. A command is a command.
+ * Otherwise, if a question is open, whatever they wrote is its answer — all
+ * of it, unparsed, because the extractor downstream reads a sentence better
+ * than a regular expression does. Only when nothing is open does a message
+ * become something to acknowledge rather than act on.
  *
  * Nothing is thrown away quietly: every branch returns an outcome that gets
  * written down next to what they sent.
  */
-export function handleMessage(candidateId: string, raw: string): HandledMessage {
+export function handleMessage(
+  candidateId: string,
+  raw: string,
+  replyToMessageId: number | null = null,
+): HandledMessage {
   const { command, text } = classifyMessage(raw)
+  const quoted = replyToMessageId
+    ? (findNotificationByExternalId('telegram', String(replyToMessageId)) ?? null)
+    : null
 
   if (command === 'start' || command === 'help') {
     return { outcome: 'greeted', about: null, reply: GREETING }
   }
 
   if (command === 'yes' || command === 'no') {
-    return respondToInterruption(candidateId, command === 'yes' ? 'HEAR_THEM_OUT' : 'NOT_FOR_ME')
+    return respondToInterruption(
+      candidateId,
+      command === 'yes' ? 'HEAR_THEM_OUT' : 'NOT_FOR_ME',
+      quoted,
+    )
   }
 
   if (text.length === 0) {
@@ -112,30 +138,13 @@ export function handleMessage(candidateId: string, raw: string): HandledMessage 
     }
   }
 
-  const question = openQuestionFor(candidateId)
-  if (question) {
-    const result = answerQuestion(question.id, text)
-    if (!result.ok) {
-      return {
-        outcome: 'failed',
-        about: { type: 'question', id: question.id },
-        detail: result.error,
-        reply: `I could not write that down: ${result.error}`,
-      }
-    }
-    return {
-      outcome: 'answered_question',
-      about: { type: 'question', id: question.id },
-      // Word for word what the screen says once an answer is in. The same
-      // moment told two ways in two places is two products.
-      reply: [
-        'Thank you. Noted.',
-        '',
-        "I'm working it into what I know about you. If it changes what I think of that role,",
-        "you'll hear from me; if it doesn't, you won't.",
-      ].join('\n'),
-    }
+  if (quoted) {
+    const routed = answerQuoted(candidateId, quoted, text)
+    if (routed) return routed
   }
+
+  const open = listOpenQuestions(candidateId)
+  if (open.length > 0) return answerOne(open[0], text, open.length > 1)
 
   const pending = listPendingInterruptions(candidateId)
   if (pending.length === 1) {
@@ -164,43 +173,167 @@ export function handleMessage(candidateId: string, raw: string): HandledMessage 
 }
 
 /**
- * A yes or a no, against the one thing it can be about.
+ * The message they quoted, and what it was about.
  *
- * With two interruptions waiting there is no way to tell which one a bare
- * yes belongs to, and guessing would record a decision about a job they were
- * not thinking of. So it says so, and points at the screen where both are
- * visible with their names on.
+ * Returns null when the quote settles nothing — a reply to my own "thank
+ * you", say — and the ordinary order takes over from there.
  */
-function respondToInterruption(candidateId: string, response: CandidateResponse): HandledMessage {
-  const pending = listPendingInterruptions(candidateId)
+function answerQuoted(
+  candidateId: string,
+  quoted: NotificationRow,
+  text: string,
+): HandledMessage | null {
+  if (quoted.about_type === 'question') {
+    const question = getQuestion(quoted.about_id)
+    if (!question) return null
+    if (question.status === 'open') return answerOne(question, text, false)
 
-  if (pending.length === 0) {
+    // The one that actually happened: four messages arrive at once, three of
+    // them about questions answered hours earlier on the screen, and nothing
+    // on the phone says so. Naming it and saying it is closed is the least
+    // this owes somebody who sat and answered it a second time.
     return {
-      outcome: 'nothing_pending',
-      about: null,
-      reply: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
-    }
-  }
-
-  if (pending.length > 1) {
-    return {
-      outcome: 'ambiguous',
-      about: null,
-      detail: `${pending.length} interruptions waiting`,
+      outcome: 'already_settled',
+      about: { type: 'question', id: question.id },
+      detail: 'a reply to a question that was already answered',
       reply: [
-        `There are ${pending.length} waiting, so I don't know which one you mean.`,
+        `You had already answered that one${about(question.opportunity_id)}, so it is closed.`,
         '',
-        `They are on the screen: ${baseUrl()}/listening`,
+        "I've kept what you just wrote, but on its own it doesn't change anything.",
       ].join('\n'),
     }
   }
 
-  const { opportunity } = pending[0]
-  const result = recordCandidateResponse(opportunity.id, response)
+  if (quoted.about_type === 'opportunity') {
+    const waiting = listPendingInterruptions(candidateId).some(
+      (item) => item.opportunity.id === quoted.about_id,
+    )
+    if (waiting) {
+      return {
+        outcome: 'ambiguous',
+        about: { type: 'opportunity', id: quoted.about_id },
+        detail: 'words arrived where a yes or a no was needed',
+        reply: [
+          `That one${about(quoted.about_id)} needs a yes or a no from you.`,
+          '',
+          "Reply /yes and I'll write down that you want to hear them out, /no and it's gone.",
+        ].join('\n'),
+      }
+    }
+    return {
+      outcome: 'already_settled',
+      about: { type: 'opportunity', id: quoted.about_id },
+      detail: 'a reply to an interruption that was already answered',
+      reply: `You already told me what you thought of that one${about(quoted.about_id)}.`,
+    }
+  }
+
+  return null
+}
+
+/**
+ * Take it as the answer to this question, and say which one it went on.
+ *
+ * Naming the role is not decoration. On a screen there is one question in
+ * front of them; in a chat there may be four, hours apart, and an answer
+ * that disappears into "noted" leaves them no way to know it landed where
+ * they meant it to.
+ */
+function answerOne(
+  question: OpportunityQuestionRow,
+  text: string,
+  othersOpen: boolean,
+): HandledMessage {
+  const result = answerQuestion(question.id, text)
   if (!result.ok) {
     return {
       outcome: 'failed',
-      about: { type: 'opportunity', id: opportunity.id },
+      about: { type: 'question', id: question.id },
+      detail: result.error,
+      reply: `I could not write that down: ${result.error}`,
+    }
+  }
+
+  const lines = [
+    `Thank you. Noted${about(question.opportunity_id)}.`,
+    '',
+    // Word for word what the screen says once an answer is in. The same
+    // moment told two ways in two places is two products.
+    "I'm working it into what I know about you. If it changes what I think of that role,",
+    "you'll hear from me; if it doesn't, you won't.",
+  ]
+  if (othersOpen) {
+    lines.push(
+      '',
+      'There is more than one thing open. If you meant one of the others, reply to its',
+      "message and I'll put it there.",
+    )
+  }
+
+  return {
+    outcome: 'answered_question',
+    about: { type: 'question', id: question.id },
+    reply: lines.join('\n'),
+  }
+}
+
+/** " — Head of Growth at Ridgeline AI", or nothing if it has gone. */
+function about(opportunityId: string): string {
+  const opportunity = getOpportunity(opportunityId)
+  return opportunity ? ` — ${opportunity.role} at ${opportunity.company}` : ''
+}
+
+/**
+ * A yes or a no, against the one thing it can be about.
+ *
+ * A quoted message says which one and settles it. Without one, and with two
+ * interruptions waiting, there is no way to tell which a bare yes belongs to
+ * — and guessing would record a decision about a job they were not thinking
+ * of. So it says so, and asks them to reply to the one they mean.
+ */
+function respondToInterruption(
+  candidateId: string,
+  response: CandidateResponse,
+  quoted: NotificationRow | null,
+): HandledMessage {
+  const pending = listPendingInterruptions(candidateId)
+
+  const quotedId =
+    quoted?.about_type === 'opportunity' &&
+    pending.some((item) => item.opportunity.id === quoted.about_id)
+      ? quoted.about_id
+      : null
+
+  if (!quotedId) {
+    if (pending.length === 0) {
+      return {
+        outcome: 'nothing_pending',
+        about: null,
+        reply: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
+      }
+    }
+
+    if (pending.length > 1) {
+      return {
+        outcome: 'ambiguous',
+        about: null,
+        detail: `${pending.length} interruptions waiting`,
+        reply: [
+          `There are ${pending.length} waiting, so I don't know which one you mean.`,
+          '',
+          "Reply to the one you mean and I'll take it from there, or they are all on the",
+          `screen: ${baseUrl()}/listening`,
+        ].join('\n'),
+      }
+    }
+  }
+
+  const opportunityId = quotedId ?? pending[0].opportunity.id
+  const result = recordCandidateResponse(opportunityId, response)
+  if (!result.ok) {
+    return {
+      outcome: 'failed',
+      about: { type: 'opportunity', id: opportunityId },
       detail: result.error,
       reply: `I could not write that down: ${result.error}`,
     }
@@ -208,18 +341,18 @@ function respondToInterruption(candidateId: string, response: CandidateResponse)
 
   return {
     outcome: 'recorded_response',
-    about: { type: 'opportunity', id: opportunity.id },
+    about: { type: 'opportunity', id: opportunityId },
     // Again, what the screen says. The medium changed, not the Rep.
     reply:
       response === 'HEAR_THEM_OUT'
         ? [
-            "Good. I've written that down.",
+            `Good. I've written that down${about(opportunityId)}.`,
             '',
             "Nothing has gone to them. I can't talk to a company on your behalf yet — when I can,",
             'this is where it starts.',
           ].join('\n')
         : [
-            "Fine. That one's gone.",
+            `Fine. That one's gone${about(opportunityId)}.`,
             '',
             "I haven't changed what I'm listening for. A no is about that job, not about the shape",
             'of what you want.',
@@ -236,8 +369,8 @@ const GREETING = [
   '',
   "Reply /yes and I'll write down that you want to hear them out, /no and it's gone.",
   '',
-  'And if I need one thing before I can tell you, I will ask. Whatever you write back is the',
-  'answer — you never have to open anything.',
+  'And if I need one thing before I can tell you, I will ask. Reply to that message and',
+  'whatever you write is the answer — you never have to open anything.',
 ].join('\n')
 
 // ─── Going and getting it ─────────────────────────────────────────────────
@@ -316,7 +449,7 @@ async function handleOne(
 
   let handled: HandledMessage
   try {
-    handled = handleMessage(candidateId, message.text)
+    handled = handleMessage(candidateId, message.text, message.replyToMessageId)
   } catch (error) {
     // The claim already says `failed`, so what they wrote is kept and the
     // reason sits next to it. One message nobody can read does not end the

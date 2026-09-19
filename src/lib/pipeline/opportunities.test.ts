@@ -562,6 +562,51 @@ describe('the message that goes out', () => {
     }
   })
 
+  it('does not send a question they answered before there was anywhere to send it', async () => {
+    // The first real Telegram run, exactly: four messages arrive at once,
+    // three of them asking for something answered on the screen hours
+    // earlier. He answered them again, carefully, and was told there was
+    // nothing open.
+    const opportunity = ingest('Halvard Stale', 'test-notice-stale')
+    const store = await import('../db/opportunities')
+    const outbox = await import('../db/notifications')
+    const notify = await import('./notify')
+
+    const question = store.insertQuestion({
+      candidate_id: candidateId,
+      opportunity_id: opportunity.id,
+      decision_id: null,
+      unknown_id: null,
+      question: 'Have you run a developer community yourself?',
+      reason: 'It turns on that.',
+    }).question
+
+    preferences.writePreferences(candidateId, { notifyChannels: ['email'] })
+    notify.queueQuestionNotice(candidateId, question.id)
+    assert.equal(outbox.findNotification('question', question.id, 'email')?.status, 'unconfigured')
+
+    // Answered on the screen, while the outbox still had nowhere to go.
+    store.recordQuestionAnswer(question.id, 'Yes, 120k developers at Manfred.')
+
+    process.env.AMBLE_SMTP_HOST = 'smtp.example.test'
+    process.env.AMBLE_SMTP_FROM = 'rep@amble.test'
+    try {
+      preferences.writePreferences(candidateId, {
+        notifyChannels: ['email'],
+        notifyEmail: 'borja@example.com',
+      })
+      notify.resumeUnsentNotices(candidateId)
+
+      const note = outbox.findNotification('question', question.id, 'email')
+      assert.equal(note?.status, 'obsolete', 'it is not asked a second time')
+      assert.match(String(note?.last_error), /answered it before this could be sent/)
+    } finally {
+      delete process.env.AMBLE_SMTP_HOST
+      delete process.env.AMBLE_SMTP_FROM
+      preferences.writePreferences(candidateId, { notifyChannels: [], notifyEmail: '' })
+    }
+  })
+
   it('does not write a second copy when the evaluation is run again', async () => {
     const opportunity = ingest('Halvard Twice', 'test-notice-twice')
     await pipeline.evaluateOpportunity(opportunity.id, runners())

@@ -35,6 +35,13 @@ export interface InboundTelegramMessage {
   /** Whatever the chat calls itself, for the trace. Never used to decide. */
   sender: string
   text: string
+  /**
+   * The message this one is a reply to, when they quoted one.
+   *
+   * It is how an answer says which question it belongs to. Telegram's own
+   * reply UI fills it in, so it costs the person nothing.
+   */
+  replyToMessageId: number | null
 }
 
 export class TelegramError extends Error {
@@ -68,7 +75,11 @@ export function fitMessage(text: string, limit = TELEGRAM_LIMIT): string {
 }
 
 /**
- * Send it, or throw with what Telegram said.
+ * Send it, or throw with what Telegram said. Hands back the message id.
+ *
+ * The id is worth keeping: a reply quotes the message it answers, so it is
+ * the only thing that ties an answer to the question it is about when more
+ * than one is in flight.
  *
  * The token never reaches the error message: these end up in a job's
  * `last_error`, and a bot token in a database column is a bot somebody else
@@ -78,7 +89,7 @@ export async function sendTelegramMessage(
   config: TelegramConfig,
   chatId: string,
   text: string,
-): Promise<void> {
+): Promise<string | null> {
   let response: Response
   try {
     response = await fetch(`${API}/bot${config.token}/sendMessage`, {
@@ -103,6 +114,7 @@ export async function sendTelegramMessage(
     ok?: boolean
     error_code?: number
     description?: string
+    result?: { message_id?: number }
   } | null
 
   if (!response.ok || body?.ok !== true) {
@@ -111,6 +123,9 @@ export async function sendTelegramMessage(
       body?.error_code ?? response.status,
     )
   }
+
+  const messageId = body.result?.message_id
+  return typeof messageId === 'number' ? String(messageId) : null
 }
 
 /**
@@ -226,10 +241,13 @@ function asMessage(update: unknown): InboundTelegramMessage | null {
     .filter(Boolean)
     .join(' ')
 
+  const replyTo = (message?.reply_to_message as { message_id?: number } | undefined)?.message_id
+
   return {
     updateId,
     chatId: String(chat.id),
     sender,
     text: typeof message?.text === 'string' ? message.text : '',
+    replyToMessageId: typeof replyTo === 'number' ? replyTo : null,
   }
 }

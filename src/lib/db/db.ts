@@ -426,6 +426,16 @@ function migrate(db: DatabaseSync): void {
   if (!has('preferences', 'notify_telegram')) {
     db.exec('ALTER TABLE preferences ADD COLUMN notify_telegram TEXT;')
   }
+  if (!has('notifications', 'external_id')) {
+    // Which message this became on the far side, so a reply that quotes it
+    // can be traced back to what it was about. Telegram hands the id back
+    // when the message is sent, and without it several things in flight at
+    // once are indistinguishable on the way home.
+    db.exec('ALTER TABLE notifications ADD COLUMN external_id TEXT;')
+  }
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS notifications_by_external ON notifications (channel, external_id);',
+  )
   if (!has('opportunities', 'source_ref')) {
     db.exec('ALTER TABLE opportunities ADD COLUMN source_ref TEXT;')
   }

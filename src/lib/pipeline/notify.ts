@@ -19,14 +19,22 @@ import { getSmtpConfig, getTelegramConfig, smtpProblem } from '@/lib/features'
 import { sendMail } from '@/lib/notify/smtp'
 import { sendTelegramMessage } from '@/lib/notify/telegram'
 import { getInterruptionFor, type InterruptionView } from '../opportunity-view'
-import { getOpportunity, getQuestion, recordAuditEvent } from '../db/opportunities'
+import {
+  getOpportunity,
+  getQuestion,
+  listPendingInterruptions,
+  recordAuditEvent,
+} from '../db/opportunities'
 import {
   getNotification,
   insertNotification,
   listUnsentNotifications,
   markNotificationFailed,
   markNotificationQueued,
+  markNotificationObsolete,
   markNotificationSent,
+  setNotificationExternalId,
+  updateNotificationBody,
   type NotificationChannel,
   type NotificationRow,
 } from '../db/notifications'
@@ -304,17 +312,94 @@ export function resumeUnsentNotices(candidateId: string): number {
   const preferences = readPreferences(candidateId)
   let resumed = 0
 
+  const pending = new Set(listPendingInterruptions(candidateId).map((item) => item.opportunity.id))
+
   for (const notification of listUnsentNotifications(candidateId)) {
     const channel = notification.channel
     if (!preferences.notifyChannels.includes(channel)) continue
+
+    // Still true? Setting a channel up months later must not deliver a
+    // question somebody already answered on the screen. They would answer it
+    // again — carefully, because it was asked carefully — and be told there
+    // was nothing open. Measured the hard way, on the first real run.
+    const reason = staleReason(notification, pending)
+    if (reason) {
+      markNotificationObsolete(notification.id, reason)
+      continue
+    }
+
     const address = addressFor(preferences, channel)
     if (!address || !configuredFor(channel)) continue
+
+    // Written for nowhere in particular, and now going somewhere specific.
+    // The one line that depends on the channel is the line telling them how
+    // to answer, and a message that arrives on Telegram saying "answer on
+    // the screen" is the exact thing this was built to stop.
+    const rewritten = rebuild(notification)
+    if (rewritten && rewritten !== notification.body) {
+      updateNotificationBody(notification.id, rewritten)
+    }
 
     markNotificationQueued(notification.id, address)
     enqueue('deliver_notification', candidateId, { notificationId: notification.id })
     resumed += 1
   }
   return resumed
+}
+
+/**
+ * Why this one should not go out after all, or null if it still should.
+ *
+ * Only about things that have since been settled. A message that is merely
+ * old is still worth sending: the whole point of the outbox is that a week
+ * without a mail server does not cost somebody an opportunity.
+ */
+function staleReason(
+  notification: NotificationRow,
+  pendingInterruptions: Set<string>,
+): string | null {
+  if (notification.about_type === 'question') {
+    const question = getQuestion(notification.about_id)
+    if (!question) return 'The question it was about is gone.'
+    if (question.status !== 'open') return 'They answered it before this could be sent.'
+    return null
+  }
+
+  if (notification.about_type === 'opportunity') {
+    if (!pendingInterruptions.has(notification.about_id)) {
+      return 'They answered it, or it is no longer an interruption.'
+    }
+  }
+  return null
+}
+
+/**
+ * The same message, said the way this channel says it.
+ *
+ * Only what the builders produce now, and only for something still waiting:
+ * if the decision behind it is gone or has changed, the stored text stays as
+ * it is rather than being quietly replaced with something else.
+ */
+function rebuild(notification: NotificationRow): string | null {
+  if (notification.about_type === 'opportunity') {
+    const interruption = getInterruptionFor(notification.about_id)
+    return interruption ? bodyFor(interruption, notification.channel) : null
+  }
+
+  if (notification.about_type === 'question') {
+    const question = getQuestion(notification.about_id)
+    const opportunity = question ? getOpportunity(question.opportunity_id) : null
+    if (!question || !opportunity) return null
+    return questionBodyFor({
+      company: opportunity.company,
+      role: opportunity.role,
+      question: question.question,
+      reason: question.reason,
+      channel: notification.channel,
+    })
+  }
+
+  return null
 }
 
 // ─── Getting it sent ──────────────────────────────────────────────────────
@@ -343,8 +428,9 @@ export async function deliverNotificationJob(notificationId: string): Promise<vo
     return
   }
 
+  let externalId: string | null = null
   try {
-    await send()
+    externalId = await send()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The message did not go out.'
     markNotificationFailed(notification.id, message, 'failed')
@@ -354,6 +440,10 @@ export async function deliverNotificationJob(notificationId: string): Promise<vo
     if ((error as { permanent?: boolean }).permanent === true) return
     throw error
   }
+
+  // Before it is marked sent: this is what a reply will quote, and a reply
+  // that arrives before we have written the id down has nothing to match.
+  if (externalId) setNotificationExternalId(notification.id, externalId)
 
   markNotificationSent(notification.id)
   recordAuditEvent({
@@ -372,14 +462,23 @@ export async function deliverNotificationJob(notificationId: string): Promise<vo
  * message never changes between them: what the screen says, word for word.
  * Only the envelope differs.
  */
-function deliveryFor(notification: NotificationRow): (() => Promise<void>) | null {
+function deliveryFor(notification: NotificationRow): (() => Promise<string | null>) | null {
   const address = notification.address
   if (!address) return null
 
   if (notification.channel === 'email') {
     const config = getSmtpConfig()
     return config
-      ? () => sendMail(config, { to: address, subject: notification.subject, text: notification.body })
+      ? async () => {
+          await sendMail(config, {
+            to: address,
+            subject: notification.subject,
+            text: notification.body,
+          })
+          // SMTP hands back a queue id that means nothing to us: there is no
+          // inbound path on this channel to match it against.
+          return null
+        }
       : null
   }
 

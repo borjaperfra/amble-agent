@@ -17,7 +17,19 @@ export type NotificationChannel = 'email' | 'whatsapp' | 'telegram'
  * between a server that refused the message and a channel nobody set up, and
  * the person waiting for the message is entitled to know which one they have.
  */
-export type NotificationStatus = 'pending' | 'sent' | 'failed' | 'unconfigured'
+/**
+ * `obsolete` is the fifth: written, never sent, and no longer true by the
+ * time there was somewhere to send it. A question answered on the screen
+ * three hours ago must not arrive on a phone as "one thing before I can
+ * say" — the person would answer it again, and be told there was nothing
+ * open.
+ */
+export type NotificationStatus =
+  | 'pending'
+  | 'sent'
+  | 'failed'
+  | 'unconfigured'
+  | 'obsolete'
 
 export interface NotificationRow {
   id: string
@@ -29,6 +41,8 @@ export interface NotificationRow {
   about_type: string
   about_id: string
   status: NotificationStatus
+  /** What the far side called it: a Telegram message id, once sent. */
+  external_id: string | null
   attempts: number
   last_error: string | null
   created_at: string
@@ -93,6 +107,41 @@ export function findNotification(
     .get(aboutType, aboutId, channel) as unknown as NotificationRow | undefined
 }
 
+/**
+ * Overtaken by events.
+ *
+ * Kept rather than deleted, with the reason: "we never told you" needs an
+ * answer, and so does "you told me about something I had already dealt
+ * with". It never comes back to the queue.
+ */
+export function markNotificationObsolete(id: string, reason: string): void {
+  getDb()
+    .prepare("UPDATE notifications SET status = 'obsolete', last_error = ? WHERE id = ?")
+    .run(reason.slice(0, 500), id)
+}
+
+/** What the channel called the message it just delivered. */
+export function setNotificationExternalId(id: string, externalId: string): void {
+  getDb().prepare('UPDATE notifications SET external_id = ? WHERE id = ?').run(externalId, id)
+}
+
+/**
+ * The message they are replying to.
+ *
+ * This is what makes several things in flight at once safe: without it, an
+ * answer is assumed to be about the oldest open question, and somebody
+ * working down four messages on their phone would have three of their
+ * answers filed against the wrong one.
+ */
+export function findNotificationByExternalId(
+  channel: NotificationChannel,
+  externalId: string,
+): NotificationRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM notifications WHERE channel = ? AND external_id = ?')
+    .get(channel, externalId) as unknown as NotificationRow | undefined
+}
+
 export function markNotificationSent(id: string): void {
   getDb()
     .prepare(
@@ -128,6 +177,19 @@ export function listUnsentNotifications(candidateId: string): NotificationRow[] 
        ORDER BY created_at`,
     )
     .all(candidateId) as unknown as NotificationRow[]
+}
+
+/**
+ * Rewrite one that never went out.
+ *
+ * Only ever called for a row that is still waiting: a sent message is a
+ * thing somebody has read, and editing our copy of it afterwards would make
+ * the outbox a worse record than their inbox.
+ */
+export function updateNotificationBody(id: string, body: string): void {
+  getDb()
+    .prepare("UPDATE notifications SET body = ? WHERE id = ? AND status <> 'sent'")
+    .run(body, id)
 }
 
 /** Back on the queue, with whatever address is current. */
