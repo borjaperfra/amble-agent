@@ -200,7 +200,8 @@ export default function UserZeroListeningFlow({
             <section className={styles.deal} aria-label="What happens from here">
               <p className="kicker">From here</p>
               <p className={styles.dealLead}>
-                Nothing is arriving yet. When something does, this is the deal.
+                Offers have started arriving — I&rsquo;m reading Manfred&rsquo;s board for now.
+                Almost none of them will reach you. That is the deal.
               </p>
               <ul className={styles.dealList}>
                 <li className={styles.dealItem}>

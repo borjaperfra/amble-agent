@@ -123,37 +123,60 @@ demasiado. La medida está para eso.
 
 ### Las ofertas ya llegan solas
 
-Manfred no tiene API pública —`/v2/manfredite/offer-filter` pide token— pero
-su `robots.txt` lo permite todo y publica `sitemap-offers.xml` con ~1.650
-ofertas activas, y cada página lleva el anuncio entero en `__NEXT_DATA__`:
-salario, % de remoto, ciudades, requisitos, secciones. Por la puerta de
-delante y sin llave.
+**Manfred sí tiene API pública**, y es la que usa su propia página:
 
-- `src/lib/sources/manfred.ts` lee el sitemap y las páginas. El parseo es puro
-  y está probado contra las rarezas que importan: el salario se guarda en
-  miles (35 son 35.000, y tomarlo literal lo suspendería todo), `remote` es un
-  porcentaje y no un modo, la moneda es un glifo, y las listas son `{id,item}`.
-- `src/lib/pipeline/manfred-sync.ts` sincroniza sobre la cola: una petición
-  cada vez con pausa, User-Agent que dice quién es, y una oferta ya guardada
-  no se vuelve a pedir (`source_ref` único por candidato).
-- **El filtro gratis primero.** Lo que el feed da como número —lo que paga,
-  cuánto es presencial— se comprueba en código con el mismo
-  `deterministicHardConstraints` que usa el pipeline después. Lo que no pasa
-  se guarda con el motivo y no cuesta ni una llamada. Con 1.650 ofertas y un
-  minuto de razonamiento cada una, esa criba es la diferencia entre un clic y
-  un día de cómputo.
+```
+GET /api/v2/public/offers?onlyActive=true&lang=ES   todas las vivas (17 hoy)
+GET /api/v2/public/offers?lang=ES                   las 1.651 con histórico
+GET /api/v2/public/offers/{id}?lang=ES              una, entera
+```
+
+(Me equivoqué la primera vez: probé `/api/v2/public/offers` en
+`api.getmanfred.com`, que lleva `/api` de más y da 404, y me quedé con
+`offer-filter`, que pide token y en realidad es para las alertas guardadas de
+un usuario. El endpoint bueno está en el chunk perezoso del listado.)
+
+Sin llave y sin nada privado. Y la forma de esa primera llamada manda sobre
+todo lo demás: **una** petición devuelve todas las ofertas vivas con lo que
+pagan, cuánto es presencial y dónde — justo lo que el dominio puede
+comprobar gratis.
+
+- `src/lib/sources/manfred.ts` habla con la API. El parseo es puro y está
+  probado contra las rarezas que importan: `equityInf: 0` es "no hay equity",
+  no "cero por ciento"; `remotePercentage` es un porcentaje y no un modo; la
+  moneda es un glifo; y `techs` viene ya graduado en MUST/SHOULD/COULD, que
+  es lo más parecido a una rúbrica que tiene la fuente, así que se conserva.
+- `src/lib/pipeline/manfred-sync.ts` sincroniza sobre la cola.
+- **La criba gratis, primero, y sobre el listado.** Con los números que da la
+  lista se corre el mismo `deterministicHardConstraints` que usa el pipeline
+  después. Lo que no pasa se guarda con el motivo y **no se llega ni a
+  descargar**. Solo lo que sobrevive se pide entero, de una en una y con
+  pausa, y una oferta ya guardada no se vuelve a pedir (`source_ref` único).
 - `POST /api/sources/manfred` y un botón en el laboratorio. `maxEvaluations`
   limita cuántas supervivientes se evalúan por tanda.
 
-Probado de verdad: 25 leídas, **13 descartadas gratis** ("At least 120.000
-EUR. The posting tops out at 55.000 EUR. Works remote. The role is hybrid"),
-4 entraron, 2 evaluadas. Una salió IGNORE (Staff Mobile Engineer, no es su
-oficio) y otra HOLD (Senior Backend Engineer, requisitos todos sin soporte).
+Probado de verdad: 17 vivas, **13 descartadas sin descargar nada** ("At least
+120.000 EUR. The posting tops out at 45.000 EUR. Works remote. The role is
+hybrid"), 4 bajadas enteras (11-14 mil caracteres de anuncio bien
+estructurado, contra los blobs que salían del HTML).
 
-Ese HOLD es la pega a mirar: con el embudo abierto, HOLD se convierte en el
-cajón de "no es para ti pero es remoto y paga bien". No llega al candidato,
-así que solo cuesta cómputo — pero si crece, la regla que lo permite es
-`positiveSignal`, y habrá que apretarla.
+**La siguiente decisión de calibración, y ya hay caso.** Con ofertas reales,
+HOLD se convierte en el cajón de "no es para ti pero es remoto y paga bien":
+un Senior Backend Engineer salió HOLD con el motivo del propio modelo — *"the
+candidate's record is entirely marketing, growth and design"*. Eso no es
+esperar información, es que no sabe hacer el trabajo, y ninguna respuesta de
+la empresa lo cambia.
+
+Lo permite `positiveSignal` en `decisionSignals`: basta con que *algo* apunte
+en la buena dirección, y la alineación de intención sola (remoto, paga bien,
+seed) ya cuenta. La regla simétrica de la de INTERRUPT sería: **un HOLD
+también necesita algo del lado de la evidencia**. Si ningún requisito
+material está ni parcialmente soportado por evidencia citable, y no falta
+nada que él pusiera como condición, es IGNORE.
+
+No lo he tocado: es un cambio de regla y merece su propia medición, y las
+diez fixtures no cubren este caso (todas son de su oficio). No cuesta nada
+mientras tanto — HOLD no llega al candidato.
 
 ### El aviso sale de la máquina
 
@@ -234,12 +257,18 @@ Antes de esa sesión: borrar `.amble-data/`. El intent ya está limpio (arriba),
 pero la base sigue teniendo dentro las diez fixtures de Opportunity Zero.
 
 El agujero de "no llega nada" está tapado a medias: Manfred entra sola, pero
-es una sola fuente y española. El copy de listening todavía dice "Nothing is
-arriving yet", y eso **ya no es verdad** en cuanto se sincroniza — hay que
-reescribirlo, y decidir si la pantalla cuenta cuántas ha mirado y descartado
-o si eso es exactamente el ruido que prometimos no hacer. Mi voto: no contar
-nada. El silencio es la respuesta, y un contador de "he mirado 1.650 ofertas
-por ti" es la métrica de vanidad que el spec prohíbe en §16.
+es una sola fuente, española, y con 17 ofertas vivas — de las que 13 se caen
+por el suelo de 120k. El embudo real para este candidato son cuatro ofertas,
+y ninguna es de marketing. Hace falta otra fuente antes de que la medición
+con ofertas reales diga nada.
+
+Nadie la dispara sola todavía: el botón del laboratorio o la ruta. Un cron es
+lo siguiente obvio.
+
+El copy de listening ya está cambiado: decía "Nothing is arriving yet", que
+dejó de ser verdad. Ahora dice de dónde vienen y que casi ninguna llegará. No
+lleva contador a propósito — "he mirado 1.650 ofertas por ti" es la métrica
+de vanidad que el spec prohíbe en §16.
 
 ## Decidido en User Zero, no volver a abrirlo
 

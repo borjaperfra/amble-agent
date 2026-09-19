@@ -1,159 +1,154 @@
 /**
- * Reading Manfred's feed, without Manfred.
+ * Reading Manfred's public API, without Manfred.
  *
- * The fixture below is the shape of a real offer page, trimmed: same field
- * names, same units, same quirks. Those quirks are the whole reason this
- * file exists — a salary stored as `35`, a `remote` that is a percentage
- * rather than a mode, a currency that is a glyph, and lists of `{id, item}`
- * where you would expect strings. Getting any of them wrong would fail
- * somebody on a number that was never there.
+ * The fixtures below are the shape the API actually answers with, trimmed:
+ * same field names, same units, same quirks. Those quirks are the whole
+ * reason this file exists — `equityInf: 0` meaning none rather than zero
+ * percent, a `remotePercentage` that is a share and not a mode, a currency
+ * that is a glyph, `techs` graded MUST/SHOULD/COULD. Getting any of them
+ * wrong would fail somebody on a number that was never there.
  */
 
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   composeRawText,
-  offerUrls,
-  parseOfferPage,
   rubricFromFeed,
+  summaryFrom,
+  summaryText,
   workModelFor,
+  type ManfredSummary,
 } from './manfred'
 import { deterministicHardConstraints } from '@/domains/opportunity/rules'
 
-const offer = {
-  slug: 'halvard-head-of-growth-sept26',
+const listed = {
   id: 8476,
-  title: 'Head of Growth & Community',
-  company: 'Halvard',
-  companyUrl: 'https://halvard.example',
-  url: '/8476/halvard-head-of-growth-sept26',
-  badges: [
-    { id: '0', item: '🛸 Startup' },
-    { id: '1', item: '🕐 Horario Flexible' },
-  ],
+  position: 'Head of Growth & Community',
+  slug: 'halvard-head-of-growth',
+  status: 'ACTIVE',
+  salaryFrom: 130_000,
+  salaryTo: 150_000,
+  bonus: 0,
+  remotePercentage: 100,
   equityInf: 0.8,
   equitySup: 1.2,
   currency: '€',
-  salaryMin: 130,
-  salaryMax: 150,
-  remote: 100,
-  active: true,
-  status: 'ACTIVE',
+  highlights: ['🛸 Startup', '🕐 Horario Flexible'],
+  locations: ['Valencia, España', 'Madrid, España'],
+  offerLanguages: ['ES'],
   updatedAt: '2026-09-18T07:48:11.546Z',
-  locationsSummary: {
-    trimmedCities: ['Valencia'],
-    extraCities: ['Madrid'],
-  },
-  heroSectionData: { jobDescription: 'An EU inference platform for developers.' },
-  requirementsSectionData: {
-    requirementsIntro: 'You would own the whole picture.',
-    responsabilities: [
-      { id: 'r0', item: 'Own how developers find us.' },
-      { id: 'r1', item: 'Own the community around the product.' },
-    ],
-  },
-  skillsSectionData: {
-    intro: 'These are the essentials:',
-    skills: [{ id: 's0', item: 'You have grown a developer audience.' }],
-    softSkills: [{ id: 's1', item: 'You can write.' }],
-  },
-  howSectionData: { howIntro: 'Small team, no theatre.', howItems: [] },
-  whenSectionData: {
-    whenIntro: 'Flexible.',
-    highlights: [{ title: 'Vacaciones', value: '25 días' }],
-  },
-  whereSectionData: { jobInfo: 'Anywhere in Europe.' },
-  teamSectionData: { teamInfo: 'Nineteen people.' },
-  offerSectionData: { offerInfo: 'Real equity and the roadmap for it.' },
+  isFreelance: false,
+  company: { name: 'Halvard', web: 'https://halvard.example' },
 }
 
-function pageWith(data: unknown): string {
-  return `<!doctype html><html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
-    { props: { pageProps: { offer: data } } },
-  )}</script></body></html>`
+const detail = {
+  ...listed,
+  introduction: 'An EU inference platform for developers.',
+  whatWillYouDo: 'You would own the whole picture.',
+  responsibilities: ['Own how developers find us.', 'Own the community around the product.'],
+  howWillYouDoIt: 'Small team, no theatre.',
+  whatTheyAskFor: 'These are the essentials:',
+  techs: [
+    { name: 'Developer marketing', section: 'MUST', level: 'ADVANCED' },
+    { name: 'SQL', section: 'COULD', level: 'BASIC' },
+  ],
+  softSkills: [{ name: 'Liderazgo' }],
+  whenWillDoIt: 'Flexible.',
+  whereWillDoIt: 'Anywhere in Europe.',
+  whoWillDoItWith: 'Nineteen people.',
+  whatOffering: 'Real equity and the roadmap for it.',
+  perks: [{ name: 'Presupuesto para formación' }],
+  inOneMonth: 'You will have shipped the first thing.',
+  languages: [{ code: 'ES', name: 'Español', level: 'NativeBilingual' }],
+  workingDayInfo: { isFullTime: true, hasFlexTime: true, annualHolidays: 25 },
 }
 
-// ─── The sitemap ──────────────────────────────────────────────────────────
+const summary = summaryFrom(listed) as ManfredSummary
 
-describe('offerUrls', () => {
-  it('takes the offer pages and leaves everything else', () => {
-    const urls = offerUrls(`<urlset>
-      <url><loc>https://www.getmanfred.com/ofertas-empleo/8476/halvard-head-of-growth</loc></url>
-      <url><loc>https://www.getmanfred.com/ofertas-empleo</loc></url>
-      <url><loc>https://www.getmanfred.com/blog/something</loc></url>
-    </urlset>`)
-    assert.deepEqual(urls, ['https://www.getmanfred.com/ofertas-empleo/8476/halvard-head-of-growth'])
-  })
-})
+// ─── One listing ──────────────────────────────────────────────────────────
 
-// ─── One offer ────────────────────────────────────────────────────────────
-
-describe('parseOfferPage', () => {
-  it('reads the posting out of the page', () => {
-    const parsed = parseOfferPage(pageWith(offer))
-    assert.ok(parsed)
-    assert.equal(parsed.sourceRef, 'manfred:8476')
-    assert.equal(parsed.company, 'Halvard')
-    assert.equal(parsed.title, 'Head of Growth & Community')
-    assert.equal(parsed.url, 'https://www.getmanfred.com/ofertas-empleo/8476/halvard-head-of-growth-sept26')
-    assert.equal(parsed.active, true)
+describe('summaryFrom', () => {
+  it('reads the offer out of the list', () => {
+    assert.ok(summary)
+    assert.equal(summary.sourceRef, 'manfred:8476')
+    assert.equal(summary.company, 'Halvard')
+    assert.equal(summary.position, 'Head of Growth & Community')
+    assert.equal(summary.url, 'https://www.getmanfred.com/ofertas-empleo/8476/halvard-head-of-growth')
+    assert.equal(summary.active, true)
   })
 
-  it('reads money in the units the feed actually stores it in', () => {
-    const parsed = parseOfferPage(pageWith(offer))
-    // 130 in the feed is 130.000 a year. Taking it literally would fail this
-    // candidate on every offer Manfred has ever published.
-    assert.equal(parsed?.salaryMin, 130_000)
-    assert.equal(parsed?.salaryMax, 150_000)
-    assert.equal(parsed?.currency, 'EUR')
+  it('takes money as whole euros and a glyph as a currency', () => {
+    assert.equal(summary.salaryFrom, 130_000)
+    assert.equal(summary.salaryTo, 150_000)
+    assert.equal(summary.currency, 'EUR')
   })
 
   it('treats a salary of zero as not stated, because that is what it means', () => {
-    const parsed = parseOfferPage(pageWith({ ...offer, salaryMin: 0, salaryMax: 0 }))
-    assert.equal(parsed?.salaryMin, null)
-    assert.equal(parsed?.salaryMax, null)
+    const quiet = summaryFrom({ ...listed, salaryFrom: 0, salaryTo: 0 })
+    assert.equal(quiet?.salaryFrom, null)
+    assert.equal(quiet?.salaryTo, null)
   })
 
-  it('keeps every city, not just the ones the card had room for', () => {
-    assert.deepEqual(parseOfferPage(pageWith(offer))?.locations, ['Valencia', 'Madrid'])
+  it('treats zero equity as no equity rather than as a promise of none', () => {
+    assert.equal(summary.equity, '0.8% – 1.2%')
+    assert.equal(summaryFrom({ ...listed, equityInf: 0, equitySup: 0 })?.equity, null)
+  })
+
+  it('keeps every location the offer lists', () => {
+    assert.deepEqual(summary.locations, ['Valencia, España', 'Madrid, España'])
   })
 
   it('knows a closed offer when it sees one', () => {
-    assert.equal(parseOfferPage(pageWith({ ...offer, active: false }))?.active, false)
-    assert.equal(parseOfferPage(pageWith({ ...offer, status: 'CLOSED' }))?.active, false)
+    assert.equal(summaryFrom({ ...listed, status: 'CLOSED' })?.active, false)
+    assert.equal(summaryFrom({ ...listed, status: 'CANCELLED' })?.active, false)
   })
 
-  it('gives up quietly on a page that is not an offer', () => {
-    assert.equal(parseOfferPage('<html><body>nothing here</body></html>'), null)
-    assert.equal(parseOfferPage(pageWith({ id: 1 })), null)
+  it('gives up quietly on something that is not an offer', () => {
+    assert.equal(summaryFrom({ id: 1 }), null)
+    assert.equal(summaryFrom(null), null)
   })
 })
 
 // ─── The posting, put back together ───────────────────────────────────────
 
 describe('composeRawText', () => {
-  const text = composeRawText(offer)
+  const text = composeRawText(summary, detail)
 
   it('states the numbers in words, so the rubric stage can read them', () => {
     assert.match(text, /130\.000 – 150\.000 EUR per year/)
     assert.match(text, /Equity: 0\.8% – 1\.2%/)
     assert.match(text, /fully remote/)
-    assert.match(text, /Based in: Valencia, Madrid/)
+    assert.match(text, /Based in: Valencia, España; Madrid, España/)
+    assert.match(text, /Working day: full time, flexible hours, 25 days of holiday/)
   })
 
-  it('says a missing number is missing rather than leaving it out', () => {
-    // An unstated salary must reach the rubric as unstated: silence there
-    // would come back as an unknown anyway, but a wrong guess would not.
-    const quiet = composeRawText({ ...offer, salaryMin: 0, salaryMax: 0, equityInf: null, equitySup: null })
-    assert.match(quiet, /Salary: not stated/)
-    assert.match(quiet, /Equity: not mentioned/)
+  it('keeps the grading the feed already did on what it wants', () => {
+    // MUST and COULD are the closest thing the source has to importance, and
+    // throwing it away would make the rubric guess at what is required.
+    assert.match(text, /- Developer marketing \(must have, advanced\)/)
+    assert.match(text, /- SQL \(nice to have, basic\)/)
   })
 
   it('carries the posting itself, not a summary of it', () => {
     assert.match(text, /Own the community around the product/)
-    assert.match(text, /You have grown a developer audience/)
     assert.match(text, /Anywhere in Europe/)
     assert.match(text, /Nineteen people/)
+    assert.match(text, /You will have shipped the first thing/)
+  })
+
+  it('says a missing number is missing rather than leaving it out', () => {
+    const quiet = composeRawText(
+      summaryFrom({ ...listed, salaryFrom: 0, salaryTo: 0, equityInf: 0, equitySup: 0 })!,
+      {},
+    )
+    assert.match(quiet, /Salary: not stated/)
+    assert.match(quiet, /Equity: not mentioned/)
+  })
+
+  it('says outright when an offer was never read past the list', () => {
+    const screened = summaryText(summary)
+    assert.match(screened, /130\.000 – 150\.000 EUR/)
+    assert.match(screened, /Not read any further/)
   })
 })
 
@@ -168,6 +163,10 @@ describe('the free screen', () => {
     technologies: [],
     stages: [],
   }
+  const failuresFor = (raw: unknown) =>
+    deterministicHardConstraints(constraints, rubricFromFeed(summaryFrom(raw)!)).filter(
+      (check) => check.verdict === 'FAIL',
+    )
 
   it('maps a remote share to how much presence is being asked for', () => {
     assert.equal(workModelFor(100), 'remote')
@@ -177,33 +176,24 @@ describe('the free screen', () => {
   })
 
   it('lets a good offer through untouched', () => {
-    const parsed = parseOfferPage(pageWith(offer))
-    const failed = deterministicHardConstraints(constraints, rubricFromFeed(parsed!)).filter(
-      (check) => check.verdict === 'FAIL',
-    )
-    assert.deepEqual(failed, [])
+    assert.deepEqual(failuresFor(listed), [])
   })
 
-  it('drops one that pays under the floor before a model ever sees it', () => {
-    const parsed = parseOfferPage(pageWith({ ...offer, salaryMin: 35, salaryMax: 45 }))
-    const failed = deterministicHardConstraints(constraints, rubricFromFeed(parsed!)).filter(
-      (check) => check.verdict === 'FAIL',
-    )
+  it('drops one that pays under the floor before anything is downloaded', () => {
+    const failed = failuresFor({ ...listed, salaryFrom: 35_000, salaryTo: 45_000 })
     assert.equal(failed.length, 1)
     assert.equal(failed[0].id, 'hc_salary')
   })
 
   it('drops one that wants four days in an office', () => {
-    const parsed = parseOfferPage(pageWith({ ...offer, remote: 20 }))
-    const failed = deterministicHardConstraints(constraints, rubricFromFeed(parsed!)).filter(
-      (check) => check.verdict === 'FAIL',
-    )
-    assert.equal(failed[0]?.id, 'hc_work_mode')
+    assert.equal(failuresFor({ ...listed, remotePercentage: 20 })[0]?.id, 'hc_work_mode')
   })
 
   it('never fails an offer for being quiet about what it pays', () => {
-    const parsed = parseOfferPage(pageWith({ ...offer, salaryMin: 0, salaryMax: 0 }))
-    const checks = deterministicHardConstraints(constraints, rubricFromFeed(parsed!))
+    const checks = deterministicHardConstraints(
+      constraints,
+      rubricFromFeed(summaryFrom({ ...listed, salaryFrom: 0, salaryTo: 0 })!),
+    )
     assert.equal(checks.find((check) => check.id === 'hc_salary')?.verdict, 'UNKNOWN')
   })
 })

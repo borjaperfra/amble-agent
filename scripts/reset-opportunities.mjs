@@ -1,8 +1,9 @@
 /**
  * Take the opportunities out of the local database and leave the graph alone.
  *
- *   npm run reset:opportunities          # only the ones loaded from fixtures
- *   npm run reset:opportunities -- --all # hand-entered ones too
+ *   npm run reset:opportunities              # the ones loaded from fixtures
+ *   npm run reset:opportunities -- --manfred # the ones the feed brought in
+ *   npm run reset:opportunities -- --all     # everything, hand-entered too
  *
  * Deleting `.amble-data/` resets everything, which is usually what you want —
  * except here. The Professional Graph behind it costs a CV, an interview and
@@ -19,7 +20,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-const all = process.argv.includes('--all')
+const flags = process.argv.slice(2)
+const all = flags.includes('--all')
+const provenance = ['fixture', 'manfred', 'manual'].find((kind) => flags.includes(`--${kind}`))
 const dbPath = path.join(process.cwd(), '.amble-data', 'amble.db')
 
 if (!fs.existsSync(dbPath)) {
@@ -30,11 +33,12 @@ if (!fs.existsSync(dbPath)) {
 const db = new DatabaseSync(dbPath)
 db.exec('PRAGMA foreign_keys = ON;')
 
-const where = all ? '1 = 1' : "provenance = 'fixture'"
+const kind = provenance ?? 'fixture'
+const where = all ? '1 = 1' : `provenance = '${kind}'`
 const targets = db.prepare(`SELECT id, company, role, provenance FROM opportunities WHERE ${where}`).all()
 
 if (targets.length === 0) {
-  console.log(all ? 'No opportunities stored.' : 'No fixture opportunities stored.')
+  console.log(all ? 'No opportunities stored.' : `No ${kind} opportunities stored.`)
   db.close()
   process.exit(0)
 }

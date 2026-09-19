@@ -1,30 +1,29 @@
 /**
  * The first thing that arrives on its own.
  *
- * Until now every opportunity Amble has seen was pasted in by hand. This
- * walks Manfred's public sitemap, reads the offers, turns them into the
- * shape the rest of the pipeline already understands, and puts the ones
- * worth reading on the queue.
+ * Until now every opportunity Amble saw was pasted in by hand. This asks
+ * Manfred's public API for every live offer, holds each one against what the
+ * candidate said, and puts the survivors on the queue.
  *
- * Two things keep it from being reckless. It is polite to the source: one
- * request at a time with a pause between them, and an offer already stored
- * is never fetched again. And it is cheap before it is expensive: what the
- * feed states as numbers — what it pays, how much of it is on site — is
- * checked against what the candidate said in code, for free, before any of
- * it reaches a model. An offer paying half the floor is recorded with the
- * reason and never costs a call.
+ * The order matters, and it is the whole design. One request returns every
+ * active offer with what it pays, how much of it is on site and where. All
+ * of that is checkable in code, for nothing, by the same
+ * `deterministicHardConstraints` the pipeline uses later — so an offer that
+ * pays half the floor is recorded with the reason and never costs a
+ * download, let alone a model call. Only what survives is fetched in full.
  *
- * That screen is the same `deterministicHardConstraints` the pipeline uses
- * later. It is not a second opinion, it is the same opinion arriving sooner.
+ * Polite by construction: one detail request at a time with a pause, an
+ * offer already stored is never fetched again, and the User-Agent says who
+ * this is.
  */
 
 import { deterministicHardConstraints } from '@/domains/opportunity/rules'
 import type { HardConstraintCheck } from '@/domains/opportunity/types'
 import {
   fetchOffer,
-  fetchOfferUrls,
+  fetchOfferSummaries,
   rubricFromFeed,
-  type ManfredOffer,
+  summaryText,
 } from '../sources/manfred'
 import {
   findOpportunityBySourceRef,
@@ -35,23 +34,24 @@ import { readPreferences } from './preferences'
 import { enqueue } from './jobs'
 
 export interface ManfredSyncOptions {
-  /** How many offer pages to read this time. The sitemap holds ~1,600. */
+  /** How many new offers to take this time, screened ones included. */
   limit?: number
   /**
-   * How many survivors to actually evaluate. Each one is three model calls
-   * and about a minute, so the default is a number you can sit through.
+   * How many survivors to actually evaluate. Each is three model calls and
+   * about a minute, so the default is a number you can sit through.
    */
   maxEvaluations?: number
   pauseMs?: number
+  language?: string
 }
 
 export interface ManfredSyncResult {
-  offersInFeed: number
-  read: number
+  liveOffers: number
   alreadyKnown: number
-  closed: number
-  unreadable: number
+  /** Dropped on the list alone, before anything was downloaded. */
   screenedOut: number
+  read: number
+  unreadable: number
   imported: number
   queued: number
   /** Stored and worth reading, but over the evaluation cap for this run. */
@@ -66,6 +66,7 @@ export async function syncManfredOffers(
   const limit = options.limit ?? 40
   const maxEvaluations = options.maxEvaluations ?? 10
   const pauseMs = options.pauseMs ?? 400
+  const language = options.language ?? 'ES'
 
   const preferences = readPreferences(candidateId)
   const constraints = {
@@ -77,62 +78,55 @@ export async function syncManfredOffers(
     stages: preferences.stages,
   }
 
-  const urls = await fetchOfferUrls()
+  const summaries = await fetchOfferSummaries(language)
   const result: ManfredSyncResult = {
-    offersInFeed: urls.length,
-    read: 0,
+    liveOffers: summaries.length,
     alreadyKnown: 0,
-    closed: 0,
-    unreadable: 0,
     screenedOut: 0,
+    read: 0,
+    unreadable: 0,
     imported: 0,
     queued: 0,
     waiting: 0,
     screenReasons: [],
   }
 
-  for (const url of urls) {
-    if (result.read >= limit) break
-
-    // The id is in the path, so a known offer costs nothing at all — not
-    // even the request to find out it is known.
-    const sourceRef = sourceRefFor(url)
-    if (!sourceRef) continue
-    if (findOpportunityBySourceRef(candidateId, sourceRef)) {
+  let taken = 0
+  for (const summary of summaries) {
+    if (taken >= limit) break
+    if (!summary.active) continue
+    if (findOpportunityBySourceRef(candidateId, summary.sourceRef)) {
       result.alreadyKnown += 1
       continue
     }
+    taken += 1
 
-    result.read += 1
-    let offer: ManfredOffer | null = null
-    try {
-      offer = await fetchOffer(url)
-    } catch {
-      // One page that will not load is not a reason to abandon the sync.
-      result.unreadable += 1
-      continue
-    }
-    if (!offer) {
-      result.unreadable += 1
-      continue
-    }
-    if (!offer.active) {
-      result.closed += 1
-      continue
-    }
-
-    const failed = deterministicHardConstraints(constraints, rubricFromFeed(offer)).filter(
+    const failed = deterministicHardConstraints(constraints, rubricFromFeed(summary)).filter(
       (check) => check.verdict === 'FAIL',
     )
 
+    // The expensive half only happens for what got through the free one.
+    let rawText = summaryText(summary)
+    if (failed.length === 0) {
+      try {
+        rawText = (await fetchOffer(summary, language)).rawText
+        result.read += 1
+      } catch {
+        // One offer that will not load is not a reason to abandon the sync.
+        result.unreadable += 1
+        continue
+      }
+      if (pauseMs > 0) await new Promise((resolve) => setTimeout(resolve, pauseMs))
+    }
+
     const opportunity = insertOpportunity({
       candidate_id: candidateId,
-      company: offer.company,
-      role: offer.title,
-      url: offer.url,
-      raw_text: offer.rawText,
+      company: summary.company,
+      role: summary.position,
+      url: summary.url,
+      raw_text: rawText,
       provenance: 'manfred',
-      source_ref: offer.sourceRef,
+      source_ref: summary.sourceRef,
       status: failed.length > 0 ? 'screened_out' : 'received',
       status_detail: failed.length > 0 ? reasonFor(failed) : null,
     })
@@ -144,11 +138,11 @@ export async function syncManfredOffers(
       subject_id: opportunity.id,
       event: failed.length > 0 ? 'opportunity_screened_out' : 'opportunity_received',
       detail: {
-        company: offer.company,
-        role: offer.title,
+        company: summary.company,
+        role: summary.position,
         source: 'manfred',
-        sourceRef: offer.sourceRef,
-        chars: offer.rawText.length,
+        sourceRef: summary.sourceRef,
+        chars: rawText.length,
         // Which check said no, and on what. Auditable without re-reading it.
         failed: failed.map((check) => ({ id: check.id, basis: check.basis })),
       },
@@ -157,8 +151,8 @@ export async function syncManfredOffers(
     if (failed.length > 0) {
       result.screenedOut += 1
       result.screenReasons.push({
-        company: offer.company,
-        role: offer.title,
+        company: summary.company,
+        role: summary.position,
         reason: reasonFor(failed),
       })
     } else if (result.queued < maxEvaluations) {
@@ -167,16 +161,9 @@ export async function syncManfredOffers(
     } else {
       result.waiting += 1
     }
-
-    if (pauseMs > 0) await new Promise((resolve) => setTimeout(resolve, pauseMs))
   }
 
   return result
-}
-
-function sourceRefFor(url: string): string | null {
-  const match = /\/ofertas-empleo\/(\d+)\//.exec(url)
-  return match ? `manfred:${match[1]}` : null
 }
 
 function reasonFor(failed: HardConstraintCheck[]): string {

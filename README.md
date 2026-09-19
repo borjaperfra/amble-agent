@@ -91,9 +91,16 @@ Two ways in, both landing in the same table and read by the same pipeline.
 
 **By hand**, pasted into the lab at `/dev/opportunity-zero`, which is how the ten calibration fixtures are run.
 
-**From Manfred**, via `POST /api/sources/manfred` or the button in the lab. Manfred publishes `sitemap-offers.xml` and allows everything in `robots.txt`, and each offer page carries the whole posting as JSON — salary, remote share, locations, requirements. No key and no private endpoint is touched. The sync reads one page at a time with a pause between them, never re-fetches an offer it already stored, and identifies itself in the User-Agent.
+**From Manfred**, via `POST /api/sources/manfred` or the button in the lab. It uses Manfred's own public API — the one their offers page calls:
 
-What the feed states as numbers is checked in code before anything reaches a model: an offer paying under the floor, or asking for more presence than the candidate will give, is stored with the reason and never costs a call. With ~1,600 offers in the sitemap and about a minute of reasoning each, that screen is the difference between a click and a day of compute. Whatever survives it is capped by `maxEvaluations` per run.
+```
+GET /api/v2/public/offers?onlyActive=true&lang=ES   every live offer (~17)
+GET /api/v2/public/offers/{id}?lang=ES              one, in full
+```
+
+No key and nothing private. The shape of that first call shapes the whole sync: one request returns every live offer with what it pays, how much of it is on site and where — all of which the domain can check for free. So the screening runs on the list, and an offer that pays under the floor is stored with the reason without being downloaded at all. Only survivors are fetched in full, one at a time with a pause, and an offer already stored is never fetched again.
+
+In practice that is 13 of 17 dropped for nothing and 4 downloaded. With about a minute of reasoning per offer, that screen is the difference between a click and a long afternoon. Whatever survives is capped by `maxEvaluations` per run.
 
 ## What gets sent
 
