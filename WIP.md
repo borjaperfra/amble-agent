@@ -1,7 +1,7 @@
 # Dónde nos quedamos — 21 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (138) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (172) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -936,6 +936,92 @@ guardarraíl para que un sondeo reintentado no encole dos veces la misma oferta
 Visto funcionar en producción mientras se escribía esto: `received` bajando de
 10 a 6 y `decided` subiendo de 6 a 9, una cada minuto y medio.
 
+## El Rep contesta, y el anuncio ya no manda — 21 de septiembre
+
+Los dos primeros pasos hacia el career advisor. El orden fue deliberado: cada
+cosa que se le deje hacer al agente multiplica la superficie, así que sellar
+va antes de ampliar.
+
+### Que conteste cuando le preguntan
+
+El bug era mío, de esta misma mañana: la rama de «todo lo que llega de él es
+contexto» se tragaba también las preguntas, así que le preguntabas algo y te
+respondía «apuntado». Le preguntabas y te archivaba.
+
+Lo distingue `looksLikeAQuestion`, una heurística y dicha como tal — signo de
+interrogación, o palabra interrogativa al principio. No una llamada al
+modelo: una llamada para decidir si hace falta otra llamada es cómo esto
+cuesta el doble sin ser el doble de listo. Y puede ser las dos cosas a la vez
+(«me he mudado a Lisboa, ¿eso cambia algo?»): el hecho entra al grafo y la
+pregunta se contesta.
+
+`src/lib/pipeline/advisor.ts` es el asesor. Contesta con el grafo entero en el
+prompt y con nada más, y las reglas del prompt son la disciplina de siempre un
+piso arriba:
+
+- Sobre él, sólo lo que sostenga el perfil.
+- **Sobre el mercado, nada.** Ha visto las ofertas que ha visto y ninguna más.
+- Lo que no sabe se dice. Un asesor que nunca dice «eso no lo sé de ti» está
+  completando frases.
+- Un consejo tiene que apoyarse en un hueco suyo, en un requisito que salió en
+  lo que le llegó, o en algo que él dijo. Si no, es un horóscopo.
+
+Lo contestado se guarda en `inbound_messages.answer`, y no sólo se envía: un
+asesor que no recuerda lo que aconsejó es un oráculo. El prompt recibe las
+cuatro últimas respuestas para no repetirse.
+
+**Los transportes son distintos a propósito.** Telegram espera al modelo y
+manda **un** mensaje, con `sendChatAction` de «escribiendo…» refrescado cada
+cuatro segundos: medio minuto de silencio en un chat es una conversación
+muerta, y un «déjame mirar» seguido de la respuesta son dos avisos por una
+pregunta. La web no puede colgar una petición medio minuto desde un móvil, así
+que encola y la pantalla vuelve a por ella, con dos minutos de tope.
+
+Comprobado en producción, con su grafo de verdad. La respuesta nombró lo que
+no sabía, citó la única oferta de Head of Growth que había leído, señaló tres
+huecos concretos —analítica sin métodos, métricas autodeclaradas, tamaño de
+equipo— y devolvió una sola pregunta.
+
+### Que el anuncio no pueda mandar
+
+El agujero, medido antes de tocarlo: el anuncio entraba al prompt a pelo,
+cuarenta mil caracteres pegados a las instrucciones, y `COMPANY` y `ROLE`
+—que vienen del feed— dentro de la cabecera. Un salto de línea en el nombre
+de la empresa era una línea nueva de prompt. Cero defensas y cero tests.
+
+Ahora `untrusted()` lo valla con un identificador que cambia en cada llamada
+—si fuera fijo, bastaría con escribirlo una vez en el anuncio— y rompe dentro
+del texto cualquier cosa que se le parezca, así que no se puede cerrar antes
+de tiempo. `headerField()` deja los campos de cabecera en una línea y sin
+caracteres de control. La rúbrica la escribió el modelo leyendo el anuncio, así
+que en la etapa de match va vallada también.
+
+Nueve tests en `prompts.test.ts`, y sólo prueban lo que se puede probar de
+forma determinista: que el texto no se haga pasar por instrucción. Que
+*convenza* al modelo es otro problema y lo para la capa de reglas, que ya
+tiene los suyos.
+
+Y dos huecos menores: diez intentos por cuarto de hora en `/api/login`, y la
+cookie deja de ser `sha256("amble:" + contraseña)` —calculable offline contra
+una cookie robada— para llevar una sal de este volumen. Se escribe con `wx` y
+se relee: `proxy.ts` y la ruta pueden evaluarse en bundles distintos y pedirla
+a la vez en el primer arranque, y dos sales distintas son un bucle de login
+que no se arregla borrando cookies.
+
+**Ojo:** el cambio de sal invalidó las sesiones. Hay que volver a entrar.
+
+### Lo que queda de la lista de Borja
+
+3. **La memoria de la conversación**, como cosa aparte y citable: qué se
+   aconsejó, qué se acordó, qué dijo que iba a hacer. El grafo sigue siendo
+   lo que él es; esto es el estado de una relación. Dos memorias que se
+   contradicen las gana la que no se puede auditar, así que no puede ser un
+   histórico de chat que el modelo relee.
+4. **El modo asesor** encima de las dos anteriores.
+5. Medir el ritmo real de fallo del modelo en Railway. El 17% que se midió era
+   la cobertura de un tren, no el sistema, y el parte de excepciones todavía
+   no ve los fallos que el reintento resuelve.
+
 ## Lo siguiente, cuando retomemos
 
 **Una sesión real de Borja, entera, sin preparar nada antes.** Todo lo medido
@@ -972,7 +1058,7 @@ de vanidad que el spec prohíbe en §16.
 
 ```bash
 cd C:\dev\amble
-npm test                      # 138 tests, sin red y sin base real
+npm test                      # 172 tests, sin red y sin base real
 npm run dev                   # http://localhost:3000
 npm run check:model           # comprueba el modelo en 2 llamadas cortas
 npm run measure -- <cv.pdf>   # sesión entera por API, cronometrada
