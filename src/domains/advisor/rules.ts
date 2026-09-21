@@ -131,13 +131,34 @@ const INTERNAL_VOCABULARY = [
   'rubric',
   'hard constraint',
   'intent profile',
+  // Y lo mismo en castellano, que es el idioma en el que habla.
+  //
+  // La primera version de esta lista estaba solo en ingles, y el Rep escribio
+  // «sin atribucion clara» sin que saltara nada: una medida que solo mira el
+  // idioma en el que no habla es una medida que siempre sale limpia.
+  'epistemico',
+  'rubrica',
+  'atribucion',
+  'atribución',
+  'evidenciado',
+  'corroborado',
+  'a nivel de',
+  'ambito',
+  'ámbito',
 ]
 
 /** Mas de esto en una sola frase y hay que leerla dos veces. */
 export const LONG_SENTENCE_WORDS = 30
 
 export interface Plainness {
-  /** Jerga interna que se ha colado, literal. Deberia estar vacio. */
+  /**
+   * Jerga que se ha colado, literal. Deberia estar vacio.
+   *
+   * No tira la respuesta: hay palabras de esta lista que en su sector son
+   * normales —«atribucion» lo dice cualquiera que haga growth— y decidir eso
+   * por el no es cosa de una lista. Lo que hace es que se vea, que es lo
+   * unico que impide que empeore sin que nadie se entere.
+   */
   jargon: string[]
   /** La frase mas larga, en palabras. */
   longestSentence: number

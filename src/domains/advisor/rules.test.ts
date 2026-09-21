@@ -175,6 +175,14 @@ describe('que se entienda', () => {
     assert.deepEqual(plain.jargon, [])
   })
 
+  it('pilla también la jerga en castellano, que es en la que habla', () => {
+    // La primera versión de la lista estaba sólo en inglés, y el Rep escribió
+    // «sin atribución clara» sin que saltara nada. Una medida que sólo mira
+    // el idioma en el que no habla siempre sale limpia.
+    assert.deepEqual(measurePlainness('Falta la atribución de los números.').jargon, ['atribución'])
+    assert.deepEqual(measurePlainness('Tu analítica está a nivel de responsabilidad.').jargon, ['a nivel de'])
+  })
+
   it('pilla el vocabulario del grafo si se cuela literal', () => {
     // Estos son los valores de verdad de la base, no inventados: es lo que
     // el modelo tiene delante en cada respuesta.
