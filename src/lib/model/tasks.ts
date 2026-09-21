@@ -455,12 +455,33 @@ export type AnswerClaimsOutput = z.infer<typeof answerClaimsOutputSchema>
 export const candidateAnswerOutputSchema = z.preprocess(
   (raw) => {
     const value = (raw ?? {}) as Record<string, unknown>
-    const answer =
-      typeof value.answer === 'string'
-        ? value.answer.trim()
-        : typeof value.text === 'string'
-          ? value.text.trim()
-          : ''
+    // Cada cosa dicha va con lo que la sostiene. Tolerante con los nombres,
+    // que se mueven entre runs, y con los ids sueltos en vez de listas.
+    const ids = (value: unknown): string[] =>
+      (Array.isArray(value) ? value : typeof value === 'string' ? [value] : [])
+        .map((id) => (typeof id === 'string' ? id.trim() : ''))
+        .filter((id) => id.length > 0)
+        .slice(0, 8)
+
+    const points = (Array.isArray(value.points) ? value.points : [])
+      .map((item) => {
+        const entry = (item ?? {}) as Record<string, unknown>
+        const text = typeof entry.text === 'string' ? entry.text.trim() : ''
+        if (text.length === 0) return null
+        return {
+          text: text.slice(0, 600),
+          evidenceIds: ids(entry.evidenceIds),
+          uncertaintyIds: ids(entry.uncertaintyIds),
+          opportunityIds: ids(entry.opportunityIds),
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .slice(0, 6)
+
+    const askBack =
+      typeof value.askBack === 'string' && value.askBack.trim().length > 0
+        ? value.askBack.trim().slice(0, 400)
+        : null
     const unknowns = Array.isArray(value.unknowns)
       ? value.unknowns
           .map((item) => (typeof item === 'string' ? item.trim() : ''))
@@ -490,10 +511,20 @@ export const candidateAnswerOutputSchema = z.preprocess(
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)
       .slice(0, 3)
-    return { answer, unknowns, remember }
+    return { points, askBack, unknowns, remember }
   },
   z.object({
-    answer: z.string().min(1).max(2000),
+    points: z
+      .array(
+        z.object({
+          text: z.string().min(1).max(600),
+          evidenceIds: z.array(z.string()).max(8),
+          uncertaintyIds: z.array(z.string()).max(8),
+          opportunityIds: z.array(z.string()).max(8),
+        }),
+      )
+      .max(6),
+    askBack: z.string().max(400).nullable(),
     unknowns: z.array(z.string().max(300)).max(2),
     remember: z
       .array(
@@ -969,11 +1000,15 @@ Rules:
 - Say what you do not know about them when it is what the question turns on. "I do not know whether you have run a team that size" is a better answer than a confident guess.
 - Advice must rest on something: a gap in what is known about them, a requirement that came up in the opportunities listed, or something they told you. Advice that rests on nothing is a horoscope — leave it out.
 - Do not ask more than one question back, and only if you genuinely cannot answer without it.
-- Short. This is a chat message, not a report: at most 6 short lines, no headings, no bullet lists unless you are naming 2-3 concrete things.
+- Your answer is a list of "points". EVERY point is one or two sentences and MUST cite at least one real id: an evidence id, an uncertainty id from WHAT IS NOT KNOWN, or an opportunity id from the list. A point that cites nothing is dropped before they ever see it, so do not write one.
+- Put the ids ONLY in the id fields. Never write an id inside the text: they are plumbing, and a career conversation with "unc_60a5d2" in the middle of it reads like a database error.
+- Short. This is a chat message, not a report: at most 4 points, one or two sentences each, no headings and no bullet markers.
+- "askBack" is the single question back, or null. It asserts nothing, so it needs no citation.
+- If nothing you would say can be traced to the profile, return an empty list of points. Saying "I cannot answer that with what I know about you" is a better answer than a paragraph built on nothing.
 - Never invent an opportunity, a company, a number or a date.
 - "remember" is what should outlast this message: advice you gave that they could act on, and anything they committed to doing. At most 3, and usually 0 or 1. Each one MUST cite at least one id from WHAT IS NOT KNOWN or from the opportunities listed — advice that cites nothing is a horoscope and is not worth remembering. side is "rep" for something you advised, "candidate" for something they said they would do.
 - Do not put pleasantries, restatements of the question or generic encouragement in "remember". If nothing in this exchange is worth holding on to, return an empty list.
-- Respond ONLY with JSON: {"answer": string, "unknowns": [string], "remember": [{"side": "rep"|"candidate", "text": string, "uncertaintyIds": [string], "opportunityIds": [string]}]} where unknowns names what you would need to know to answer better (at most 2, may be empty).`
+- Respond ONLY with JSON: {"points": [{"text": string, "evidenceIds": [string], "uncertaintyIds": [string], "opportunityIds": [string]}], "askBack": string|null, "unknowns": [string], "remember": [{"side": "rep"|"candidate", "text": string, "uncertaintyIds": [string], "opportunityIds": [string]}]} where unknowns names what you would need to know to answer better (at most 2, may be empty).`
 
   const user = `THEIR QUESTION:
 ${params.question}
@@ -990,8 +1025,10 @@ ${params.history || '(nothing yet)'}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'answer_candidate_question',
-    // v2: ademas de contestar, dice que de esta conversacion merece durar.
-    version: 'v2',
+    // v3: la respuesta deja de ser un bloque de texto. Cada cosa dicha viene
+    // con lo que la sostiene, para que el codigo pueda comprobarlo y tirar lo
+    // que no se sostenga en vez de ensenarlo.
+    version: 'v3',
     system,
     user,
     schema: candidateAnswerOutputSchema,

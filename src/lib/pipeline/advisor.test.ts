@@ -38,6 +38,8 @@ let prompts: string[] = []
 let calls = 0
 /** Lo que el modelo propone recordar de la conversación. */
 let proposedMemory: unknown[] = []
+/** Lo que el modelo dice, con lo que dice que lo sostiene. */
+let proposedPoints: unknown[] = []
 
 before(async () => {
   previousDirectory = process.cwd()
@@ -97,7 +99,8 @@ before(async () => {
     }
     prompts.push(body.messages.map((message) => message.content).join('\n'))
     const content = JSON.stringify({
-      answer: 'Te falta un caso de gestión de equipo. Lo de la comunidad ya lo tienes.',
+      points: proposedPoints,
+      askBack: null,
       unknowns: ['Si has llevado un equipo de más de cinco.'],
       remember: proposedMemory,
     })
@@ -121,6 +124,15 @@ beforeEach(() => {
   prompts = []
   calls = 0
   proposedMemory = []
+  // Por defecto, algo que se sostiene de verdad: el hueco existe en el grafo.
+  proposedPoints = [
+    {
+      text: 'Te falta un caso de gestión de equipo. Lo de la comunidad ya lo tienes.',
+      evidenceIds: [],
+      uncertaintyIds: ['unk_team'],
+      opportunityIds: [],
+    },
+  ]
 })
 
 let nextId = 500
@@ -189,6 +201,12 @@ describe('contestar', () => {
     assert.match(result.answer, /gestión de equipo/)
     assert.equal(inboundDb.getInboundMessage(id)?.answer, result.answer)
     assert.ok(inboundDb.getInboundMessage(id)?.answered_at)
+    // Y con lo que lo sostiene al lado, guardado: una fuente que se
+    // recalcula mañana con otro grafo ya no es la fuente de lo de ayer.
+    assert.deepEqual(
+      JSON.parse(inboundDb.getInboundMessage(id)?.answer_sources ?? '[]')[0].uncertaintyIds,
+      ['unk_team'],
+    )
   })
 
   it('no vuelve a pagar una pregunta ya contestada', async () => {
@@ -260,5 +278,41 @@ describe('lo que queda dicho entre los dos', () => {
 
     assert.match(prompts.join('\n'), /WHAT IS STILL OPEN BETWEEN YOU/)
     assert.match(prompts.join('\n'), /YOU ADVISED: Te falta enseñar que has llevado un equipo/)
+  })
+})
+
+describe('las fuentes, comprobadas de verdad', () => {
+  it('tira lo que cita un hueco que no existe, aunque suene bien', async () => {
+    proposedPoints = [
+      {
+        text: 'El mercado está pagando más por perfiles como el tuyo.',
+        evidenceIds: [],
+        uncertaintyIds: ['unk_no_existe'],
+        opportunityIds: [],
+      },
+    ]
+
+    const result = await advisor.answerQuestionJob(candidateId, arrive('¿Cuánto pido?'))
+
+    assert.equal(result.points.length, 0)
+    assert.equal(result.dropped, 1)
+    // Y lo que se le enseña lo dice, en vez de rellenar con algo amable.
+    assert.match(result.answer, /no puedo contestarte eso sin inventármelo/i)
+  })
+
+  it('no deja ni un id suelto en lo que se lee', async () => {
+    proposedPoints = [
+      {
+        text: 'Falta enseñar equipo (unk_team).',
+        evidenceIds: [],
+        uncertaintyIds: ['unk_team'],
+        opportunityIds: [],
+      },
+    ]
+
+    const result = await advisor.answerQuestionJob(candidateId, arrive('¿Y el equipo?'))
+
+    assert.doesNotMatch(result.answer, /unk_|ev_|opp_/)
+    assert.deepEqual(result.points[0].uncertaintyIds, ['unk_team'])
   })
 })

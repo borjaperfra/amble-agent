@@ -70,6 +70,8 @@ export interface InboundRow {
   incorporated_at: string | null
   /** Lo que se le contestó, cuando lo que llegó era una pregunta. */
   answer: string | null
+  /** Lo que sostiene cada cosa dicha en esa respuesta, en JSON. */
+  answer_sources: string | null
   answered_at: string | null
   created_at: string
 }
@@ -193,10 +195,12 @@ export function markInboundIncorporated(id: string): void {
  * caso con números»— hay que poder releerlo en noviembre: un agente que
  * aconseja y no se acuerda de lo que aconsejó es un oráculo, no un asesor.
  */
-export function recordInboundAnswer(id: string, answer: string): void {
+export function recordInboundAnswer(id: string, answer: string, sources: unknown = []): void {
   getDb()
-    .prepare('UPDATE inbound_messages SET answer = ?, answered_at = ? WHERE id = ?')
-    .run(answer, now(), id)
+    .prepare(
+      'UPDATE inbound_messages SET answer = ?, answer_sources = ?, answered_at = ? WHERE id = ?',
+    )
+    .run(answer, JSON.stringify(sources), now(), id)
 }
 
 export function listInboundMessages(candidateId: string, limit = 50): InboundRow[] {

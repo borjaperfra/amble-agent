@@ -87,6 +87,8 @@ export interface RepCopy {
     couldNotWrite: (error: string) => string
     /** Era una pregunta y no se ha podido contestar. */
     couldNotAnswer: string
+    /** Nada de lo que diría se sostiene en lo que sabe de él. */
+    nothingGrounded: string
   }
 }
 
@@ -163,6 +165,8 @@ const es: RepCopy = {
     nothingToYesNo: 'No hay nada esperando un sí o un no. Ya te aviso cuando lo haya.',
     couldNotAnswer:
       'Ahora mismo no he podido contestarte. Lo he guardado: vuelve a preguntármelo en un rato.',
+    nothingGrounded:
+      'Con lo que sé de ti no puedo contestarte eso sin inventármelo, y prefiero no hacerlo.',
     severalWaiting: (count, url) => [
       `Hay ${count} esperando y no sé cuál dices.`,
       '',
@@ -261,6 +265,8 @@ const en: RepCopy = {
     nothingToYesNo: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
     couldNotAnswer:
       "I could not answer that just now. I've kept it: ask me again in a while.",
+    nothingGrounded:
+      "With what I know about you I cannot answer that without making it up, and I would rather not.",
     severalWaiting: (count, url) => [
       `There are ${count} waiting, so I don't know which you mean.`,
       '',

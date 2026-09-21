@@ -399,6 +399,10 @@ function createDb(): DatabaseSync {
       detail TEXT,
       incorporated_at TEXT,
       answer TEXT,
+      -- Lo que sostiene cada cosa dicha en esa respuesta, ya comprobado.
+      -- Guardado y no recalculado: una fuente que se recalcula manana con un
+      -- grafo distinto ya no es la fuente de lo que se dijo ayer.
+      answer_sources TEXT,
       answered_at TEXT,
       created_at TEXT NOT NULL
     );
@@ -523,6 +527,9 @@ function migrate(db: DatabaseSync): void {
     // una frase que dijo una sola vez — el mismo bug que dejó las evidencias
     // duplicadas en las preguntas.
     db.exec('ALTER TABLE inbound_messages ADD COLUMN incorporated_at TEXT;')
+  }
+  if (!has('inbound_messages', 'answer_sources')) {
+    db.exec('ALTER TABLE inbound_messages ADD COLUMN answer_sources TEXT;')
   }
   if (!has('inbound_messages', 'answer')) {
     // Lo que el Rep le contestó, cuando lo que llegó era una pregunta.

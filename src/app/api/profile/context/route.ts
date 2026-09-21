@@ -3,7 +3,9 @@ import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, newId } from '@/lib/db/repo'
 import { claimInboundMessage, getInboundMessage } from '@/lib/db/inbound'
 import { looksLikeAQuestion } from '@/lib/pipeline/advisor'
-import { recordAuditEvent } from '@/lib/db/opportunities'
+import { getOpportunity, recordAuditEvent } from '@/lib/db/opportunities'
+import { listEvidence, listUncertainties } from '@/lib/db/repo'
+import type { AdvisorPoint } from '@/domains/advisor/rules'
 import { enqueue } from '@/lib/pipeline/jobs'
 
 export const runtime = 'nodejs'
@@ -103,5 +105,51 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'That message is not here.' }, { status: 404 })
   }
 
-  return NextResponse.json({ answer: message.answer, answeredAt: message.answered_at })
+  return NextResponse.json({
+    answer: message.answer,
+    answeredAt: message.answered_at,
+    sources: message.answer ? resolveSources(candidate.id, message.answer_sources) : [],
+  })
+}
+
+/**
+ * Las fuentes, en palabras.
+ *
+ * Los ids no le dicen nada a nadie: lo que se puede comprobar es «esto lo
+ * dice porque no sabe si llevaste un equipo» o «porque lo leyó en la oferta
+ * de Nomad Compute». Se resuelven al leer, contra el grafo de ahora, y un id
+ * que ya no exista simplemente no aparece — enseñar una fuente que no se
+ * puede abrir es peor que no enseñar ninguna.
+ */
+function resolveSources(candidateId: string, raw: string | null) {
+  let points: AdvisorPoint[]
+  try {
+    points = JSON.parse(raw ?? '[]') as AdvisorPoint[]
+  } catch {
+    return []
+  }
+  if (!Array.isArray(points) || points.length === 0) return []
+
+  const uncertainties = new Map(
+    listUncertainties(candidateId).map((item) => [item.id, item.description]),
+  )
+  const evidence = new Map(listEvidence(candidateId).map((item) => [item.id, item.statement]))
+
+  return points.map((point) => ({
+    text: point.text,
+    cites: [
+      ...point.uncertaintyIds
+        .map((id) => uncertainties.get(id))
+        .filter((label): label is string => Boolean(label))
+        .map((label) => ({ kind: 'gap' as const, label })),
+      ...point.evidenceIds
+        .map((id) => evidence.get(id))
+        .filter((label): label is string => Boolean(label))
+        .map((label) => ({ kind: 'evidence' as const, label })),
+      ...point.opportunityIds
+        .map((id) => getOpportunity(id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map((item) => ({ kind: 'opportunity' as const, label: `${item.role} · ${item.company}` })),
+    ],
+  }))
 }

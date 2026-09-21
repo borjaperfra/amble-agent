@@ -17,6 +17,10 @@ const COPY = {
     failed: 'No se ha guardado. Sigue escrito aquí: inténtalo otra vez.',
     slow: 'Estoy tardando más de la cuenta. Te contesto por Telegram en cuanto lo tenga.',
     another: 'Contarle otra cosa',
+    sources: 'De dónde sale esto',
+    gap: 'no lo sé de ti',
+    evidence: 'está en tu perfil',
+    opportunity: 'lo leí en',
   },
   en: {
     kicker: 'Tell me something',
@@ -29,8 +33,17 @@ const COPY = {
     failed: 'It did not save. It is still written here: try again.',
     slow: 'This is taking longer than it should. I will answer on Telegram once I have it.',
     another: 'Tell them something else',
+    sources: 'Where this comes from',
+    gap: 'I do not know this about you',
+    evidence: 'it is in your profile',
+    opportunity: 'I read it in',
   },
 } as const
+
+interface Source {
+  text: string
+  cites: { kind: 'gap' | 'evidence' | 'opportunity'; label: string }[]
+}
 
 interface TellYourRepProps {
   language: Language
@@ -43,16 +56,18 @@ interface TellYourRepProps {
  * es mentir. La respuesta no se pierde —está guardada en su fila— y el Rep
  * la manda por Telegram, que es donde de todas formas vive esto.
  */
-async function waitForAnswer(id: string): Promise<string | null> {
+async function waitForAnswer(
+  id: string,
+): Promise<{ answer: string | null; sources: Source[] }> {
   const until = Date.now() + 120_000
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, 2_000))
     const response = await fetch(`/api/profile/context?id=${encodeURIComponent(id)}`)
-    if (!response.ok) return null
-    const { answer } = (await response.json()) as { answer: string | null }
-    if (answer) return answer
+    if (!response.ok) return { answer: null, sources: [] }
+    const body = (await response.json()) as { answer: string | null; sources?: Source[] }
+    if (body.answer) return { answer: body.answer, sources: body.sources ?? [] }
   }
-  return null
+  return { answer: null, sources: [] }
 }
 
 /**
@@ -72,6 +87,8 @@ export default function TellYourRep({ language }: TellYourRepProps) {
   const [text, setText] = useState('')
   const [state, setState] = useState<'idle' | 'sending' | 'thinking' | 'done'>('idle')
   const [answer, setAnswer] = useState<string | null>(null)
+  const [sources, setSources] = useState<Source[]>([])
+  const [showSources, setShowSources] = useState(false)
   /** Si lo último que mandó era una pregunta: sin esto, «no hay respuesta» y
       «no hacía falta ninguna» se dirían igual, que es el bug de hoy otra vez. */
   const [asked, setAsked] = useState(false)
@@ -105,7 +122,9 @@ export default function TellYourRep({ language }: TellYourRepProps) {
       // enseña mientras tanto dice lo que está pasando de verdad —«déjame
       // mirar lo que sé de ti»— y no un girador.
       setState('thinking')
-      setAnswer(await waitForAnswer(id))
+      const settled = await waitForAnswer(id)
+      setAnswer(settled.answer)
+      setSources(settled.sources)
       setState('done')
     } catch {
       setState('idle')
@@ -129,11 +148,46 @@ export default function TellYourRep({ language }: TellYourRepProps) {
         <p className={styles.done} role="status">
           {answer ?? (asked ? words.slow : words.done)}
         </p>
+
+        {/* Comprobable, no prometido. Cada cosa que ha dicho sobre él se
+            apoya en algo del grafo, y aquí está en palabras: si algo no
+            cuadra, se ve mirándolo. */}
+        {sources.length > 0 ? (
+          <div className={styles.sources}>
+            <button
+              type="button"
+              className={`text-btn ${styles.sourcesToggle}`}
+              onClick={() => setShowSources((value) => !value)}
+              aria-expanded={showSources}
+            >
+              {words.sources}
+            </button>
+            {showSources ? (
+              <ul className={styles.sourceList}>
+                {sources.map((source, index) => (
+                  <li key={index} className={styles.source}>
+                    <p className={styles.sourceText}>{source.text}</p>
+                    <ul className={styles.cites}>
+                      {source.cites.map((cite, citeIndex) => (
+                        <li key={citeIndex} className={styles.cite}>
+                          <span className={styles.citeKind}>{words[cite.kind]}</span>{' '}
+                          {cite.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
           className={`text-btn ${styles.again}`}
           onClick={() => {
             setAnswer(null)
+            setSources([])
+            setShowSources(false)
             setAsked(false)
             setState('idle')
           }}

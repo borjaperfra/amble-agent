@@ -32,6 +32,9 @@ import {
   recordAuditEvent,
 } from '../db/opportunities'
 import { runAnswerCandidateQuestionTask } from '../model/tasks'
+import { copyIn } from '@/lib/copy'
+import { auditAdvice, renderAdvice, type AdvisorPoint } from '@/domains/advisor/rules'
+import { listEvidence } from '../db/repo'
 import { readPreferences } from './preferences'
 
 /**
@@ -206,6 +209,10 @@ export interface AnsweredQuestion {
   unknowns: string[]
   /** Lo que quedó guardado de esta conversación, ya comprobado. */
   remembered: AdviceRow[]
+  /** Lo que sostiene cada cosa dicha, ya comprobado contra el grafo. */
+  points: AdvisorPoint[]
+  /** Lo que se cayó por no sostenerse. La cuenta es la medida: cero. */
+  dropped: number
 }
 
 /**
@@ -225,7 +232,15 @@ export async function answerQuestionJob(
 
   // Un reintento no vuelve a pagar la respuesta ni le manda otra distinta a
   // la misma pregunta.
-  if (message.answer) return { answer: message.answer, unknowns: [], remembered: [] }
+  if (message.answer) {
+    return {
+      answer: message.answer,
+      unknowns: [],
+      remembered: [],
+      points: JSON.parse(message.answer_sources ?? '[]') as AdvisorPoint[],
+      dropped: 0,
+    }
+  }
 
   const { data } = await runAnswerCandidateQuestionTask({
     candidateId,
@@ -236,7 +251,22 @@ export async function answerQuestionJob(
     history: answerHistory(candidateId, messageId),
   })
 
-  recordInboundAnswer(messageId, data.answer)
+  // Lo que no se puede trazar se descarta en vez de ensenarse, y se cuenta.
+  // La misma regla que la explicacion de una oferta, y aqui hace mas falta:
+  // si el modelo se inventa algo en una decision, las reglas la tumban; en un
+  // consejo no hay nada que tumbar, se lee y se cree.
+  const audit = auditAdvice(
+    { points: data.points, askBack: data.askBack },
+    {
+      evidenceIds: listEvidence(candidateId).map((item) => item.id),
+      uncertaintyIds: listUncertainties(candidateId).map((item) => item.id),
+      opportunityIds: listOpportunities(candidateId).map((item) => item.id),
+    },
+  )
+
+  const answer = renderAdvice(audit, copyIn(readPreferences(candidateId).language).bot.nothingGrounded)
+
+  recordInboundAnswer(messageId, answer, audit.points)
   const remembered = rememberFromAnswer(candidateId, messageId, data.remember)
 
   recordAuditEvent({
@@ -246,8 +276,13 @@ export async function answerQuestionJob(
     event: 'question_answered_by_rep',
     detail: {
       channel: message.channel,
-      chars: data.answer.length,
+      chars: answer.length,
       unknowns: data.unknowns,
+      points: audit.points.length,
+      // Objetivo: cero. Si esto sube, el asesor esta afirmando cosas que no
+      // puede sostener y el candidato se estaba creyendo la mitad.
+      dropped: audit.dropped.length,
+      droppedWhy: audit.dropped.map((item) => item.why),
       // Cuántas propuso y cuántas citaban algo real. La diferencia es lo que
       // habría acabado siendo memoria de relleno.
       proposed: data.remember.length,
@@ -255,5 +290,11 @@ export async function answerQuestionJob(
     },
   })
 
-  return { answer: data.answer, unknowns: data.unknowns, remembered }
+  return {
+    answer,
+    unknowns: data.unknowns,
+    remembered,
+    points: audit.points,
+    dropped: audit.dropped.length,
+  }
 }

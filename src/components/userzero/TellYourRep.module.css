@@ -91,3 +91,43 @@
   color: var(--clay);
   font-size: var(--text-body-sm);
 }
+
+.sources {
+  margin-top: 4px;
+}
+
+.sourcesToggle {
+  padding: 12px 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.sourceList,
+.cites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.source + .source {
+  margin-top: 16px;
+}
+
+.sourceText {
+  margin: 0 0 4px;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+
+.cite {
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--ink-secondary);
+  padding-left: 14px;
+  text-indent: -14px;
+}
+
+.citeKind {
+  color: var(--ink-tertiary);
+  font-style: italic;
+}
