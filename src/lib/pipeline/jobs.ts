@@ -402,6 +402,21 @@ export function hasQueuedKind(candidateId: string, kind: JobKind): boolean {
 }
 
 /**
+ * Si ya hay un trabajo de esta clase esperando por esta oferta.
+ *
+ * Mira dentro del payload, que es donde vive el id. Existe para que un
+ * sondeo que se reintenta tras caerse a medias no vuelva a encolar lo que ya
+ * encoló: la etapa siguiente se salta lo ya decidido, pero una oferta todavía
+ * en cola no está decidida y se evaluaría dos veces — seis llamadas al modelo
+ * por una oferta.
+ */
+export function hasActiveJobFor(candidateId: string, kind: JobKind, id: string): boolean {
+  return listActiveJobs(candidateId).some(
+    (job) => job.kind === kind && String(job.payload ?? '').includes(id),
+  )
+}
+
+/**
  * Wait for this candidate's queue to empty. Used before showing the Map.
  * Returns false if it is still busy when the time runs out — a job backing
  * off for ten minutes is not worth holding a page for.

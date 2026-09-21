@@ -171,6 +171,33 @@ export function findOpportunityByFixtureKey(
 }
 
 /** The same offer arriving from the feed again is the same offer. */
+/**
+ * Las que pasaron la criba y nunca llegaron a decidirse.
+ *
+ * Un sondeo evalúa como mucho `maxEvaluations` por pasada, porque cada una
+ * son tres llamadas y un minuto. Las que sobran se guardan en `received` — y
+ * en la pasada siguiente se saltan por «ya conocida», así que se quedaban ahí
+ * para siempre. Diez ofertas que habían superado el filtro y sobre las que
+ * nunca se dijo nada, que es justo lo que este producto existe para no hacer.
+ *
+ * Las más antiguas primero: una oferta lleva viva lo que lleva, y la que
+ * lleva más esperando es la que antes deja de estarlo.
+ */
+export function listUnevaluatedOpportunities(
+  candidateId: string,
+  provenance?: string,
+): OpportunityRow[] {
+  const sql = provenance
+    ? `SELECT * FROM opportunities
+       WHERE candidate_id = ? AND status = 'received' AND provenance = ?
+       ORDER BY created_at ASC`
+    : `SELECT * FROM opportunities
+       WHERE candidate_id = ? AND status = 'received'
+       ORDER BY created_at ASC`
+  const args = provenance ? [candidateId, provenance] : [candidateId]
+  return getDb().prepare(sql).all(...args) as unknown as OpportunityRow[]
+}
+
 export function findOpportunityBySourceRef(
   candidateId: string,
   sourceRef: string,

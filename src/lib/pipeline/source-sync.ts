@@ -27,10 +27,11 @@ import {
   findOpportunityBySourceRef,
   insertOpportunity,
   listAuditEvents,
+  listUnevaluatedOpportunities,
   recordAuditEvent,
 } from '../db/opportunities'
 import { readPreferences } from './preferences'
-import { enqueue, hasQueuedKind, type JobKind } from './jobs'
+import { enqueue, hasActiveJobFor, hasQueuedKind, type JobKind } from './jobs'
 
 export interface SyncOptions {
   /** How many new offers to take this time, screened ones included. */
@@ -55,6 +56,8 @@ export interface SyncResult {
   unreadable: number
   imported: number
   queued: number
+  /** Las que esperaban de una pasada anterior y esta vez sí se evalúan. */
+  resumed: number
   /** Stored and worth reading, but over the evaluation cap for this run. */
   waiting: number
   screenReasons: { company: string; role: string; reason: string }[]
@@ -91,8 +94,24 @@ export async function syncSource(
     unreadable: 0,
     imported: 0,
     queued: 0,
+    resumed: 0,
     waiting: 0,
     screenReasons: [],
+  }
+
+  // Primero, lo que ya estaba esperando.
+  //
+  // El presupuesto de evaluaciones se gasta antes en lo viejo que en lo
+  // nuevo, y a propósito: una oferta que pasó la criba hace dos pasadas y
+  // sigue sin respuesta lleva dos pasadas siendo exactamente el fallo que
+  // este producto dice no cometer. Lo nuevo puede esperar seis horas; lo que
+  // lleva esperando desde el martes, no.
+  for (const waiting of listUnevaluatedOpportunities(candidateId, adapter.source)) {
+    if (result.queued >= maxEvaluations) break
+    if (hasActiveJobFor(candidateId, 'evaluate_opportunity', waiting.id)) continue
+    enqueue('evaluate_opportunity', candidateId, { opportunityId: waiting.id })
+    result.queued += 1
+    result.resumed += 1
   }
 
   let taken = 0
@@ -214,6 +233,7 @@ export async function syncAll(
         unreadable: 0,
         imported: 0,
         queued: 0,
+        resumed: 0,
         waiting: 0,
         screenReasons: [],
       })
