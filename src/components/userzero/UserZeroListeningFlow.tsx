@@ -10,6 +10,9 @@ import styles from '@/app/listening/listening.module.css'
 import type { InterruptionView } from '@/lib/opportunity-view'
 import type { CandidateResponse } from '@/domains/opportunity/types'
 import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from '@/lib/copy'
+import TellYourRep from './TellYourRep'
+import Exceptions from './Exceptions'
+import type { Exception } from '@/lib/pipeline/exceptions'
 
 interface ListeningVm {
   evidenceCount: number
@@ -178,10 +181,13 @@ export default function UserZeroListeningFlow({
   vm,
   interruption: initialInterruption,
   question: initialQuestion,
+  exceptions = [],
 }: {
   vm: ListeningVm
   interruption: InterruptionView | null
   question: OpenQuestion | null
+  /** Lo que se ha atascado. Vacío casi siempre, y entonces no se ve nada. */
+  exceptions?: Exception[]
 }) {
   // Something is already waiting, so there is nothing to arrive at: skip
   // straight to it. Sitting through "your Rep is listening" when your Rep
@@ -507,6 +513,15 @@ export default function UserZeroListeningFlow({
             </section>
           </>
         )}
+
+        {/* Antes de la caja, porque si algo se atascó eso cambia lo que hay
+            que contarle. Vacío casi siempre: su mejor día es el que no sale. */}
+        <Exceptions exceptions={exceptions} language={language} />
+
+        {/* Debajo de todo lo que pasa y justo encima de lo que el Rep sabe de
+            él: es el orden en el que se lee la pantalla, y quien acaba de
+            mirar su perfil es quien se da cuenta de que falta algo. */}
+        <TellYourRep language={language} />
 
         <div className={styles.repSummary}>
           <p className={styles.repLabel}>{words.repLabel}</p>

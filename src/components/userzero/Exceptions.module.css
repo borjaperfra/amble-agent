@@ -1,0 +1,41 @@
+/*
+ * Sin rojo y sin icono de alarma: nada de esto es una emergencia, y pintarlo
+ * como si lo fuera es cómo se aprende a ignorarlo. Ocre, que es el color de
+ * «mírame cuando puedas».
+ */
+
+.box {
+  max-width: var(--conversation-max);
+  margin: 0 auto 48px;
+  padding: 20px 20px 16px;
+  background: var(--ochre-soft);
+  border-radius: var(--radius-md);
+}
+
+.list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.item + .item {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--ochre) 22%, transparent);
+}
+
+.summary {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.55;
+}
+
+.detail {
+  margin: 6px 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  /* Los detalles llegan con saltos de línea: una oferta por renglón se lee,
+     todas seguidas con puntos y comas no. */
+  white-space: pre-line;
+}

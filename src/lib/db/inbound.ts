@@ -14,7 +14,16 @@
 import { getDb } from './db'
 import { newId, now } from './repo'
 
-export type InboundChannel = 'telegram'
+/**
+ * Por dónde llegó.
+ *
+ * `web` no es un transporte como Telegram —nadie sondea nada— pero la fila es
+ * la misma a propósito: lo que escribe en la pantalla y lo que manda al bot
+ * tienen que acabar en el perfil por el mismo camino, con el mismo
+ * guardarraíl contra incorporarlo dos veces y la misma traza. Dos caminos
+ * para lo mismo son dos comportamientos distintos seis meses después.
+ */
+export type InboundChannel = 'telegram' | 'web'
 
 /**
  * What became of it.

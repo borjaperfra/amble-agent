@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Header from './Header'
+import VoiceRecorder from './VoiceRecorder'
 import styles from './FeedbackNotebook.module.css'
 import type { FeedbackNoteRow } from '@/lib/db/feedback'
 
@@ -103,6 +104,16 @@ export default function FeedbackNotebook({ initialNotes }: FeedbackNotebookProps
             autoComplete="off"
           />
           <div className={styles.actions}>
+            {/* Las ideas se te ocurren por la calle, que es donde escribir es
+                la fricción. Lo dictado cae en la caja y no se guarda solo:
+                una idea mal transcrita que se apunta sin que nadie la lea es
+                una idea que mañana no se entiende. */}
+            <VoiceRecorder
+              live
+              onCapture={(spoken) =>
+                setText((current) => (current.trim().length > 0 ? `${current} ${spoken}` : spoken))
+              }
+            />
             <button className={styles.submit} type="submit" disabled={text.trim().length === 0}>
               {saving ? 'Apuntando…' : 'Apuntar'}
             </button>

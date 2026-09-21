@@ -113,6 +113,18 @@ export interface HardConstraintCheck {
   evidenceIds: string[]
   /** True when domain code worked it out rather than the model proposing it. */
   deterministic: boolean
+  /**
+   * Falló, pero por poco.
+   *
+   * Un suelo es un acantilado: 118.000 contra 120.000 desaparece igual que
+   * 35.000, gratis y sin una palabra. Y las dos cosas no son lo mismo — la
+   * primera puede querer decir que el suelo está mal puesto, y eso solo se
+   * sabe si alguien lo cuenta.
+   *
+   * No cambia el veredicto a propósito: el suelo es suyo y una oferta por
+   * debajo está por debajo. Lo que cambia es que deje de ser invisible.
+   */
+  near?: boolean
 }
 
 export interface EvidenceMatchItem {

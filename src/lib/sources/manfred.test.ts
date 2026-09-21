@@ -183,6 +183,21 @@ describe('the free screen', () => {
     assert.equal(failuresFor({ ...listed, remotePercentage: 20 })[0]?.id, 'hc_work_mode')
   })
 
+  it('marca la que se queda a un palmo, sin dejarla pasar', () => {
+    // 110.000 contra un suelo de 120.000: cae igual —el suelo es suyo— pero
+    // deja de ser indistinguible de una de 35.000, que es lo único que puede
+    // decirle algún día que su propio suelo le está costando cosas.
+    const failed = failuresFor({ ...listed, salaryFrom: 100_000, salaryTo: 110_000 })
+    assert.equal(failed[0]?.id, 'hc_salary')
+    assert.equal(failed[0]?.verdict, 'FAIL', 'sigue cayendo')
+    assert.equal(failed[0]?.near, true)
+  })
+
+  it('y no marca la que no se queda cerca de nada', () => {
+    const failed = failuresFor({ ...listed, salaryFrom: 35_000, salaryTo: 45_000 })
+    assert.equal(failed[0]?.near, undefined)
+  })
+
   it('never fails an offer for being quiet about what it pays', () => {
     const checks = deterministicHardConstraints(
       constraints,

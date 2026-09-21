@@ -157,6 +157,11 @@ export async function syncSource(
       status: failed.length > 0 ? 'screened_out' : 'received',
       status_detail: failed.length > 0 ? reasonFor(failed) : null,
     })
+    // Por poco. No cambia nada de lo que se hace con ella —el suelo es suyo y
+    // una oferta por debajo está por debajo— pero deja de ser invisible: tres
+    // que se quedan a doce mil euros del suelo dicen algo sobre el suelo, y
+    // hoy eso desaparecía gratis y en silencio.
+    const nearMiss = failed.some((check) => check.near === true)
     result.imported += 1
 
     recordAuditEvent({
@@ -170,8 +175,9 @@ export async function syncSource(
         source: offer.source,
         sourceRef: offer.sourceRef,
         chars: rawText.length,
+        near: nearMiss,
         // Which check said no, and on what. Auditable without re-reading it.
-        failed: failed.map((check) => ({ id: check.id, basis: check.basis })),
+        failed: failed.map((check) => ({ id: check.id, basis: check.basis, near: check.near === true })),
       },
     })
 

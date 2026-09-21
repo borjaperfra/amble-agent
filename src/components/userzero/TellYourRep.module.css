@@ -1,0 +1,84 @@
+.box {
+  max-width: var(--conversation-max);
+  margin: 0 auto 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.lead {
+  margin: 8px 0 16px;
+  color: var(--ink-secondary);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  max-width: 54ch;
+}
+
+.input {
+  width: 100%;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  /* 16px o el navegador del móvil hace zoom al enfocar. */
+  font-size: var(--text-body);
+  font-family: inherit;
+  color: var(--ink);
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color var(--motion-fast) ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px var(--moss-wash);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.send {
+  height: 48px;
+  padding: 0 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--moss);
+  color: var(--paper-light);
+  font-family: inherit;
+  font-size: var(--text-body);
+  cursor: pointer;
+  transition: background var(--motion-fast) ease;
+}
+
+.send:hover:not(:disabled) {
+  background: var(--moss-dark);
+}
+
+.send:disabled {
+  background: var(--paper-dark);
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.done {
+  margin: 0 0 8px;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  max-width: 54ch;
+}
+
+.again {
+  padding: 12px 0;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--clay);
+  font-size: var(--text-body-sm);
+}

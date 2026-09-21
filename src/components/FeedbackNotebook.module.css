@@ -62,7 +62,12 @@
 
 .actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  /* El dictado a la izquierda y el botón a la derecha; si no caben en una
+     línea de móvil, se apilan en vez de encogerse. */
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 12px;
 }
 

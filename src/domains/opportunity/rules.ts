@@ -225,6 +225,15 @@ export function structuralUnknowns(
  * own hard no's live in prose, and a string comparison pretending to settle
  * them would be precision we do not have.
  */
+/**
+ * Cuánto por debajo del suelo sigue siendo «por poco».
+ *
+ * Un diez por ciento, que sobre 120.000 son doce mil: por debajo de eso ya no
+ * es una oferta que se quedó corta, es otra oferta. El número no decide nada
+ * —la que falla sigue fallando— solo decide cuáles merece la pena contar.
+ */
+export const NEAR_MISS_MARGIN = 0.1
+
 export function deterministicHardConstraints(
   constraints: CandidateConstraints,
   rubric: OpportunityRubric,
@@ -262,6 +271,7 @@ export function deterministicHardConstraints(
       })
     } else {
       const passes = top >= constraints.salaryMin
+      const near = !passes && top >= constraints.salaryMin * (1 - NEAR_MISS_MARGIN)
       checks.push({
         id: 'hc_salary',
         constraint,
@@ -270,6 +280,7 @@ export function deterministicHardConstraints(
         intentRefs: ['int_pref_salary_min'],
         evidenceIds: [],
         deterministic: true,
+        ...(near ? { near: true } : {}),
       })
     }
   }
