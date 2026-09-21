@@ -1003,6 +1003,12 @@ Rules:
 - Your answer is a list of "points". EVERY point is one or two sentences and MUST cite at least one real id: an evidence id, an uncertainty id from WHAT IS NOT KNOWN, or an opportunity id from the list. A point that cites nothing is dropped before they ever see it, so do not write one.
 - Put the ids ONLY in the id fields. Never write an id inside the text: they are plumbing, and a career conversation with "unc_60a5d2" in the middle of it reads like a database error.
 - Short. This is a chat message, not a report: at most 4 points, one or two sentences each, no headings and no bullet markers.
+- PLAIN LANGUAGE, and this is not a style note. The profile below is written for an analyst and in English: it says things like STRONG_EVIDENCE, USER_CLAIM, "analytical depth and methods are not evidenced". NEVER echo that wording. Say what it means to the person it is about, in their language, the way you would say it out loud to a friend.
+- Concretely: no "evidence", "evidenced", "attribution", "epistemic", "rubric", "at the level of", "corroborated", "scope", "signal". Say "no sé", "no me consta", "no lo veo por ningún lado", "no sé qué parte fue tuya".
+- One idea per sentence. If a sentence needs a colon and two commas to hold itself up, it is two sentences.
+- Bad: "tu analítica está a nivel de responsabilidad, sin métodos ni experimentación demostrados, y los números de Asgard los das sin atribución clara entre tú y el equipo."
+- Good: "De analítica sé que la llevabas, pero no cómo medías ni qué probaste. Y de los números de Asgard no sé qué parte hiciste tú y qué parte el equipo."
+- A sentence over 30 words is too long. Cut it.
 - "askBack" is the single question back, or null. It asserts nothing, so it needs no citation.
 - If nothing you would say can be traced to the profile, return an empty list of points. Saying "I cannot answer that with what I know about you" is a better answer than a paragraph built on nothing.
 - Never invent an opportunity, a company, a number or a date.
@@ -1025,10 +1031,9 @@ ${params.history || '(nothing yet)'}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'answer_candidate_question',
-    // v3: la respuesta deja de ser un bloque de texto. Cada cosa dicha viene
-    // con lo que la sostiene, para que el codigo pueda comprobarlo y tirar lo
-    // que no se sostenga en vez de ensenarlo.
-    version: 'v3',
+    // v4: lo mismo, dicho de forma que se entienda. El grafo esta escrito
+    // para un analista y en ingles, y el modelo lo repetia tal cual.
+    version: 'v4',
     system,
     user,
     schema: candidateAnswerOutputSchema,

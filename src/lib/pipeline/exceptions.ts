@@ -36,9 +36,20 @@ const STALE_QUESTION_DAYS = 7
 /** Cuánto atrás se miran los fallos: lo de hace un mes ya no es noticia. */
 const WINDOW_DAYS = 14
 
+/**
+ * Cuándo el modelo está fallando de verdad y no es la red teniendo un día.
+ *
+ * Una llamada perdida y reintentada es funcionamiento normal. Lo que importa
+ * es una racha, y hacen falta suficientes llamadas para que el porcentaje
+ * signifique algo: tres de cinco no es el 60%, son cinco llamadas.
+ */
+const MODEL_FAILURE_RATE = 0.1
+const MIN_RUNS_TO_JUDGE = 20
+
 export type ExceptionKind =
   | 'stuck_opportunities'
   | 'failed_jobs'
+  | 'model_failing'
   | 'source_silent'
   | 'stale_questions'
   | 'near_misses'
@@ -84,6 +95,48 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
         .slice(0, 3)
         .map((opportunity) => `${opportunity.role} · ${opportunity.company}`)
         .join('\n'),
+    })
+  }
+
+  // ── El modelo fallando por debajo, donde el reintento lo tapa ───────────
+  //
+  // Este era el agujero de este mismo parte cuando se escribio: solo miraba
+  // trabajos en `failed`, y casi ningun fallo del modelo llega ahi porque el
+  // reintento lo resuelve. En la medicion del portatil, 43 de 255 llamadas
+  // fallaron -el 17%- y no lo dijo nada: se descubrio consultando la base a
+  // mano. Resulto ser la cobertura de un tren, pero el punto es que nadie se
+  // habria enterado si hubiera sido el servidor.
+  //
+  // El umbral no es cero a proposito. Una llamada perdida y reintentada es
+  // parte del funcionamiento normal de una red; lo que hay que contar es una
+  // racha, y para eso hacen falta suficientes llamadas como para que el
+  // porcentaje signifique algo.
+  const runs = db
+    .prepare(
+      `SELECT COUNT(*) AS total, SUM(CASE WHEN ok = 0 THEN 1 ELSE 0 END) AS failed
+       FROM model_runs WHERE candidate_id = ? AND created_at > datetime('now', '-1 day')`,
+    )
+    .get(candidateId) as unknown as { total: number; failed: number | null }
+
+  const failedRuns = runs.failed ?? 0
+  const rate = runs.total > 0 ? failedRuns / runs.total : 0
+  if (runs.total >= MIN_RUNS_TO_JUDGE && rate > MODEL_FAILURE_RATE) {
+    const worst = db
+      .prepare(
+        `SELECT error, COUNT(*) AS n FROM model_runs
+         WHERE candidate_id = ? AND ok = 0 AND created_at > datetime('now', '-1 day')
+         GROUP BY error ORDER BY n DESC LIMIT 2`,
+      )
+      .all(candidateId) as unknown as { error: string | null; n: number }[]
+
+    const percent = Math.round(rate * 100)
+    out.push({
+      kind: 'model_failing',
+      count: failedRuns,
+      summary: es
+        ? `${percent}% de las llamadas al modelo están fallando (${failedRuns} de ${runs.total} hoy).`
+        : `${percent}% of model calls are failing (${failedRuns} of ${runs.total} today).`,
+      detail: worst.map((row) => `${(row.error ?? '—').slice(0, 140)} ×${row.n}`).join('\n'),
     })
   }
 

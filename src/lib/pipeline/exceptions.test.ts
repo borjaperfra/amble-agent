@@ -115,4 +115,50 @@ describe('el parte de excepciones', () => {
     const stuck = report.find((item) => item.kind === 'stuck_opportunities')
     assert.match(String(stuck?.summary), /have still not been decided/)
   })
+
+  it('avisa cuando el modelo está fallando por debajo, donde el reintento lo tapa', () => {
+    // Este era el agujero de este mismo parte: sólo miraba trabajos rendidos,
+    // y casi ningún fallo del modelo llega ahí porque el reintento lo
+    // resuelve. En el portátil fueron 43 de 255 y no lo dijo nada.
+    const insert = db
+      .getDb()
+      .prepare(
+        `INSERT INTO model_runs
+           (id, candidate_id, task, task_version, provider, model_id, base_url,
+            prompt_chars, output_chars, latency_ms, ok, error, created_at)
+         VALUES (?, ?, 'opportunity_rubric', 'v1', 'test', 'test', 'test', 10, 10, 100, ?, ?, datetime('now'))`,
+      )
+    for (let i = 0; i < 20; i += 1) insert.run(`run_ok_${i}`, candidateId, 1, null)
+    for (let i = 0; i < 5; i += 1) {
+      insert.run(`run_bad_${i}`, candidateId, 0, 'Could not reach the model: fetch failed (ENOTFOUND)')
+    }
+
+    const failing = exceptions
+      .listExceptions(candidateId)
+      .find((item) => item.kind === 'model_failing')
+
+    assert.ok(failing, '5 de 25 es un 20%, y eso se cuenta')
+    assert.equal(failing.count, 5)
+    assert.match(String(failing.detail), /ENOTFOUND/)
+  })
+
+  it('calla cuando fallar es lo normal de una red', () => {
+    // Una llamada perdida y reintentada no es una noticia. Un parte que
+    // habla de eso se deja de leer, y entonces tampoco se lee el día que sí.
+    const insert = db
+      .getDb()
+      .prepare(
+        `INSERT INTO model_runs
+           (id, candidate_id, task, task_version, provider, model_id, base_url,
+            prompt_chars, output_chars, latency_ms, ok, error, created_at)
+         VALUES (?, ?, 'opportunity_match', 'v1', 'test', 'test', 'test', 10, 10, 100, 1, null, datetime('now'))`,
+      )
+    for (let i = 0; i < 200; i += 1) insert.run(`run_fine_${i}`, candidateId)
+
+    // 5 fallos entre 225 llamadas es un 2%.
+    const failing = exceptions
+      .listExceptions(candidateId)
+      .find((item) => item.kind === 'model_failing')
+    assert.equal(failing, undefined)
+  })
 })

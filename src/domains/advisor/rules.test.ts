@@ -20,7 +20,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { auditAdvice, renderAdvice, stripIds } from './rules'
+import { auditAdvice, measurePlainness, renderAdvice, stripIds } from './rules'
 
 const GROUNDS = {
   evidenceIds: ['ev_community', 'ev_growth'],
@@ -151,5 +151,56 @@ describe('lo que se le acaba enseñando', () => {
     assert.doesNotMatch(renderAdvice(audit, 'nada'), /unc_|ev_|opp_/)
     // Pero la trazabilidad no se pierde: vive en el campo, comprobable.
     assert.deepEqual(audit.points[0].uncertaintyIds, ['unc_analytics'])
+  })
+})
+
+describe('que se entienda', () => {
+  // La frase real que Borja senalo, y de donde salio: el grafo esta escrito
+  // para un analista y en ingles, y el modelo la repitio en castellano.
+  const JERGA =
+    'Lo que si queda flojo no se arregla con un curso: tu analitica esta a nivel de ' +
+    'responsabilidad, sin metodos ni experimentacion demostrados, y los numeros de Asgard ' +
+    'los das sin atribucion clara entre tu y el equipo.'
+
+  it('canta la frase larga, que es la que hay que leer dos veces', () => {
+    const { longestSentence } = measurePlainness(JERGA)
+    assert.ok(longestSentence > 30, `${longestSentence} palabras en una frase`)
+  })
+
+  it('no se queja de una frase corta y clara', () => {
+    const plain = measurePlainness(
+      'De analitica se que la llevabas, pero no como medias. Y de los numeros de Asgard no se que parte hiciste tu.',
+    )
+    assert.ok(plain.longestSentence <= 30)
+    assert.deepEqual(plain.jargon, [])
+  })
+
+  it('pilla el vocabulario del grafo si se cuela literal', () => {
+    // Estos son los valores de verdad de la base, no inventados: es lo que
+    // el modelo tiene delante en cada respuesta.
+    assert.deepEqual(measurePlainness('Tienes STRONG_EVIDENCE en growth.').jargon, ['STRONG_EVIDENCE'])
+    assert.deepEqual(measurePlainness('Eso es un USER_CLAIM.').jargon, ['USER_CLAIM'])
+  })
+
+  it('la medida viaja con la auditoria, para poder vigilarla', () => {
+    const audit = auditAdvice(
+      {
+        points: [
+          {
+            text: JERGA,
+            evidenceIds: ['ev_community'],
+            uncertaintyIds: [],
+            opportunityIds: [],
+          },
+        ],
+        askBack: null,
+      },
+      GROUNDS,
+    )
+
+    // El punto no se tira: se sostiene. Pero queda medido que no se entiende,
+    // que es lo que evita que empeore sin que nadie se entere.
+    assert.equal(audit.points.length, 1)
+    assert.ok(audit.plainness.longestSentence > 30)
   })
 })

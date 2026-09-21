@@ -52,6 +52,8 @@ export interface AdvisorAudit {
   askBack: string | null
   /** Lo que se cayó. La cuenta es la medida: objetivo cero. */
   dropped: DroppedPoint[]
+  /** Si se entiende. También objetivo cero en la jerga. */
+  plainness: Plainness
 }
 
 /**
@@ -88,6 +90,69 @@ export function stripIds(text: string): string {
     .replace(/\s+([.,;:!?])/g, '$1')
     .replace(/\(\s*\)|\[\s*\]/g, '')
     .trim()
+}
+
+/**
+ * Lo que se entiende y lo que no.
+ *
+ * El grafo esta escrito para un analista y en ingles: `STRONG_EVIDENCE`,
+ * `USER_CLAIM`, «analytical depth is not evidenced». El modelo lo lee entero
+ * en cada respuesta y, si nadie se lo impide, lo repite — y entonces sale
+ * «tu analitica esta a nivel de responsabilidad», que es una frase que no
+ * entiende nadie y que ademas no significa nada fuera de aqui.
+ *
+ * Esto no se arregla del todo con codigo: lo que hace que una frase se
+ * entienda es el prompt. Lo que si se puede hacer desde aqui es **medirlo**,
+ * que es lo que evita que empeore sin que nadie se entere — igual que la
+ * cuenta de lo que se cae por no sostenerse.
+ *
+ * Dos medidas, y las dos a proposito tontas. La jerga interna es una lista
+ * cerrada: si aparece literalmente, es un fallo, no una opinion. Y la frase
+ * mas larga en palabras, porque a esta escala —tres o cuatro frases— un
+ * indice de legibilidad es ruido, y «esta frase tiene 38 palabras» no lo es.
+ */
+const INTERNAL_VOCABULARY = [
+  'STRONG_EVIDENCE',
+  'GOOD_EVIDENCE',
+  'SOME_EVIDENCE',
+  'USER_CLAIM',
+  'SOURCE_FACT',
+  'ESTABLISHED',
+  'PARTIALLY_SUPPORTED',
+  'NOT_SUPPORTED',
+  'ACCEPTED_UNKNOWN',
+  'INTERRUPT',
+  'IGNORE',
+  'HOLD',
+  'ASK_CANDIDATE',
+  'ASK_COMPANY',
+  'REQUIRED',
+  'epistemic',
+  'rubric',
+  'hard constraint',
+  'intent profile',
+]
+
+/** Mas de esto en una sola frase y hay que leerla dos veces. */
+export const LONG_SENTENCE_WORDS = 30
+
+export interface Plainness {
+  /** Jerga interna que se ha colado, literal. Deberia estar vacio. */
+  jargon: string[]
+  /** La frase mas larga, en palabras. */
+  longestSentence: number
+}
+
+export function measurePlainness(text: string): Plainness {
+  const lower = text.toLowerCase()
+  const jargon = INTERNAL_VOCABULARY.filter((term) => lower.includes(term.toLowerCase()))
+
+  const longestSentence = text
+    .split(/[.!?\n]+/)
+    .map((sentence) => sentence.trim().split(/\s+/).filter((word) => word.length > 0).length)
+    .reduce((worst, length) => Math.max(worst, length), 0)
+
+  return { jargon, longestSentence }
 }
 
 /**
@@ -133,10 +198,12 @@ export function auditAdvice(draft: AdvisorDraft, grounds: AdvisorGrounds): Advis
     points.push({ text, ...cited })
   }
 
+  const askBack = draft.askBack ? stripIds(draft.askBack) || null : null
   return {
     points,
-    askBack: draft.askBack ? stripIds(draft.askBack) || null : null,
+    askBack,
     dropped,
+    plainness: measurePlainness([...points.map((point) => point.text), askBack ?? ''].join(' ')),
   }
 }
 

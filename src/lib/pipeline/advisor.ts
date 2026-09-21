@@ -283,6 +283,10 @@ export async function answerQuestionJob(
       // puede sostener y el candidato se estaba creyendo la mitad.
       dropped: audit.dropped.length,
       droppedWhy: audit.dropped.map((item) => item.why),
+      // Si esto deja de estar vacio, el Rep esta hablando en el idioma del
+      // grafo y no en el suyo, y eso no se ve leyendo una respuesta suelta.
+      jargon: audit.plainness.jargon,
+      longestSentence: audit.plainness.longestSentence,
       // Cuántas propuso y cuántas citaban algo real. La diferencia es lo que
       // habría acabado siendo memoria de relleno.
       proposed: data.remember.length,
