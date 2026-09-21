@@ -23,7 +23,6 @@ type Sync = typeof import('./source-sync')
 type Opportunities = typeof import('../db/opportunities')
 type Repo = typeof import('../db/repo')
 type Preferences = typeof import('./preferences')
-type Types = typeof import('../sources/types')
 
 let sync: Sync
 let opportunities: Opportunities
