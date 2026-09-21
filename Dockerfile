@@ -29,6 +29,10 @@ RUN npm run build
 FROM node:24-alpine AS runner
 WORKDIR /app
 
+# Para poder soltar los privilegios después de tocar el volumen. Ver el
+# entrypoint, abajo.
+RUN apk add --no-cache su-exec
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
@@ -49,7 +53,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # se cae antes de poder decir qué le falta.
 RUN mkdir -p /data && chown nextjs:nodejs /data
 
-USER nextjs
+# El volumen se monta *encima* de /data al arrancar, y viene siendo de root:
+# el `chown` de arriba se queda debajo del montaje y no lo ve nadie. Por eso
+# el arranque empieza como root, arregla el dueño del directorio ya montado y
+# entonces baja a `nextjs` — que es donde corre el servidor.
+#
+# Sin esto: `unable to open database file` (SQLITE_CANTOPEN) en la primera
+# página que toque la base, con el contenedor arrancado y el health check en
+# verde, que es la peor forma de fallar.
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 3000
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

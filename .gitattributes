@@ -1,0 +1,5 @@
+# El entrypoint lo lee `/bin/sh` dentro de un contenedor Linux. Con CRLF, el
+# shebang se convierte en `/bin/sh\r` y el contenedor arranca con un
+# "bad interpreter" — en una máquina Windows con autocrlf esto pasa solo.
+*.sh text eol=lf
+Dockerfile text eol=lf
