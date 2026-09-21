@@ -163,16 +163,75 @@ export function profileDigest(candidateId: string): string {
     }
   }
 
+  // La escala salarial entera va antes que los huecos, y completa: si sólo
+  // ve el trozo de la tabla donde falta algo, «lo que más paga» sale mal sin
+  // que ningún dato sea falso.
+  const pay = paySeen(candidateId)
+  if (pay.length > 0) {
+    lines.push(
+      '',
+      'WHAT EVERY POSTING YOU HAVE READ PAYS (all of them, highest first — this is the whole scale):',
+      pay,
+    )
+  }
+
   const unmet = unmetRequirements(candidateId)
   if (unmet.length > 0) {
     lines.push(
       '',
-      'WHAT THOSE POSTINGS ASKED FOR AND THEY COULD NOT SHOW (highest paying first):',
+      'OF THOSE POSTINGS, THE ONES WHERE SOMETHING WAS MISSING (not the best paid — the ones with gaps):',
       unmet,
     )
   }
 
   return lines.join('\n')
+}
+
+/**
+ * Lo que paga todo lo que ha leído, de más a menos.
+ *
+ * Existe por un fallo concreto y sutil. El resumen de requisitos sin cubrir
+ * va ordenado por lo que paga y cortado por arriba, así que el modelo veía un
+ * trozo de la tabla salarial y decia «lo que mas paga de lo que he leido son
+ * 234.000» cuando el maximo de verdad era 258.000 — la oferta de 258.000 no
+ * salia en ese trozo porque no le faltaba nada.
+ *
+ * El numero era real. Lo falso era el superlativo, que es una forma de
+ * mentira mas dificil de ver que un dato inventado: nadie la pilla
+ * comprobando la cifra.
+ *
+ * Asi que la escala entera, aparte y completa. Cuesta unas lineas de prompt y
+ * es la unica forma de que «lo que mas paga» signifique lo que dice.
+ */
+export function paySeen(candidateId: string): string {
+  const rows: { top: number; line: string }[] = []
+
+  for (const opportunity of listOpportunities(candidateId)) {
+    const rubric = getLatestRubric(opportunity.id)
+    if (!rubric) continue
+    try {
+      const compensation = (
+        JSON.parse(rubric.rubric) as {
+          compensation?: { min?: number | null; max?: number | null; currency?: string | null }
+        }
+      ).compensation
+      const top = compensation?.max ?? compensation?.min ?? null
+      if (typeof top !== 'number' || top <= 0) continue
+      rows.push({
+        top,
+        line: `- ${opportunity.role} · ${opportunity.company}: ${(compensation?.min ?? top).toLocaleString('en-GB')}–${top.toLocaleString('en-GB')} ${compensation?.currency ?? ''}`.trim(),
+      })
+    } catch {
+      // Una rúbrica ilegible no aparece en la escala. Mejor faltar que mentir.
+    }
+  }
+
+  if (rows.length === 0) return ''
+  return rows
+    .sort((a, b) => b.top - a.top)
+    .slice(0, 16)
+    .map((row) => row.line)
+    .join('\n')
 }
 
 /**
