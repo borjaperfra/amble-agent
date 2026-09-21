@@ -60,9 +60,21 @@ preguntas).
 - La red hasta `api.telegram.org` desde esta máquina va lenta a ratos y se
   pasa del timeout de conexión de undici (10 s). Se recupera solo; si se
   vuelve costumbre, hace falta un dispatcher propio.
-- **En Railway todavía no hay nada.** Los ficheros están, el proyecto no: hay
-  que crear el servicio, montar un volumen en `/data`, poner las variables y
-  subir la base con `npm run push:db`. El § de abajo lo cuenta entero.
+- **Está desplegado y en pie**: https://amble-agent-production.up.railway.app
+  — volumen en `/data`, las 26 variables puestas, y el grafo subido (3,4 MB y
+  los cuatro ficheros de `uploads/`). La contraseña está en el gestor de
+  Borja; si se pierde, se cambia `AMBLE_PASSWORD` en Railway.
+- **Dos Reps es el riesgo real ahora.** El token de Telegram está en los dos
+  sitios: si se levanta `npm run dev` aquí con el chat id guardado, el
+  portátil y Railway sondean el mismo bot y los dos actúan sobre el mismo
+  mensaje. Para tocar en local, `AMBLE_TELEGRAM_BOT_TOKEN=` vacío delante del
+  `npm run dev`.
+- **Tras cada despliegue, el bucle duerme hasta la primera petición.**
+  `ensureInboundPolling` se llama desde los endpoints que sondean las
+  pantallas, así que Railway no escucha a Telegram hasta que alguien abre la
+  app una vez. En un portátil que se cierra por la noche eso era lo correcto;
+  en un servidor es un agujero — lo suyo sería arrancarlo también al levantar
+  el proceso.
 - La puerta **no existe sin `AMBLE_PASSWORD`**. En local se sigue entrando
   como siempre, a propósito: una contraseña por cada `npm run dev` es cómo se
   acaba con la contraseña escrita en un post-it.
@@ -871,11 +883,29 @@ misma petición para que un fichero malo se note ahora y no mañana.
 
 Quitar `AMBLE_ALLOW_RESTORE` en cuanto termine.
 
-### Lo que falta para que esté en pie
+### En pie — 21 de septiembre
 
-Nada de código. El proyecto en Railway, el volumen en `/data`, las variables
-—`AMBLE_PASSWORD`, `AMBLE_BASE_URL`, la clave del modelo, el token del bot— y
-`npm run push:db`. Detalle en el README.
+https://amble-agent-production.up.railway.app, con su grafo dentro.
+
+Dos cosas se aprendieron desplegando, y las dos estaban en el Dockerfile:
+
+- **El volumen se monta siendo de root.** La imagen construyó, el contenedor
+  arrancó, el health check se puso verde, y la primera página que tocó la base
+  se cayó con `unable to open database file`. El `chown` del build se queda
+  *debajo* del montaje. Lo arregla `docker-entrypoint.sh`: empieza como root,
+  hace suyo el directorio ya montado, y baja con `su-exec`, que reemplaza el
+  proceso en vez de envolverlo —el servidor sigue siendo PID 1 y recibe el
+  SIGTERM del despliegue—. Con `.gitattributes` detrás, porque ese shebang
+  leído con CRLF es un `bad interpreter`.
+- **Borrar una variable no reinicia nada.** `AMBLE_ALLOW_RESTORE` siguió
+  abierta hasta el siguiente despliegue. Si alguna vez se quita algo que
+  importa, hay que redesplegar detrás y comprobarlo, no suponerlo.
+
+Comprobado en vivo, sin cookie: `/feedback`, `/me`, `/listening` y
+`/dev/user-zero` redirigen a `/login`; las APIs dan 401; `/api/admin/restore`
+da 404 porque la variable ya no está; `/api/health` contesta 200, que es lo
+que necesita Railway. Y una nota escrita antes de un redespliegue seguía ahí
+después, que era la única forma de saber que el volumen es de verdad.
 
 ## Lo siguiente, cuando retomemos
 
