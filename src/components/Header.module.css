@@ -62,12 +62,38 @@
 
 @media (max-width: 640px) {
   .inner {
-    gap: 16px;
-    padding-top: 16px;
-    padding-bottom: 16px;
+    /* La barra pasa a dos filas: la marca arriba, la navegación debajo.
+       Con tres enlaces cabía justo a 390px; con el cuarto —Ideas— ya no, y
+       lo que se sale por la derecha es el último, que es precisamente el que
+       se abre desde el móvil. Envolver no depende de cuánto mida cada
+       palabra, que es lo que lo hace fiable. */
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-top: 12px;
+    padding-bottom: 8px;
   }
 
   .nav {
-    gap: 16px;
+    gap: 20px;
+    /* Su propia fila, pegada a la izquierda bajo la marca. */
+    margin-left: 0;
+    width: 100%;
+    /* Si algún día hay un quinto, se desliza en vez de romper. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navLink {
+    /* 44px de alto real: el mínimo con el que se acierta con el pulgar. */
+    padding: 12px 2px;
+    white-space: nowrap;
+  }
+
+  .inner nav + .right {
+    margin-left: 0;
   }
 }

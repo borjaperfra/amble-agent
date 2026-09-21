@@ -6,7 +6,9 @@
 .page {
   max-width: var(--reading-max);
   margin: 0 auto;
-  padding: 24px 20px 96px;
+  /* `--page-pad` ya baja a 20px por debajo de 640 y a 32px por debajo de 768:
+     el margen lateral lo decide el sistema, no esta pantalla. */
+  padding: 24px var(--page-pad) 96px;
 }
 
 .title {
@@ -145,7 +147,11 @@
 .remove {
   background: none;
   border: none;
-  padding: 4px 0;
+  /* Área de toque de 44px sin que el texto parezca separado: el relleno
+     vertical hace el objetivo, el margen negativo devuelve la línea a su
+     sitio. */
+  padding: 12px 8px;
+  margin: -12px -8px;
   font-family: inherit;
   font-size: var(--text-body-sm);
   color: var(--ink-tertiary);
@@ -160,7 +166,8 @@
   color: var(--clay);
 }
 
-@media (min-width: 720px) {
+/* 640px es el corte del sistema (§27), no uno propio. */
+@media (min-width: 641px) {
   .page {
     padding: 48px var(--page-pad) 128px;
   }
