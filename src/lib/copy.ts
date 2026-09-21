@@ -78,7 +78,8 @@ export interface RepCopy {
     needsYesNo: (about: string) => string[]
     waitingOnYou: (role: string, company: string) => string[]
     alreadyResponded: (about: string) => string
-    nothingOpen: string[]
+    /** Nada abierto, y aun así lo que escribió pasa al perfil. */
+    notedAsContext: string[]
     nothingToYesNo: string
     severalWaiting: (count: number, url: string) => string[]
     heardThemOut: (about: string) => string[]
@@ -142,7 +143,7 @@ const es: RepCopy = {
     alreadyAnswered: (about) => [
       `Esa ya la contestaste${about}.`,
       '',
-      'Me guardo lo que has escrito, pero por sí solo no cambia nada.',
+      'Lo que has escrito ahora se suma a tu perfil igualmente.',
     ],
     needsYesNo: (about) => [`Esa${about} necesita un sí o un no.`, '', 'Contesta /si o /no.'],
     waitingOnYou: (role, company) => [
@@ -151,10 +152,11 @@ const es: RepCopy = {
       'Contesta /si y les escucho, /no y fuera.',
     ],
     alreadyResponded: (about) => `Esa ya me dijiste qué te parecía${about}.`,
-    nothingOpen: [
-      'Ahora mismo no hay nada abierto. Lo apunto y ahí se queda.',
+    notedAsContext: [
+      'No tenía nada abierto, pero eso no es una nota suelta: pasa a formar parte de lo que sé',
+      'de ti, y lo tengo en cuenta en lo que llegue.',
       '',
-      'Cuando necesite algo tuyo te lo pregunto aquí.',
+      'Si cambia lo que pienso de algo que tengo en el aire, te aviso.',
     ],
     nothingToYesNo: 'No hay nada esperando un sí o un no. Ya te aviso cuando lo haya.',
     severalWaiting: (count, url) => [
@@ -237,7 +239,7 @@ const en: RepCopy = {
     alreadyAnswered: (about) => [
       `You already answered that one${about}.`,
       '',
-      "I've kept what you wrote, but on its own it changes nothing.",
+      'What you just wrote goes into your profile all the same.',
     ],
     needsYesNo: (about) => [`That one${about} needs a yes or a no.`, '', 'Reply /yes or /no.'],
     waitingOnYou: (role, company) => [
@@ -246,10 +248,11 @@ const en: RepCopy = {
       "Reply /yes and I'll hear them out, /no and it's gone.",
     ],
     alreadyResponded: (about) => `You already told me what you thought of that one${about}.`,
-    nothingOpen: [
-      "Nothing is open right now. I've written that down and left it there.",
+    notedAsContext: [
+      "Nothing was open, but that is not a note in a drawer: it is part of what I know about",
+      'you now, and I hold it against whatever comes in.',
       '',
-      "When I need something from you, I'll ask here.",
+      "If it changes what I think of something I'm sitting on, you'll hear from me.",
     ],
     nothingToYesNo: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
     severalWaiting: (count, url) => [

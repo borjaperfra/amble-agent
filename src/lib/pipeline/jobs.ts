@@ -50,6 +50,7 @@ export type JobKind =
   | 'evaluate_opportunity'
   | 'deliver_notification'
   | 'incorporate_opportunity_answer'
+  | 'incorporate_unprompted'
   | 'sync_manfred'
   | 'sync_ats'
   | 'poll_telegram'
@@ -63,6 +64,7 @@ export interface JobPayloads {
   build_profile: Record<string, never>
   evaluate_opportunity: { opportunityId: string; reassess?: boolean }
   incorporate_opportunity_answer: { questionId: string }
+  incorporate_unprompted: { messageId: string }
   deliver_notification: { notificationId: string }
   sync_manfred: { limit?: number; maxEvaluations?: number }
   sync_ats: { limit?: number; maxEvaluations?: number }
@@ -100,6 +102,7 @@ const LANES = {
     'evaluate_opportunity',
     'deliver_notification',
     'incorporate_opportunity_answer',
+    'incorporate_unprompted',
     'sync_manfred',
     'sync_ats',
     'send_questions',
@@ -205,6 +208,11 @@ async function run(job: JobRow): Promise<void> {
     case 'incorporate_opportunity_answer': {
       const { incorporateQuestionAnswerJob } = await import('./opportunity-questions')
       await incorporateQuestionAnswerJob(String(payload.questionId ?? ''))
+      return
+    }
+    case 'incorporate_unprompted': {
+      const { incorporateUnpromptedJob } = await import('./inbound-context')
+      await incorporateUnpromptedJob(job.candidate_id, String(payload.messageId ?? ''))
       return
     }
     case 'deliver_notification': {

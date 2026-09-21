@@ -359,6 +359,43 @@ export function listPendingInterruptions(candidateId: string): {
   return out
 }
 
+/**
+ * The ones being held, newest first.
+ *
+ * HOLD is not a queue for the candidate — they never see these — but it is
+ * the only part of the pipeline that a new fact can unstick. A hold means
+ * the bar was not cleared with what was known at the time; something they
+ * mentioned in passing afterwards is exactly the thing that might clear it.
+ */
+export function listHeldOpportunities(candidateId: string): {
+  opportunity: OpportunityRow
+  decision: DecisionRow
+}[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT d.* FROM opportunity_decisions d
+       JOIN opportunities o ON o.id = d.opportunity_id
+       WHERE o.candidate_id = ? AND d.decision = 'HOLD'
+       ORDER BY d.created_at DESC`,
+    )
+    .all(candidateId) as unknown as DecisionRow[]
+
+  const out: { opportunity: OpportunityRow; decision: DecisionRow }[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (seen.has(row.opportunity_id)) continue
+    // Only where HOLD is still the standing answer: an opportunity held in
+    // the morning and interrupted at noon is not on hold.
+    const latest = getLatestDecision(row.opportunity_id)
+    if (!latest || latest.id !== row.id) continue
+    const opportunity = getOpportunity(row.opportunity_id)
+    if (!opportunity) continue
+    seen.add(row.opportunity_id)
+    out.push({ opportunity, decision: row })
+  }
+  return out
+}
+
 // ─── The blind label, and the candidate's answer ──────────────────────────
 
 /**

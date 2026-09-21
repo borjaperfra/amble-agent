@@ -23,12 +23,20 @@ export type InboundChannel = 'telegram'
  * allowed to write to their Rep when nothing is open, and somebody else's
  * chat is allowed to exist. They are separate outcomes because "your reply
  * went nowhere" has several causes and only one of them is a bug.
+ *
+ * `noted_as_context` is what used to be `nothing_pending` for words. It is a
+ * different thing now and deserves its own name: nothing was open, and what
+ * they wrote went into the profile anyway. `nothing_pending` is left for the
+ * one case where there really is nothing to do — a yes or a no with nothing
+ * waiting for one.
  */
 export type InboundOutcome =
   | 'answered_question'
   | 'recorded_response'
   | 'greeted'
   | 'nothing_pending'
+  /** Nothing was open, and what they wrote became part of the profile. */
+  | 'noted_as_context'
   /** A reply to something that had already been dealt with. */
   | 'already_settled'
   | 'ambiguous'
@@ -47,6 +55,8 @@ export interface InboundRow {
   about_type: string | null
   about_id: string | null
   detail: string | null
+  /** When what they wrote was read into the graph, if it ever was. */
+  incorporated_at: string | null
   created_at: string
 }
 
@@ -147,6 +157,18 @@ export function lastInboundExternalId(channel: InboundChannel): number | null {
     )
     .get(channel) as unknown as { last: number | null } | undefined
   return row?.last ?? null
+}
+
+/**
+ * Read into the graph, once.
+ *
+ * Same guard as a question's answer, and for the same reason: the job can be
+ * handed back after a model call that half-failed, and a second pass over
+ * the same sentence leaves two pieces of evidence where somebody said one
+ * thing once.
+ */
+export function markInboundIncorporated(id: string): void {
+  getDb().prepare('UPDATE inbound_messages SET incorporated_at = ? WHERE id = ?').run(now(), id)
 }
 
 export function listInboundMessages(candidateId: string, limit = 50): InboundRow[] {

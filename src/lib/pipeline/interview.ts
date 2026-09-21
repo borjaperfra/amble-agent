@@ -22,6 +22,7 @@ import {
 } from '../db/repo'
 import {
   runExtractAnswerClaimsTask,
+  runExtractUnpromptedClaimsTask,
   runPlanNextQuestionTask,
   runReassessAfterAnswerTask,
 } from '../model/tasks'
@@ -368,6 +369,16 @@ export interface AnswerSource {
   targetCapabilityIds: string[]
   /** How the provenance line reads on anything this answer opens. */
   label: string
+  /**
+   * Nobody asked. They wrote to their Rep because they felt like it, and it
+   * still belongs in the profile — the rule Borja set on 19 September: what
+   * he tells his Rep, his Rep knows, whatever prompted it.
+   *
+   * It changes one thing here, the extraction, because a prompt built around
+   * a question that does not exist invents one. Everything after it —
+   * evidence, provenance, reassessment — is the same path on purpose.
+   */
+  unprompted?: boolean
 }
 
 export function sourceFromTurn(turn: InterviewTurnRow): AnswerSource {
@@ -387,12 +398,14 @@ export async function incorporateAnswer(
 ): Promise<IncorporatedAnswer> {
   const turnId = source.id
 
-  const { data: answerData } = await runExtractAnswerClaimsTask({
-    candidateId,
-    question: source.question,
-    questionReason: source.reason,
-    answer: answerText,
-  })
+  const { data: answerData } = source.unprompted
+    ? await runExtractUnpromptedClaimsTask({ candidateId, message: answerText })
+    : await runExtractAnswerClaimsTask({
+        candidateId,
+        question: source.question,
+        questionReason: source.reason,
+        answer: answerText,
+      })
 
   let claimsCreated = 0
   const evidenceIds: string[] = []
@@ -471,7 +484,13 @@ export async function incorporateAnswer(
       description: uncertainty.description,
       materiality: uncertainty.materiality,
     })),
-    question: source.question,
+    // Nada que preguntar cuando nadie preguntó: el hueco en blanco deja al
+    // modelo leyendo la respuesta como si contestase a algo, y lo que se
+    // inventa ahí acaba siendo una capacidad reevaluada por una pregunta que
+    // no existe.
+    question: source.unprompted
+      ? '(Nothing was asked. They wrote to their Rep on their own.)'
+      : source.question,
     answer: answerText,
   })
 

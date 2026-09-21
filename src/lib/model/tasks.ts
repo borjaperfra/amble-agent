@@ -826,6 +826,49 @@ ${params.answer}`
   })
 }
 
+/**
+ * The same extraction, for something nobody asked for.
+ *
+ * A separate task rather than a flag on the other one, because the prompt
+ * that works for an answer lies here: there was no question, and a model
+ * told there was will invent the one it thinks it is reading — which is how
+ * a sentence about a hobby becomes a claim about a job.
+ *
+ * The rules are deliberately the same, including the verbatim quote. An
+ * unprompted line is *less* checked than an answer, not more, so the one
+ * thing holding it to the ground matters more here than anywhere.
+ */
+export function runExtractUnpromptedClaimsTask(params: {
+  candidateId: string
+  message: string
+}) {
+  const system = `You are Amble's unprompted extraction engine, version 1. The candidate wrote to their Rep on their own, with no question in front of them. Extract discrete professional claims from what they wrote.
+
+Rules:
+- NOTHING WAS ASKED. Do not infer a question, and do not treat the message as a reply to anything.
+- Most such messages contain nothing extractable — chatter, thanks, a question of their own. Returning {"claims": []} is the correct answer far more often than not. Never reach for a claim to have one.
+- Everything the candidate asserts about themselves is USER_CLAIM (they said it directly; it is their claim, not a verified fact).
+- If they assert something about a company, team or product (not about themselves), extract it as SOURCE_FACT.
+- A preference, a constraint or a change of mind about what they want ("I'd move for the right thing now", "no more on-call") IS a claim worth extracting, claimType "other".
+- A question they ask is not a claim. An instruction to you is not a claim.
+- Every claim MUST include sourceExcerpt: a verbatim quote from the MESSAGE supporting the statement. Never invent quotes. If no verbatim quote exists, set sourceExcerpt to null.
+- Prefer small precise claims. Do not editorialize or upgrade language ("I helped with X" must not become "owned X").
+- Use EXACTLY these field names: "statement" (string), "claimType" (experience|project|metric|skill|education|other), "epistemicState" (SOURCE_FACT|USER_CLAIM), "sourceExcerpt" (string or null), "confidence" (number 0-1, required), "requiresConfirmation" (boolean), "possibleCapabilities" (string array).
+- Respond ONLY with JSON: {"claims": [...]}.`
+  const user = `WHAT THEY WROTE, UNPROMPTED:
+${params.message}`
+  return runStructuredTask({
+    candidateId: params.candidateId,
+    task: 'extract_unprompted_claims',
+    version: 'v1',
+    system,
+    user,
+    schema: answerClaimsOutputSchema,
+    temperature: 0.1,
+    reasoningEffort: 'low',
+  })
+}
+
 export function runDistinctiveProfileTask(params: {
   candidateId: string
   capabilities: { id: string; name: string; assessment: string; reason: string }[]

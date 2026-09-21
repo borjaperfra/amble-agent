@@ -205,12 +205,21 @@ describe('a message from a chat that is not theirs', () => {
 })
 
 describe('a message with nothing open', () => {
-  it('is acknowledged rather than acted on', async () => {
-    updates = [update(30, 'any news?')]
+  it('goes into the profile instead of being thanked and dropped', async () => {
+    updates = [update(30, 'Por cierto, me he mudado a Lisboa este mes.')]
 
     await inbound.pollTelegram(candidateId)
-    assert.equal(inboundDb.findInboundMessage('telegram', '30')?.outcome, 'nothing_pending')
-    assert.match(String((sent()[0]?.body as { text: string }).text), /no hay nada abierto/)
+
+    const row = inboundDb.findInboundMessage('telegram', '30')
+    assert.equal(row?.outcome, 'noted_as_context')
+    // La regla del 19: lo que le cuente al Rep, el Rep lo sabe — venga a
+    // cuento de lo que venga. El acuse lo dice, porque «apuntado» a secas es
+    // lo que le hizo repetirse.
+    assert.match(String((sent()[0]?.body as { text: string }).text), /parte de lo que sé/)
+  })
+
+  it('says so on the branch itself, so nothing depends on reading the copy', () => {
+    assert.equal(inbound.handleMessage(candidateId, 'Ya no quiero guardias.').asContext, true)
   })
 
   it('answers /start with what this is, and eats nothing', async () => {
@@ -432,6 +441,6 @@ describe('el idioma se elige', () => {
     updates = [update(71, '¿alguna novedad?')]
 
     await inbound.pollTelegram(candidateId)
-    assert.match(String((sent()[0]?.body as { text: string }).text), /Apuntado|no hay nada abierto/)
+    assert.match(String((sent()[0]?.body as { text: string }).text), /Apuntado|parte de lo que sé/)
   })
 })

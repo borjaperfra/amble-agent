@@ -386,6 +386,7 @@ function createDb(): DatabaseSync {
       about_type TEXT,
       about_id TEXT,
       detail TEXT,
+      incorporated_at TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -452,6 +453,13 @@ function migrate(db: DatabaseSync): void {
   db.exec(
     'CREATE INDEX IF NOT EXISTS notifications_by_external ON notifications (channel, external_id);',
   )
+  if (!has('inbound_messages', 'incorporated_at')) {
+    // Cuándo pasó al perfil lo que escribió sin que nadie le preguntase. Es
+    // lo que impide que un reintento extraiga dos veces los mismos claims de
+    // una frase que dijo una sola vez — el mismo bug que dejó las evidencias
+    // duplicadas en las preguntas.
+    db.exec('ALTER TABLE inbound_messages ADD COLUMN incorporated_at TEXT;')
+  }
   if (!has('opportunities', 'source_ref')) {
     db.exec('ALTER TABLE opportunities ADD COLUMN source_ref TEXT;')
   }

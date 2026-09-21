@@ -91,6 +91,15 @@ export interface HandledMessage {
   /** What to say back. Nothing is said back to a chat we do not know. */
   reply: string | null
   detail?: string
+  /**
+   * Words that nothing here consumed, and that still belong in the profile.
+   *
+   * Set wherever a message was not taken as the answer to something: nothing
+   * open, a reply to a question already closed, words where a yes was
+   * needed. An answer is not flagged, because it is already on its way into
+   * the graph by the door built for it and two doors means two claims.
+   */
+  asContext?: boolean
 }
 
 /**
@@ -105,8 +114,13 @@ export interface HandledMessage {
  * After that the order is the whole of it. A command is a command.
  * Otherwise, if a question is open, whatever they wrote is its answer — all
  * of it, unparsed, because the extractor downstream reads a sentence better
- * than a regular expression does. Only when nothing is open does a message
- * become something to acknowledge rather than act on.
+ * than a regular expression does.
+ *
+ * What is left over is not nothing. A message with no question behind it
+ * used to be acknowledged and dropped, which made the Rep a form with
+ * conversation on top: tell it you have moved, and the next opportunity asks
+ * where you live. Those branches now carry `asContext`, and what they wrote
+ * goes into the profile by the same door an answer does.
  *
  * Nothing is thrown away quietly: every branch returns an outcome that gets
  * written down next to what they sent.
@@ -159,14 +173,16 @@ export function handleMessage(
       outcome: 'ambiguous',
       about: { type: 'opportunity', id: opportunity.id },
       detail: 'words arrived while an interruption was waiting for a yes or a no',
+      asContext: true,
       reply: copy.bot.waitingOnYou(opportunity.role, opportunity.company).join('\n'),
     }
   }
 
   return {
-    outcome: 'nothing_pending',
+    outcome: 'noted_as_context',
     about: null,
-    reply: copy.bot.nothingOpen.join('\n'),
+    asContext: true,
+    reply: copy.bot.notedAsContext.join('\n'),
   }
 }
 
@@ -195,6 +211,7 @@ function answerQuoted(
       outcome: 'already_settled',
       about: { type: 'question', id: question.id },
       detail: 'a reply to a question that was already answered',
+      asContext: true,
       reply: copy.bot.alreadyAnswered(about(question.opportunity_id, copy)).join('\n'),
     }
   }
@@ -208,6 +225,7 @@ function answerQuoted(
         outcome: 'ambiguous',
         about: { type: 'opportunity', id: quoted.about_id },
         detail: 'words arrived where a yes or a no was needed',
+        asContext: true,
         reply: copy.bot.needsYesNo(about(quoted.about_id, copy)).join('\n'),
       }
     }
@@ -215,6 +233,7 @@ function answerQuoted(
       outcome: 'already_settled',
       about: { type: 'opportunity', id: quoted.about_id },
       detail: 'a reply to an interruption that was already answered',
+      asContext: true,
       reply: copy.bot.alreadyResponded(about(quoted.about_id, copy)),
     }
   }
@@ -452,6 +471,16 @@ async function handleOne(
   }
 
   settleInboundMessage(claim.message.id, handled.outcome, handled.about, handled.detail ?? null)
+
+  // Todo lo que llegue de él es contexto del perfil. Va a la cola y no aquí
+  // porque extraer cuesta una llamada al modelo, y el sondeo de Telegram
+  // tiene carril propio para que contestar en el móvil se note en segundos:
+  // esperar a una extracción dentro del sondeo es volver a atarlo todo a que
+  // alguien esté mirando.
+  if (handled.asContext && text.trim().length > 0) {
+    enqueue('incorporate_unprompted', candidateId, { messageId: claim.message.id })
+  }
+
   recordAuditEvent({
     candidate_id: candidateId,
     subject_type: handled.about?.type ?? 'inbound',
