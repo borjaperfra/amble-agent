@@ -72,6 +72,8 @@ export interface InboundRow {
   answer: string | null
   /** Lo que sostiene cada cosa dicha en esa respuesta, en JSON. */
   answer_sources: string | null
+  /** Por dónde va, mientras va. */
+  progress: string | null
   answered_at: string | null
   created_at: string
 }
@@ -195,10 +197,24 @@ export function markInboundIncorporated(id: string): void {
  * caso con números»— hay que poder releerlo en noviembre: un agente que
  * aconseja y no se acuerda de lo que aconsejó es un oráculo, no un asesor.
  */
+/**
+ * Por dónde va.
+ *
+ * En la base y no en memoria por lo mismo que todo lo demás aquí: quien
+ * pregunta por el progreso es otra petición, y puede ser otro proceso después
+ * de un despliegue. Un estado que vive en una variable se pierde justo cuando
+ * hace falta.
+ */
+export function recordInboundProgress(id: string, stage: string | null): void {
+  getDb().prepare('UPDATE inbound_messages SET progress = ? WHERE id = ?').run(stage, id)
+}
+
 export function recordInboundAnswer(id: string, answer: string, sources: unknown = []): void {
   getDb()
     .prepare(
-      'UPDATE inbound_messages SET answer = ?, answer_sources = ?, answered_at = ? WHERE id = ?',
+      `UPDATE inbound_messages
+         SET answer = ?, answer_sources = ?, answered_at = ?, progress = NULL
+       WHERE id = ?`,
     )
     .run(answer, JSON.stringify(sources), now(), id)
 }

@@ -13,6 +13,12 @@ const COPY = {
     send: 'Contárselo',
     sending: 'Guardando…',
     thinking: 'Déjame mirar lo que sé de ti…',
+    stages: {
+      fetching: 'Abriendo la oferta…',
+      reading: 'Leyendo la oferta entera…',
+      comparing: 'Comparándola con lo que sé de ti…',
+      writing: 'Pensando qué decirte…',
+    } as Record<string, string>,
     done: 'Apuntado. Tardo un momento en encajarlo, y si cambia lo que pienso de algo que tengo en el aire, te aviso.',
     failed: 'No se ha guardado. Sigue escrito aquí: inténtalo otra vez.',
     slow: 'Estoy tardando más de la cuenta. Te contesto por Telegram en cuanto lo tenga.',
@@ -29,6 +35,12 @@ const COPY = {
     send: 'Tell them',
     sending: 'Saving…',
     thinking: 'Let me look at what I know about you…',
+    stages: {
+      fetching: 'Opening the posting…',
+      reading: 'Reading the whole posting…',
+      comparing: 'Holding it against what I know about you…',
+      writing: 'Working out what to tell you…',
+    } as Record<string, string>,
     done: "Noted. It takes me a moment to place it, and if it changes what I think of something I'm sitting on, you'll hear from me.",
     failed: 'It did not save. It is still written here: try again.',
     slow: 'This is taking longer than it should. I will answer on Telegram once I have it.',
@@ -56,16 +68,31 @@ interface TellYourRepProps {
  * es mentir. La respuesta no se pierde —está guardada en su fila— y el Rep
  * la manda por Telegram, que es donde de todas formas vive esto.
  */
+/**
+ * Volver a por la respuesta, contando por dónde va.
+ *
+ * Leer una oferta y compararla con una carrera entera son noventa segundos.
+ * Noventa segundos de «cargando» es una pantalla rota; noventa segundos
+ * diciendo qué está haciendo es alguien trabajando, y es exactamente el mismo
+ * tiempo. El tope sube a cuatro minutos por eso: ahora hay respuestas que
+ * legítimamente tardan.
+ */
 async function waitForAnswer(
   id: string,
+  onProgress: (stage: string | null) => void,
 ): Promise<{ answer: string | null; sources: Source[] }> {
-  const until = Date.now() + 120_000
+  const until = Date.now() + 240_000
   while (Date.now() < until) {
-    await new Promise((resolve) => setTimeout(resolve, 2_000))
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
     const response = await fetch(`/api/profile/context?id=${encodeURIComponent(id)}`)
     if (!response.ok) return { answer: null, sources: [] }
-    const body = (await response.json()) as { answer: string | null; sources?: Source[] }
+    const body = (await response.json()) as {
+      answer: string | null
+      progress?: string | null
+      sources?: Source[]
+    }
     if (body.answer) return { answer: body.answer, sources: body.sources ?? [] }
+    onProgress(body.progress ?? null)
   }
   return { answer: null, sources: [] }
 }
@@ -88,6 +115,9 @@ export default function TellYourRep({ language }: TellYourRepProps) {
   const [state, setState] = useState<'idle' | 'sending' | 'thinking' | 'done'>('idle')
   const [answer, setAnswer] = useState<string | null>(null)
   const [sources, setSources] = useState<Source[]>([])
+  const [stage, setStage] = useState<string | null>(null)
+  /** Lo que preguntó, para que no desaparezca mientras espera la respuesta. */
+  const [asking2, setAsking2] = useState('')
   const [showSources, setShowSources] = useState(false)
   /** Si lo último que mandó era una pregunta: sin esto, «no hay respuesta» y
       «no hacía falta ninguna» se dirían igual, que es el bug de hoy otra vez. */
@@ -101,6 +131,8 @@ export default function TellYourRep({ language }: TellYourRepProps) {
 
     setState('sending')
     setError(null)
+    setStage(null)
+    setAsking2(written)
     try {
       const response = await fetch('/api/profile/context', {
         method: 'POST',
@@ -122,7 +154,7 @@ export default function TellYourRep({ language }: TellYourRepProps) {
       // enseña mientras tanto dice lo que está pasando de verdad —«déjame
       // mirar lo que sé de ti»— y no un girador.
       setState('thinking')
-      const settled = await waitForAnswer(id)
+      const settled = await waitForAnswer(id, setStage)
       setAnswer(settled.answer)
       setSources(settled.sources)
       setState('done')
@@ -135,8 +167,11 @@ export default function TellYourRep({ language }: TellYourRepProps) {
   if (state === 'thinking') {
     return (
       <section className={styles.box} aria-label={words.kicker}>
+        {/* Lo que preguntó sigue delante. Que tu propia frase desaparezca
+            mientras esperas es lo que hace dudar de si se ha enviado. */}
+        <p className={styles.asked}>{asking2}</p>
         <p className={styles.thinking} role="status">
-          {words.thinking}
+          {(stage && words.stages[stage]) || words.thinking}
         </p>
       </section>
     )
@@ -145,6 +180,7 @@ export default function TellYourRep({ language }: TellYourRepProps) {
   if (state === 'done') {
     return (
       <section className={styles.box} aria-label={words.kicker}>
+        {asked ? <p className={styles.asked}>{asking2}</p> : null}
         <p className={styles.done} role="status">
           {answer ?? (asked ? words.slow : words.done)}
         </p>

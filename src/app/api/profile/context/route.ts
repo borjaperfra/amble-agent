@@ -107,6 +107,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     answer: message.answer,
+    progress: message.progress,
     answeredAt: message.answered_at,
     sources: message.answer ? resolveSources(candidate.id, message.answer_sources) : [],
   })

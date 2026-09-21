@@ -403,6 +403,11 @@ function createDb(): DatabaseSync {
       -- Guardado y no recalculado: una fuente que se recalcula manana con un
       -- grafo distinto ya no es la fuente de lo que se dijo ayer.
       answer_sources TEXT,
+      -- Por donde va, mientras va. Leer una oferta y compararla con una
+      -- carrera entera son noventa segundos, y noventa segundos de «cargando»
+      -- es una pantalla rota; noventa segundos de «estoy leyendo la oferta»
+      -- es alguien trabajando.
+      progress TEXT,
       answered_at TEXT,
       created_at TEXT NOT NULL
     );
@@ -530,6 +535,9 @@ function migrate(db: DatabaseSync): void {
   }
   if (!has('inbound_messages', 'answer_sources')) {
     db.exec('ALTER TABLE inbound_messages ADD COLUMN answer_sources TEXT;')
+  }
+  if (!has('inbound_messages', 'progress')) {
+    db.exec('ALTER TABLE inbound_messages ADD COLUMN progress TEXT;')
   }
   if (!has('inbound_messages', 'answer')) {
     // Lo que el Rep le contestó, cuando lo que llegó era una pregunta.

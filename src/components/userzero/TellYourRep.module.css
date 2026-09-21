@@ -66,6 +66,15 @@
   cursor: default;
 }
 
+.asked {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  color: var(--ink-tertiary);
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+
 .thinking {
   margin: 0;
   color: var(--ink-secondary);

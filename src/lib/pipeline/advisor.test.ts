@@ -168,6 +168,31 @@ describe('distinguir una pregunta de una afirmación', () => {
   })
 })
 
+describe('reconocer que te están pasando una oferta', () => {
+  it('ve el enlace suelto', () => {
+    const found = advisor.offerInMessage('mira esta https://jobs.example.com/head-of-growth')
+    assert.equal(found.url, 'https://jobs.example.com/head-of-growth')
+  })
+
+  it('ve el anuncio pegado entero, por tamaño y no por palabras', () => {
+    // Adivinar si dice «oferta» o «vacante» es adivinar el vocabulario de
+    // alguien, y falla justo con quien escribe raro.
+    assert.equal(advisor.offerInMessage('x'.repeat(1200)).pasted, true)
+  })
+
+  it('no confunde una frase con un enlace con un anuncio pegado', () => {
+    const found = advisor.offerInMessage('¿qué te parece https://example.com/a?')
+    assert.equal(found.pasted, false, 'el texto que queda es una frase')
+    assert.ok(found.url)
+  })
+
+  it('deja en paz un mensaje normal', () => {
+    const found = advisor.offerInMessage('Ya no quiero guardias.')
+    assert.equal(found.url, null)
+    assert.equal(found.pasted, false)
+  })
+})
+
 describe('con qué contesta', () => {
   it('le da el grafo entero y nada más', () => {
     const digest = advisor.profileDigest(candidateId)

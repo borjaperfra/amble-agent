@@ -18,7 +18,12 @@
  * consejo que no se apoya en nada es un horóscopo, y de esos ya hay.
  */
 
-import { getInboundMessage, listInboundMessages, recordInboundAnswer } from '../db/inbound'
+import {
+  getInboundMessage,
+  listInboundMessages,
+  recordInboundAnswer,
+  recordInboundProgress,
+} from '../db/inbound'
 import { insertAdvice, listOpenAdvice, type AdviceRow } from '../db/advice'
 import {
   getLatestIntent,
@@ -27,7 +32,9 @@ import {
   parseJsonArray,
 } from '../db/repo'
 import {
+  getLatestAssessment,
   getLatestDecision,
+  getLatestRubric,
   listOpportunities,
   recordAuditEvent,
 } from '../db/opportunities'
@@ -36,6 +43,12 @@ import { copyIn } from '@/lib/copy'
 import { auditAdvice, renderAdvice, type AdvisorPoint } from '@/domains/advisor/rules'
 import { listEvidence } from '../db/repo'
 import { readPreferences } from './preferences'
+import {
+  FetchRefused,
+  opportunityFromMessage,
+  readPastedOpportunity,
+  requirementsDigest,
+} from './pasted-offer'
 
 /**
  * Si eso era una pregunta.
@@ -58,6 +71,30 @@ export function looksLikeAQuestion(text: string): boolean {
   if (trimmed.length === 0) return false
   if (trimmed.includes('?') || trimmed.includes('¿')) return true
   return OPENERS.test(trimmed)
+}
+
+/**
+ * Si lo que ha mandado es una oferta para que la mire.
+ *
+ * Dos formas, y las dos son las que usa la gente: un enlace suelto, o el
+ * anuncio pegado entero. Lo segundo se reconoce por el tamaño y no por las
+ * palabras: un anuncio de trabajo son mil caracteres largos, y un mensaje de
+ * mil caracteres que no es un anuncio tampoco se pierde nada por leerse como
+ * si lo fuera —acaba en el perfil igual—.
+ *
+ * Deliberadamente no mira si dice «oferta» o «vacante». Eso es adivinar el
+ * idioma y el vocabulario de alguien, y falla justo con quien escribe raro.
+ */
+const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/i
+
+/** Por debajo de esto no es un anuncio, es una frase con un enlace. */
+const PASTED_POSTING_CHARS = 900
+
+export function offerInMessage(text: string): { url: string | null; pasted: boolean } {
+  const match = URL_IN_TEXT.exec(text)
+  const url = match ? match[0] : null
+  const withoutUrl = url ? text.replace(url, ' ').trim() : text
+  return { url, pasted: withoutUrl.length >= PASTED_POSTING_CHARS }
 }
 
 /**
@@ -126,7 +163,96 @@ export function profileDigest(candidateId: string): string {
     }
   }
 
+  const unmet = unmetRequirements(candidateId)
+  if (unmet.length > 0) {
+    lines.push(
+      '',
+      'WHAT THOSE POSTINGS ASKED FOR AND THEY COULD NOT SHOW (highest paying first):',
+      unmet,
+    )
+  }
+
   return lines.join('\n')
+}
+
+/**
+ * Lo que le han pedido y no ha podido enseñar, empezando por lo que más paga.
+ *
+ * Esto ya estaba calculado y no lo leía nadie. Cada vez que se evalúa una
+ * oferta, la etapa de match dice requisito por requisito si hay evidencia
+ * para sostenerlo, y guarda el veredicto. Treinta ofertas después, eso es un
+ * mapa de lo que el mercado que le llega le pide y él no puede demostrar.
+ *
+ * Es lo que convierte «¿qué mejoro?» en una respuesta con suelo. Sin esto, el
+ * Rep sólo sabe lo que ignora de él —los huecos del grafo— y eso contesta a
+ * «qué no sabes de mí», que es otra pregunta. Con esto puede contestar a «qué
+ * me está costando dinero», que es la que él hace.
+ *
+ * Ordenado por lo que pagaba la oferta, de más a menos, y con el tope
+ * incluido: «esta pedía esto y llegaba a 150.000» es una frase que se puede
+ * comprobar y sobre la que se puede decidir. «Deberías mejorar tu analítica»
+ * no lo es.
+ *
+ * Nada de agrupar requisitos parecidos: cada oferta lo escribe a su manera, y
+ * juntar «experiencia construyendo sistemas backend» con «perfil técnico»
+ * porque se parecen es inventarse un dato que luego se cita como real.
+ */
+export function unmetRequirements(candidateId: string): string {
+  const rows: { pay: number; line: string }[] = []
+
+  for (const opportunity of listOpportunities(candidateId)) {
+    const assessment = getLatestAssessment(opportunity.id)
+    if (!assessment) continue
+
+    let matches: {
+      requirement: string
+      importance: string
+      verdict: string
+      note?: string
+    }[]
+    try {
+      matches = JSON.parse(assessment.evidence_match)
+    } catch {
+      continue
+    }
+
+    const unmet = matches.filter(
+      (item) =>
+        (item.importance === 'REQUIRED' || item.importance === 'HIGH') &&
+        (item.verdict === 'NOT_SUPPORTED' || item.verdict === 'UNKNOWN'),
+    )
+    if (unmet.length === 0) continue
+
+    let pay = 0
+    let paid = 'pay not stated'
+    const rubric = getLatestRubric(opportunity.id)
+    if (rubric) {
+      try {
+        const compensation = (JSON.parse(rubric.rubric) as { compensation?: { max?: number | null; min?: number | null; currency?: string | null } }).compensation
+        const top = compensation?.max ?? compensation?.min ?? null
+        if (typeof top === 'number' && top > 0) {
+          pay = top
+          paid = `up to ${top.toLocaleString('en-GB')} ${compensation?.currency ?? ''}`.trim()
+        }
+      } catch {
+        // Una rúbrica ilegible no tumba el resumen: la oferta entra sin cifra.
+      }
+    }
+
+    for (const item of unmet.slice(0, 4)) {
+      rows.push({
+        pay,
+        line: `- "${item.requirement.slice(0, 160)}" [${item.importance}, ${item.verdict}] — asked by ${opportunity.role} · ${opportunity.company} (${paid})`,
+      })
+    }
+  }
+
+  if (rows.length === 0) return ''
+  return rows
+    .sort((a, b) => b.pay - a.pay)
+    .slice(0, 14)
+    .map((row) => row.line)
+    .join('\n')
 }
 
 /**
@@ -242,11 +368,36 @@ export async function answerQuestionJob(
     }
   }
 
+  // ¿Trae una oferta para que la mire? Entonces eso es la mitad de la
+  // respuesta, y hay que leerla antes de decir nada. Son noventa segundos: el
+  // progreso se va escribiendo para que quien espera sepa por dónde va.
+  let posting = ''
+  const offer = offerInMessage(message.text)
+  if (offer.url || offer.pasted) {
+    try {
+      recordInboundProgress(messageId, offer.url ? 'fetching' : 'reading')
+      const opportunity = await opportunityFromMessage(candidateId, message.text, offer.url)
+      recordInboundProgress(messageId, 'reading')
+      await readPastedOpportunity(opportunity.id)
+      recordInboundProgress(messageId, 'comparing')
+      posting = requirementsDigest(opportunity)
+    } catch (error) {
+      // No poder abrir un enlace no puede tumbar la respuesta: se le dice, y
+      // se contesta con lo que se sabe de él, que no es poco.
+      posting =
+        error instanceof FetchRefused
+          ? `THEY SENT YOU A LINK AND YOU COULD NOT READ IT: ${error.message} Tell them this, briefly, and offer to read it if they paste the text.`
+          : ''
+    }
+  }
+
+  recordInboundProgress(messageId, 'writing')
   const { data } = await runAnswerCandidateQuestionTask({
     candidateId,
     question: message.text,
     language: readPreferences(candidateId).language ?? 'es',
     profile: profileDigest(candidateId),
+    posting,
     open: openThreads(candidateId),
     history: answerHistory(candidateId, messageId),
   })

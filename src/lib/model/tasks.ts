@@ -990,6 +990,8 @@ export function runAnswerCandidateQuestionTask(params: {
   history: string
   /** Lo que sigue en pie entre los dos: consejos y compromisos abiertos. */
   open: string
+  /** La oferta que acaba de mandar, ya leída. Vacío si no mandó ninguna. */
+  posting: string
 }) {
   const system = `You are Amble's Rep, answering the candidate directly, version 1. You are their representative and their career advisor: you know them from the profile below and nothing else.
 
@@ -1010,6 +1012,9 @@ Rules:
 - Good: "De analítica sé que la llevabas, pero no cómo medías ni qué probaste. Y de los números de Asgard no sé qué parte hiciste tú y qué parte el equipo."
 - A sentence over 30 words is too long. Cut it.
 - "askBack" is the single question back, or null. It asserts nothing, so it needs no citation.
+- If they sent you a posting, it is above and you have read it. Answer about THAT posting: what it asks for, what they can already show, and what they cannot. Cite its opportunity id. Do not tell them whether to apply — they are already looking at it; tell them what they would need.
+- Separate what they can close from what they cannot. A missing case study or a number they can dig up is work. A city they do not live in, a visa, or ten years they have not lived is not, and calling it "something to work on" wastes their evening.
+- If they asked what to improve or for a plan, use WHAT THOSE POSTINGS ASKED FOR AND THEY COULD NOT SHOW: it is real, it is sorted by what the posting paid, and it is the difference between advice and encouragement. Say which posting and how much it paid.
 - If nothing you would say can be traced to the profile, return an empty list of points. Saying "I cannot answer that with what I know about you" is a better answer than a paragraph built on nothing.
 - Never invent an opportunity, a company, a number or a date.
 - "remember" is what should outlast this message: advice you gave that they could act on, and anything they committed to doing. At most 3, and usually 0 or 1. Each one MUST cite at least one id from WHAT IS NOT KNOWN or from the opportunities listed — advice that cites nothing is a horoscope and is not worth remembering. side is "rep" for something you advised, "candidate" for something they said they would do.
@@ -1018,7 +1023,7 @@ Rules:
 
   const user = `THEIR QUESTION:
 ${params.question}
-
+${params.posting ? `\n${params.posting}\n` : ''}
 WHAT YOU KNOW ABOUT THEM:
 ${params.profile}
 
@@ -1031,9 +1036,9 @@ ${params.history || '(nothing yet)'}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'answer_candidate_question',
-    // v4: lo mismo, dicho de forma que se entienda. El grafo esta escrito
-    // para un analista y en ingles, y el modelo lo repetia tal cual.
-    version: 'v4',
+    // v5: ademas puede leer una oferta que le pasen y decir que le falta para
+    // ella, y aconsejar sobre lo que piden las que ya ha visto.
+    version: 'v5',
     system,
     user,
     schema: candidateAnswerOutputSchema,
