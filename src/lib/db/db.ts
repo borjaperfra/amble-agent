@@ -417,6 +417,80 @@ function createDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS inbound_messages_by_candidate
       ON inbound_messages (candidate_id, created_at);
 
+    -- ─── Los dos agentes ────────────────────────────────────────────────
+    -- La oferta desde el lado de la empresa.
+    --
+    -- Separada de "opportunities" a proposito, y no por normalizar: es la
+    -- costura por donde esto se parte en dos despliegues. "opportunities" es
+    -- el anuncio tal y como lo lee el Rep; esto es lo que la empresa sabe y
+    -- no ha publicado — su techo real, hasta donde cede, quien manda. El dia
+    -- que el agente de la empresa viva en otra maquina, esta tabla se va con
+    -- el y la otra se queda.
+    CREATE TABLE IF NOT EXISTS openings (
+      id TEXT PRIMARY KEY,
+      employer TEXT NOT NULL,
+      role TEXT NOT NULL,
+      -- Lo publicado, para poder comparar con lo que de verdad hay detras.
+      posting_text TEXT NOT NULL,
+      -- Lo que la empresa contesta si se lo preguntan, en JSON: pregunta que
+      -- reconoce y respuesta. Lo que no este aqui, su agente no lo sabe — y
+      -- entonces hay que preguntarle a un humano, que es la decision 2.
+      answers TEXT NOT NULL DEFAULT '{}',
+      -- Sus propias condiciones duras, las que deciden si para o sigue.
+      budget_max INTEGER,
+      currency TEXT,
+      work_model TEXT,
+      location TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- Una conversacion entre el Rep de alguien y una oferta.
+    --
+    -- "disclosure_tier" es la escalera del 19 y vive aqui, no en el prompt:
+    -- mientras sea "guarded" su nombre no sale, y quien lo sube es el, nadie
+    -- mas.
+    CREATE TABLE IF NOT EXISTS negotiations (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      opening_id TEXT NOT NULL REFERENCES openings(id),
+      -- Como la lee el Rep: de ahi salen las preguntas de los dos lados.
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      state TEXT NOT NULL DEFAULT 'open',
+      disclosure_tier TEXT NOT NULL DEFAULT 'guarded',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS negotiations_once
+      ON negotiations (candidate_id, opening_id);
+
+    -- Lo que se dijeron, en orden y con lo que lo sostiene.
+    --
+    -- "kind" solo puede ser 'question' o 'answer'. No hay 'agreement', y esa
+    -- ausencia es la decision 3: ningun agente declara el acuerdo, lo calcula
+    -- el codigo de cada lado. Una regla que se puede saltar rellenando otro
+    -- campo no es una regla.
+    CREATE TABLE IF NOT EXISTS negotiation_turns (
+      id TEXT PRIMARY KEY,
+      negotiation_id TEXT NOT NULL REFERENCES negotiations(id),
+      idx INTEGER NOT NULL,
+      side TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      text TEXT NOT NULL,
+      -- Lo revelado, ya pasado por la escalera. Guardado para poder
+      -- responder a «que se dijo de mi», que es la pregunta que hara.
+      facts TEXT NOT NULL DEFAULT '[]',
+      -- Y lo que se quedo fuera, con su motivo. La cuenta es la medida.
+      withheld TEXT NOT NULL DEFAULT '[]',
+      needs_human TEXT,
+      -- El hueco del analisis que este turno estaba cerrando.
+      unknown_id TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS turns_by_negotiation
+      ON negotiation_turns (negotiation_id, idx);
+
     -- La libreta.
     --
     -- No es parte del producto: es donde caben las ideas sobre el producto,

@@ -157,6 +157,27 @@ describe('3 · qué significa acordado', () => {
   it('y mientras nadie se atasque, sigue abierta', () => {
     assert.equal(negotiationState({ hardFails: 0, blockingUnknowns: 1 }, clean, []), 'open')
   })
+
+  it('no se acuerda nada mientras queden preguntas sin hacer', () => {
+    // El fallo que tuve: la primera versión miraba «acordado» lo primero, y
+    // una conversación con dos preguntas pendientes salía acordada — porque
+    // ninguna parte tenía nada en contra. Claro: no había preguntado nada.
+    assert.equal(negotiationState(clean, clean, [], true), 'open')
+    assert.equal(negotiationState(clean, clean, [], false), 'agreed')
+  })
+
+  it('ni con un humano esperando, por muy limpias que estén las dos partes', () => {
+    const waiting = [
+      {
+        side: 'employer' as const,
+        kind: 'answer' as const,
+        text: 'No lo sé.',
+        facts: [],
+        needsHuman: { who: 'employer' as const, question: '¿El techo real?' },
+      },
+    ]
+    assert.equal(negotiationState(clean, clean, waiting, false), 'stalled')
+  })
 })
 
 describe('5 · no se rankea', () => {

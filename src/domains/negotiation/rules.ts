@@ -151,19 +151,37 @@ export function isAgreed(ours: SideSignals, theirs: SideSignals): boolean {
 /**
  * En qué punto está esto, según las dos partes y lo que se ha dicho.
  *
- * `dead` es un hard constraint que falla y no se va a arreglar hablando: una
- * ciudad, un visado, un suelo. Seguir preguntando ahí es gastar llamadas en
- * convencer a la aritmética.
+ * **El orden es la regla**, y lo aprendí rompiéndolo: la primera versión
+ * miraba «acordado» lo primero, y entonces una conversación con dos preguntas
+ * sin hacer y un humano esperando salía como acordada — porque ninguna de las
+ * dos partes tenía todavía nada en contra. Claro que no: no había preguntado
+ * nada.
+ *
+ * Así que primero lo que impide seguir, y sólo al final lo que permite
+ * cerrar:
+ *
+ * 1. `dead`: un hard constraint que falla. Una ciudad, un visado, un suelo.
+ *    No se arregla hablando, y seguir ahí es gastar llamadas en convencer a
+ *    la aritmética.
+ * 2. `stalled`: alguien espera a un humano. No se puede acordar nada mientras
+ *    una de las partes no sabe lo que le han preguntado.
+ * 3. `open`: quedan preguntas. El trabajo de los agentes es justamente
+ *    averiguar antes de concluir, así que concluir antes es no haber
+ *    trabajado.
+ * 4. `agreed`: no queda nada que preguntar y a ninguno le queda nada en
+ *    contra. Ése es el único sitio donde cabe.
  */
 export function negotiationState(
   ours: SideSignals,
   theirs: SideSignals,
   turns: readonly NegotiationTurn[],
+  /** Si todavía queda algo que preguntar. Sin esto se acuerda en el vacío. */
+  questionsLeft = false,
 ): NegotiationState {
-  if (isAgreed(ours, theirs)) return 'agreed'
   if (ours.hardFails > 0 || theirs.hardFails > 0) return 'dead'
   if (turns.some((turn) => turn.needsHuman)) return 'stalled'
-  return 'open'
+  if (questionsLeft) return 'open'
+  return isAgreed(ours, theirs) ? 'agreed' : 'open'
 }
 
 // ─── 5. No se rankea ──────────────────────────────────────────────────────
