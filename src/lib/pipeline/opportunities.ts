@@ -41,6 +41,8 @@ import {
   type OpportunityRow,
 } from '../db/opportunities'
 import { getQuestionBatchMs } from '@/lib/features'
+import { selectEvidenceForMatch } from '@/domains/opportunity/selection'
+import type { EvidenceRow } from '../db/repo'
 import { readPreferences } from './preferences'
 import { stripInternalIds } from '../model/tasks'
 import {
@@ -105,9 +107,31 @@ export interface CandidateContext {
  * answers. The graph exists precisely so that matching reads assessed
  * evidence rather than prose, and a capability claim can be pointed at.
  */
-export function candidateContext(candidateId: string): CandidateContext {
+export function candidateContext(
+  candidateId: string,
+  /**
+   * La oferta que se va a leer, si ya se ha leído.
+   *
+   * Sin ella se manda todo, que es lo que había: la explicación y la
+   * reevaluación no tienen una rúbrica delante cuando piden el contexto, y
+   * mandarles de más es mucho menos malo que dejarles fuera la prueba que
+   * necesitaban.
+   */
+  rubric?: OpportunityRubric,
+): CandidateContext {
   const capabilityEvidence = listCapabilityEvidenceIds(candidateId)
-  const evidence = listEvidence(candidateId)
+  const allEvidence = listEvidence(candidateId)
+  // El techo. Ver `selection.ts`: el 67% del prompt son evidencias, el modelo
+  // nunca citó más de 28, y sin un tope esto deja de caber en cuanto el grafo
+  // crezca — que es lo que pasa cuanto mejor le conoce.
+  const evidence: EvidenceRow[] = rubric
+    ? (selectEvidenceForMatch(
+        allEvidence,
+        listCapabilities(candidateId),
+        capabilityEvidence,
+        rubric,
+      ) as EvidenceRow[])
+    : allEvidence
   const intent = getLatestIntent(candidateId)
   const preferences = readPreferences(candidateId)
 
@@ -333,7 +357,7 @@ export async function evaluateOpportunity(
   }
 
   const rubric = JSON.parse(rubricRow.rubric) as OpportunityRubric
-  const context = candidateContext(candidateId)
+  const context = candidateContext(candidateId, rubric)
 
   // ── Stage 2: the four readings ─────────────────────────────────────────
   let assessmentRow = options.reassess ? undefined : getLatestAssessment(opportunityId)
