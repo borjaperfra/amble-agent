@@ -4,6 +4,7 @@ import { getPendingInterruption } from '@/lib/opportunity-view'
 import { openQuestionFor } from '@/lib/pipeline/opportunity-questions'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { listExceptions } from '@/lib/pipeline/exceptions'
+import { listOpenAdvice } from '@/lib/db/advice'
 import { readPreferences } from '@/lib/pipeline/preferences'
 import { getOpportunity } from '@/lib/db/opportunities'
 import FixtureListeningFlow from '@/components/fixture/FixtureListeningFlow'
@@ -26,6 +27,13 @@ export default function ListeningPage() {
       vm={vm}
       interruption={getPendingInterruption()}
       exceptions={listExceptions(candidateId, readPreferences(candidateId).language === 'en' ? 'en' : 'es')}
+      // Copiadas a objetos normales: `node:sqlite` devuelve las filas sin
+      // prototipo y React se niega a pasarlas al cliente.
+      threads={listOpenAdvice(candidateId, 8).map((row) => ({
+        id: row.id,
+        side: row.side,
+        text: row.text,
+      }))}
       question={
         open
           ? {

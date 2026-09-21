@@ -467,11 +467,44 @@ export const candidateAnswerOutputSchema = z.preprocess(
           .filter((item) => item.length > 0)
           .slice(0, 2)
       : []
-    return { answer, unknowns }
+    // Lo que queda dicho entre los dos. Tolerante con los nombres de campo
+    // porque se mueven entre runs, y con un tope bajo a proposito: tres cosas
+    // que recordar de una conversacion ya son muchas.
+    const remember = (Array.isArray(value.remember) ? value.remember : [])
+      .map((item) => {
+        const entry = (item ?? {}) as Record<string, unknown>
+        const text = typeof entry.text === 'string' ? entry.text.trim() : ''
+        if (text.length === 0) return null
+        const ids = (key: string) =>
+          (Array.isArray(entry[key]) ? (entry[key] as unknown[]) : [])
+            .map((id) => (typeof id === 'string' ? id.trim() : ''))
+            .filter((id) => id.length > 0)
+            .slice(0, 8)
+        const side = entry.side === 'candidate' ? 'candidate' : 'rep'
+        return {
+          side,
+          text: text.slice(0, 600),
+          uncertaintyIds: ids('uncertaintyIds'),
+          opportunityIds: ids('opportunityIds'),
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .slice(0, 3)
+    return { answer, unknowns, remember }
   },
   z.object({
     answer: z.string().min(1).max(2000),
     unknowns: z.array(z.string().max(300)).max(2),
+    remember: z
+      .array(
+        z.object({
+          side: z.enum(['rep', 'candidate']),
+          text: z.string().min(1).max(600),
+          uncertaintyIds: z.array(z.string()).max(8),
+          opportunityIds: z.array(z.string()).max(8),
+        }),
+      )
+      .max(3),
   }),
 )
 
@@ -924,6 +957,8 @@ export function runAnswerCandidateQuestionTask(params: {
   profile: string
   /** Lo que ya se le dijo antes, para no repetirlo ni contradecirlo. */
   history: string
+  /** Lo que sigue en pie entre los dos: consejos y compromisos abiertos. */
+  open: string
 }) {
   const system = `You are Amble's Rep, answering the candidate directly, version 1. You are their representative and their career advisor: you know them from the profile below and nothing else.
 
@@ -936,7 +971,9 @@ Rules:
 - Do not ask more than one question back, and only if you genuinely cannot answer without it.
 - Short. This is a chat message, not a report: at most 6 short lines, no headings, no bullet lists unless you are naming 2-3 concrete things.
 - Never invent an opportunity, a company, a number or a date.
-- Respond ONLY with JSON: {"answer": string, "unknowns": [string]} where unknowns names what you would need to know to answer better (at most 2, may be empty).`
+- "remember" is what should outlast this message: advice you gave that they could act on, and anything they committed to doing. At most 3, and usually 0 or 1. Each one MUST cite at least one id from WHAT IS NOT KNOWN or from the opportunities listed — advice that cites nothing is a horoscope and is not worth remembering. side is "rep" for something you advised, "candidate" for something they said they would do.
+- Do not put pleasantries, restatements of the question or generic encouragement in "remember". If nothing in this exchange is worth holding on to, return an empty list.
+- Respond ONLY with JSON: {"answer": string, "unknowns": [string], "remember": [{"side": "rep"|"candidate", "text": string, "uncertaintyIds": [string], "opportunityIds": [string]}]} where unknowns names what you would need to know to answer better (at most 2, may be empty).`
 
   const user = `THEIR QUESTION:
 ${params.question}
@@ -944,13 +981,17 @@ ${params.question}
 WHAT YOU KNOW ABOUT THEM:
 ${params.profile}
 
+WHAT IS STILL OPEN BETWEEN YOU (advice you gave, things they said they would do):
+${params.open || '(nothing yet)'}
+
 WHAT YOU HAVE ALREADY TOLD THEM:
 ${params.history || '(nothing yet)'}`
 
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'answer_candidate_question',
-    version: 'v1',
+    // v2: ademas de contestar, dice que de esta conversacion merece durar.
+    version: 'v2',
     system,
     user,
     schema: candidateAnswerOutputSchema,

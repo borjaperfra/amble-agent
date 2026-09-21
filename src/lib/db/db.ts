@@ -424,6 +424,41 @@ function createDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS feedback_notes_by_candidate
       ON feedback_notes (candidate_id, created_at);
 
+    -- Lo que os habeis dicho.
+    --
+    -- El grafo guarda lo que el es. Esto guarda el estado de una relacion:
+    -- que le aconsejo el Rep, sobre que hueco, y que dijo el que iba a hacer.
+    -- Son cosas distintas y por eso viven aparte: si se mezclaran, un consejo
+    -- acabaria siendo una afirmacion sobre su experiencia, que es justo lo
+    -- que no es.
+    --
+    -- Lo que no es: un historico de chat. Cada fila apunta a incertidumbres,
+    -- evidencias u oportunidades que existen, igual que todo lo demas aqui.
+    -- Un consejo que no puede citar nada no se guarda, porque un consejo que
+    -- no se apoya en nada es un horoscopo y no hace falta recordarlo.
+    CREATE TABLE IF NOT EXISTS advice (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      -- De que conversacion salio, para poder releer el hilo entero.
+      inbound_message_id TEXT,
+      -- 'rep' lo dijo el Rep; 'candidate' lo dijo el.
+      side TEXT NOT NULL,
+      text TEXT NOT NULL,
+      uncertainty_ids TEXT NOT NULL DEFAULT '[]',
+      evidence_ids TEXT NOT NULL DEFAULT '[]',
+      opportunity_ids TEXT NOT NULL DEFAULT '[]',
+      -- 'open' sigue en pie; 'addressed' lo cubrio algo que llego despues;
+      -- 'dropped' dejo de tener sentido.
+      status TEXT NOT NULL DEFAULT 'open',
+      -- Que lo cerro: el id de lo que llego y lo cubrio.
+      addressed_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS advice_by_candidate
+      ON advice (candidate_id, status, created_at);
+
     CREATE TABLE IF NOT EXISTS intent_profiles (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

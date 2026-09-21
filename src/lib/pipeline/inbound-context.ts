@@ -29,6 +29,7 @@ import {
   markInboundIncorporated,
 } from '../db/inbound'
 import { listHeldOpportunities, recordAuditEvent } from '../db/opportunities'
+import { addressAdviceFor } from '../db/advice'
 import { incorporateAnswer } from './interview'
 import { enqueue } from './jobs'
 
@@ -79,6 +80,12 @@ export async function incorporateUnpromptedJob(
 
   markInboundIncorporated(message.id)
 
+  // Lo que le aconsejo sobre un hueco deja de estar abierto cuando el hueco
+  // se cierra. Es el pago de toda la tabla: sin esto, en noviembre le vuelve a
+  // aconsejar lo que ya hizo en octubre, que es como se deja de leer a
+  // alguien.
+  const closed = addressAdviceFor(candidateId, incorporated.resolvedUncertaintyIds, message.id)
+
   const moved =
     incorporated.resolvedUncertaintyIds.length > 0 ||
     incorporated.reassessedCapabilityIds.length > 0
@@ -101,6 +108,7 @@ export async function incorporateUnpromptedJob(
       resolvedUncertainties: incorporated.resolvedUncertaintyIds.length,
       reassessedCapabilities: incorporated.reassessedCapabilityIds.length,
       reassessedHolds: held.length,
+      adviceClosed: closed.length,
     },
   })
 }

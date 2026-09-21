@@ -22,11 +22,13 @@ type Advisor = typeof import('./advisor')
 type InboundDb = typeof import('../db/inbound')
 type Repo = typeof import('../db/repo')
 type Preferences = typeof import('./preferences')
+type AdviceDb = typeof import('../db/advice')
 
 let advisor: Advisor
 let inboundDb: InboundDb
 let repo: Repo
 let preferences: Preferences
+let advice: AdviceDb
 let candidateId: string
 let workingDirectory: string
 let previousDirectory: string
@@ -34,6 +36,8 @@ let previousDirectory: string
 /** Lo que el modelo recibió, para poder mirarlo. */
 let prompts: string[] = []
 let calls = 0
+/** Lo que el modelo propone recordar de la conversación. */
+let proposedMemory: unknown[] = []
 
 before(async () => {
   previousDirectory = process.cwd()
@@ -47,6 +51,7 @@ before(async () => {
   inboundDb = await import('../db/inbound')
   repo = await import('../db/repo')
   preferences = await import('./preferences')
+  advice = await import('../db/advice')
 
   candidateId = repo.getOrCreateCandidate().id
 
@@ -94,6 +99,7 @@ before(async () => {
     const content = JSON.stringify({
       answer: 'Te falta un caso de gestión de equipo. Lo de la comunidad ya lo tienes.',
       unknowns: ['Si has llevado un equipo de más de cinco.'],
+      remember: proposedMemory,
     })
     return new Response(
       JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }),
@@ -114,6 +120,7 @@ after(() => {
 beforeEach(() => {
   prompts = []
   calls = 0
+  proposedMemory = []
 })
 
 let nextId = 500
@@ -199,5 +206,59 @@ describe('contestar', () => {
     await advisor.answerQuestionJob(candidateId, arrive('¿Y ahora qué?'))
     assert.match(prompts.join('\n'), /WHAT YOU HAVE ALREADY TOLD THEM/)
     assert.match(prompts.join('\n'), /YOU SAID/)
+  })
+})
+
+describe('lo que queda dicho entre los dos', () => {
+  it('guarda el consejo que cita un hueco de verdad', async () => {
+    proposedMemory = [
+      {
+        side: 'rep',
+        text: 'Te falta enseñar que has llevado un equipo.',
+        uncertaintyIds: ['unk_team'],
+        opportunityIds: [],
+      },
+    ]
+
+    const result = await advisor.answerQuestionJob(candidateId, arrive('¿Y para liderar?'))
+
+    assert.equal(result.remembered.length, 1)
+    assert.equal(result.remembered[0].side, 'rep')
+    assert.equal(advice.listOpenAdvice(candidateId).length, 1)
+  })
+
+  it('tira el que no puede citar nada, que es un horóscopo', async () => {
+    proposedMemory = [
+      { side: 'rep', text: 'Sigue así, vas muy bien.', uncertaintyIds: [], opportunityIds: [] },
+      {
+        side: 'rep',
+        text: 'Y apúntate a un curso.',
+        uncertaintyIds: ['unk_no_existe'],
+        opportunityIds: [],
+      },
+    ]
+    const before = advice.listOpenAdvice(candidateId).length
+
+    const result = await advisor.answerQuestionJob(candidateId, arrive('¿Qué tal voy?'))
+
+    assert.equal(result.remembered.length, 0, 'ninguno cita algo que exista')
+    assert.equal(advice.listOpenAdvice(candidateId).length, before)
+  })
+
+  it('le enseña al modelo los ids que puede citar', async () => {
+    await advisor.answerQuestionJob(candidateId, arrive('¿Por dónde sigo?'))
+
+    // Sin los ids delante no puede citar nada, y entonces todo lo que
+    // proponga se cae en la comprobación y la memoria sale siempre vacía.
+    assert.match(prompts.join('\n'), /\[unk_team\]/)
+    assert.match(prompts.join('\n'), /cite these ids/)
+  })
+
+  it('le enseña lo que sigue en pie, para no repetirse', async () => {
+    proposedMemory = []
+    await advisor.answerQuestionJob(candidateId, arrive('¿Alguna idea más?'))
+
+    assert.match(prompts.join('\n'), /WHAT IS STILL OPEN BETWEEN YOU/)
+    assert.match(prompts.join('\n'), /YOU ADVISED: Te falta enseñar que has llevado un equipo/)
   })
 })

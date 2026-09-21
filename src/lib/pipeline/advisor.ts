@@ -19,6 +19,7 @@
  */
 
 import { getInboundMessage, listInboundMessages, recordInboundAnswer } from '../db/inbound'
+import { insertAdvice, listOpenAdvice, type AdviceRow } from '../db/advice'
 import {
   getLatestIntent,
   listCapabilities,
@@ -96,9 +97,11 @@ export function profileDigest(candidateId: string): string {
   // es casi siempre «esto que no se sabe de ti es lo que te está costando».
   const open = listUncertainties(candidateId, 'OPEN')
   if (open.length > 0) {
-    lines.push('', 'WHAT IS NOT KNOWN ABOUT THEM YET:')
+    // Con sus ids: son lo unico que el modelo puede citar para que un consejo
+    // se guarde, y un id que no ve es un consejo que se descarta.
+    lines.push('', 'WHAT IS NOT KNOWN ABOUT THEM YET (cite these ids):')
     for (const uncertainty of open.slice(0, 12)) {
-      lines.push(`- ${uncertainty.description}`)
+      lines.push(`- [${uncertainty.id}] ${uncertainty.description}`)
     }
   }
 
@@ -109,10 +112,13 @@ export function profileDigest(candidateId: string): string {
     .filter((item) => item.decision)
     .slice(0, 12)
   if (decided.length > 0) {
-    lines.push('', 'OPPORTUNITIES YOU HAVE READ FOR THEM (all of them, there are no others):')
+    lines.push(
+      '',
+      'OPPORTUNITIES YOU HAVE READ FOR THEM (all of them, there are no others; cite these ids):',
+    )
     for (const { opportunity, decision } of decided) {
       lines.push(
-        `- ${opportunity.role} · ${opportunity.company} → ${decision!.decision}: ${decision!.reason.slice(0, 180)}`,
+        `- [${opportunity.id}] ${opportunity.role} · ${opportunity.company} → ${decision!.decision}: ${decision!.reason.slice(0, 180)}`,
       )
     }
   }
@@ -136,9 +142,70 @@ function answerHistory(candidateId: string, exceptId: string): string {
     .join('\n\n')
 }
 
+/**
+ * Lo que sigue en pie entre los dos, en texto.
+ *
+ * Va al prompt por dos motivos, y el segundo importa más. Para no repetirse
+ * —volver a aconsejar en noviembre lo mismo que en octubre es la forma más
+ * rápida de que alguien deje de leerte—. Y para poder referirse a ello: «esto
+ * es lo que te dije», que es la diferencia entre un asesor y un oráculo que
+ * empieza de cero cada vez.
+ */
+export function openThreads(candidateId: string): string {
+  const open = listOpenAdvice(candidateId, 12)
+  if (open.length === 0) return ''
+  return open
+    .map((row) => {
+      const who = row.side === 'rep' ? 'YOU ADVISED' : 'THEY SAID THEY WOULD'
+      const about = (JSON.parse(row.uncertainty_ids) as string[]).join(', ')
+      return `- [${row.id}] ${who}: ${row.text}${about ? ` (about: ${about})` : ''}`
+    })
+    .join('\n')
+}
+
+/**
+ * Guardar lo que merece durar, y sólo si cita algo que existe.
+ *
+ * El modelo propone qué recordar; aquí se comprueba. Un consejo cuyos ids no
+ * corresponden a ninguna incertidumbre ni a ninguna oferta real no se guarda
+ * — es la misma regla que impide que una capacidad se sostenga en una
+ * evidencia inventada, aplicada a la conversación. Sin esto, la memoria se
+ * llena de «sigue así» y deja de valer para nada.
+ */
+function rememberFromAnswer(
+  candidateId: string,
+  messageId: string,
+  proposed: { side: 'rep' | 'candidate'; text: string; uncertaintyIds: string[]; opportunityIds: string[] }[],
+): AdviceRow[] {
+  const realUncertainties = new Set(listUncertainties(candidateId).map((item) => item.id))
+  const realOpportunities = new Set(listOpportunities(candidateId).map((item) => item.id))
+
+  const kept: AdviceRow[] = []
+  for (const item of proposed) {
+    const uncertaintyIds = item.uncertaintyIds.filter((id) => realUncertainties.has(id))
+    const opportunityIds = item.opportunityIds.filter((id) => realOpportunities.has(id))
+    if (uncertaintyIds.length === 0 && opportunityIds.length === 0) continue
+
+    kept.push(
+      insertAdvice({
+        candidate_id: candidateId,
+        inbound_message_id: messageId,
+        side: item.side,
+        text: item.text,
+        uncertainty_ids: uncertaintyIds,
+        evidence_ids: [],
+        opportunity_ids: opportunityIds,
+      }),
+    )
+  }
+  return kept
+}
+
 export interface AnsweredQuestion {
   answer: string
   unknowns: string[]
+  /** Lo que quedó guardado de esta conversación, ya comprobado. */
+  remembered: AdviceRow[]
 }
 
 /**
@@ -158,17 +225,20 @@ export async function answerQuestionJob(
 
   // Un reintento no vuelve a pagar la respuesta ni le manda otra distinta a
   // la misma pregunta.
-  if (message.answer) return { answer: message.answer, unknowns: [] }
+  if (message.answer) return { answer: message.answer, unknowns: [], remembered: [] }
 
   const { data } = await runAnswerCandidateQuestionTask({
     candidateId,
     question: message.text,
     language: readPreferences(candidateId).language ?? 'es',
     profile: profileDigest(candidateId),
+    open: openThreads(candidateId),
     history: answerHistory(candidateId, messageId),
   })
 
   recordInboundAnswer(messageId, data.answer)
+  const remembered = rememberFromAnswer(candidateId, messageId, data.remember)
+
   recordAuditEvent({
     candidate_id: candidateId,
     subject_type: 'inbound',
@@ -178,8 +248,12 @@ export async function answerQuestionJob(
       channel: message.channel,
       chars: data.answer.length,
       unknowns: data.unknowns,
+      // Cuántas propuso y cuántas citaban algo real. La diferencia es lo que
+      // habría acabado siendo memoria de relleno.
+      proposed: data.remember.length,
+      remembered: remembered.length,
     },
   })
 
-  return { answer: data.answer, unknowns: data.unknowns }
+  return { answer: data.answer, unknowns: data.unknowns, remembered }
 }

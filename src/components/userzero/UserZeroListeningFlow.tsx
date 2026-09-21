@@ -12,6 +12,7 @@ import type { CandidateResponse } from '@/domains/opportunity/types'
 import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from '@/lib/copy'
 import TellYourRep from './TellYourRep'
 import Exceptions from './Exceptions'
+import OpenThreads, { type OpenThread } from './OpenThreads'
 import type { Exception } from '@/lib/pipeline/exceptions'
 
 interface ListeningVm {
@@ -182,12 +183,15 @@ export default function UserZeroListeningFlow({
   interruption: initialInterruption,
   question: initialQuestion,
   exceptions = [],
+  threads = [],
 }: {
   vm: ListeningVm
   interruption: InterruptionView | null
   question: OpenQuestion | null
   /** Lo que se ha atascado. Vacío casi siempre, y entonces no se ve nada. */
   exceptions?: Exception[]
+  /** Lo que sigue en pie entre los dos: consejos y compromisos abiertos. */
+  threads?: OpenThread[]
 }) {
   // Something is already waiting, so there is nothing to arrive at: skip
   // straight to it. Sitting through "your Rep is listening" when your Rep
@@ -522,6 +526,10 @@ export default function UserZeroListeningFlow({
             él: es el orden en el que se lee la pantalla, y quien acaba de
             mirar su perfil es quien se da cuenta de que falta algo. */}
         <TellYourRep language={language} />
+
+        {/* Después de la caja, no antes: lo que cierra un hilo es contarle
+            algo que lo cubra, así que primero está dónde contarlo. */}
+        <OpenThreads threads={threads} language={language} />
 
         <div className={styles.repSummary}>
           <p className={styles.repLabel}>{words.repLabel}</p>
