@@ -21,7 +21,7 @@ export async function GET() {
   ensureSyncScheduled(candidateId, 'sync_manfred')
   ensureSyncScheduled(candidateId, 'sync_ats')
   ensureInboundPolling(candidateId)
-  return NextResponse.json(getOpportunityLabViewModel())
+  return NextResponse.json(getOpportunityLabViewModel(getOrCreateCandidate().id))
 }
 
 /**

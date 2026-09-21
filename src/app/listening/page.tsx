@@ -14,18 +14,20 @@ export const dynamic = 'force-dynamic'
 
 export default function ListeningPage() {
   if (!isUserZero()) return <FixtureListeningFlow />
-  const vm = getListeningViewModel()
+  // Quién ha entrado. Es la única capa que debería preguntarlo: todo lo que
+  // hay debajo lo recibe.
+  const candidateId = getOrCreateCandidate().id
+  const vm = getListeningViewModel(candidateId)
   // Rendered here as well as polled, so someone who opens the app to a
   // notification lands on the thing itself rather than on six seconds of
   // "nothing worth bothering you with".
-  const candidateId = getOrCreateCandidate().id
   const open = openQuestionFor(candidateId)
   const about = open ? getOpportunity(open.opportunity_id) : null
 
   return (
     <UserZeroListeningFlow
       vm={vm}
-      interruption={getPendingInterruption()}
+      interruption={getPendingInterruption(candidateId)}
       exceptions={listExceptions(candidateId, readPreferences(candidateId).language === 'en' ? 'en' : 'es')}
       // Copiadas a objetos normales: `node:sqlite` devuelve las filas sin
       // prototipo y React se niega a pasarlas al cliente.

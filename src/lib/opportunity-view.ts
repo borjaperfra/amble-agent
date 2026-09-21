@@ -7,7 +7,7 @@
  * no IGNORE, no HOLD, no queue of things to get through.
  */
 
-import { getOrCreateCandidate, listCapabilities, listEvidence } from './db/repo'
+import { listCapabilities, listEvidence } from './db/repo'
 import {
   getLabel,
   getLatestAssessment,
@@ -176,12 +176,11 @@ function traceFor(opportunityId: string): Pick<
   }
 }
 
-export function getOpportunityLabViewModel(): OpportunityLabViewModel {
-  const candidate = getOrCreateCandidate()
-  const capabilities = listCapabilities(candidate.id)
-  const evidence = listEvidence(candidate.id)
+export function getOpportunityLabViewModel(candidateId: string): OpportunityLabViewModel {
+  const capabilities = listCapabilities(candidateId)
+  const evidence = listEvidence(candidateId)
 
-  const opportunities: OpportunityTraceItem[] = listOpportunities(candidate.id).map((row) => ({
+  const opportunities: OpportunityTraceItem[] = listOpportunities(candidateId).map((row) => ({
     id: row.id,
     company: row.company,
     role: row.role,
@@ -240,7 +239,7 @@ export function getOpportunityLabViewModel(): OpportunityLabViewModel {
       ),
     },
     matrix,
-    notifications: listNotifications(candidate.id).map((note) => ({
+    notifications: listNotifications(candidateId).map((note) => ({
       id: note.id,
       channel: note.channel,
       address: note.address,
@@ -251,7 +250,7 @@ export function getOpportunityLabViewModel(): OpportunityLabViewModel {
       createdAt: note.created_at,
       sentAt: note.sent_at,
     })),
-    modelRuns: listOpportunityModelRuns(candidate.id).map((run) => ({
+    modelRuns: listOpportunityModelRuns(candidateId).map((run) => ({
       id: run.id,
       task: run.task,
       version: run.task_version,
@@ -261,7 +260,7 @@ export function getOpportunityLabViewModel(): OpportunityLabViewModel {
       error: run.error,
       createdAt: run.created_at,
     })),
-    queue: queueStatus(candidate.id),
+    queue: queueStatus(candidateId),
   }
 }
 
@@ -288,10 +287,9 @@ export interface InterruptionView {
  * a "things we are still thinking about" list would give the work back to
  * the person Amble is supposed to be doing it for.
  */
-export function getPendingInterruption(): InterruptionView | null {
-  const candidate = getOrCreateCandidate()
-  const pending = listPendingInterruptions(candidate.id)[0]
-  return pending ? buildInterruption(candidate.id, pending.opportunity, pending.decision) : null
+export function getPendingInterruption(candidateId: string): InterruptionView | null {
+  const pending = listPendingInterruptions(candidateId)[0]
+  return pending ? buildInterruption(candidateId, pending.opportunity, pending.decision) : null
 }
 
 /**

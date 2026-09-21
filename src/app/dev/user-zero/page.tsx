@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { isUserZero } from '@/lib/features'
 import { getDevTrace } from '@/lib/view'
 import styles from './user-zero.module.css'
+import { getOrCreateCandidate } from '@/lib/db/repo'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ function Count({ label, value }: { label: string; value: number }) {
 
 export default function UserZeroTrace() {
   if (!isUserZero() || process.env.NODE_ENV === 'production') notFound()
-  const trace = getDevTrace()
+  const trace = getDevTrace(getOrCreateCandidate().id)
 
   return (
     <main className={styles.page}>

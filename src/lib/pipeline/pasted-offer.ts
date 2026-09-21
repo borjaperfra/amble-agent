@@ -14,10 +14,10 @@
  * meses las dos decidieran distinto sobre el mismo anuncio.
  */
 
-import { getOrCreateCandidate } from '../db/repo'
 import {
   findOpportunityBySourceRef,
   getLatestAssessment,
+  getOpportunity,
   getLatestRubric,
   insertOpportunity,
   recordAuditEvent,
@@ -165,9 +165,12 @@ export function requirementsDigest(opportunity: OpportunityRow): string {
  */
 export async function readPastedOpportunity(opportunityId: string): Promise<void> {
   await evaluateOpportunity(opportunityId)
-  const candidateId = getOrCreateCandidate().id
+  // La oferta sabe de quién es. Preguntárselo al candidato global, teniéndolo
+  // aquí delante, es la fuga que este proyecto tiene que dejar de tener.
+  const opportunity = getOpportunity(opportunityId)
+  if (!opportunity) return
   recordAuditEvent({
-    candidate_id: candidateId,
+    candidate_id: opportunity.candidate_id,
     subject_type: 'opportunity',
     subject_id: opportunityId,
     event: 'pasted_opportunity_read',

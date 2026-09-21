@@ -164,6 +164,19 @@ function parseJsonArray(value: string | null | undefined): string[] {
   }
 }
 
+/**
+ * Un candidato concreto, por su id.
+ *
+ * Existe porque `getOrCreateCandidate()` contesta «el candidato», y eso sólo
+ * es una respuesta mientras haya uno. Quien ya tiene un id no debería tener
+ * que pedir el global y confiar en que coincidan.
+ */
+export function getCandidate(id: string): CandidateRow | undefined {
+  return getDb().prepare('SELECT * FROM candidates WHERE id = ?').get(id) as unknown as
+    | CandidateRow
+    | undefined
+}
+
 export function getOrCreateCandidate(): CandidateRow {
   const db = getDb()
   const existing = db

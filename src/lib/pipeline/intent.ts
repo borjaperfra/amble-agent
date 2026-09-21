@@ -1,7 +1,6 @@
 import {
   confirmIntent,
   getLatestIntent,
-  getOrCreateCandidate,
   insertIntent,
   newId,
   type IntentRow,
@@ -24,20 +23,22 @@ export interface IntentResult {
   preferences: Preferences
 }
 
-export async function interpretIntent(answerText: string): Promise<IntentResult> {
-  const candidate = getOrCreateCandidate()
+export async function interpretIntent(
+  candidateId: string,
+  answerText: string,
+): Promise<IntentResult> {
   try {
-    const { data } = await runInterpretIntentTask({ candidateId: candidate.id, answer: answerText })
+    const { data } = await runInterpretIntentTask({ candidateId, answer: answerText })
     const row = insertIntent({
       id: newId('intn'),
-      candidate_id: candidate.id,
+      candidate_id: candidateId,
       raw_answer: answerText,
       groups: JSON.stringify(data.groups),
       listening_for: JSON.stringify(data.listeningFor),
     })
     // The same answer, reduced to what can be checked against a real job.
     // Only the blanks: anything the candidate typed in themselves stands.
-    const preferences = applyExtractedPreferences(candidate.id, data.preferences)
+    const preferences = applyExtractedPreferences(candidateId, data.preferences)
 
     return {
       id: row.id,
@@ -50,7 +51,7 @@ export async function interpretIntent(answerText: string): Promise<IntentResult>
   } catch {
     const row = insertIntent({
       id: newId('intn'),
-      candidate_id: candidate.id,
+      candidate_id: candidateId,
       raw_answer: answerText,
       groups: JSON.stringify([{ label: 'Other', values: [answerText.slice(0, 120)] }]),
       listening_for: JSON.stringify([]),
@@ -61,7 +62,7 @@ export async function interpretIntent(answerText: string): Promise<IntentResult>
       groups: [{ label: 'In your words', values: [answerText] }],
       listeningFor: [],
       structured: false,
-      preferences: readPreferences(candidate.id),
+      preferences: readPreferences(candidateId),
     }
   }
 }

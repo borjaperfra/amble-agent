@@ -43,7 +43,7 @@ export async function GET() {
   const about = question ? getOpportunity(question.opportunity_id) : null
 
   return NextResponse.json({
-    interruption: getPendingInterruption(),
+    interruption: getPendingInterruption(candidateId),
     question: question
       ? {
           id: question.id,

@@ -2,7 +2,7 @@ import type { Language } from '@/lib/copy'
 import {
   getDistinctiveProfile,
   getLatestIntent,
-  getOrCreateCandidate,
+  getCandidate,
   getOrCreateInterview,
   listCapabilities,
   listCapabilityEvidenceIds,
@@ -135,15 +135,15 @@ function evidenceToViewItem(item: EvidenceRow, sourceNames: Map<string, string>)
   }
 }
 
-export function getMapViewModel(): MapViewModel {
-  const candidate = getOrCreateCandidate()
-  const capabilities = listCapabilities(candidate.id)
-  const capabilityEvidence = listCapabilityEvidenceIds(candidate.id)
-  const evidence = listEvidence(candidate.id)
+export function getMapViewModel(candidateId: string): MapViewModel {
+  const candidate = getCandidate(candidateId)
+  const capabilities = listCapabilities(candidateId)
+  const capabilityEvidence = listCapabilityEvidenceIds(candidateId)
+  const evidence = listEvidence(candidateId)
   const evidenceById = new Map(evidence.map((item) => [item.id, item]))
-  const sourceNames = new Map(listSources(candidate.id).map((source) => [source.id, source.name]))
-  const uncertainties = listUncertainties(candidate.id)
-  const distinctiveIds = getDistinctiveProfile(candidate.id)
+  const sourceNames = new Map(listSources(candidateId).map((source) => [source.id, source.name]))
+  const uncertainties = listUncertainties(candidateId)
+  const distinctiveIds = getDistinctiveProfile(candidateId)
 
   const capabilityItems: CapabilityViewItem[] = capabilities.map((capability) => {
     const ids = capabilityEvidence.get(capability.id) ?? []
@@ -191,10 +191,10 @@ export function getMapViewModel(): MapViewModel {
   const openQuestions = uncertainties.filter(
     (uncertainty) => uncertainty.status === 'OPEN' && uncertainty.resolvable_by_interview === 1,
   ).length
-  const interview = getOrCreateInterview(candidate.id)
+  const interview = getOrCreateInterview(candidateId)
   const answeredQuestions = listTurns(interview.id).filter((turn) => turn.answer !== null).length
 
-  const sources = listSources(candidate.id)
+  const sources = listSources(candidateId)
   const readSources = sources.filter((source) => source.status === 'processed')
   const missingSources = (['github', 'linkedin', 'website'] as const)
     .filter((kind) => !sources.some((source) => source.type === kind && source.status !== 'failed'))
@@ -238,8 +238,8 @@ export function getMapViewModel(): MapViewModel {
 
   return {
     userZero: true,
-    name: candidate.name,
-    descriptor: candidate.descriptor,
+    name: candidate?.name ?? null,
+    descriptor: candidate?.descriptor ?? null,
     updated: `Last updated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`,
     capabilities: capabilityItems,
     gaps,
@@ -255,17 +255,17 @@ export function getMapViewModel(): MapViewModel {
       steps: steps.slice(0, 3),
     },
     counts: {
-      claims: listClaims(candidate.id).length,
+      claims: listClaims(candidateId).length,
       evidence: evidence.length,
       capabilities: capabilities.length,
       uncertaintiesOpen: uncertainties.filter((uncertainty) => uncertainty.status === 'OPEN').length,
       uncertaintiesResolved: uncertainties.filter((uncertainty) => uncertainty.status === 'RESOLVED').length,
-      sources: listSources(candidate.id).length,
+      sources: listSources(candidateId).length,
     },
   }
 }
 
-export function getListeningViewModel(): {
+export function getListeningViewModel(candidateId: string): {
   evidenceCount: number
   capabilitiesCount: number
   listeningFor: string[]
@@ -280,12 +280,11 @@ export function getListeningViewModel(): {
   /** En qué idioma le habla el Rep: la pantalla lo necesita para todo. */
   language: Language
 } {
-  const candidate = getOrCreateCandidate()
-  const intent = getLatestIntent(candidate.id)
-  const preferences = readPreferences(candidate.id)
+  const intent = getLatestIntent(candidateId)
+  const preferences = readPreferences(candidateId)
   return {
-    evidenceCount: listEvidence(candidate.id).length,
-    capabilitiesCount: listCapabilities(candidate.id).length,
+    evidenceCount: listEvidence(candidateId).length,
+    capabilitiesCount: listCapabilities(candidateId).length,
     listeningFor: intent ? parseJsonArray(intent.listening_for) : [],
     hasIntent: Boolean(intent),
     intentConfirmed: Boolean(intent?.confirmed_at),
@@ -337,21 +336,21 @@ export interface DevTrace {
   distinctive: string[]
 }
 
-export function getDevTrace(): DevTrace {
-  const candidate = getOrCreateCandidate()
-  const capabilities = listCapabilities(candidate.id)
-  const capabilityEvidence = listCapabilityEvidenceIds(candidate.id)
-  const evidence = listEvidence(candidate.id)
+export function getDevTrace(candidateId: string): DevTrace {
+  const candidate = getCandidate(candidateId)
+  const capabilities = listCapabilities(candidateId)
+  const capabilityEvidence = listCapabilityEvidenceIds(candidateId)
+  const evidence = listEvidence(candidateId)
   const evidenceIds = new Set(evidence.map((item) => item.id))
-  const sources = listSources(candidate.id)
-  const uncertainties = listUncertainties(candidate.id)
-  const distinctiveIds = getDistinctiveProfile(candidate.id)
+  const sources = listSources(candidateId)
+  const uncertainties = listUncertainties(candidateId)
+  const distinctiveIds = getDistinctiveProfile(candidateId)
 
-  const interviewRecord = getOrCreateInterview(candidate.id)
+  const interviewRecord = getOrCreateInterview(candidateId)
   const turns = listTurns(interviewRecord.id)
 
   return {
-    candidate: { id: candidate.id, name: candidate.name, descriptor: candidate.descriptor },
+    candidate: { id: candidateId, name: candidate?.name ?? null, descriptor: candidate?.descriptor ?? null },
     sources: sources.map((source) => ({
       id: source.id,
       type: source.type,
@@ -360,7 +359,7 @@ export function getDevTrace(): DevTrace {
       detail: source.status_detail,
       charCount: source.char_count,
     })),
-    claims: listClaims(candidate.id).map((claim) => ({
+    claims: listClaims(candidateId).map((claim) => ({
       id: claim.id,
       statement: claim.statement,
       type: claim.claim_type,
@@ -404,7 +403,7 @@ export function getDevTrace(): DevTrace {
           .map((item) => item.id),
       })),
     },
-    modelRuns: listModelRuns(candidate.id, 200).map((run) => ({
+    modelRuns: listModelRuns(candidateId, 200).map((run) => ({
       id: run.id,
       task: run.task,
       version: run.task_version,
@@ -414,7 +413,7 @@ export function getDevTrace(): DevTrace {
       error: run.error,
       createdAt: run.created_at,
     })),
-    evaluations: listEvaluations(candidate.id).map((evaluation) => ({
+    evaluations: listEvaluations(candidateId).map((evaluation) => ({
       targetType: evaluation.target_type,
       targetId: evaluation.target_id,
       verdict: evaluation.verdict,

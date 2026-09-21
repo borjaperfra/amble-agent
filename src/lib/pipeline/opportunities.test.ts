@@ -535,7 +535,7 @@ describe('getPendingInterruption', () => {
     await pipeline.evaluateOpportunity(opportunity.id, runners())
 
     const view = await import('../opportunity-view')
-    const pending = view.getPendingInterruption()
+    const pending = view.getPendingInterruption(candidateId)
     assert.ok(pending, 'an interruption was decided, so there is one to show')
     assert.equal(pending.company, 'Halvard')
     assert.ok(pending.headline.length > 0)
@@ -550,7 +550,7 @@ describe('getPendingInterruption', () => {
 
     pipeline.recordCandidateResponse(opportunity.id, 'NOT_FOR_ME')
     assert.notEqual(
-      view.getPendingInterruption()?.opportunityId,
+      view.getPendingInterruption(candidateId)?.opportunityId,
       opportunity.id,
       'an answered interruption does not come back',
     )

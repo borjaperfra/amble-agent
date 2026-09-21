@@ -11,7 +11,7 @@ import {
   updateCandidateProfile,
   upsertCapability,
   linkCapabilityEvidence,
-  getOrCreateCandidate,
+  getCandidate,
   getDistinctiveProfile,
   type ClaimRow,
   type EvidenceRow,
@@ -178,7 +178,11 @@ export async function buildDistinctiveProfile(candidateId: string): Promise<stri
 }
 
 export async function buildDescriptor(candidateId: string): Promise<string | null> {
-  const candidate = getOrCreateCandidate()
+  // Recibía el id y cogía el candidato global igualmente. Con una sola
+  // persona da lo mismo; con dos, escribe el descriptor de una a partir del
+  // nombre de la otra, y nada lo dice.
+  const candidate = getCandidate(candidateId)
+  if (!candidate) return null
   const capabilities = listCapabilities(candidateId)
   const substantive = capabilities.filter((c) => {
     const level = c.assessment
@@ -186,7 +190,7 @@ export async function buildDescriptor(candidateId: string): Promise<string | nul
   })
 
   if (substantive.length === 0) {
-    updateCandidateProfile(candidate.id, candidate.name, null, false)
+    updateCandidateProfile(candidateId, candidate.name, null, false)
     return null
   }
 
@@ -196,10 +200,10 @@ export async function buildDescriptor(candidateId: string): Promise<string | nul
       candidateName: candidate.name,
       capabilities: substantive.map((c) => ({ name: c.name, assessment: c.assessment })),
     })
-    updateCandidateProfile(candidate.id, candidate.name, data.descriptor, true)
+    updateCandidateProfile(candidateId, candidate.name, data.descriptor, true)
     return data.descriptor
   } catch {
-    updateCandidateProfile(candidate.id, candidate.name, null, false)
+    updateCandidateProfile(candidateId, candidate.name, null, false)
     return null
   }
 }
