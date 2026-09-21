@@ -69,12 +69,10 @@ preguntas).
   portátil y Railway sondean el mismo bot y los dos actúan sobre el mismo
   mensaje. Para tocar en local, `AMBLE_TELEGRAM_BOT_TOKEN=` vacío delante del
   `npm run dev`.
-- **Tras cada despliegue, el bucle duerme hasta la primera petición.**
-  `ensureInboundPolling` se llama desde los endpoints que sondean las
-  pantallas, así que Railway no escucha a Telegram hasta que alguien abre la
-  app una vez. En un portátil que se cierra por la noche eso era lo correcto;
-  en un servidor es un agujero — lo suyo sería arrancarlo también al levantar
-  el proceso.
+- **El servidor ya está limpio**: las ocho fixtures fuera, 30 ofertas de
+  fuentes reales dentro. Queda **Nomad Compute** (`manual`), que también era
+  una prueba — se borra con `npm run reset:opportunities -- --manual` y otro
+  `push:db` si estorba.
 - La puerta **no existe sin `AMBLE_PASSWORD`**. En local se sigue entrando
   como siempre, a propósito: una contraseña por cada `npm run dev` es cómo se
   acaba con la contraseña escrita en un post-it.
@@ -906,6 +904,37 @@ Comprobado en vivo, sin cookie: `/feedback`, `/me`, `/listening` y
 da 404 porque la variable ya no está; `/api/health` contesta 200, que es lo
 que necesita Railway. Y una nota escrita antes de un redespliegue seguía ahí
 después, que era la única forma de saber que el volumen es de verdad.
+
+### Dos agujeros que solo se ven en un servidor — 21 de septiembre
+
+**El bucle dormía.** Todo lo que reanuda el trabajo —la cola, el sondeo de
+Telegram, las sincronizaciones, el outbox— colgaba de
+`GET /api/opportunities/interruption`, que es lo que pide la pantalla de
+listening cada seis segundos. En un portátil que se cierra por la noche eso
+era exactamente lo correcto: lo que reanuda es la persona volviendo. En un
+servidor significa que tras cada despliegue nadie escucha a Telegram hasta que
+alguien abre la app — el bucle construido para funcionar sin la app abierta
+dependía de que alguien la abriera.
+
+Ahora va en `src/instrumentation.ts`, que Next llama una vez por instancia y
+antes de la primera petición. Comprobado en vivo: tras el despliegue apareció
+una oferta nueva de Manfred sin que nadie tocara nada.
+
+**Y las que pasaron la criba y nadie llegó a mirar.** Un sondeo evalúa como
+mucho diez por pasada; las que sobran se guardan en `received`, y en la pasada
+siguiente se saltan por «ya conocida». Nunca se evaluaban. En la instancia
+real eran diez ofertas que habían superado el filtro y sobre las que no se
+dijo nada jamás — el fallo que este producto existe para no cometer, cometido
+en silencio y sin una línea en el log.
+
+El presupuesto se gasta ahora primero en lo que ya esperaba y después en lo
+nuevo. Ese orden es la decisión, y es discutible: lo nuevo puede esperar seis
+horas, lo que lleva esperando desde el martes ya ha esperado bastante. Con un
+guardarraíl para que un sondeo reintentado no encole dos veces la misma oferta
+—seis llamadas por una— y tres tests.
+
+Visto funcionar en producción mientras se escribía esto: `received` bajando de
+10 a 6 y `decided` subiendo de 6 a 9, una cada minuto y medio.
 
 ## Lo siguiente, cuando retomemos
 
