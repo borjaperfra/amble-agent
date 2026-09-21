@@ -1,7 +1,7 @@
-# Dónde nos quedamos — 19 septiembre 2026
+# Dónde nos quedamos — 21 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (124) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (138) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -17,24 +17,22 @@ El lado de la empresa **no existe**, y ahí es donde va esto: dos agentes que
 averiguan lo que necesitan el uno del otro antes de molestar a nadie. Las
 cinco decisiones que hacían falta para empezar están cerradas (§ más abajo).
 
-**Lo siguiente, por orden** (decidido el 19 por la noche, se retoma aquí):
+Y **deja de vivir en el portátil**: hay Dockerfile, `railway.json` y una
+puerta con contraseña delante, porque en una URL pública ahí dentro está su
+CV. Con una libreta en `/feedback` para las ideas, que era el motivo de
+desplegarlo.
 
-1. **Todo lo que llegue del candidato es contexto del perfil.** Hoy solo se
-   incorpora al grafo lo que contesta a una pregunta abierta; un mensaje suyo
-   con nada abierto se guarda en `inbound_messages` con `nothing_pending` y no
-   hace nada más. Tiene que pasar por el mismo camino que una respuesta
-   —`incorporateAnswer` con su procedencia— de modo que contarle algo al Rep,
-   venga a cuento de lo que venga, lo sepa. Dos cosas que hay que decidir al
-   hacerlo: qué se le contesta ("apuntado" a secas se queda corto si acaba de
-   contar algo que cambia una decisión) y si un mensaje suelto puede disparar
-   una reevaluación de lo que está en HOLD, que es lo suyo pero cuesta
-   llamadas.
-2. **Que el onboarding pregunte una vez lo que se repite oferta tras oferta**
+**Lo siguiente, por orden** (lo primero de la lista del 19 ya está hecho):
+
+1. **Que el onboarding pregunte una vez lo que se repite oferta tras oferta**
    (propiedad, escala, presupuesto). Lo cuarto de su lista, y lo más grande:
    toca la entrevista.
-3. El lado de la empresa: empresa, apertura, su agente, y la conversación como
+2. El lado de la empresa: empresa, apertura, su agente, y la conversación como
    objeto con turnos y traza.
-4. La sesión real de Borja con User Zero, que sigue pendiente desde el 18.
+3. La sesión real de Borja con User Zero, que sigue pendiente desde el 18 —
+   ahora tiene sitio donde hacerla, que es el móvil.
+4. **Lo que se apunte en `/feedback`.** Ese es el punto de la libreta: que la
+   lista de arriba la escriba él y no yo.
 
 **Por escrito sigue siendo lo normal.** El audio es una vía más, no la vía: se
 contesta escribiendo por Telegram, escribiendo en la pantalla, o hablando.
@@ -62,6 +60,12 @@ preguntas).
 - La red hasta `api.telegram.org` desde esta máquina va lenta a ratos y se
   pasa del timeout de conexión de undici (10 s). Se recupera solo; si se
   vuelve costumbre, hace falta un dispatcher propio.
+- **En Railway todavía no hay nada.** Los ficheros están, el proyecto no: hay
+  que crear el servicio, montar un volumen en `/data`, poner las variables y
+  subir la base con `npm run push:db`. El § de abajo lo cuenta entero.
+- La puerta **no existe sin `AMBLE_PASSWORD`**. En local se sigue entrando
+  como siempre, a propósito: una contraseña por cada `npm run dev` es cómo se
+  acaba con la contraseña escrita en un post-it.
 
 ## Opportunity Zero — entero, y ya interrumpe
 
@@ -759,6 +763,120 @@ corriendo en un portátil.
 - **La config del modelo sigue cerrada.** El prompt original decía "DeepSeek
   V4.1 Flash"; no se toca nada, el provider ya abstrae eso.
 
+### Todo lo que le llega al Rep es perfil — 21 de septiembre
+
+Lo primero de la lista del 19, hecho. Un mensaje suyo sin nada abierto se
+guardaba en `inbound_messages` con `nothing_pending` y ahí moría: eso
+convertía al Rep en un formulario con conversación encima, porque le contabas
+que te habías mudado y la siguiente oferta te preguntaba dónde vives.
+
+Ahora las ramas que no consumen lo que escribió lo marcan con `asContext` y la
+cola lo mete al grafo por la misma puerta que una respuesta:
+`incorporateAnswer` con el mensaje como procedencia. Son cuatro ramas, no una:
+nada abierto, una pregunta que ya estaba contestada, una interrupción ya
+respondida, y palabras donde hacía falta un sí o un no. Un `/si` no, que no
+dice nada del perfil.
+
+Lo único distinto es la extracción. `extract_unprompted_claims` es una tarea
+aparte porque el prompt de las respuestas miente aquí —dice que contestó a una
+pregunta— y un modelo al que le dicen que hay una pregunta se inventa cuál es.
+Le dice tres cosas que el otro no: que no se preguntó nada, que devolver cero
+claims es lo normal, y que un cambio de lo que quiere («ya no quiero
+guardias») sí es un claim. La reevaluación recibe lo mismo escrito en su
+sitio: `(Nothing was asked...)` en vez de un hueco en blanco.
+
+**Las dos decisiones que quedaban abiertas, decididas:**
+
+- **Qué se le contesta.** No un segundo mensaje. El acuse dice lo que ha
+  pasado de verdad —«pasa a formar parte de lo que sé de ti»— y si eso acaba
+  cambiando una decisión, quien habla es la interrupción, que ya existe y
+  tiene algo que decir. Un «apuntado» seguido de un «por cierto, ahora sí» son
+  dos avisos por una frase suya, que es justo lo que pidió que no pasara.
+- **Si un mensaje suelto reevalúa lo que está en HOLD.** Sí, pero solo cuando
+  movió algo: si la incorporación no resolvió ninguna incertidumbre y no
+  cambió ninguna capacidad, no se toca nada. Un «gracias» extrae en una
+  llamada barata y ahí acaba. Cuando sí movió, van las cinco más recientes en
+  espera (`MAX_REASSESSED_HOLDS`): una oferta que lleva tres semanas en HOLD no
+  la rescata un mensaje de hoy.
+
+Y un guardarraíl que ya nos costó una vez: `inbound_messages.incorporated_at`.
+Sin él, un reintento tras un «empty response» extrae los mismos claims otra
+vez y deja dos evidencias por cada frase dicha una sola vez — exactamente el
+bug de las preguntas.
+
+Nueve tests nuevos. Lo que **no** cubre: la pantalla no tiene caja para
+contarle algo al Rep sin que haya pregunta abierta. Por Telegram sí, por la
+web no.
+
+## Fuera del portátil: Railway, la puerta y la libreta
+
+### Lo que hay en el repo
+
+- **`Dockerfile`** en tres etapas, sobre `node:24-alpine` —en 22 `node:sqlite`
+  es experimental y avisa por stderr en cada arranque— con
+  `output: "standalone"` en `next.config.ts` para que la imagen no lleve
+  `node_modules` entero.
+- **`railway.json`**: builder DOCKERFILE, health check en `/api/health`, y
+  **`numReplicas: 1`**. Eso último no es una preferencia: la base es un
+  fichero y la cola vive en el proceso, así que dos contenedores son dos colas
+  sondeando el mismo bot de Telegram y actuando sobre el mismo mensaje.
+- **`AMBLE_DATA_DIR`**, que es lo único que hacía falta tocar del código para
+  que esto fuera posible. Sin la variable, `.amble-data/` junto al proyecto,
+  como siempre; en Railway, el punto de montaje del volumen.
+
+### La puerta
+
+`src/proxy.ts` — que es como se llama ahora lo que era `middleware.ts`, que
+está deprecado en Next 16 y desde esta versión corre en el runtime de Node.
+Deja pasar `/login`, `/api/login` y `/api/health`, y nada más. Una API sin
+cookie recibe 401 y no el HTML del login, que es un error de JSON raro diez
+minutos después.
+
+Sin `AMBLE_PASSWORD` no hay puerta, a propósito: en local se entra como
+siempre. La cookie lleva el sha-256 de la contraseña y no la contraseña, y se
+compara en tiempo constante.
+
+Esto no es un sistema de cuentas y no pretende serlo. Es que el enlace por sí
+solo no valga, porque ahí dentro está su CV.
+
+### La libreta
+
+`/feedback`. Una caja, un botón, y debajo lo que ya escribió agrupado por día,
+con «hoy» y «ayer» antes que cualquier fecha. Se guarda en optimista: la nota
+aparece antes de que conteste el servidor, y si falla vuelve a la caja con lo
+que había escrito. Escribiendo en el metro, esperar un 201 para ver que la
+frase existe es la diferencia entre usarlo y no usarlo.
+
+Tabla `feedback_notes` en la misma base. Sin estado, sin etiquetas y sin
+prioridad, y eso es la decisión: una idea que hay que clasificar antes de
+poder apuntarla es una idea que no se apunta. Lo de convertirlas en trabajo
+será otra conversación cuando haya veinte y se vea cómo se agrupan.
+
+Está en la barra de arriba. Una idea a la que hay que llegar escribiendo una
+URL a mano tampoco se apunta.
+
+### Llevarse el grafo
+
+`npm run push:db -- https://loquesea.up.railway.app`. Pide la contraseña, hace
+una copia con `VACUUM INTO` —copiar el fichero mientras hay un `-wal` vivo se
+lleva media base—, la sube, y después sube los ficheros de `uploads/`.
+
+Al otro lado, `POST /api/admin/restore`, que es la ruta más destructiva del
+proyecto y por eso tiene tres cerrojos: `AMBLE_ALLOW_RESTORE=true`, la
+contraseña, y comprobar que lo que llega empieza por `SQLite format 3`. Cierra
+la base antes de reemplazar el fichero —cambiarlo por debajo de una conexión
+abierta es cómo se corrompe SQLite—, borra el `-wal` y el `-shm` de la
+anterior, guarda lo que había con la fecha al lado, y la vuelve a abrir en la
+misma petición para que un fichero malo se note ahora y no mañana.
+
+Quitar `AMBLE_ALLOW_RESTORE` en cuanto termine.
+
+### Lo que falta para que esté en pie
+
+Nada de código. El proyecto en Railway, el volumen en `/data`, las variables
+—`AMBLE_PASSWORD`, `AMBLE_BASE_URL`, la clave del modelo, el token del bot— y
+`npm run push:db`. Detalle en el README.
+
 ## Lo siguiente, cuando retomemos
 
 **Una sesión real de Borja, entera, sin preparar nada antes.** Todo lo medido
@@ -795,12 +913,13 @@ de vanidad que el spec prohíbe en §16.
 
 ```bash
 cd C:\dev\amble
-npm test                      # 117 tests, sin red y sin base real
+npm test                      # 138 tests, sin red y sin base real
 npm run dev                   # http://localhost:3000
 npm run check:model           # comprueba el modelo en 2 llamadas cortas
 npm run measure -- <cv.pdf>   # sesión entera por API, cronometrada
 npm run measure:opportunities # las diez fixtures, con el dev levantado
 npm run reset:opportunities   # quita las fixtures, deja el grafo
+npm run push:db -- <url>      # lleva esta base al servidor
 ```
 
 Para traer ofertas de Manfred: el botón del laboratorio, o

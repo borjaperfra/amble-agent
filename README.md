@@ -159,3 +159,59 @@ Two fixture sets, measured apart. **Calibration** is ten different ways of being
 No test framework: Node 22 strips the types itself, and `scripts/test-resolve.mjs` resolves the `@/` alias and extensionless imports. Domain rules are tested with no database and no provider; the pipeline tests build a throwaway database in a temp directory and stub the four model calls.
 
 The measurement scripts are the opposite: they drive the real HTTP routes against a running dev server and a real model, and write their full transcript to `.amble-data/`.
+
+## Running it on a server
+
+Amble keeps its state in a file — SQLite in `.amble-data/`, plus the uploads —
+and its job queue lives inside the process. That rules out anything
+serverless: this wants one long-running container with a disk attached to it.
+
+**One replica, always.** A second container would open its own copy of the
+queue and poll the same Telegram bot, and both would act on the same message.
+
+### Railway
+
+The repo carries a `Dockerfile` and a `railway.json`, so the service needs no
+build configuration. What it does need:
+
+1. **A volume**, mounted at `/data`. The image already sets
+   `AMBLE_DATA_DIR=/data`; without the volume, the database is written inside
+   the container and disappears on the next deploy.
+2. **The variables** from `.env.example` — at minimum `AMBLE_MODEL_API_KEY`,
+   `AMBLE_MODEL_ID`, `AMBLE_USER_ZERO=true`, plus:
+
+   - `AMBLE_PASSWORD` — the single password. Amble has no accounts and the
+     CV, the graph and the offers are all in there, so on a public URL this
+     is not optional. Every page asks for it once and keeps a cookie.
+   - `AMBLE_BASE_URL` — the public URL, because it is what goes in the links
+     inside the messages.
+   - `AMBLE_TELEGRAM_BOT_TOKEN` — the loop only closes if the server can
+     reach Telegram.
+
+`/api/health` is the health check and is the one route that answers without
+the password.
+
+### Taking the graph with you
+
+The database on the laptop can be moved across in one go:
+
+```bash
+AMBLE_ALLOW_RESTORE=true      # set it in Railway first
+npm run push:db -- https://your-app.up.railway.app
+```
+
+It asks for the password, makes a clean snapshot with `VACUUM INTO` — copying
+the file while the dev server holds a write-ahead log gets you half a
+database — uploads it, and then uploads the files in `uploads/`. What was
+there is kept beside it with a timestamp.
+
+Then remove `AMBLE_ALLOW_RESTORE`. It is a route that replaces the whole
+database.
+
+## Ideas
+
+`/feedback` is a notebook, not part of the product: a box, a button, and what
+you have already written underneath it, by day. It exists because ideas about
+Amble arrive on a phone, in a queue, half an hour before the laptop is open —
+and one that has to be filed or tagged before it can be written down is one
+that never gets written down.

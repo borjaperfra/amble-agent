@@ -8,9 +8,13 @@ const navItems = [
   { href: '/listening', label: 'Your Rep' },
   { href: '/me', label: 'Your Map' },
   { href: '/me/intent', label: 'Listening for' },
+  // No es producto: es la libreta de lo que hay que arreglar del producto.
+  // Está en la barra porque una idea a la que hay que llegar escribiendo una
+  // URL a mano es una idea que no se apunta.
+  { href: '/feedback', label: 'Ideas' },
 ]
 
-const navRoutes = ['/me', '/me/intent', '/listening']
+const navRoutes = ['/me', '/me/intent', '/listening', '/feedback']
 
 interface HeaderProps {
   right?: React.ReactNode

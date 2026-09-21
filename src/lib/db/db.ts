@@ -2,7 +2,18 @@ import { DatabaseSync } from 'node:sqlite'
 import path from 'node:path'
 import fs from 'node:fs'
 
-const DATA_DIR = path.join(process.cwd(), '.amble-data')
+/**
+ * Donde vive todo: la base y los ficheros que subió.
+ *
+ * Por defecto, al lado del proyecto — que es lo que hace que un test se lleve
+ * su propio directorio con un `chdir` y que borrar `.amble-data/` sea empezar
+ * de cero. En un servidor el disco que sobrevive a un despliegue está montado
+ * en otra parte, y eso es lo único que `AMBLE_DATA_DIR` cambia: sin él, nada
+ * de esto se mueve.
+ */
+const DATA_DIR = process.env.AMBLE_DATA_DIR?.trim()
+  ? path.resolve(process.env.AMBLE_DATA_DIR.trim())
+  : path.join(process.cwd(), '.amble-data')
 const DB_PATH = path.join(DATA_DIR, 'amble.db')
 
 declare global {
@@ -395,6 +406,22 @@ function createDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS inbound_messages_by_candidate
       ON inbound_messages (candidate_id, created_at);
 
+    -- La libreta.
+    --
+    -- No es parte del producto: es donde caben las ideas sobre el producto,
+    -- escritas desde el móvil en el momento en que se le ocurren. Vive en la
+    -- misma base que todo lo demás porque el disco ya está ahí y montar un
+    -- sitio aparte para guardar frases sueltas es cómo se queda sin hacer.
+    CREATE TABLE IF NOT EXISTS feedback_notes (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      text TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS feedback_notes_by_candidate
+      ON feedback_notes (candidate_id, created_at);
+
     CREATE TABLE IF NOT EXISTS intent_profiles (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),
@@ -475,6 +502,25 @@ export function getDb(): DatabaseSync {
   return globalThis.__ambleDb
 }
 
+/**
+ * Soltar el fichero.
+ *
+ * Existe para una cosa: cambiar la base por otra sin reiniciar, que es lo que
+ * hace falta para llevarse el grafo del portátil al servidor. Cambiar el
+ * fichero por debajo de una conexión abierta es cómo se corrompe una base de
+ * SQLite, así que primero se cierra.
+ *
+ * Es seguro porque `DatabaseSync` es síncrono: mientras el reemplazo ocurra
+ * en un solo tick, ninguna petición puede estar a mitad de una sentencia.
+ * Cualquier cosa que llegue después vuelve a abrir por `getDb()`.
+ */
+export function closeDb(): void {
+  const db = globalThis.__ambleDb
+  globalThis.__ambleDb = undefined
+  db?.close()
+}
+
+export const DB_FILE = DB_PATH
 export const DATA_DIRECTORY = DATA_DIR
 
 type DeferredWrite = () => void

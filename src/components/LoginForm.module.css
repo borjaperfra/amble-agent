@@ -1,0 +1,68 @@
+.page {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+}
+
+.form {
+  width: 100%;
+  max-width: 320px;
+}
+
+.label {
+  display: block;
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-bottom: 8px;
+}
+
+.input {
+  width: 100%;
+  height: 48px;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  /* 16px o Safari hace zoom al enfocar el campo. */
+  font-size: var(--text-body);
+  font-family: inherit;
+  color: var(--ink);
+  transition: border-color var(--motion-fast) ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px var(--moss-wash);
+}
+
+.submit {
+  width: 100%;
+  height: 48px;
+  margin-top: 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: var(--paper-light);
+  font-family: inherit;
+  font-size: var(--text-body);
+  cursor: pointer;
+  transition: background var(--motion-fast) ease;
+}
+
+.submit:disabled {
+  background: var(--paper-dark);
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--clay);
+  font-size: var(--text-body-sm);
+  text-align: center;
+}
