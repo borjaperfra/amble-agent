@@ -15,8 +15,13 @@
  *   esto junto a su propia red interna: `http://169.254.169.254` es el
  *   servicio de metadatos en casi todas las nubes, y `amble.railway.internal`
  *   resuelve a un vecino. Comprobar el nombre no vale — hay que resolver.
- * - **Sin seguir redirecciones.** Una redirección es otra URL que nadie ha
- *   comprobado; si la hay, se comprueba desde cero.
+ * - **Las redirecciones se siguen a mano, comprobando cada salto.** Rechazarlas
+ *   sin más suena seguro y es inservible: `boards.greenhouse.io` redirige a
+ *   `job-boards.greenhouse.io` y así casi todos los tablones, o sea que no se
+ *   podría leer ninguna oferta. Y seguirlas a ciegas es peor que no
+ *   comprobar nada — un dominio público que redirige a `169.254.169.254` se
+ *   salta la comprobación entera con una sola cabecera. Así que se siguen
+ *   pocas y cada destino pasa por el mismo filtro que el primero.
  * - **Un tope de tamaño y de tiempo.** Un fichero de dos gigas contestado muy
  *   despacio tumba el proceso, y con él la cola.
  *
@@ -32,6 +37,15 @@ export class FetchRefused extends Error {}
 /** Más que esto no es un anuncio, es un sitio web entero. */
 const MAX_BYTES = 2_000_000
 const TIMEOUT_MS = 15_000
+
+/**
+ * Tres saltos.
+ *
+ * Los tablones reales dan uno, a veces dos —dominio viejo, luego `www`, luego
+ * la página—. Más allá de tres es una cadena de acortadores o un bucle, y
+ * ninguna de las dos cosas es una oferta de trabajo.
+ */
+const MAX_HOPS = 3
 
 /**
  * Si esa dirección es del mundo o de dentro de casa.
@@ -117,19 +131,30 @@ export interface FetchedPosting {
 }
 
 export async function fetchPosting(raw: string): Promise<FetchedPosting> {
-  const url = await assertPublicUrl(raw)
+  let url = await assertPublicUrl(raw)
+  let response: Response | null = null
 
-  const response = await fetch(url, {
-    // Una redirección es otra URL que nadie ha comprobado.
-    redirect: 'manual',
-    headers: { 'User-Agent': 'amble/0.1 (+candidate pasted this link)' },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  }).catch(() => null)
+  for (let hop = 0; hop <= MAX_HOPS; hop += 1) {
+    response = await fetch(url, {
+      // A mano, para poder comprobar a dónde lleva antes de ir.
+      redirect: 'manual',
+      headers: { 'User-Agent': 'amble/0.1 (+candidate pasted this link)' },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    }).catch(() => null)
+
+    if (!response) throw new FetchRefused('I could not reach that page.')
+    if (response.status < 300 || response.status >= 400) break
+
+    const location = response.headers.get('location')
+    if (!location) throw new FetchRefused('That link goes nowhere.')
+    if (hop === MAX_HOPS) throw new FetchRefused('That link bounces around too much.')
+
+    // Relativa o absoluta, y la comprobación es la misma: lo que importa no
+    // es de dónde viene el salto, es a dónde va.
+    url = await assertPublicUrl(new URL(location, url).toString())
+  }
 
   if (!response) throw new FetchRefused('I could not reach that page.')
-  if (response.status >= 300 && response.status < 400) {
-    throw new FetchRefused('That link redirects somewhere else. Send me the final one.')
-  }
   if (!response.ok) throw new FetchRefused(`That page answered ${response.status}.`)
 
   const length = Number(response.headers.get('content-length') ?? '0')

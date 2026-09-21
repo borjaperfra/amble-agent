@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { assertPublicUrl, FetchRefused, textFromHtml } from './pasted'
+import { assertPublicUrl, fetchPosting, FetchRefused, textFromHtml } from './pasted'
 
 async function refused(url: string): Promise<string> {
   try {
@@ -51,6 +51,51 @@ describe('a dónde se deja ir', () => {
 
   it('y lo que no es un enlace, no lo es', async () => {
     assert.match(await refused('no soy una url'), /not a link/)
+  })
+})
+
+describe('siguiendo una redirección', () => {
+  const realFetch = globalThis.fetch
+
+  it('comprueba el destino, no sólo el punto de partida', async () => {
+    // El ataque que esto para: un destino público perfectamente legítimo que
+    // redirige al servicio de metadatos. Comprobar sólo la primera URL deja
+    // pasar eso con una sola cabecera.
+    //
+    // Se parte de una IP pública literal y no de un dominio: `dns.lookup` la
+    // devuelve tal cual, así que el test no depende de que haya red.
+    globalThis.fetch = (async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://169.254.169.254/latest/meta-data/' },
+      })) as typeof fetch
+
+    try {
+      await assert.rejects(
+        () => fetchPosting('https://93.184.216.34/job'),
+        (error: unknown) =>
+          error instanceof FetchRefused && /not on the public/.test(error.message),
+      )
+    } finally {
+      globalThis.fetch = realFetch
+    }
+  })
+
+  it('no se queda dando vueltas para siempre', async () => {
+    globalThis.fetch = (async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://93.184.216.34/again' },
+      })) as typeof fetch
+
+    try {
+      await assert.rejects(
+        () => fetchPosting('https://93.184.216.34/job'),
+        (error: unknown) => error instanceof FetchRefused && /bounces around/.test(error.message),
+      )
+    } finally {
+      globalThis.fetch = realFetch
+    }
   })
 })
 
