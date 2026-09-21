@@ -38,9 +38,9 @@ import {
   listOpportunities,
   recordAuditEvent,
 } from '../db/opportunities'
-import { runAnswerCandidateQuestionTask } from '../model/tasks'
+import { runAnswerCandidateQuestionTask, runRewordAnswerTask } from '../model/tasks'
 import { copyIn } from '@/lib/copy'
-import { auditAdvice, renderAdvice, type AdvisorPoint } from '@/domains/advisor/rules'
+import { auditAdvice, renderAdvice, stripIds, type AdvisorPoint } from '@/domains/advisor/rules'
 import { listEvidence } from '../db/repo'
 import { readPreferences } from './preferences'
 import {
@@ -401,6 +401,76 @@ export interface AnsweredQuestion {
 }
 
 /**
+ * Lo mismo, dicho de otra manera.
+ *
+ * La pieza que hace que el tono se pueda iterar sin desplegar nada. Los
+ * puntos ya están, ya están auditados y ya citan lo que citan; lo único que
+ * se rehace son las palabras. Una llamada corta en vez de las cuatro de una
+ * respuesta entera, que es lo que permite probar diez veces seguidas.
+ *
+ * Y el guardarraíl, que es el que lo hace seguro: **si la cuenta de puntos no
+ * cuadra, se tira la reescritura entera**. Las citas se quedan con su punto
+ * por posición, así que un punto de más sería una afirmación sin fuente
+ * colada por la puerta del estilo — y esa puerta es justo la que estamos
+ * abriendo aquí.
+ */
+export async function rewordAnswer(
+  candidateId: string,
+  messageId: string,
+  tone: string,
+): Promise<{ answer: string; points: AdvisorPoint[] } | null> {
+  const message = getInboundMessage(messageId)
+  if (!message?.answer) return null
+
+  let points: AdvisorPoint[]
+  try {
+    points = JSON.parse(message.answer_sources ?? '[]') as AdvisorPoint[]
+  } catch {
+    return null
+  }
+  if (points.length === 0) return null
+
+  const preferences = readPreferences(candidateId)
+  const { data } = await runRewordAnswerTask({
+    candidateId,
+    language: preferences.language ?? 'es',
+    tone: tone.trim() || preferences.tone || 'Natural, como hablarías en un chat.',
+    points: points.map((point) => point.text),
+    askBack: null,
+  })
+
+  if (data.points.length !== points.length) return null
+
+  // Las citas no se tocan: viajan con su punto, por posición.
+  const reworded: AdvisorPoint[] = points.map((point, index) => ({
+    ...point,
+    text: stripIds(data.points[index]),
+  }))
+
+  const audit = auditAdvice(
+    { points: reworded, askBack: data.askBack },
+    {
+      evidenceIds: listEvidence(candidateId).map((item) => item.id),
+      uncertaintyIds: listUncertainties(candidateId).map((item) => item.id),
+      opportunityIds: listOpportunities(candidateId).map((item) => item.id),
+    },
+  )
+  if (audit.points.length !== points.length) return null
+
+  const answer = renderAdvice(audit, copyIn(preferences.language).bot.nothingGrounded)
+  recordInboundAnswer(messageId, answer, audit.points)
+  recordAuditEvent({
+    candidate_id: candidateId,
+    subject_type: 'inbound',
+    subject_id: messageId,
+    event: 'answer_reworded',
+    detail: { tone: tone.slice(0, 200), jargon: audit.plainness.jargon, longestSentence: audit.plainness.longestSentence },
+  })
+
+  return { answer, points: audit.points }
+}
+
+/**
  * La cola: contestar de verdad, guardarlo, y devolvérselo a quien pregunte.
  *
  * No manda nada por sí mismo. Quién entrega la respuesta lo decide el
@@ -455,6 +525,7 @@ export async function answerQuestionJob(
     candidateId,
     question: message.text,
     language: readPreferences(candidateId).language ?? 'es',
+    tone: readPreferences(candidateId).tone ?? '',
     profile: profileDigest(candidateId),
     posting,
     open: openThreads(candidateId),

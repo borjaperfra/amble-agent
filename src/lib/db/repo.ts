@@ -739,6 +739,8 @@ export interface PreferencesRow {
   notify_whatsapp: string | null
   notify_telegram: string | null
   language: string | null
+  /** Cómo quiere que le hablen, en sus palabras. */
+  tone: string | null
   updated_at: string
 }
 

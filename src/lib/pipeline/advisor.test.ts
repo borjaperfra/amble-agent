@@ -40,6 +40,8 @@ let calls = 0
 let proposedMemory: unknown[] = []
 /** Lo que el modelo dice, con lo que dice que lo sostiene. */
 let proposedPoints: unknown[] = []
+/** Lo que devuelve al pedirle que lo diga de otra manera. */
+let rewordedPoints: string[] = []
 
 before(async () => {
   previousDirectory = process.cwd()
@@ -98,12 +100,15 @@ before(async () => {
       messages: { role: string; content: string }[]
     }
     prompts.push(body.messages.map((message) => message.content).join('\n'))
-    const content = JSON.stringify({
-      points: proposedPoints,
-      askBack: null,
-      unknowns: ['Si has llevado un equipo de más de cinco.'],
-      remember: proposedMemory,
-    })
+    const system = body.messages.find((message) => message.role === 'system')?.content ?? ''
+    const content = system.includes('different voice')
+      ? JSON.stringify({ points: rewordedPoints, askBack: null })
+      : JSON.stringify({
+          points: proposedPoints,
+          askBack: null,
+          unknowns: ['Si has llevado un equipo de más de cinco.'],
+          remember: proposedMemory,
+        })
     return new Response(
       JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -124,6 +129,7 @@ beforeEach(() => {
   prompts = []
   calls = 0
   proposedMemory = []
+  rewordedPoints = ['Lo mismo, pero más corto.']
   // Por defecto, algo que se sostiene de verdad: el hueco existe en el grafo.
   proposedPoints = [
     {
@@ -339,5 +345,57 @@ describe('las fuentes, comprobadas de verdad', () => {
 
     assert.doesNotMatch(result.answer, /unk_|ev_|opp_/)
     assert.deepEqual(result.points[0].uncertaintyIds, ['unk_team'])
+  })
+})
+
+describe('decirlo de otra manera', () => {
+  it('cambia las palabras y no toca las fuentes', async () => {
+    const id = arrive('¿Y para liderar?')
+    await advisor.answerQuestionJob(candidateId, id)
+    const before = JSON.parse(inboundDb.getInboundMessage(id)?.answer_sources ?? '[]')
+
+    rewordedPoints = ['Te falta enseñar equipo. Nada más.']
+    const said = await advisor.rewordAnswer(candidateId, id, 'Más corto, sin rodeos.')
+
+    assert.match(String(said?.answer), /Nada más/)
+    // Las citas viajan con su punto, por posición: son las mismas de antes.
+    assert.deepEqual(
+      said?.points.map((point) => point.uncertaintyIds),
+      before.map((point: { uncertaintyIds: string[] }) => point.uncertaintyIds),
+    )
+  })
+
+  it('se tira entera si el modelo se inventa un punto de más', async () => {
+    // Un punto de más sería una afirmación sin fuente colada por la puerta
+    // del estilo, y esa puerta es justo la que esto abre.
+    const id = arrive('¿Y ahora?')
+    await advisor.answerQuestionJob(candidateId, id)
+    const original = inboundDb.getInboundMessage(id)?.answer
+
+    rewordedPoints = ['Uno.', 'Y esto que me acabo de inventar.']
+    const said = await advisor.rewordAnswer(candidateId, id, 'Más largo.')
+
+    assert.equal(said, null, 'no devuelve nada')
+    assert.equal(inboundDb.getInboundMessage(id)?.answer, original, 'y lo de antes sigue intacto')
+  })
+
+  it('tampoco cuela si se deja uno por el camino', async () => {
+    const id = arrive('¿Y esto?')
+    await advisor.answerQuestionJob(candidateId, id)
+    const original = inboundDb.getInboundMessage(id)?.answer
+
+    rewordedPoints = []
+    assert.equal(await advisor.rewordAnswer(candidateId, id, 'Muy corto.'), null)
+    assert.equal(inboundDb.getInboundMessage(id)?.answer, original)
+  })
+
+  it('y el tono que él escribe llega al prompt tal cual', async () => {
+    const id = arrive('¿Qué tal?')
+    await advisor.answerQuestionJob(candidateId, id)
+
+    prompts = []
+    await advisor.rewordAnswer(candidateId, id, 'Como un amigo del gremio, sin paños calientes.')
+
+    assert.match(prompts.join('\n'), /amigo del gremio/)
   })
 })

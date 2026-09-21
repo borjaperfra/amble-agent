@@ -38,6 +38,17 @@ export interface Preferences {
    * el modelo. Es de la persona, no de la instalación, así que vive aquí.
    */
   language: Language
+  /**
+   * Como quiere que le hablen, en sus palabras.
+   *
+   * Texto libre y suyo, no una lista de estilos que yo haya adivinado. Se
+   * mete tal cual en el prompt del Rep.
+   *
+   * Y es seguro que sea libre porque la auditoria no pasa por aqui: lo que
+   * el Rep afirma tiene que citar algo del grafo pase lo que pase, asi que
+   * ningun tono puede convertirlo en un adivino. Solo cambia como suena.
+   */
+  tone: string | null
 }
 
 export const NOTIFY_CHANNELS = ['email', 'whatsapp', 'telegram'] as const
@@ -56,6 +67,7 @@ export const EMPTY_PREFERENCES: Preferences = {
   notifyWhatsapp: null,
   notifyTelegram: null,
   language: DEFAULT_LANGUAGE,
+  tone: null,
 }
 
 function asWorkMode(value: string | null): WorkMode | null {
@@ -96,6 +108,7 @@ export function readPreferences(candidateId: string): Preferences {
     notifyWhatsapp: row.notify_whatsapp,
     notifyTelegram: row.notify_telegram,
     language: asLanguage(row.language) ?? DEFAULT_LANGUAGE,
+    tone: typeof row.tone === 'string' && row.tone.trim().length > 0 ? row.tone.trim() : null,
   }
 }
 
@@ -141,6 +154,10 @@ export function writePreferences(candidateId: string, input: Record<string, unkn
   if ('notifyWhatsapp' in input) patch.notify_whatsapp = trim(input.notifyWhatsapp, 40)
   if ('notifyTelegram' in input) patch.notify_telegram = trim(input.notifyTelegram, 40)
   if ('language' in input) patch.language = asLanguage(input.language) ?? DEFAULT_LANGUAGE
+  if ('tone' in input) {
+    const tone = typeof input.tone === 'string' ? input.tone.trim().slice(0, 600) : ''
+    patch.tone = tone.length > 0 ? tone : null
+  }
 
   const technologies = list(input.technologies, 12)
   if (technologies) patch.technologies = JSON.stringify(technologies)

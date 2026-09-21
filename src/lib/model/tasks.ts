@@ -992,6 +992,8 @@ export function runAnswerCandidateQuestionTask(params: {
   open: string
   /** La oferta que acaba de mandar, ya leída. Vacío si no mandó ninguna. */
   posting: string
+  /** Cómo quiere que le hablen, en sus palabras. Vacío si no lo ha dicho. */
+  tone: string
 }) {
   const system = `You are Amble's Rep, answering the candidate directly, version 1. You are their representative and their career advisor: you know them from the profile below and nothing else.
 
@@ -1010,7 +1012,11 @@ Rules:
 - One idea per sentence. If a sentence needs a colon and two commas to hold itself up, it is two sentences.
 - Bad: "tu analítica está a nivel de responsabilidad, sin métodos ni experimentación demostrados, y los números de Asgard los das sin atribución clara entre tú y el equipo."
 - Good: "De analítica sé que la llevabas, pero no cómo medías ni qué probaste. Y de los números de Asgard no sé qué parte hiciste tú y qué parte el equipo."
-- A sentence over 30 words is too long. Cut it.
+- A sentence over 30 words is too long. Cut it.${
+    params.tone
+      ? `\n- HOW THEY WANT TO BE SPOKEN TO, in their own words: "${params.tone}". Follow it. It changes how you sound, never what you may claim: every rule above about citing still holds exactly the same.`
+      : ''
+  }
 - "askBack" is the single question back, or null. It asserts nothing, so it needs no citation.
 - If they sent you a posting, it is above and you have read it. Answer about THAT posting: what it asks for, what they can already show, and what they cannot. Cite its opportunity id. Do not tell them whether to apply — they are already looking at it; tell them what they would need.
 - Separate what they can close from what they cannot. A missing case study or a number they can dig up is work. A city they do not live in, a visa, or ten years they have not lived is not, and calling it "something to work on" wastes their evening.
@@ -1046,6 +1052,80 @@ ${params.history || '(nothing yet)'}`
     reasoningEffort: 'medium',
   })
 }
+
+/**
+ * Lo mismo, dicho de otra manera.
+ *
+ * Es la pieza que hace que el tono se pueda iterar de verdad. Cambiar cómo
+ * suena algo no debería costar volver a pensarlo: los puntos ya están, ya
+ * están auditados y ya citan lo que citan. Lo único que cambia son las
+ * palabras.
+ *
+ * De ahí sale la regla dura de esta tarea: **un punto entra, un punto sale,
+ * en el mismo orden**. No puede fundir dos, no puede añadir uno, no puede
+ * quitar ninguno — porque las citas se quedan con el punto por posición, y un
+ * punto de más sería una afirmación sin fuente colada por la puerta del
+ * estilo. Si la cuenta no cuadra, la reescritura se tira entera y se queda lo
+ * que había.
+ *
+ * Y cuesta una llamada corta en vez de las cuatro de una respuesta entera,
+ * que es lo que convierte «pruébalo otra vez» en algo que se hace diez veces
+ * seguidas sin pensar en la factura.
+ */
+export function runRewordAnswerTask(params: {
+  candidateId: string
+  language: string
+  tone: string
+  points: string[]
+  askBack: string | null
+}) {
+  const system = `You are Amble's Rep, saying the same thing in a different voice, version 1.
+
+Rules:
+- Answer in ${params.language === 'en' ? 'English' : 'Spanish (castellano)'}.
+- You are given N points. Return EXACTLY N points, in the SAME ORDER, each saying the same thing as the one it replaces. Do not merge two, do not split one, do not add one, do not drop one.
+- You may change the words, the rhythm, the length and the register. You may NOT change what is claimed: no new facts, no new numbers, no new names, nothing that was not already there.
+- If a point says something is not known, the new one must still say it is not known.
+- Never write an internal id (anything like unc_… or ev_…) in the text.
+- HOW THEY WANT TO BE SPOKEN TO, in their own words: "${params.tone}"
+- Respond ONLY with JSON: {"points": [string], "askBack": string|null}.`
+
+  const user = `POINTS TO SAY AGAIN:
+${params.points.map((point, index) => `${index + 1}. ${point}`).join('\n')}
+
+${params.askBack ? `THE QUESTION BACK: ${params.askBack}` : 'NO QUESTION BACK.'}`
+
+  return runStructuredTask({
+    candidateId: params.candidateId,
+    task: 'reword_answer',
+    version: 'v1',
+    system,
+    user,
+    schema: rewordOutputSchema,
+    temperature: 0.6,
+    reasoningEffort: 'low',
+  })
+}
+
+export const rewordOutputSchema = z.preprocess(
+  (raw) => {
+    const value = (raw ?? {}) as Record<string, unknown>
+    const points = (Array.isArray(value.points) ? value.points : [])
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter((item) => item.length > 0)
+    const askBack =
+      typeof value.askBack === 'string' && value.askBack.trim().length > 0
+        ? value.askBack.trim().slice(0, 400)
+        : null
+    return { points, askBack }
+  },
+  z.object({
+    points: z.array(z.string().min(1).max(600)).max(6),
+    askBack: z.string().max(400).nullable(),
+  }),
+)
+
+export type RewordOutput = z.infer<typeof rewordOutputSchema>
 
 export function runDistinctiveProfileTask(params: {
   candidateId: string

@@ -590,6 +590,20 @@ function migrate(db: DatabaseSync): void {
     // variable de entorno porque es de la persona, no de la instalación.
     db.exec("ALTER TABLE preferences ADD COLUMN language TEXT;")
   }
+  if (!has('preferences', 'tone')) {
+    // Como quiere que le hablen, en sus palabras.
+    //
+    // En la base y no en el codigo a proposito: el tono es lo unico de todo
+    // esto que solo se puede arreglar probando, y probando significa cambiar
+    // y volver a mirar. Con el tono en un prompt, cada prueba es un
+    // despliegue de tres minutos y lo que queda de cada vuelta es una
+    // impresion; con el aqui, es un boton.
+    //
+    // Es seguro que lo escriba el porque la auditoria no depende de esto: un
+    // texto de tono no puede hacer que el Rep se invente una fuente, porque
+    // lo que no cita se cae igual. Eso es lo que permite darle el volante.
+    db.exec('ALTER TABLE preferences ADD COLUMN tone TEXT;')
+  }
   if (!has('notifications', 'external_id')) {
     // Which message this became on the far side, so a reply that quotes it
     // can be traced back to what it was about. Telegram hands the id back

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import VoiceRecorder from '../VoiceRecorder'
+import ToneLoop from './ToneLoop'
 import styles from './TellYourRep.module.css'
 import type { Language } from '@/lib/copy'
 
@@ -122,6 +123,8 @@ export default function TellYourRep({ language }: TellYourRepProps) {
   /** Si lo último que mandó era una pregunta: sin esto, «no hay respuesta» y
       «no hacía falta ninguna» se dirían igual, que es el bug de hoy otra vez. */
   const [asked, setAsked] = useState(false)
+  /** El mensaje que se contestó, para poder pedir que se diga de otra manera. */
+  const [messageId, setMessageId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   async function submit(event: React.FormEvent) {
@@ -144,6 +147,7 @@ export default function TellYourRep({ language }: TellYourRepProps) {
       setText('')
 
       setAsked(asking)
+      setMessageId(id)
       if (!asking) {
         setState('done')
         return
@@ -188,6 +192,16 @@ export default function TellYourRep({ language }: TellYourRepProps) {
         {/* Comprobable, no prometido. Cada cosa que ha dicho sobre él se
             apoya en algo del grafo, y aquí está en palabras: si algo no
             cuadra, se ve mirándolo. */}
+        {/* El bucle del tono, donde de verdad se usa: debajo de lo que acaba
+            de leer, y sólo cuando hay algo que reescribir. */}
+        {asked && answer ? (
+          <ToneLoop
+            messageId={messageId}
+            language={language}
+            onReworded={(rewritten) => setAnswer(rewritten)}
+          />
+        ) : null}
+
         {sources.length > 0 ? (
           <div className={styles.sources}>
             <button
