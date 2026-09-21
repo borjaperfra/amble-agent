@@ -85,6 +85,8 @@ export interface RepCopy {
     heardThemOut: (about: string) => string[]
     notForMe: (about: string) => string[]
     couldNotWrite: (error: string) => string
+    /** Era una pregunta y no se ha podido contestar. */
+    couldNotAnswer: string
   }
 }
 
@@ -159,6 +161,8 @@ const es: RepCopy = {
       'Si cambia lo que pienso de algo que tengo en el aire, te aviso.',
     ],
     nothingToYesNo: 'No hay nada esperando un sí o un no. Ya te aviso cuando lo haya.',
+    couldNotAnswer:
+      'Ahora mismo no he podido contestarte. Lo he guardado: vuelve a preguntármelo en un rato.',
     severalWaiting: (count, url) => [
       `Hay ${count} esperando y no sé cuál dices.`,
       '',
@@ -255,6 +259,8 @@ const en: RepCopy = {
       "If it changes what I think of something I'm sitting on, you'll hear from me.",
     ],
     nothingToYesNo: "There's nothing waiting for a yes or a no. I'll tell you when there is.",
+    couldNotAnswer:
+      "I could not answer that just now. I've kept it: ask me again in a while.",
     severalWaiting: (count, url) => [
       `There are ${count} waiting, so I don't know which you mean.`,
       '',

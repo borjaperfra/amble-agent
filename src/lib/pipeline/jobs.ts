@@ -51,6 +51,7 @@ export type JobKind =
   | 'deliver_notification'
   | 'incorporate_opportunity_answer'
   | 'incorporate_unprompted'
+  | 'answer_question'
   | 'sync_manfred'
   | 'sync_ats'
   | 'poll_telegram'
@@ -65,6 +66,7 @@ export interface JobPayloads {
   evaluate_opportunity: { opportunityId: string; reassess?: boolean }
   incorporate_opportunity_answer: { questionId: string }
   incorporate_unprompted: { messageId: string }
+  answer_question: { messageId: string }
   deliver_notification: { notificationId: string }
   sync_manfred: { limit?: number; maxEvaluations?: number }
   sync_ats: { limit?: number; maxEvaluations?: number }
@@ -92,7 +94,9 @@ const MAX_ATTEMPTS = BACKOFF_MS.length + 1
  * do every ten seconds.
  */
 const LANES = {
-  interactive: ['plan_question'],
+  // Contestarle es lo único que se hace con alguien delante mirando: va en
+  // el carril interactivo y no detrás de una evaluación de tres minutos.
+  interactive: ['plan_question', 'answer_question'],
   inbound: ['poll_telegram'],
   background: [
     'process_source',
@@ -213,6 +217,11 @@ async function run(job: JobRow): Promise<void> {
     case 'incorporate_unprompted': {
       const { incorporateUnpromptedJob } = await import('./inbound-context')
       await incorporateUnpromptedJob(job.candidate_id, String(payload.messageId ?? ''))
+      return
+    }
+    case 'answer_question': {
+      const { answerQuestionJob } = await import('./advisor')
+      await answerQuestionJob(job.candidate_id, String(payload.messageId ?? ''))
       return
     }
     case 'deliver_notification': {

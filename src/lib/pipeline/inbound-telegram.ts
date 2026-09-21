@@ -25,6 +25,7 @@ import {
   fetchUpdates,
   fetchVoice,
   sendTelegramMessage,
+  sendTyping,
   type InboundTelegramMessage,
 } from '@/lib/notify/telegram'
 import { transcribeAudio, TranscriptionError } from '@/lib/model/transcribe'
@@ -50,6 +51,7 @@ import { recordCandidateResponse } from './opportunities'
 import { baseUrl } from './notify'
 import { readPreferences } from './preferences'
 import { enqueue, hasQueuedKind } from './jobs'
+import { answerQuestionJob, looksLikeAQuestion } from './advisor'
 
 // ─── What they meant ──────────────────────────────────────────────────────
 
@@ -100,6 +102,14 @@ export interface HandledMessage {
    * the graph by the door built for it and two doors means two claims.
    */
   asContext?: boolean
+  /**
+   * Era una pregunta, y hay que contestarla en vez de archivarla.
+   *
+   * Puede venir con `asContext` a la vez, y eso es lo normal: «me he mudado a
+   * Lisboa, ¿eso cambia algo?» son un hecho y una pregunta en la misma frase.
+   * El hecho entra al grafo y la pregunta se contesta.
+   */
+  asQuestion?: boolean
 }
 
 /**
@@ -175,6 +185,20 @@ export function handleMessage(
       detail: 'words arrived while an interruption was waiting for a yes or a no',
       asContext: true,
       reply: copy.bot.waitingOnYou(opportunity.role, opportunity.company).join('\n'),
+    }
+  }
+
+  // Preguntar y contar algo no son lo mismo, y hasta hoy aquí lo eran: a una
+  // pregunta se le contestaba «apuntado», que es la forma más rápida de que
+  // esto parezca un formulario.
+  if (looksLikeAQuestion(text)) {
+    return {
+      outcome: 'answered_by_rep',
+      about: null,
+      asContext: true,
+      asQuestion: true,
+      // La contesta quien la entrega: aquí todavía no hay respuesta.
+      reply: null,
     }
   }
 
@@ -472,6 +496,36 @@ async function handleOne(
 
   settleInboundMessage(claim.message.id, handled.outcome, handled.about, handled.detail ?? null)
 
+  // Una pregunta se contesta aquí mismo, esperando al modelo, y no en la cola.
+  //
+  // Es medio minuto, y el carril de entrada es suyo: una pasada lenta sólo
+  // retrasa la siguiente. A cambio sale **un** mensaje en vez de un «déjame
+  // mirar» y una respuesta después — que son dos avisos por una pregunta, que
+  // es justo lo que pidió que no pasara.
+  //
+  // Y mientras tanto, «escribiendo…». Medio minuto de silencio en un chat es
+  // una conversación muerta; medio minuto viendo escribir al otro es alguien
+  // pensando, y cuesta una petición.
+  let answer: string | null = null
+  if (handled.asQuestion) {
+    const typing = setInterval(() => void sendTyping(config, chatId), 4_000)
+    void sendTyping(config, chatId)
+    try {
+      answer = (await answerQuestionJob(candidateId, claim.message.id)).answer
+    } catch (error) {
+      const copy = copyIn(readPreferences(candidateId).language)
+      settleInboundMessage(
+        claim.message.id,
+        'failed',
+        null,
+        error instanceof Error ? error.message : 'could not answer',
+      )
+      answer = copy.bot.couldNotAnswer
+    } finally {
+      clearInterval(typing)
+    }
+  }
+
   // Todo lo que llegue de él es contexto del perfil. Va a la cola y no aquí
   // porque extraer cuesta una llamada al modelo, y el sondeo de Telegram
   // tiene carril propio para que contestar en el móvil se note en segundos:
@@ -494,7 +548,8 @@ async function handleOne(
     },
   })
 
-  if (handled.reply) {
+  const reply = answer ?? handled.reply
+  if (reply) {
     try {
       // Si vino hablando, se le enseña lo que se ha entendido: una
       // transcripción mala que entra al grafo sin que nadie la vea es peor
@@ -504,7 +559,7 @@ async function handleOne(
       await sendTelegramMessage(
         config,
         chatId,
-        spoken ? `${copy.bot.heard(text)}\n\n${handled.reply}` : handled.reply,
+        spoken ? `${copy.bot.heard(text)}\n\n${reply}` : reply,
       )
     } catch (error) {
       // The answer is in. Failing to say "noted" is not a reason to throw: a

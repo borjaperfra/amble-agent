@@ -66,11 +66,20 @@
   cursor: default;
 }
 
+.thinking {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
 .done {
   margin: 0 0 8px;
   font-size: var(--text-body);
   line-height: 1.6;
   max-width: 54ch;
+  /* La respuesta llega con saltos de línea, que es como escribe el Rep. */
+  white-space: pre-line;
 }
 
 .again {

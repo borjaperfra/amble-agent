@@ -445,6 +445,38 @@ export const answerClaimsOutputSchema = z.preprocess(
 
 export type AnswerClaimsOutput = z.infer<typeof answerClaimsOutputSchema>
 
+/**
+ * La respuesta del Rep, normalizada con la misma tolerancia que las demás.
+ *
+ * Un modelo que se deja `unknowns` fuera, o que lo manda como texto en vez de
+ * lista, no vale un reintento de treinta segundos por una pregunta que el
+ * candidato está esperando en el móvil.
+ */
+export const candidateAnswerOutputSchema = z.preprocess(
+  (raw) => {
+    const value = (raw ?? {}) as Record<string, unknown>
+    const answer =
+      typeof value.answer === 'string'
+        ? value.answer.trim()
+        : typeof value.text === 'string'
+          ? value.text.trim()
+          : ''
+    const unknowns = Array.isArray(value.unknowns)
+      ? value.unknowns
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter((item) => item.length > 0)
+          .slice(0, 2)
+      : []
+    return { answer, unknowns }
+  },
+  z.object({
+    answer: z.string().min(1).max(2000),
+    unknowns: z.array(z.string().max(300)).max(2),
+  }),
+)
+
+export type CandidateAnswerOutput = z.infer<typeof candidateAnswerOutputSchema>
+
 export const distinctiveProfileOutputSchema = z.object({
   capabilityIds: z.array(z.string().min(1)).max(3),
 })
@@ -866,6 +898,64 @@ ${params.message}`
     schema: answerClaimsOutputSchema,
     temperature: 0.1,
     reasoningEffort: 'low',
+  })
+}
+
+/**
+ * Contestar cuando le preguntan.
+ *
+ * Hasta ahora el Rep solo hablaba cuando el pipeline producía algo, y a un
+ * mensaje suyo respondía «apuntado». Preguntarle algo y que te archive es lo
+ * que hace que esto se lea como un formulario con conversación encima.
+ *
+ * La disciplina es la misma que en todo lo demás, un piso más arriba. Sobre
+ * él, solo lo que sostenga el grafo — y el grafo va entero en el prompt,
+ * así que lo que no esté ahí no existe. Sobre el mercado, nada: el Rep ha
+ * visto las ofertas que ha visto y ninguna más, y «el sector está pagando
+ * más» es un horóscopo con confianza.
+ *
+ * Y lo que no sabe se dice. Un asesor que nunca dice «eso no lo sé de ti» no
+ * está asesorando, está completando frases.
+ */
+export function runAnswerCandidateQuestionTask(params: {
+  candidateId: string
+  question: string
+  language: string
+  profile: string
+  /** Lo que ya se le dijo antes, para no repetirlo ni contradecirlo. */
+  history: string
+}) {
+  const system = `You are Amble's Rep, answering the candidate directly, version 1. You are their representative and their career advisor: you know them from the profile below and nothing else.
+
+Rules:
+- Answer in ${params.language === 'en' ? 'English' : 'Spanish (castellano)'}, in the second person, the way a sharp friend who happens to know their CV would in a chat message.
+- ONLY assert things about the candidate that the PROFILE supports. You may reason and advise, but every claim about what they have done or are good at must come from it.
+- You have seen the opportunities listed and NO OTHERS. Never describe the market, salary norms, what "companies are looking for" or what is in demand. You do not know.
+- Say what you do not know about them when it is what the question turns on. "I do not know whether you have run a team that size" is a better answer than a confident guess.
+- Advice must rest on something: a gap in what is known about them, a requirement that came up in the opportunities listed, or something they told you. Advice that rests on nothing is a horoscope — leave it out.
+- Do not ask more than one question back, and only if you genuinely cannot answer without it.
+- Short. This is a chat message, not a report: at most 6 short lines, no headings, no bullet lists unless you are naming 2-3 concrete things.
+- Never invent an opportunity, a company, a number or a date.
+- Respond ONLY with JSON: {"answer": string, "unknowns": [string]} where unknowns names what you would need to know to answer better (at most 2, may be empty).`
+
+  const user = `THEIR QUESTION:
+${params.question}
+
+WHAT YOU KNOW ABOUT THEM:
+${params.profile}
+
+WHAT YOU HAVE ALREADY TOLD THEM:
+${params.history || '(nothing yet)'}`
+
+  return runStructuredTask({
+    candidateId: params.candidateId,
+    task: 'answer_candidate_question',
+    version: 'v1',
+    system,
+    user,
+    schema: candidateAnswerOutputSchema,
+    temperature: 0.3,
+    reasoningEffort: 'medium',
   })
 }
 

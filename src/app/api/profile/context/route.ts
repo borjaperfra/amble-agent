@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, newId } from '@/lib/db/repo'
-import { claimInboundMessage } from '@/lib/db/inbound'
+import { claimInboundMessage, getInboundMessage } from '@/lib/db/inbound'
+import { looksLikeAQuestion } from '@/lib/pipeline/advisor'
 import { recordAuditEvent } from '@/lib/db/opportunities'
 import { enqueue } from '@/lib/pipeline/jobs'
 
@@ -43,6 +44,11 @@ export async function POST(request: Request) {
 
   const candidate = getOrCreateCandidate()
 
+  // Una pregunta se contesta; una afirmación se archiva. Y puede ser las dos
+  // cosas —«me he mudado a Lisboa, ¿eso cambia algo?»— así que lo que decide
+  // esto es qué se le devuelve, no si entra al perfil: entra igual.
+  const asking = looksLikeAQuestion(text)
+
   // El `external_id` lo pone el servidor y no el navegador: es la clave que
   // impide tratar dos veces el mismo mensaje, y una que venga de fuera es una
   // que alguien puede repetir a propósito.
@@ -53,7 +59,7 @@ export async function POST(request: Request) {
     chat_id: 'web',
     sender: null,
     text,
-    outcome: 'noted_as_context',
+    outcome: asking ? 'answered_by_rep' : 'noted_as_context',
   })
 
   recordAuditEvent({
@@ -61,10 +67,41 @@ export async function POST(request: Request) {
     subject_type: 'inbound',
     subject_id: claim.message.id,
     event: 'inbound_message',
-    detail: { channel: 'web', outcome: 'noted_as_context', chars: text.length, spoken: false },
+    detail: {
+      channel: 'web',
+      outcome: asking ? 'answered_by_rep' : 'noted_as_context',
+      chars: text.length,
+      spoken: false,
+    },
   })
 
   enqueue('incorporate_unprompted', candidate.id, { messageId: claim.message.id })
+  // Contestar cuesta medio minuto de modelo. En un chat eso se tapa con
+  // «escribiendo…»; una petición HTTP colgada medio minuto desde un móvil se
+  // muere en el primer túnel, así que aquí la pantalla vuelve a buscarla.
+  if (asking) enqueue('answer_question', candidate.id, { messageId: claim.message.id })
 
-  return NextResponse.json({ ok: true, id: claim.message.id }, { status: 201 })
+  return NextResponse.json({ ok: true, id: claim.message.id, asking }, { status: 201 })
+}
+
+/**
+ * ¿Ya hay respuesta?
+ *
+ * La pantalla pregunta por su propio mensaje hasta que la hay. No espera
+ * eternamente: quien pregunte tiene que decidir cuándo rendirse, y la
+ * respuesta sigue guardada en la fila para cuando vuelva.
+ */
+export async function GET(request: Request) {
+  if (!isUserZero()) {
+    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
+  }
+
+  const id = new URL(request.url).searchParams.get('id')?.trim() ?? ''
+  const message = id.length > 0 ? getInboundMessage(id) : undefined
+  const candidate = getOrCreateCandidate()
+  if (!message || message.candidate_id !== candidate.id) {
+    return NextResponse.json({ error: 'That message is not here.' }, { status: 404 })
+  }
+
+  return NextResponse.json({ answer: message.answer, answeredAt: message.answered_at })
 }

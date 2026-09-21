@@ -398,6 +398,8 @@ function createDb(): DatabaseSync {
       about_id TEXT,
       detail TEXT,
       incorporated_at TEXT,
+      answer TEXT,
+      answered_at TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -486,6 +488,13 @@ function migrate(db: DatabaseSync): void {
     // una frase que dijo una sola vez — el mismo bug que dejó las evidencias
     // duplicadas en las preguntas.
     db.exec('ALTER TABLE inbound_messages ADD COLUMN incorporated_at TEXT;')
+  }
+  if (!has('inbound_messages', 'answer')) {
+    // Lo que el Rep le contestó, cuando lo que llegó era una pregunta.
+    // Guardado y no solo enviado: la pantalla lo pide después de escribir, y
+    // un consejo que se dio una vez tiene que poder releerse.
+    db.exec('ALTER TABLE inbound_messages ADD COLUMN answer TEXT;')
+    db.exec('ALTER TABLE inbound_messages ADD COLUMN answered_at TEXT;')
   }
   if (!has('opportunities', 'source_ref')) {
     db.exec('ALTER TABLE opportunities ADD COLUMN source_ref TEXT;')

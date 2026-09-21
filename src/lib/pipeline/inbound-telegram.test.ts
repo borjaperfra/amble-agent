@@ -438,9 +438,36 @@ describe('el idioma se elige', () => {
   })
 
   it('vuelve al castellano igual de rápido', async () => {
-    updates = [update(71, '¿alguna novedad?')]
+    updates = [update(71, 'Por cierto, he dejado las guardias.')]
 
     await inbound.pollTelegram(candidateId)
     assert.match(String((sent()[0]?.body as { text: string }).text), /Apuntado|parte de lo que sé/)
+  })
+})
+
+describe('una pregunta suya', () => {
+  it('se contesta en vez de archivarse', async () => {
+    // Lo que pasaba hasta hoy: le preguntabas y te devolvía «apuntado». Aquí
+    // no hay modelo detrás —el stub sólo sabe de Telegram— así que lo que se
+    // prueba es la rama: que va a contestar y que, cuando no puede, lo dice
+    // en vez de fingir que lo ha apuntado.
+    updates = [update(80, '¿qué me falta para un puesto más senior?')]
+
+    await inbound.pollTelegram(candidateId)
+
+    const row = inboundDb.findInboundMessage('telegram', '80')
+    assert.equal(row?.outcome, 'failed', 'quedó registrado que no se pudo contestar')
+    const text = String((sent().at(-1)?.body as { text: string }).text)
+    assert.doesNotMatch(text, /Apuntado/, 'a una pregunta no se le contesta «apuntado»')
+    assert.match(text, /no he podido contestarte/)
+  })
+
+  it('avisa de que está escribiendo mientras lo piensa', async () => {
+    updates = [update(81, '¿y para una Serie B?')]
+
+    await inbound.pollTelegram(candidateId)
+
+    // Medio minuto de silencio en un chat es una conversación muerta.
+    assert.ok(calls.some((call) => call.url.includes('/sendChatAction')))
   })
 })

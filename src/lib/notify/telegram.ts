@@ -92,6 +92,31 @@ export function fitMessage(text: string, limit = TELEGRAM_LIMIT): string {
  * `last_error`, and a bot token in a database column is a bot somebody else
  * can send messages as.
  */
+/**
+ * «Escribiendo…».
+ *
+ * Contestar una pregunta cuesta una llamada al modelo y medio minuto. Medio
+ * minuto de silencio en un chat es una conversación que se ha muerto; medio
+ * minuto viendo que el otro escribe es alguien pensando. Es la diferencia
+ * entre un bot y alguien, y cuesta una petición.
+ *
+ * Telegram lo apaga solo a los cinco segundos, así que hay que repetirlo
+ * mientras dure la espera. Y no se reintenta ni se lanza: si falla, lo único
+ * que se pierde son unos puntos suspensivos.
+ */
+export async function sendTyping(config: TelegramConfig, chatId: string): Promise<void> {
+  try {
+    await fetch(`${API}/bot${config.token}/sendChatAction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+      signal: AbortSignal.timeout(config.timeoutMs),
+    })
+  } catch {
+    // Unos puntos suspensivos que no salen no son un error.
+  }
+}
+
 export async function sendTelegramMessage(
   config: TelegramConfig,
   chatId: string,

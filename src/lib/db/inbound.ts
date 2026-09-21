@@ -46,6 +46,8 @@ export type InboundOutcome =
   | 'nothing_pending'
   /** Nothing was open, and what they wrote became part of the profile. */
   | 'noted_as_context'
+  /** Era una pregunta, y el Rep la contestó con lo que sabe de él. */
+  | 'answered_by_rep'
   /** A reply to something that had already been dealt with. */
   | 'already_settled'
   | 'ambiguous'
@@ -66,6 +68,9 @@ export interface InboundRow {
   detail: string | null
   /** When what they wrote was read into the graph, if it ever was. */
   incorporated_at: string | null
+  /** Lo que se le contestó, cuando lo que llegó era una pregunta. */
+  answer: string | null
+  answered_at: string | null
   created_at: string
 }
 
@@ -178,6 +183,20 @@ export function lastInboundExternalId(channel: InboundChannel): number | null {
  */
 export function markInboundIncorporated(id: string): void {
   getDb().prepare('UPDATE inbound_messages SET incorporated_at = ? WHERE id = ?').run(now(), id)
+}
+
+/**
+ * Lo contestado, guardado además de enviado.
+ *
+ * Por dos motivos. La pantalla escribe y se queda esperando, así que tiene
+ * que poder venir a buscarlo. Y un consejo que se dio una vez —«te falta un
+ * caso con números»— hay que poder releerlo en noviembre: un agente que
+ * aconseja y no se acuerda de lo que aconsejó es un oráculo, no un asesor.
+ */
+export function recordInboundAnswer(id: string, answer: string): void {
+  getDb()
+    .prepare('UPDATE inbound_messages SET answer = ?, answered_at = ? WHERE id = ?')
+    .run(answer, now(), id)
 }
 
 export function listInboundMessages(candidateId: string, limit = 50): InboundRow[] {

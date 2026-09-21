@@ -14,6 +14,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -102,6 +103,34 @@ describe('la puerta', () => {
 
   it('no guarda la contraseña en la cookie', () => {
     assert.ok(!gate.sessionToken('correcta').includes('correcta'))
+  })
+
+  it('aguanta diez intentos y corta el once', () => {
+    for (let i = 0; i < 10; i += 1) {
+      assert.equal(gate.tooManyAttempts('1.2.3.4'), false, `intento ${i + 1}`)
+      gate.recordFailedAttempt('1.2.3.4')
+    }
+    assert.equal(gate.tooManyAttempts('1.2.3.4'), true)
+    // Y no castiga a quien no ha fallado.
+    assert.equal(gate.tooManyAttempts('5.6.7.8'), false)
+  })
+
+  it('acertar limpia la cuenta: quien entra no estaba atacando', () => {
+    for (let i = 0; i < 10; i += 1) gate.recordFailedAttempt('9.9.9.9')
+    assert.equal(gate.tooManyAttempts('9.9.9.9'), true)
+
+    gate.clearAttempts('9.9.9.9')
+    assert.equal(gate.tooManyAttempts('9.9.9.9'), false)
+  })
+
+  it('la cookie no se puede calcular sin el fichero de la sal', () => {
+    // El token lleva una sal de esta instalación, así que probar contraseñas
+    // offline contra una cookie robada necesita primero el volumen.
+    assert.match(gate.sessionToken('correcta'), /^[a-f0-9]{64}$/)
+    assert.notEqual(
+      gate.sessionToken('correcta'),
+      createHash('sha256').update('amble:correcta').digest('hex'),
+    )
   })
 
   it('compara contraseñas de distinta longitud sin romperse', () => {
