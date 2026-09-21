@@ -1,7 +1,7 @@
 # Dónde nos quedamos — 21 septiembre 2026
 
 Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (172) en verde. Bórrame cuando esto esté cerrado.
+`next build` y `npm test` (254) en verde. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -1022,29 +1022,130 @@ que no se arregla borrando cookies.
    la cobertura de un tren, no el sistema, y el parte de excepciones todavía
    no ve los fallos que el reintento resuelve.
 
+## Asesor, negociación y el bucle del tono — 21 de septiembre, tarde
+
+### Lo que puede hacer el Rep ahora
+
+- **Contesta preguntas**, y cada cosa que dice cita algo del grafo. Lo que no
+  se puede trazar se descarta en vez de enseñarse, y se cuenta — objetivo cero,
+  y va al registro en cada respuesta. Si no queda nada en pie, dice que no
+  puede contestar sin inventárselo en vez de rellenar.
+- **Se acuerda de lo que os habéis dicho** (`advice`): qué aconsejó, sobre qué
+  hueco, y qué dijo él que iba a hacer. Se cierra solo cuando llega algo que
+  cubre el hueco, y queda escrito qué lo cerró.
+- **Le puedes pasar una oferta**, por enlace o pegada, y te dice qué pide y qué
+  puedes enseñar — separando lo que puedes cerrar de lo que no («eso no es
+  algo que puedas mejorar, es tiempo que no has vivido»).
+- **Aconseja con los datos de las ofertas leídas**: qué piden las que más
+  pagan y no puedes demostrar. Ese dato lo calculaba el match desde el
+  principio y no lo leía nadie.
+
+### El bucle del tono, que es lo siguiente que toca usar
+
+En `/listening`, debajo de cada respuesta. Marcas qué falla —seis motivos, que
+son botones porque un motivo escrito a mano no se puede contar— escribes cómo
+lo quieres, y lo ves reescrito **sin desplegar nada**.
+
+Funciona porque no vuelve a pensar la respuesta: los puntos ya están y ya
+están auditados, sólo se rehacen las palabras. Una llamada corta en vez de
+cuatro. Y el guardarraíl es que **un punto entra, un punto sale, en el mismo
+orden** — las citas viajan por posición, así que un punto de más sería una
+afirmación sin fuente colada por la puerta del estilo.
+
+«Y háblame siempre así» lo guarda en preferencias (`preferences.tone`).
+
+**Lo que hay que mirar al retomar:** la tabla `evaluations` (qué motivos se
+repiten, por tarea y versión) y los eventos `answer_reworded` (qué tonos probó
+y con cuál se quedó). Eso es lo que dice si el problema es el prompt o el
+grafo. Hasta hoy tenía cero filas.
+
+### La negociación, empezada
+
+`src/domains/negotiation/` tiene las cinco decisiones del 19 hechas tipos, y
+`pipeline/negotiation.ts` corre una conversación entera con las dos partes
+dentro del mismo proceso. Diez tests que la corren de verdad.
+
+Lo que no hace, y es lo que la hace barata: **no inventa preguntas**. Ya
+existían — cada evaluación produce `unknowns` con su lado, `ASK_CANDIDATE` y
+`ASK_COMPANY`, y llevaban ahí desde el primer día.
+
+La asimetría es deliberada: la empresa contesta sólo lo que su oferta dice y
+**para** cuando no lo sabe (decisión 2); el Rep contesta desde el grafo y lo
+que sale pasa por la escalera (decisión 1). Y no hay turno de tipo «acuerdo»,
+así que ningún agente puede declararlo (decisión 3).
+
+**Lo que falta para que sea real**, por orden:
+
+1. La voz del Rep: hoy `answerFromGraph` es un parámetro que el test rellena.
+   En producción necesita una tarea que conteste un hueco desde el grafo
+   devolviendo hechos citables — mismo patrón que el asesor, misma auditoría.
+2. Las señales propias de la empresa: hoy `theirs = {0, 0}`. Su lado tiene que
+   correr sus reglas sobre su presupuesto y sus condiciones, que es la otra
+   mitad de la decisión 3.
+3. Y después separar el despliegue. No antes: hasta tener 1 y 2 no se sabe qué
+   tiene que cruzar el cable.
+
+### Seguridad, hecha
+
+Un anuncio entraba al prompt a pelo, con `COMPANY` y `ROLE` del feed dentro de
+la cabecera — un salto de línea ahí era una línea nueva de prompt. Ahora va
+vallado con un identificador que cambia en cada llamada. Nueve tests.
+
+Y las guardas del enlace pegado, que es la única vez que este servidor pide a
+donde le digan: sólo https, sólo direcciones públicas **resueltas antes de
+pedir**, redirecciones seguidas a mano comprobando **cada salto** (rechazarlas
+sin más era inservible: casi todos los tablones redirigen), y topes de tamaño
+y tiempo. Ocho tests.
+
+Más: diez intentos por cuarto de hora en la entrada, y la cookie con una sal
+de este volumen en vez de un hash calculable offline.
+
+### Lo que la instrumentación dice hoy
+
+- **`/api/reliability`** da el ritmo de fallo también cuando es bueno. El
+  8,5% que salió al medirlo **no era la red**: eran respuestas truncadas de
+  `opportunity_match` (3 de 14) por un techo de 8.000 tokens. Subido a 20.000.
+  El 17% de antes era la cobertura de un tren.
+- **`npm run smoke`** abre todas las pantallas y endpoints. Habría cazado el
+  500 de `/feedback` que pasó tipos, lint, 197 tests y el build.
+- El prompt de match tiene techo: 60 evidencias, más del doble de las 28 que
+  el modelo llegó a citar. No era para ahorrar hoy — era para que no crezca.
+
+### Cerrado y no hay que volver a abrirlo
+
+- La librería **no pregunta quién es el candidato en ningún sitio**. La
+  identidad entra por la sesión y por el arranque. Comprobado contando.
+- `railway.json` migrado a `.railway/railway.ts`.
+
 ## Lo siguiente, cuando retomemos
 
-**Una sesión real de Borja, entera, sin preparar nada antes.** Todo lo medido
-hasta ahora lleva respuestas sintéticas que el modelo escribe en diez
-segundos: una persona tarda más en escribir y contesta otras cosas. Es lo
-único que dirá si las preguntas valen la pena.
+**Lo primero es mirar, no construir.** El bucle del tono lleva desde hoy en
+pie y hasta que no se use no hay nada que decidir. Al volver: `evaluations`,
+los eventos `answer_reworded`, y `/feedback`.
 
-Antes de esa sesión: borrar `.amble-data/`. El intent ya está limpio (arriba),
-pero la base sigue teniendo dentro las diez fixtures de Opportunity Zero.
+Después, por orden:
 
-El agujero de "no llega nada" está tapado a medias: Manfred entra sola, pero
-es una sola fuente, española, y con 17 ofertas vivas — de las que 13 se caen
-por el suelo de 120k. El embudo real para este candidato son cuatro ofertas,
-y ninguna es de marketing. Hace falta otra fuente antes de que la medición
-con ofertas reales diga nada.
+1. **Tono y contenido**, con esos datos delante. Borja dijo que hay mucho que
+   mejorar en las dos cosas, y esa es la conversación que sí se puede tener
+   con evidencia.
+2. **El onboarding que no se repite** (propiedad, escala, presupuesto). Lo más
+   grande de lo que queda: toca la entrevista, que es la parte que funciona.
+3. **La negociación**, por los tres pasos del § de arriba.
 
-Nadie la dispara sola todavía: el botón del laboratorio o la ruta. Un cron es
-lo siguiente obvio.
+**Lo suyo, cuando quiera:** el resto del Intent sigue siendo mío —remoto
+innegociable, Valencia, AI infra, Seed/Serie A— aunque el suelo ya es suyo
+(80.000 desde hoy). Dijo que las pruebas que hay dentro no le preocupan y que
+ya las cambiará: **Nomad Compute, las dos evidencias duplicadas y las
+fixtures** se quedan a propósito, no son un descuido.
 
-El copy de listening ya está cambiado: decía "Nothing is arriving yet", que
-dejó de ser verdad. Ahora dice de dónde vienen y que casi ninguna llegará. No
-lleva contador a propósito — "he mirado 1.650 ofertas por ti" es la métrica
-de vanidad que el spec prohíbe en §16.
+**Dos preguntas suyas sin contestar:** si «atribución» le sobra del
+vocabulario o es normal en growth, y dónde publica Tinybird — no tiene tablón
+en Greenhouse ni en Ashby. Anthropic y OpenAI sí, y ya están en
+`AMBLE_ATS_BOARDS`.
+
+**Lo que sigue sin comprobarse:** la app en una pantalla de móvil de verdad
+—nunca la he visto— y el camino de Telegram con un enlace pegado, que no puedo
+probar porque no puedo escribirle a su bot.
 
 ## Decidido en User Zero, no volver a abrirlo
 
@@ -1058,14 +1159,18 @@ de vanidad que el spec prohíbe en §16.
 
 ```bash
 cd C:\dev\amble
-npm test                      # 172 tests, sin red y sin base real
+npm test                      # 254 tests, sin red y sin base real
 npm run dev                   # http://localhost:3000
 npm run check:model           # comprueba el modelo en 2 llamadas cortas
 npm run measure -- <cv.pdf>   # sesión entera por API, cronometrada
 npm run measure:opportunities # las diez fixtures, con el dev levantado
 npm run reset:opportunities   # quita las fixtures, deja el grafo
 npm run push:db -- <url>      # lleva esta base al servidor
+npm run smoke -- <url>        # abre cada pantalla y cada endpoint
 ```
+
+En pie en **https://amble-agent-production.up.railway.app** — contraseña en el
+gestor de Borja, y si se pierde se cambia `AMBLE_PASSWORD` en Railway.
 
 Para traer ofertas de Manfred: el botón del laboratorio, o
 
