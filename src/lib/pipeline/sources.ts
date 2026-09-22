@@ -12,6 +12,7 @@ import {
   updateSourceStatus,
   type SourceRow,
 } from '../db/repo'
+import { githubHandle, readGitHub, type GitHubRead } from '../sources/github'
 import { runExtractClaimsTask } from '../model/tasks'
 import { docxToText } from './docx'
 
@@ -241,7 +242,10 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     uri: url,
     original_filename: null,
     mime_type: 'text/html',
-    stored_path: null,
+    // El fichero se escribía y no se apuntaba dónde, así que `readSourceContent`
+    // devolvía cadena vacía y la web acababa en «failed» con el texto ya en
+    // disco. Una fuente que no se lee es peor que una que no se acepta.
+    stored_path: `${id}.txt`,
     char_count: content.length,
     status: 'extracted',
     status_detail: null,
@@ -251,32 +255,99 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
   return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
 }
 
-export function createGitHubSource(candidateId: string, url: string): SourceCreated {
+/**
+ * GitHub, now actually read.
+ *
+ * It used to store the URL and say so, which was honest and useless. What it
+ * does now is pull the profile, the repositories, their languages, their
+ * READMEs and what sits at the root of each one, and write all of it into the
+ * same kind of text document a CV becomes — so the claim extractor downstream
+ * treats code exactly like any other source, and every claim that comes out
+ * of it points at a repository anyone can open.
+ *
+ * When GitHub will not answer, the URL is still stored and the reason is
+ * stored with it. That is the old behaviour, kept for the bad day only.
+ */
+export async function createGitHubSource(
+  candidateId: string,
+  url: string,
+): Promise<SourceCreated> {
   const id = newId('src')
-  const handle = url
-    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
-    .replace(/\/.*$/, '')
-    .trim()
-  const name = handle || url
+  const handle = githubHandle(url)
+  if (!handle) {
+    const source = insertSource({
+      id,
+      candidate_id: candidateId,
+      type: 'github',
+      name: url,
+      uri: url,
+      original_filename: null,
+      mime_type: null,
+      stored_path: null,
+      char_count: 0,
+      status: 'registered',
+      status_detail: "That doesn't look like a GitHub profile, so there was nothing to read.",
+    })
+    return {
+      id: source.id,
+      name: source.name,
+      type: source.type,
+      status: source.status,
+      detail: "That doesn't look like a GitHub profile. I stored it, but I couldn't read it.",
+    }
+  }
+
+  let read: GitHubRead
+  try {
+    read = await readGitHub(handle)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown reason'
+    const source = insertSource({
+      id,
+      candidate_id: candidateId,
+      type: 'github',
+      name: handle,
+      uri: `https://github.com/${handle}`,
+      original_filename: null,
+      mime_type: null,
+      stored_path: null,
+      char_count: 0,
+      status: 'registered',
+      status_detail: `I couldn't read this GitHub profile (${reason}). The URL is stored only.`,
+    })
+    return {
+      id: source.id,
+      name: source.name,
+      type: source.type,
+      status: source.status,
+      detail: "I couldn't read this GitHub profile just now. The URL is stored, and I can try again.",
+    }
+  }
+
   const source = insertSource({
     id,
     candidate_id: candidateId,
     type: 'github',
-    name,
-    uri: `https://github.com/${name}`,
+    name: handle,
+    uri: `https://github.com/${handle}`,
     original_filename: null,
-    mime_type: null,
-    stored_path: null,
-    char_count: 0,
-    status: 'registered',
-    status_detail: "GitHub reading isn't supported in this build yet. The profile is stored, not read.",
+    mime_type: 'text/plain',
+    stored_path: `${id}.txt`,
+    char_count: read.text.length,
+    status: 'extracted',
+    status_detail:
+      read.unread > 0
+        ? `${read.readInFull} of ${read.repos.length} repositories read in full; ${read.unread} could not be read.`
+        : null,
   })
+  fs.mkdirSync(path.join(DATA_DIRECTORY, 'uploads'), { recursive: true })
+  fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.txt`), read.text)
   return {
     id: source.id,
     name: source.name,
     type: source.type,
     status: source.status,
-    detail: "GitHub reading isn't supported in this build yet. The profile is stored, not read.",
+    detail: null,
   }
 }
 

@@ -246,14 +246,14 @@ export function getMapViewModel(candidateId: string): MapViewModel {
       label: 'GitHub',
       count: countOf('github'),
       adds: 'Lo que construyes de verdad: código, arquitectura y cómo lo explicas.',
-      soon: true,
+      href: '/onboarding',
     },
     {
       kind: 'website',
       label: 'Web o portfolio',
       count: countOf('website'),
       adds: 'Cómo te presentas cuando eliges tú el formato.',
-      soon: true,
+      href: '/onboarding',
     },
   ]
 

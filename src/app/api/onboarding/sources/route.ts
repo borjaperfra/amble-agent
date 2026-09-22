@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       if (body.kind === 'linkedin') {
         result = createLinkedInSource(candidate.id, url)
       } else if (body.kind === 'github') {
-        result = createGitHubSource(candidate.id, url)
+        result = await createGitHubSource(candidate.id, url)
       } else if (body.kind === 'website') {
         result = await createWebsiteSource(candidate.id, url)
       } else {

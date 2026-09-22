@@ -252,7 +252,8 @@ export default function UserZeroOnboardingFlow() {
         </div>
 
         <p className={styles.notice}>
-          A readable CV is what powers this first real test. LinkedIn and websites help less.
+          A CV I can read is the fastest start. GitHub I read properly now — the repositories,
+          what they are written in and what their READMEs say. LinkedIn I only keep the link to.
         </p>
 
         {error && (
