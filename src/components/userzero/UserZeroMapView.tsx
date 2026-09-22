@@ -9,6 +9,7 @@ import type { Capability } from '@/domains/candidate/types'
 import type { MapViewModel } from '@/lib/view'
 import { EvaluationControl } from './EvaluationControl'
 import styles from '@/app/me/me.module.css'
+import ProfileState from './ProfileState'
 
 interface MapViewProps {
   vm: MapViewModel
@@ -70,6 +71,16 @@ export default function UserZeroMapView({ vm }: MapViewProps) {
           <p className={styles.updated}>{vm.updated}</p>
           {rests && <p className={styles.rests}>{rests}</p>}
         </section>
+
+        {/* De dónde te conozco y qué me falta, arriba y no al final.
+            Estaba todo calculado desde el principio pero debajo de dieciséis
+            capacidades, que es como no estar: «no hay botones que te lleven a
+            ello rápido ni una progresión en barra». */}
+        <ProfileState
+          completeness={vm.completeness}
+          sources={vm.completeness.sources}
+          openGaps={vm.gaps.length + vm.gapsHidden}
+        />
 
         <section className={styles.section} aria-labelledby="demonstrates">
           <p id="demonstrates" className={`kicker ${styles.sectionKicker}`}>
@@ -174,22 +185,16 @@ export default function UserZeroMapView({ vm }: MapViewProps) {
             <p id="stands" className={`kicker ${styles.sectionKicker}`}>
               What would sharpen this
             </p>
-            {vm.completeness.steps.length > 0 ? (
-              <div className={styles.steps}>
-                {vm.completeness.steps.map((step) => (
-                  <article key={step.id} className={styles.step}>
-                    <h3 className={styles.stepLabel}>{step.label}</h3>
-                    <p className={styles.stepDetail}>{step.detail}</p>
-                    <Link href={step.href} className={`text-btn ${styles.stepAction}`}>
-                      {step.id === 'sources' ? 'Add a source →' : 'Pick this up →'}
-                    </Link>
-                  </article>
-                ))}
-              </div>
-            ) : (
+            {/* Los pasos ya están arriba. Aquí sólo queda lo que decir
+                cuando no hay ninguno, que es una frase que merece quedarse. */}
+            {vm.completeness.steps.length === 0 ? (
               <p className={styles.stepsNone}>
                 Nothing obvious. Everything I could ask about, I&apos;ve asked; everything you gave
                 me, I&apos;ve read. This is as sharp as it gets without new work to read.
+              </p>
+            ) : (
+              <p className={styles.stepsNone}>
+                What would sharpen this is at the top of this page, where you can act on it.
               </p>
             )}
           </section>

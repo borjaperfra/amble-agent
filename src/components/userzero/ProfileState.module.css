@@ -1,0 +1,135 @@
+.box {
+  max-width: var(--map-max);
+  margin: 0 auto 48px;
+  padding: 20px;
+  background: var(--paper-light);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+/* Las fuentes, en fila y con desplazamiento si no caben: en un móvil son
+   cuatro tarjetas y apilarlas empujaría la barra fuera de la pantalla, que es
+   justo lo que él se quejaba de tener que buscar. */
+.sources {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 20px;
+}
+
+.sources::-webkit-scrollbar {
+  display: none;
+}
+
+.source {
+  flex: 1 0 auto;
+  min-width: 132px;
+  padding: 12px;
+  background: var(--paper);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.sourceOn {
+  border-color: var(--moss-soft);
+  background: var(--moss-wash);
+}
+
+.sourceName {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+}
+
+.sourceCount {
+  color: var(--ink-tertiary);
+}
+
+.sourceNote {
+  margin: 4px 0 0;
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.sourceLink {
+  color: var(--moss-dark);
+  text-decoration: none;
+}
+
+.sourceAdds {
+  margin: 6px 0 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.4;
+  color: var(--ink-tertiary);
+}
+
+.progress {
+  margin-bottom: 16px;
+}
+
+.bar {
+  height: 6px;
+  background: var(--paper-dark);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--moss);
+  border-radius: 3px;
+  transition: width var(--motion-slow) var(--ease-standard);
+}
+
+.progressNote {
+  margin: 8px 0 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.steps {
+  display: grid;
+  gap: 8px;
+}
+
+.step {
+  display: block;
+  /* 44px de sobra: esto se pulsa con el pulgar. */
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: border-color var(--motion-fast) ease;
+}
+
+.step:hover {
+  border-color: var(--moss);
+}
+
+.stepLabel {
+  display: block;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+}
+
+.stepDetail {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-body-sm);
+  line-height: 1.45;
+  color: var(--ink-tertiary);
+}
+
+@media (min-width: 641px) {
+  .box {
+    padding: 24px;
+  }
+
+  .steps {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}

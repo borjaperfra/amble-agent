@@ -79,6 +79,16 @@ export interface NextStep {
   href: string
 }
 
+/** Una fuente posible, esté dada o no. */
+export interface SourceState {
+  kind: string
+  label: string
+  count: number
+  adds: string
+  soon?: boolean
+  href?: string
+}
+
 export interface MapCompleteness {
   /** Capabilities several consistent pieces of evidence hold up. */
   solid: number
@@ -89,6 +99,14 @@ export interface MapCompleteness {
   sourcesRead: number
   missingSources: string[]
   steps: NextStep[]
+  /**
+   * De dónde te conozco, esté dado o no.
+   *
+   * Con las que todavía no se pueden leer dentro y marcadas como tales: una
+   * casilla apagada que no dice por qué se lee como un fallo, y decir «esto
+   * aún no lo leo» es más honesto que no enseñarlo.
+   */
+  sources: SourceState[]
 }
 
 export interface MapViewModel {
@@ -205,6 +223,40 @@ export function getMapViewModel(candidateId: string): MapViewModel {
     .filter((kind) => !sources.some((source) => source.type === kind && source.status !== 'failed'))
     .map((kind) => (kind === 'github' ? 'GitHub' : kind === 'linkedin' ? 'LinkedIn' : 'a website'))
 
+  const countOf = (kind: string) =>
+    sources.filter((source) => source.type === kind && source.status !== 'failed').length
+
+  const sourceStates: SourceState[] = [
+    {
+      kind: 'cv',
+      label: 'CV',
+      count: countOf('cv'),
+      adds: 'Lo que has hecho, en tus palabras.',
+      href: '/onboarding',
+    },
+    {
+      kind: 'linkedin',
+      label: 'LinkedIn',
+      count: countOf('linkedin'),
+      adds: 'Fechas, cargos y quién te avala. Corrobora o contradice el CV.',
+      soon: true,
+    },
+    {
+      kind: 'github',
+      label: 'GitHub',
+      count: countOf('github'),
+      adds: 'Lo que construyes de verdad: código, arquitectura y cómo lo explicas.',
+      soon: true,
+    },
+    {
+      kind: 'website',
+      label: 'Web o portfolio',
+      count: countOf('website'),
+      adds: 'Cómo te presentas cuando eliges tú el formato.',
+      soon: true,
+    },
+  ]
+
   // Ranked by what it would actually change, and never more than three: a
   // list of everything that could be better is a list nobody acts on.
   const steps: NextStep[] = []
@@ -258,6 +310,7 @@ export function getMapViewModel(candidateId: string): MapViewModel {
       sourcesRead: readSources.length,
       missingSources,
       steps: steps.slice(0, 3),
+      sources: sourceStates,
     },
     counts: {
       claims: listClaims(candidateId).length,
