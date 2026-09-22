@@ -111,6 +111,34 @@ button {
   border-radius: var(--radius-sm);
 }
 
+/* ---------- El móvil, que es donde se usa ---------- */
+
+/*
+ * Una URL de una oferta o un correo largo no tienen dónde partirse, así que
+ * empujan la columna y aparece un scroll horizontal en toda la página. En un
+ * portátil sobra sitio y no se ve; en 375 px se ve siempre.
+ */
+body {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Safari en iOS hace zoom sobre cualquier campo cuyo texto mida menos de
+ * 16 px, y no lo deshace al salir. Escribir el sueldo en «Listening for»
+ * dejaba la pantalla torcida el resto de la sesión. No es un detalle de
+ * estilo: es la diferencia entre que se pueda usar desde el móvil o no.
+ *
+ * Y de paso, 44 px de alto, que es lo que ocupa un pulgar.
+ */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
 /* ---------- Shared primitives ---------- */
 
 .btn {

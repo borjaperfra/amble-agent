@@ -147,12 +147,6 @@ export default function UserZeroIntentFlow({ initial = null }: { initial?: Initi
   async function confirm() {
     setSaved(false)
     try {
-      window.sessionStorage.setItem('amble-listening-activated', '1')
-    } catch {
-      // Session storage unavailable; the Listening screen still works.
-    }
-
-    try {
       await fetch('/api/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -180,7 +174,11 @@ export default function UserZeroIntentFlow({ initial = null }: { initial?: Initi
       setSaved(true)
       return
     }
-    router.push('/listening')
+    // `?arrived=1` en vez de una marca en sessionStorage: así el servidor ya
+    // sabe qué pantalla mandar y no hay un parpadeo entre una y otra. La
+    // pantalla se quita el parámetro de la URL en cuanto termina, para que
+    // recargar no repita la ceremonia.
+    router.push('/listening?arrived=1')
   }
 
   function updateValue(groupIndex: number, valueIndex: number, value: string) {

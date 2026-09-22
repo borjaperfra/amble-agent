@@ -13,8 +13,12 @@ import UserZeroListeningFlow from '@/components/userzero/UserZeroListeningFlow'
 
 export const dynamic = 'force-dynamic'
 
-export default function ListeningPage() {
+export default async function ListeningPage({ searchParams }: PageProps<'/listening'>) {
   if (!isUserZero()) return <FixtureListeningFlow />
+  // La ceremonia de «empezar a escuchar» se pide por la URL. Leerla aquí es
+  // lo que evita el parpadeo: el servidor manda ya la pantalla que toca en
+  // vez de mandar siempre la ceremonia y corregirla al hidratar.
+  const justArrived = (await searchParams).arrived === '1'
   // Quién ha entrado. Es la única capa que debería preguntarlo: todo lo que
   // hay debajo lo recibe.
   const candidateId = getOrCreateCandidate().id
@@ -28,6 +32,7 @@ export default function ListeningPage() {
   return (
     <UserZeroListeningFlow
       vm={vm}
+      justArrived={justArrived}
       interruption={getPendingInterruption(candidateId)}
       // Sólo lo que es suyo. Una cola atascada o un tablón que no responde
       // es fontanería mía, y narrarle la maquinaria en su pantalla es lo

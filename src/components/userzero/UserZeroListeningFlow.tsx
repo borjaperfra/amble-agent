@@ -187,6 +187,7 @@ export default function UserZeroListeningFlow({
   exceptions = [],
   threads = [],
   inPlay = { inPlay: [], held: [] },
+  justArrived = false,
 }: {
   vm: ListeningVm
   interruption: InterruptionView | null
@@ -197,13 +198,22 @@ export default function UserZeroListeningFlow({
   threads?: OpenThread[]
   /** Lo que él puso en marcha, y lo que está parado esperando algo. */
   inPlay?: InPlayView
+  /**
+   * Acaba de darle a empezar a escuchar, y sólo entonces.
+   *
+   * Viene de `?arrived=1` en la URL en vez de de una marca en el navegador,
+   * porque es la única forma de que el servidor mande de primeras la pantalla
+   * correcta. Con la marca, todo el mundo recibía la ceremonia y la cambiaba
+   * al hidratar.
+   */
+  justArrived?: boolean
 }) {
   // Something is already waiting, so there is nothing to arrive at: skip
   // straight to it. Sitting through "your Rep is listening" when your Rep
   // has already found something is the wrong screen, and it is also the one
   // someone opening a notification would land on.
   const [phase, setPhase] = useState<Phase>(
-    initialInterruption || initialQuestion ? 'home' : 'arriving',
+    justArrived && !initialInterruption && !initialQuestion ? 'arriving' : 'home',
   )
   const [interruption, setInterruption] = useState(initialInterruption)
   const [question, setQuestion] = useState(initialQuestion)
@@ -247,18 +257,24 @@ export default function UserZeroListeningFlow({
     }
   }
 
+  // Antes esto se decidía al hidratar: la pantalla empezaba siempre en
+  // «arriving», leía sessionStorage y saltaba a «home» con un timeout de cero.
+  // En un portátil no se nota; en un móvil lento, la primera cosa que se
+  // pinta es la ceremonia y desaparece a mitad de leerla. Ahora el servidor
+  // manda directamente la pantalla que toca y aquí sólo queda el reloj.
   useEffect(() => {
-    let activated = false
-    try {
-      activated = window.sessionStorage.getItem('amble-listening-activated') === '1'
-      window.sessionStorage.removeItem('amble-listening-activated')
-    } catch {
-      activated = false
-    }
-    const delay = activated ? activationMs : 0
-    const id = window.setTimeout(() => setPhase('home'), delay)
+    if (phase !== 'arriving') return
+    const id = window.setTimeout(() => {
+      setPhase('home')
+      // Fuera el parámetro, para que un refresco no repita la ceremonia.
+      try {
+        window.history.replaceState(null, '', '/listening')
+      } catch {
+        // Sin historial no pasa nada: el parámetro sólo decide una animación.
+      }
+    }, activationMs)
     return () => window.clearTimeout(id)
-  }, [])
+  }, [phase])
 
   // Nothing can arrive as the answer to a request — the reading happens on
   // the queue — so the screen asks every so often and goes on saying
