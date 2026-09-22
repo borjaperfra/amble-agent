@@ -1,8 +1,12 @@
 # Dónde nos quedamos — 22 septiembre 2026
 
-Todo commiteado y empujado, hasta `59f2351`. Árbol limpio; `tsc`, `eslint`
-(un warning viejo), `next build` y `npm test` (292) en verde. Desplegado y
-comprobado en producción. Bórrame cuando esto esté cerrado.
+Todo commiteado y empujado. Árbol limpio; `tsc`, `eslint` (un warning viejo),
+`next build` y `npm test` (292) en verde. Bórrame cuando esto esté cerrado.
+
+**Ojo:** lo de la voz y GitHub está desplegado y comprobado en producción. El
+último commit —el del móvil— está empujado pero **sin comprobar en Railway**:
+al retomar, `AMBLE_PASSWORD=... npm run smoke -- <url>` y mirar que
+`/listening` mande la pantalla normal y `/listening?arrived=1` la ceremonia.
 
 ## Si solo lees una cosa
 
@@ -142,9 +146,29 @@ ya bajado. Nunca se ha leído ninguna web. Una línea.
 
 ### Lo que queda de su lista
 
-1. **Móvil** (su punto 1). Sigue sin comprobarse en una pantalla de verdad —
-   nunca la he visto. Hace falta que mande dos o tres capturas de lo que le
-   chirría, o no es una revisión, es adivinar.
+1. **Móvil** (su punto 1). **Media hecho, sin comprobar en pantalla.** Van
+   las tres cosas que se pueden ver leyendo el código, y las tres estropean la
+   sensación entera y no una pantalla:
+
+   - **El zoom de Safari en iOS**: cualquier campo de menos de 16 px hace zoom
+     al tocarlo y no lo deshace. Eran 14 px los de «Listening for» —donde
+     escribe el sueldo— y los de añadir fuentes en el onboarding. Ahora 16 px
+     y 44 px de alto en cualquier pantalla táctil.
+   - **Las URLs que empujan la página**: sin sitio donde partirse ensanchan la
+     columna y sale scroll horizontal en 375 px. `overflow-wrap: anywhere` en
+     el body. Que `InPlay` y el panel ya llevaran `word-break` a mano dice que
+     ya había pasado.
+   - **El parpadeo de la ceremonia.** Lo conté mal en su día: no eran 2,6 s
+     cada vez que entra, el reloj sólo corría al venir de activar. Lo que sí
+     pasaba siempre es que el servidor mandaba la pantalla de «Estoy
+     escuchando» y el navegador la cambiaba al hidratar con un timeout de
+     cero. La marca vivía en `sessionStorage`, que el servidor no lee. Ahora
+     se pide por la URL (`?arrived=1`), que sí lee, y la pantalla se quita el
+     parámetro al terminar.
+
+   **Lo que falta:** verlo en una pantalla de verdad. Nunca la he visto. Hace
+   falta que mande dos o tres capturas de lo que le chirría, o no es una
+   revisión, es adivinar.
 2. **El percentil** (su punto 7), **bloqueado en una decisión suya**. Pidió un
    percentil de talento y su pitch de lanzamiento lo menciona, pero el
    documento de voz dice que AMBLE no te dice lo bueno que eres y prohíbe el
@@ -161,8 +185,8 @@ ya bajado. Nunca se ha leído ninguna web. Una línea.
   arreglar: lo más probable es pasar a la API HTTP de Resend en vez de SMTP.
 - **La mezcla de castellano e inglés** entre pantallas, que se nota al pasar
   de una a otra.
-- **La animación de 2,6 s a pantalla completa** cada vez que se entra en
-  `/listening`. Es exactamente lo contrario de «smooth».
+- ~~La animación de `/listening`~~ — hecha, y estaba mal contada. Ver el
+  punto 1 de arriba.
 
 ## Opportunity Zero — entero, y ya interrumpe
 
