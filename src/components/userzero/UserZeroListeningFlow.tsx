@@ -13,6 +13,8 @@ import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from '@/lib/copy'
 import TellYourRep from './TellYourRep'
 import Exceptions from './Exceptions'
 import OpenThreads, { type OpenThread } from './OpenThreads'
+import InPlay from './InPlay'
+import type { InPlayView } from '@/lib/in-play'
 import type { Exception } from '@/lib/pipeline/exceptions'
 
 interface ListeningVm {
@@ -184,6 +186,7 @@ export default function UserZeroListeningFlow({
   question: initialQuestion,
   exceptions = [],
   threads = [],
+  inPlay = { inPlay: [], held: [] },
 }: {
   vm: ListeningVm
   interruption: InterruptionView | null
@@ -192,6 +195,8 @@ export default function UserZeroListeningFlow({
   exceptions?: Exception[]
   /** Lo que sigue en pie entre los dos: consejos y compromisos abiertos. */
   threads?: OpenThread[]
+  /** Lo que él puso en marcha, y lo que está parado esperando algo. */
+  inPlay?: InPlayView
 }) {
   // Something is already waiting, so there is nothing to arrive at: skip
   // straight to it. Sitting through "your Rep is listening" when your Rep
@@ -530,6 +535,10 @@ export default function UserZeroListeningFlow({
         {/* Después de la caja, no antes: lo que cierra un hilo es contarle
             algo que lo cubra, así que primero está dónde contarlo. */}
         <OpenThreads threads={threads} language={language} />
+
+        {/* Antes del resumen del perfil: lo que está pasando ahora pesa más
+            que lo que el Rep sabe de él, que no cambia de un día para otro. */}
+        <InPlay view={inPlay} language={language} />
 
         <div className={styles.repSummary}>
           <p className={styles.repLabel}>{words.repLabel}</p>

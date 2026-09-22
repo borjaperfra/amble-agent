@@ -5,6 +5,7 @@ import { openQuestionFor } from '@/lib/pipeline/opportunity-questions'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { listExceptions } from '@/lib/pipeline/exceptions'
 import { listOpenAdvice } from '@/lib/db/advice'
+import { inPlayView } from '@/lib/in-play'
 import { readPreferences } from '@/lib/pipeline/preferences'
 import { getOpportunity } from '@/lib/db/opportunities'
 import FixtureListeningFlow from '@/components/fixture/FixtureListeningFlow'
@@ -31,6 +32,7 @@ export default function ListeningPage() {
       exceptions={listExceptions(candidateId, readPreferences(candidateId).language === 'en' ? 'en' : 'es')}
       // Copiadas a objetos normales: `node:sqlite` devuelve las filas sin
       // prototipo y React se niega a pasarlas al cliente.
+      inPlay={JSON.parse(JSON.stringify(inPlayView(candidateId)))}
       threads={listOpenAdvice(candidateId, 8).map((row) => ({
         id: row.id,
         side: row.side,

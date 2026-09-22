@@ -1,0 +1,93 @@
+.box {
+  max-width: var(--conversation-max);
+  margin: 0 auto 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.item {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--moss-wash);
+  border-radius: var(--radius-md);
+}
+
+.role {
+  margin: 0;
+  font-size: var(--text-body-lg);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.company {
+  color: var(--ink-secondary);
+  font-weight: 400;
+}
+
+.since {
+  margin: 4px 0 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.status {
+  margin: 12px 0 0;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  max-width: 52ch;
+}
+
+.link {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 12px 0;
+  font-size: var(--text-body-sm);
+  color: var(--moss-dark);
+  word-break: break-all;
+}
+
+.held {
+  margin-top: 20px;
+}
+
+.heldLead {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+
+.toggle {
+  padding: 12px 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.heldList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.heldItem {
+  padding: 12px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.heldRole {
+  margin: 0;
+  font-size: var(--text-body-sm);
+}
+
+.heldWhy {
+  margin: 4px 0 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--ink-tertiary);
+}
+
+.heldNote {
+  margin: 12px 0 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
