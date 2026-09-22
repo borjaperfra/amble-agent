@@ -12,18 +12,18 @@ export interface OpenThread {
 
 const COPY = {
   es: {
-    kicker: 'Queda pendiente',
+    kicker: 'Sin cerrar',
     rep: 'Te dije',
     candidate: 'Dijiste que',
-    drop: 'Ya no',
-    lead: 'Se cierra solo cuando me cuentas algo que lo cubre.',
+    drop: 'Ya no aplica',
+    lead: 'Consejos que te di y cosas que dijiste que ibas a hacer. No hay que marcar nada: se cierran solos cuando me cuentas algo que los cubre.',
   },
   en: {
     kicker: 'Still open',
     rep: 'I said',
     candidate: 'You said you would',
-    drop: 'Not any more',
-    lead: 'It closes itself when you tell me something that covers it.',
+    drop: 'No longer applies',
+    lead: 'Advice I gave you and things you said you would do. Nothing to tick: they close themselves when you tell me something that covers them.',
   },
 } as const
 

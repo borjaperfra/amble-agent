@@ -21,6 +21,8 @@
  * está completando frases.
  */
 
+import { stripIds } from '../ids'
+
 /** De dónde puede colgar una afirmación sobre él. */
 export interface AdvisorGrounds {
   evidenceIds: readonly string[]
@@ -59,38 +61,10 @@ export interface AdvisorAudit {
 /**
  * Los ids son fontanería, no lenguaje.
  *
- * El modelo los cuela en la prosa —«tus métricas son autodeclaradas
- * (unc_60a5d2…)»— porque le hemos pedido que cite, y entonces el candidato
- * lee un identificador interno en un consejo sobre su carrera. Fuera del
- * texto; la trazabilidad vive en los campos, que es donde se puede comprobar.
- *
- * Los prefijos están comprobados contra la base y contra las llamadas a
- * `newId()`, no supuestos: la primera versión de esto buscaba `unc_` y se
- * dejaba `unk_`, que es el que usan los ids de huecos dentro de un análisis.
- * Un filtro que se deja la mitad es peor que ninguno, porque parece que
- * funciona.
+ * Vive en `domains/ids` porque no es un problema del asesor: el Mapa tenía
+ * exactamente lo mismo dentro y nadie lo había mirado en cinco meses.
  */
-const ID_PREFIXES =
-  'unc|unk|ev|opp|clm|int|intent|intn|cap|req|hc|src|turn|dec|rub|asmt|oq|adv'
-
-const ID = new RegExp(`\\b(?:${ID_PREFIXES})_[A-Za-z0-9][A-Za-z0-9_]*\\b`, 'g')
-
-/** Uno o varios entre paréntesis o corchetes, que es como los escribe. */
-const BRACKETED = new RegExp(
-  `\\s*[([]\\s*(?:${ID_PREFIXES})_[A-Za-z0-9][A-Za-z0-9_]*` +
-    `(?:\\s*[,;]\\s*(?:${ID_PREFIXES})_[A-Za-z0-9][A-Za-z0-9_]*)*\\s*[)\\]]`,
-  'g',
-)
-
-export function stripIds(text: string): string {
-  return text
-    .replace(BRACKETED, '')
-    .replace(ID, '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\s+([.,;:!?])/g, '$1')
-    .replace(/\(\s*\)|\[\s*\]/g, '')
-    .trim()
-}
+export { stripIds } from '../ids'
 
 /**
  * Lo que se entiende y lo que no.

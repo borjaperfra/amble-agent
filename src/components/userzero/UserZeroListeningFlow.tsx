@@ -540,7 +540,15 @@ export default function UserZeroListeningFlow({
           </Link>
         </div>
 
-        {!interruption && !answered && !question && !thanked && (
+        {/* Un conmutador para ver cómo queda la pantalla de vuelta sin
+            esperar a que pase algo. Es una herramienta de desarrollo, y en
+            producción lo único que hace es que alguien lea «ver estado de
+            vuelta» en su propia pantalla y no sepa qué es. */}
+        {process.env.NODE_ENV !== 'production' &&
+          !interruption &&
+          !answered &&
+          !question &&
+          !thanked && (
           <div className={styles.fixtureToggle}>
             <button
               type="button"

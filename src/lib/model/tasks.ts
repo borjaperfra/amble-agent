@@ -799,6 +799,8 @@ export function runReassessAfterAnswerTask(params: {
 
 Your job:
 1. Reassess ONLY the listed capabilities using ALL their evidence (old and new). Same rules as initial assessment: every capability must link evidence IDs; never inflate ownership; company facts are not personal evidence.
+1b. "reason" is a STANDING description of what this capability rests on, written for the candidate to read on their own profile. It is NOT a note about this reassessment. Never begin it with "Unchanged", "No new evidence", "This message" or anything else that only makes sense next to the message that triggered it: on their profile there is no message, and it reads as if their career were a changelog. If nothing changed, restate the same standing reason.
+1c. Never write an evidence id, or any other internal id, inside "reason". The ids go in evidenceIds. A person reading "sits inside documented GTM roles (ev_fc5e68e749254b87)" is being shown our filing system.
 2. For each listed open uncertainty, decide its new status: RESOLVED (the answer materially settles it), OPEN (still unknown), or ACCEPTED_UNKNOWN (it will not be resolvable and is not worth pursuing). Only reference uncertainty IDs you were given.
 3. Optionally add up to 3 genuinely important new uncertainties discovered from the answer. Use EXACTLY these field names for each: "description" (string), "materiality" (HIGH|MEDIUM|LOW), "capabilitySlug" (string or null).
 Respond ONLY with JSON: {"assessments": [...], "uncertaintyUpdates": [...], "newUncertainties": [...]}.`
@@ -828,7 +830,11 @@ ${JSON.stringify(params.openUncertainties, null, 1)}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'reassess_after_answer',
-    version: 'v1',
+    // v2: el motivo pasa a ser una descripción de lo que sostiene la
+    // capacidad, y no una nota sobre esta reevaluación. Lo de antes acababa
+    // en su perfil: «Unchanged. No new evidence from this response…», que es
+    // su carrera contada como un registro de cambios.
+    version: 'v2',
     system,
     user,
     schema: reassessOutputSchema,
