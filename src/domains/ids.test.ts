@@ -15,7 +15,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { stripIds } from './ids'
+import { standingDescription, stripIds } from './ids'
 
 /** Tal y como estaba en su Mapa, en producción, el 22 de septiembre. */
 const REAL =
@@ -54,5 +54,37 @@ describe('lo que lee una persona sobre sí misma', () => {
     for (const id of ['ev_abc123', 'unc_abc123', 'unk_team', 'opp_abc123', 'clm_abc123']) {
       assert.doesNotMatch(stripIds(`Algo ${id} más`), /_/, id)
     }
+  })
+})
+
+describe('el motivo, sin la nota de la reevaluación', () => {
+  // Tal y como estaba en su Mapa el 22 de septiembre. Su perfil contado como
+  // un registro de cambios: en la pantalla no hay ningún mensaje delante.
+  const REAL_DELTA =
+    'Unchanged. The message was not an account of work — the candidate shared a ' +
+    'Cloudflare job link and asked what was needed to apply — so it added no ' +
+    'job-relevant evidence. Basis remains: founding and running Desastre Estudio ' +
+    'with strategic direction (ev_5ae44c8f6ee94bbb).'
+
+  it('se queda con lo que describe y tira lo que era una nota', () => {
+    const clean = standingDescription(REAL_DELTA)
+
+    assert.ok(clean.startsWith('Founding and running Desastre Estudio'), clean.slice(0, 60))
+    assert.doesNotMatch(clean, /Unchanged|Cloudflare|this message/i)
+    assert.doesNotMatch(clean, /ev_/)
+  })
+
+  it('y si no hay parte que describa, quita todas las notas de delante', () => {
+    // Encadenaba varias. Quitar sólo la primera deja la segunda, que es
+    // exactamente igual de ilegible.
+    assert.equal(
+      standingDescription('Unchanged. No new evidence. Ran a developer community.'),
+      'Ran a developer community.',
+    )
+  })
+
+  it('no toca un motivo que ya estaba bien escrito', () => {
+    const good = 'Ran a developer community of 120,000 people for three years.'
+    assert.equal(standingDescription(good), good)
   })
 })

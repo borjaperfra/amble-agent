@@ -18,7 +18,7 @@ import {
 } from './db/repo'
 import { preferencesAsLines, readPreferences } from './pipeline/preferences'
 import type { EvidenceStrength } from '@/domains/candidate/types'
-import { stripIds } from '@/domains/ids'
+import { standingDescription, stripIds } from '@/domains/ids'
 
 const ASSESSMENT_TO_STRENGTH: Record<string, EvidenceStrength> = {
   STRONG_EVIDENCE: 'strong',
@@ -158,8 +158,9 @@ export function getMapViewModel(candidateId: string): MapViewModel {
       strength: ASSESSMENT_TO_STRENGTH[capability.assessment] ?? 'limited',
       // Limpiado al leer y no sólo al escribir: lo que ya está guardado no
       // lo limpia nadie nunca, y ahí seguían los ids de evidencia metidos en
-      // mitad de la frase que él lee sobre sí mismo.
-      explanation: stripIds(capability.reason),
+      // mitad de la frase que él lee sobre sí mismo — y, delante, una nota
+      // sobre la reevaluación que lo escribió.
+      explanation: standingDescription(capability.reason),
       count: items.length,
       evidence: items,
     }
@@ -183,7 +184,7 @@ export function getMapViewModel(candidateId: string): MapViewModel {
         ? (capabilities.find((capability) => capability.id === uncertainty.capability_id)?.name ??
           'Something unresolved')
         : 'Something unresolved',
-      explanation: uncertainty.description,
+      explanation: stripIds(uncertainty.description),
       materiality: uncertainty.materiality,
     }))
 

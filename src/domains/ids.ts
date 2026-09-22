@@ -54,3 +54,47 @@ export function stripIds(text: string): string {
     .replace(/,\s*\./g, '.')
     .trim()
 }
+
+/**
+ * Un puente, y dicho como tal.
+ *
+ * El prompt de reevaluación escribía el motivo de una capacidad como una nota
+ * sobre *esa* reevaluación: «Unchanged. The message was not an account of
+ * work — the candidate shared a Cloudflare job link…». En su perfil no hay
+ * ningún mensaje delante, así que eso se lee como si su carrera fuera un
+ * registro de cambios.
+ *
+ * El prompt ya está arreglado (v2), pero lo escrito sigue escrito hasta que
+ * vuelva a pasar por ahí — y eso sólo ocurre cuando él cuenta algo. Así que
+ * esto limpia al leer.
+ *
+ * Es un puente y se nota que lo es: cuando esas filas se hayan reescrito,
+ * sobra. Lo que hace es quedarse con la parte que describe —el modelo la
+ * marcaba con «Basis remains:»— y si no la hay, tirar la frase de delante que
+ * sólo tenía sentido al lado del mensaje que ya no está.
+ */
+const DELTA_OPENER =
+  /^(unchanged|no new evidence|this (message|response)|sin cambios)\b[^.]*\.\s*/i
+
+const STANDING_MARKER = /\b(basis remains|la base sigue siendo)\s*:?\s*/i
+
+export function standingDescription(text: string): string {
+  const clean = stripIds(text)
+
+  const marker = STANDING_MARKER.exec(clean)
+  if (marker && marker.index + marker[0].length < clean.length) {
+    const kept = clean.slice(marker.index + marker[0].length).trim()
+    return kept.charAt(0).toUpperCase() + kept.slice(1)
+  }
+
+  // En bucle, no una sola vez: el modelo encadenaba varias —«Unchanged. No
+  // new evidence. …»— y quitar sólo la primera deja la segunda, que es
+  // exactamente igual de ilegible.
+  let withoutDelta = clean
+  for (let pass = 0; pass < 4; pass += 1) {
+    const next = withoutDelta.replace(DELTA_OPENER, '').trim()
+    if (next === withoutDelta || next.length === 0) break
+    withoutDelta = next
+  }
+  return withoutDelta.length > 0 ? withoutDelta : clean
+}
