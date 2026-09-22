@@ -53,7 +53,7 @@ const interruptionPollMs = 6000
  */
 const WORDS = {
   es: {
-    arriving: 'Tu Rep está escuchando.',
+    arriving: 'Estoy escuchando.',
     thanks: 'Gracias. Apuntado.',
     thanksNote:
       'Lo estoy metiendo en lo que sé de ti. Si cambia lo que pienso de ese puesto, te aviso; si no, no.',
@@ -108,7 +108,7 @@ const WORDS = {
     whatsappNote: 'todavía no funciona',
   },
   en: {
-    arriving: 'Your Rep is listening.',
+    arriving: "I'm listening.",
     thanks: 'Thank you. Noted.',
     thanksNote:
       "I'm working it into what I know about you. If it changes what I think of that role, you'll hear from me; if it doesn't, you won't.",
@@ -118,7 +118,7 @@ const WORDS = {
     notForMe: "Fine. That one's gone.",
     notForMeNote:
       "I haven't changed what I'm listening for. A no is about that job, not about the shape of what you want.",
-    nothingWorth: 'Nothing worth bothering you with.',
+    nothingWorth: 'Nothing worth interrupting you for.',
     stillListening: "I'm still listening.",
     onlyInterrupt: "I'll only interrupt you when something deserves your attention.",
     listeningForLabel: 'Currently listening for',

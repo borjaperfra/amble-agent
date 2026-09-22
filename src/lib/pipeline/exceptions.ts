@@ -54,8 +54,27 @@ export type ExceptionKind =
   | 'stale_questions'
   | 'near_misses'
 
+/**
+ * Para quién es cada cosa.
+ *
+ * `operator` es fontanería: una cola atascada, un trabajo que se rindió, un
+ * tablón que no responde. Eso es mío, no suyo. Enseñárselo en su pantalla es
+ * narrar la maquinaria — «deliver_notification: No answer from
+ * smtp.resend.com:587» en la pantalla de alguien que sólo quería saber si hay
+ * algo para él.
+ *
+ * `candidate` es lo que le pasa a él: una pregunta suya sin contestar, una
+ * oferta que se quedó a un palmo del suelo que él puso. Eso sí, y en primera
+ * persona.
+ *
+ * La regla que lo decide es la última del documento de voz: ¿necesita oír
+ * esto ahora? Si no, silencio.
+ */
+export type ExceptionAudience = 'candidate' | 'operator'
+
 export interface Exception {
   kind: ExceptionKind
+  audience: ExceptionAudience
   /** Una línea, en su idioma, sin jerga de la implementación. */
   summary: string
   /** Lo que hay que mirar, si hay que mirar algo. */
@@ -87,6 +106,7 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
   if (stuck.length > 0) {
     out.push({
       kind: 'stuck_opportunities',
+      audience: 'operator',
       count: stuck.length,
       summary: es
         ? `${stuck.length} ${stuck.length === 1 ? 'oferta pasó' : 'ofertas pasaron'} el filtro y ${stuck.length === 1 ? 'sigue' : 'siguen'} sin decidirse.`
@@ -132,6 +152,7 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
     const percent = Math.round(rate * 100)
     out.push({
       kind: 'model_failing',
+      audience: 'operator',
       count: failedRuns,
       summary: es
         ? `${percent}% de las llamadas al modelo están fallando (${failedRuns} de ${runs.total} hoy).`
@@ -157,6 +178,7 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
   if (failedTotal > 0) {
     out.push({
       kind: 'failed_jobs',
+      audience: 'operator',
       count: failedTotal,
       summary: es
         ? `${failedTotal} ${failedTotal === 1 ? 'trabajo se rindió' : 'trabajos se rindieron'} tras reintentarlo.`
@@ -183,6 +205,7 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
   if (quiet.length > 0) {
     out.push({
       kind: 'source_silent',
+      audience: 'operator',
       count: quiet.length,
       summary: es
         ? `${quiet.length} ${quiet.length === 1 ? 'fuente lleva' : 'fuentes llevan'} más de dos días sin llegar a leerse.`
@@ -200,10 +223,11 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
   if (stale.length > 0) {
     out.push({
       kind: 'stale_questions',
+      audience: 'candidate',
       count: stale.length,
       summary: es
-        ? `${stale.length} ${stale.length === 1 ? 'pregunta lleva' : 'preguntas llevan'} más de una semana esperándote.`
-        : `${stale.length} ${stale.length === 1 ? 'question has' : 'questions have'} been waiting on you for over a week.`,
+        ? `Te pregunté ${stale.length === 1 ? 'una cosa' : `${stale.length} cosas`} hace más de una semana y sigo sin saberlo.`
+        : `I asked you ${stale.length === 1 ? 'something' : `${stale.length} things`} over a week ago and I still don't know.`,
       detail: stale.map((question) => question.question).slice(0, 3).join('\n'),
     })
   }
@@ -224,13 +248,14 @@ export function listExceptions(candidateId: string, language: 'es' | 'en' = 'es'
   if (near.n > 0) {
     out.push({
       kind: 'near_misses',
+      audience: 'candidate',
       count: near.n,
       summary: es
-        ? `${near.n} ${near.n === 1 ? 'oferta se quedó' : 'ofertas se quedaron'} a menos de un 10% de tu suelo.`
-        : `${near.n} ${near.n === 1 ? 'offer came' : 'offers came'} within 10% of your floor.`,
+        ? `${near.n === 1 ? 'Una oferta se quedó' : `${near.n} ofertas se quedaron`} a un palmo del suelo que me diste.`
+        : `${near.n === 1 ? 'One offer came' : `${near.n} offers came`} just short of the floor you gave me.`,
       detail: es
-        ? 'No las he leído: caen antes de gastar nada. Si eso te parece mal, el suelo se cambia en «Listening for».'
-        : 'I did not read them: they drop before anything is spent. If that seems wrong, the floor lives in "Listening for".',
+        ? 'No las he leído: con ese suelo, no llegan. Si el suelo ya no es ése, me lo dices en «Listening for».'
+        : "I didn't read them: with that floor, they don't clear it. If the floor has changed, tell me in \"Listening for\".",
     })
   }
 

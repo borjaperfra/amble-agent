@@ -25,9 +25,12 @@ export default function Exceptions({ exceptions, language }: ExceptionsProps) {
   return (
     <section
       className={styles.box}
-      aria-label={language === 'es' ? 'Lo que se ha atascado' : 'What got stuck'}
+      aria-label={language === 'es' ? 'Lo que sigue pendiente' : 'Still pending'}
     >
-      <p className="kicker">{language === 'es' ? 'Se ha atascado' : 'Stuck'}</p>
+      {/* No «se ha atascado»: eso es lenguaje de sistema. Lo que queda aquí
+          es de él —algo que le pregunté, un suelo que quizá ya no es el
+          suyo— y se dice como se lo diría alguien, no como un aviso. */}
+      <p className="kicker">{language === 'es' ? 'Una cosa' : 'One thing'}</p>
       <ul className={styles.list}>
         {exceptions.map((exception) => (
           <li key={exception.kind} className={styles.item}>

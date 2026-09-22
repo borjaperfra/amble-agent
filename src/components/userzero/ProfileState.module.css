@@ -66,27 +66,14 @@
   color: var(--ink-tertiary);
 }
 
-.progress {
-  margin-bottom: 16px;
+.state {
+  margin: 0 0 16px;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  max-width: 54ch;
 }
 
-.bar {
-  height: 6px;
-  background: var(--paper-dark);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.fill {
-  height: 100%;
-  background: var(--moss);
-  border-radius: 3px;
-  transition: width var(--motion-slow) var(--ease-standard);
-}
-
-.progressNote {
-  margin: 8px 0 0;
-  font-size: var(--text-body-sm);
+.stateGap {
   color: var(--ink-secondary);
 }
 

@@ -29,7 +29,13 @@ export default function ListeningPage() {
     <UserZeroListeningFlow
       vm={vm}
       interruption={getPendingInterruption(candidateId)}
-      exceptions={listExceptions(candidateId, readPreferences(candidateId).language === 'en' ? 'en' : 'es')}
+      // Sólo lo que es suyo. Una cola atascada o un tablón que no responde
+      // es fontanería mía, y narrarle la maquinaria en su pantalla es lo
+      // contrario de lo que este producto hace. Eso vive en el panel.
+      exceptions={listExceptions(
+        candidateId,
+        readPreferences(candidateId).language === 'en' ? 'en' : 'es',
+      ).filter((item) => item.audience === 'candidate')}
       // Copiadas a objetos normales: `node:sqlite` devuelve las filas sin
       // prototipo y React se niega a pasarlas al cliente.
       inPlay={JSON.parse(JSON.stringify(inPlayView(candidateId)))}

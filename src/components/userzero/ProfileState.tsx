@@ -26,24 +26,25 @@ interface ProfileStateProps {
  * De dónde te conozco, y qué me falta.
  *
  * Todo esto ya se calculaba y estaba **al final de la página**, debajo de
- * dieciséis capacidades. Borja lo dijo así el 22: *«Lo que falta por
- * completar del perfil está muy abajo. No hay botones que te lleven a ello
- * rápido ni una progresión en barra»*. Tenía razón en las tres cosas.
+ * dieciséis capacidades, que es como no estar.
  *
- * La barra no es un porcentaje inventado. Un «70% de perfil completo» es 70%
- * de nada: se elige el denominador para que el número salga bonito, y eso es
- * la métrica de vanidad que el spec prohíbe en §16. Ésta mide una sola cosa y
- * la dice: **cuántas de las cosas que no se saben de él siguen sin saberse**.
- * Eso es lo que le está costando ofertas, y baja cuando cuenta algo.
+ * Aquí había una barra de progreso. La quité al leer el documento de voz, que
+ * lo dice con este ejemplo exacto:
  *
- * Y las fuentes que aún no se pueden leer salen como lo que son —«todavía no
- * lo leo»— y no como una casilla apagada que promete algo para el mes que
- * viene.
+ *     No: «Tu perfil está completo al 82%».
+ *     Sí: «Sé lo suficiente para empezar a escuchar».
+ *
+ * Y tenía razón el documento y no yo. Una barra convierte esto en un juego de
+ * rellenar perfil —lo de LinkedIn— y la sensación que busca es la contraria:
+ * que él siga trabajando mientras otro se ocupa. Un porcentaje le dice que
+ * tiene deberes.
+ *
+ * Lo que queda es el mismo dato dicho como lo diría alguien: cuántas cosas no
+ * sé todavía de él. Y el hueco es mío, no suyo — «no tengo evidencia
+ * suficiente para entender esto», nunca «te falta esto».
  */
 export default function ProfileState({ completeness, sources, openGaps }: ProfileStateProps) {
   const known = completeness.answeredQuestions
-  const total = known + openGaps
-  const pct = total > 0 ? Math.round((known / total) * 100) : 0
 
   return (
     <section className={styles.box} aria-label="De dónde te conozco y qué me falta">
@@ -75,18 +76,17 @@ export default function ProfileState({ completeness, sources, openGaps }: Profil
         ))}
       </div>
 
-      {total > 0 ? (
-        <div className={styles.progress}>
-          <div className={styles.bar} role="img" aria-label={`${known} de ${total} resueltas`}>
-            <div className={styles.fill} style={{ width: `${Math.max(pct, 2)}%` }} />
-          </div>
-          <p className={styles.progressNote}>
-            <strong>{openGaps}</strong>{' '}
-            {openGaps === 1 ? 'cosa que no sé de ti' : 'cosas que no sé de ti'}
-            {known > 0 ? <> · {known} resueltas</> : null}
-          </p>
-        </div>
-      ) : null}
+      <p className={styles.state}>
+        {completeness.solid > 0
+          ? 'Sé lo suficiente para escuchar.'
+          : 'Todavía no sé lo suficiente para escuchar.'}{' '}
+        {openGaps > 0 ? (
+          <span className={styles.stateGap}>
+            Hay {openGaps === 1 ? 'una cosa' : `${openGaps} cosas`} que aún no sé de ti
+            {known > 0 ? `, y ${known === 1 ? 'una' : known} que ya me contaste` : ''}.
+          </span>
+        ) : null}
+      </p>
 
       {completeness.steps.length > 0 ? (
         <div className={styles.steps}>
