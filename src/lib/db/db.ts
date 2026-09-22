@@ -491,6 +491,31 @@ function createDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS turns_by_negotiation
       ON negotiation_turns (negotiation_id, idx);
 
+    -- La lista de espera.
+    --
+    -- La unica tabla de todo esto que no va de una persona concreta: son
+    -- desconocidos que han dejado un correo antes de que exista el producto.
+    -- Por eso no cuelga de candidates y no tiene candidate_id.
+    --
+    -- Un correo y nada mas, que es lo que se pidio. Pedir el puesto, la
+    -- ciudad o «cuentanos tu caso» dobla el formulario y lo unico que mejora
+    -- son nuestras hojas de calculo: quien se apunta a una lista de espera no
+    -- esta buscando rellenar un formulario.
+    --
+    -- El indice es sobre el correo en minusculas y normalizado, asi que
+    -- apuntarse dos veces no crea dos filas. Y a quien lo intente se le dice
+    -- lo mismo que la primera vez: si la respuesta cambiara, cualquiera
+    -- podria averiguar quien esta en la lista probando correos.
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      -- De donde llego, por si algun dia hay mas de una puerta.
+      source TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS waitlist_once ON waitlist (email);
+
     -- La libreta.
     --
     -- No es parte del producto: es donde caben las ideas sobre el producto,

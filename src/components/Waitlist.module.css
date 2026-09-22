@@ -1,0 +1,100 @@
+.box {
+  width: 100%;
+  max-width: 480px;
+  margin: 32px auto 0;
+  text-align: left;
+}
+
+.lead {
+  margin: 0 0 16px;
+  color: var(--ink-secondary);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.label {
+  display: block;
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-bottom: 8px;
+}
+
+/* Apilado en el móvil y en línea a partir de ahí: un campo de correo y un
+   botón compartiendo 320px dejan al botón sin sitio para su palabra. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input {
+  flex: 1;
+  height: 48px;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  /* 16px o Safari hace zoom al enfocar. */
+  font-size: var(--text-body);
+  font-family: inherit;
+  color: var(--ink);
+  transition: border-color var(--motion-fast) ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px var(--moss-wash);
+}
+
+.submit {
+  height: 48px;
+  padding: 0 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: var(--paper-light);
+  font-family: inherit;
+  font-size: var(--text-body);
+  cursor: pointer;
+  transition: background var(--motion-fast) ease;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--moss-dark);
+}
+
+.submit:disabled {
+  background: var(--paper-dark);
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.small {
+  margin: 12px 0 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.error {
+  margin: 12px 0 0;
+  font-size: var(--text-body-sm);
+  color: var(--clay);
+}
+
+.done {
+  margin: 0;
+  font-size: var(--text-body-lg);
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 42ch;
+}
+
+@media (min-width: 560px) {
+  .row {
+    flex-direction: row;
+    align-items: center;
+  }
+}

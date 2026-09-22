@@ -32,7 +32,8 @@ const password = process.env.AMBLE_PASSWORD?.trim()
  * lo dice, que es distinto de callarse.
  */
 const PAGES = [
-  { path: '/' },
+  // La portada es publica: es el enlace que se comparte.
+  { path: '/', public: true },
   { path: '/listening' },
   { path: '/me' },
   { path: '/me/intent' },
@@ -45,6 +46,7 @@ const PAGES = [
 /** Y lo que las pantallas piden mientras están abiertas. */
 const ENDPOINTS = [
   '/api/health',
+  '/api/waitlist',
   '/api/preferences',
   '/api/opportunities',
   '/api/opportunities/interruption',

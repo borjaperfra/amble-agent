@@ -25,6 +25,19 @@ export function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // La portada y la lista de espera, abiertas.
+  //
+  // Es el enlace que Borja va a compartir, así que pedirle contraseña a quien
+  // llega sería pedirle la llave de una casa para preguntar si puede entrar
+  // algún día. No enseña nada suyo: es la página de producto que ya existía.
+  //
+  // Sólo el POST. La misma ruta en GET devuelve los correos de otra gente, y
+  // eso sí es suyo — si fuera pública, la lista de espera sería una lista de
+  // contactos para cualquiera.
+  if (pathname === '/' || (pathname === '/api/waitlist' && request.method === 'POST')) {
+    return NextResponse.next()
+  }
+
   if (tokenMatches(request.cookies.get(SESSION_COOKIE)?.value, password)) {
     return NextResponse.next()
   }

@@ -1,5 +1,5 @@
-import Link from 'next/link'
 import Header from '@/components/Header'
+import Waitlist from '@/components/Waitlist'
 import Reveal from '@/components/Reveal'
 import styles from './page.module.css'
 
@@ -33,9 +33,11 @@ export default function Landing() {
             Meet your professional Rep.
           </p>
           <div className={`${styles.heroCta} ${styles.rise} ${styles.delay2}`}>
-            <Link href="/onboarding" className="btn">
-              Meet your Rep →
-            </Link>
+{/* La lista de espera donde estaba el botón de entrar.
+              Todavía no está abierto: llevar a alguien a «conoce a tu Rep»
+              para que se choque con una contraseña es peor que no
+              invitarle. */}
+            <Waitlist />
           </div>
         </section>
 
@@ -54,9 +56,7 @@ export default function Landing() {
           <Reveal>
             <h2 className={styles.finaleTitle}>Remove applications.</h2>
             <div className={styles.finaleCta}>
-              <Link href="/onboarding" className="text-btn">
-                Meet your Rep →
-              </Link>
+              <Waitlist />
             </div>
           </Reveal>
         </section>
