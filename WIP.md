@@ -1,7 +1,8 @@
-# Dónde nos quedamos — 21 septiembre 2026
+# Dónde nos quedamos — 22 septiembre 2026
 
-Todo commiteado, de `5695d19` en adelante. Árbol limpio; `tsc`, `eslint`,
-`next build` y `npm test` (254) en verde. Bórrame cuando esto esté cerrado.
+Todo commiteado y empujado, hasta `59f2351`. Árbol limpio; `tsc`, `eslint`
+(un warning viejo), `next build` y `npm test` (292) en verde. Desplegado y
+comprobado en producción. Bórrame cuando esto esté cerrado.
 
 ## Si solo lees una cosa
 
@@ -76,6 +77,92 @@ preguntas).
 - La puerta **no existe sin `AMBLE_PASSWORD`**. En local se sigue entrando
   como siempre, a propósito: una contraseña por cada `npm run dev` es cómo se
   acaba con la contraseña escrita en un post-it.
+
+## 22 de septiembre — su lista, la waitlist, el panel, la voz y GitHub
+
+El día entero fue **su lista de feedback**, escrita por él en `/feedback` desde
+el móvil, una por una y por orden. Que la lista la escriba él era justamente el
+motivo de desplegar la libreta, así que esto es la libreta funcionando.
+
+**Lo que salió de la lista** (`17a0e71` → `c98fcd2`):
+
+- **Los ids se le estaban colando en su propio Mapa.** Leía `unc_4f2a` en una
+  frase escrita para él. `stripIds` vive ahora en `src/domains/ids.ts` con la
+  lista de prefijos comprobada contra los que se generan de verdad — la
+  anterior cubría `unc_` y se dejaba `unk_`, y un filtro que pilla la mitad es
+  peor que ninguno porque parece que funciona. Con él, `standingDescription()`,
+  que quita los arranques de delta («Unchanged», «No new evidence») en bucle y
+  se queda con lo que va detrás de `Basis remains:`.
+- **«Listening for» dejó de preguntarle lo que ya había contestado.**
+- **De dónde te conozco, arriba en vez de al final.** Estaba calculado y
+  enterrado debajo de dieciséis capacidades, que es como no estar.
+- **Una lista de espera** (`3d49757`), que pidió a media lista porque va a
+  lanzar la idea: un correo y ya está. `POST /api/waitlist` es público y el
+  `GET` sigue detrás de la puerta. La respuesta es la misma la primera vez y
+  la quinta, para que nadie pueda usarla para saber quién está apuntado.
+- **Un panel de admin** (`773b188`) en `/admin`: la waitlist con los correos
+  copiables, la salud del modelo por tarea **y por versión**, el tono, los
+  veredictos y las reescrituras, las colas, la conversación, las ideas y el
+  parte de excepciones. Y sólo con lo que hay de verdad — ninguna tarjeta
+  inventa un número que no se pueda perseguir.
+- **«En marcha»** (`c98fcd2`): lo que dijo que sí y qué ha pasado desde
+  entonces.
+
+**La voz** (`d32a129`). Pasó el documento de voz y los cinco principios. Tres
+cosas mías lo incumplían:
+
+1. **El parte de excepciones le narraba la maquinaria en su pantalla.** Leía
+   «4 trabajos se rindieron tras reintentarlo · deliver_notification: No
+   answer from smtp.resend.com:587». Ahora cada excepción declara **para
+   quién** es (`ExceptionAudience`): la fontanería —cola atascada, trabajo
+   rendido, tablón mudo— vive en `/admin`, y en `/listening` sólo queda lo
+   suyo, dicho en primera persona.
+2. **Fuera la barra de progreso** de `/me`, hecha esa misma mañana. El
+   documento usa ese ejemplo exacto: «Tu perfil está completo al 82%» no; «Sé
+   lo suficiente para empezar a escuchar» sí. Una barra convierte esto en el
+   juego de rellenar perfil de LinkedIn.
+3. **Primera persona**: «Tu Rep está escuchando» → «Estoy escuchando».
+   «Pensando qué decirte…» era teatro; «Mirando lo que sé de ti…» sí describe
+   algo que pasa.
+
+**GitHub, leído de verdad** (`59f2351`). Era una URL guardada con un cartel de
+«not supported». Ahora `src/lib/sources/github.ts` lee el perfil, los repos, y
+de los que valen la pena los lenguajes por bytes, el README y qué hay en la
+raíz — un `docker-compose.yml` o un `terraform/` dicen cómo construye mejor
+que una línea de CV. Fuera forks y archivados; orden por estrellas y empates
+por último push; seis en profundidad. **Lo que no se pudo leer se cuenta y se
+dice** al final del documento. Entra por la misma puerta que un CV, así que
+cada claim apunta a un repo que se puede abrir. Probado contra el API real con
+su perfil: 4 repos, 2 en profundidad, 0 sin leer, 7.801 caracteres.
+
+Por el camino, **una fuente rota desde que existe**: la web/portfolio
+descargaba el texto, lo escribía en disco y guardaba `stored_path: null`, así
+que `readSourceContent` devolvía vacío y acababa en `failed` con el contenido
+ya bajado. Nunca se ha leído ninguna web. Una línea.
+
+### Lo que queda de su lista
+
+1. **Móvil** (su punto 1). Sigue sin comprobarse en una pantalla de verdad —
+   nunca la he visto. Hace falta que mande dos o tres capturas de lo que le
+   chirría, o no es una revisión, es adivinar.
+2. **El percentil** (su punto 7), **bloqueado en una decisión suya**. Pidió un
+   percentil de talento y su pitch de lanzamiento lo menciona, pero el
+   documento de voz dice que AMBLE no te dice lo bueno que eres y prohíbe el
+   vocabulario de puntuación. Mi recomendación, sin tocar nada: cambiar el eje
+   —«de las 40 ofertas que he visto, encajas en 6, y en 3 de las que más
+   pagan»— que es el mismo dato útil sin ser una nota. Si el pitch necesita el
+   percentil, se hace, pero entonces el documento pierde su punto 10.
+
+### Y tres cosas abiertas que no son de la lista
+
+- **El correo está muerto en Railway.** `deliver_notification` falla con «No
+  answer from smtp.resend.com:587»; el puerto 587 parece bloqueado en la
+  plataforma. Telegram no se ve afectado y sigue siendo la vía buena. Sin
+  arreglar: lo más probable es pasar a la API HTTP de Resend en vez de SMTP.
+- **La mezcla de castellano e inglés** entre pantallas, que se nota al pasar
+  de una a otra.
+- **La animación de 2,6 s a pantalla completa** cada vez que se entra en
+  `/listening`. Es exactamente lo contrario de «smooth».
 
 ## Opportunity Zero — entero, y ya interrumpe
 
@@ -1119,11 +1206,11 @@ de este volumen en vez de un hash calculable offline.
 
 ## Lo siguiente, cuando retomemos
 
-**Lo primero es mirar, no construir.** El bucle del tono lleva desde hoy en
-pie y hasta que no se use no hay nada que decidir. Al volver: `evaluations`,
-los eventos `answer_reworded`, y `/feedback`.
+**Esta lista es del 21 y la de arriba la sustituye** — lo que manda ahora es
+«Lo que queda de su lista», en la sección del 22. Lo de aquí sigue vivo pero
+va detrás.
 
-Después, por orden:
+Del 21, y sin hacer:
 
 1. **Tono y contenido**, con esos datos delante. Borja dijo que hay mucho que
    mejorar en las dos cosas, y esa es la conversación que sí se puede tener
