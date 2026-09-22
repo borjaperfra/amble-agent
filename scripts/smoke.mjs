@@ -38,6 +38,7 @@ const PAGES = [
   { path: '/me' },
   { path: '/me/intent' },
   { path: '/feedback' },
+  { path: '/admin' },
   { path: '/onboarding' },
   { path: '/dev/user-zero', devOnly: true },
   { path: '/dev/opportunity-zero', devOnly: true },

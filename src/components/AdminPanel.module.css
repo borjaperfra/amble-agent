@@ -1,0 +1,190 @@
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px var(--page-pad) 96px;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.nav {
+  display: flex;
+  gap: 20px;
+}
+
+.nav a {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  text-decoration: none;
+  /* 44px de objetivo: esto también se abre desde el móvil. */
+  padding: 12px 0;
+}
+
+.nav a:hover {
+  color: var(--ink);
+}
+
+/* Una sola columna en el móvil y tantas como quepan a partir de ahí: un panel
+   con dos columnas estrechas en un teléfono es media pantalla desperdiciada a
+   cada lado. */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  padding: 20px;
+  background: var(--paper-light);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.alert {
+  background: var(--ochre-soft);
+  border-color: color-mix(in srgb, var(--ochre) 30%, transparent);
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  margin: 0 0 12px;
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  font-weight: 500;
+}
+
+.big {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--heading-xl);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.bigNote {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--ink-tertiary);
+  letter-spacing: 0;
+}
+
+.row + .row {
+  margin-top: 12px;
+}
+
+.rowMain {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+
+.rowSub {
+  margin: 6px 0 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--ink-tertiary);
+  white-space: pre-line;
+}
+
+.action {
+  display: inline-block;
+  margin: 12px 0 4px;
+  padding: 12px 0;
+  font-size: var(--text-body-sm);
+  color: var(--moss-dark);
+}
+
+.list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.listItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-soft);
+  font-size: var(--text-body-sm);
+  line-height: 1.45;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-body-sm);
+  word-break: break-all;
+}
+
+.when {
+  flex-shrink: 0;
+  color: var(--ink-tertiary);
+  font-size: var(--text-body-sm);
+}
+
+.noteText {
+  line-height: 1.45;
+}
+
+.quote {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.55;
+}
+
+.quoteSmall {
+  color: var(--ink-secondary);
+  line-height: 1.45;
+}
+
+.counts + .counts {
+  margin-top: 12px;
+}
+
+.countsLabel {
+  margin: 12px 0 6px;
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  background: var(--paper);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+@media (min-width: 720px) {
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+
+  .wide {
+    grid-column: 1 / -1;
+  }
+}

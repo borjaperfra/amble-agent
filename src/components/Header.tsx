@@ -12,9 +12,10 @@ const navItems = [
   // Está en la barra porque una idea a la que hay que llegar escribiendo una
   // URL a mano es una idea que no se apunta.
   { href: '/feedback', label: 'Ideas' },
+  { href: '/admin', label: 'Panel' },
 ]
 
-const navRoutes = ['/me', '/me/intent', '/listening', '/feedback']
+const navRoutes = ['/me', '/me/intent', '/listening', '/feedback', '/admin']
 
 interface HeaderProps {
   right?: React.ReactNode
