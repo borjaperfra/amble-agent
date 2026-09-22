@@ -51,20 +51,45 @@ const STAGE_OPTIONS = ['Pre-seed', 'Seed', 'Series A', 'Scale-up', 'Large compan
 
 type Phase = 'ask' | 'sending' | 'reveal'
 
+/**
+ * Lo que ya dijo, si lo dijo.
+ *
+ * Nulo la primera vez y sólo la primera vez. A partir de ahí esta pantalla
+ * es para releer y corregir, no para volver a contestar lo mismo.
+ */
+export interface InitialIntent {
+  id: string
+  groups: IntentGroup[]
+  listeningFor: string[]
+  rawAnswer: string
+  saidAt: string
+  confirmed: boolean
+  preferences: Preferences
+}
+
 const PROMPT_LEAD = 'One more thing.'
 const PROMPT_QUESTION =
   'What would have to be true for you to seriously consider leaving your current job?'
 
-export default function UserZeroIntentFlow() {
+export default function UserZeroIntentFlow({ initial = null }: { initial?: InitialIntent | null }) {
   const router = useRouter()
-  const [phase, setPhase] = useState<Phase>('ask')
-  const [answer, setAnswer] = useState('')
-  const [result, setResult] = useState<IntentResponse | null>(null)
-  const [editedGroups, setEditedGroups] = useState<IntentGroup[]>([])
+  // Si ya contestó, se entra directamente a lo que dijo. Preguntárselo otra
+  // vez es lo que él mismo pidió que no se hiciera nunca.
+  const [phase, setPhase] = useState<Phase>(initial ? 'reveal' : 'ask')
+  const [answer, setAnswer] = useState(initial?.rawAnswer ?? '')
+  const [result, setResult] = useState<IntentResponse | null>(
+    initial ? { id: initial.id, groups: initial.groups, structured: true } : null,
+  )
+  const [editedGroups, setEditedGroups] = useState<IntentGroup[]>(initial?.groups ?? [])
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState(false)
-  const [preferences, setPreferences] = useState<Preferences>(EMPTY_PREFERENCES)
+  const [preferences, setPreferences] = useState<Preferences>(
+    initial?.preferences ?? EMPTY_PREFERENCES,
+  )
   const [technologyDraft, setTechnologyDraft] = useState('')
+  /** Si esto es una vuelta y no la primera vez: cambia lo que dice todo. */
+  const returning = initial !== null
+  const [saved, setSaved] = useState(false)
 
   async function submit() {
     if (!answer.trim()) return
@@ -120,6 +145,7 @@ export default function UserZeroIntentFlow() {
   }
 
   async function confirm() {
+    setSaved(false)
     try {
       window.sessionStorage.setItem('amble-listening-activated', '1')
     } catch {
@@ -146,6 +172,13 @@ export default function UserZeroIntentFlow() {
       } catch {
         // Confirmation persistence is best-effort in this build.
       }
+    }
+    // La primera vez, empezar a escuchar es el momento y se va allí. Una
+    // corrección no es un momento: se guarda y se queda donde estaba, porque
+    // lo normal es cambiar dos cosas seguidas.
+    if (returning) {
+      setSaved(true)
+      return
     }
     router.push('/listening')
   }
@@ -237,8 +270,34 @@ export default function UserZeroIntentFlow() {
       <Header />
       <main className={styles.page}>
         <div className={styles.reveal}>
-          <p className="kicker">Your Rep</p>
-          <h1 className={styles.revealLead}>&quot;Here&apos;s what I&apos;ll listen for.&quot;</h1>
+          <p className="kicker">{returning ? 'What I listen for' : 'Your Rep'}</p>
+          <h1 className={styles.revealLead}>
+            {returning
+              ? '"This is what I\u2019m listening for. Change anything."'
+              : '"Here\u2019s what I\u2019ll listen for."'}
+          </h1>
+          {returning ? (
+            <p className={styles.hint}>
+              {/* Que se vea que está guardado, y desde cuándo. La duda que él
+                  tenía era justo ésa: si esto se rellenaba una vez o se
+                  quedaba ahí preguntando para siempre. */}
+              Saved {new Date(initial.saidAt).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'long',
+              })}
+              . Edit anything here and it takes effect on the next offer that arrives.{' '}
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => {
+                  setSaved(false)
+                  setPhase('ask')
+                }}
+              >
+                Or tell me again from scratch
+              </button>
+            </p>
+          ) : null}
           {result && !result.structured && (
             <p className={styles.hint}>
               I couldn&apos;t structure this automatically, so your words are kept exactly. Edit
@@ -410,10 +469,12 @@ export default function UserZeroIntentFlow() {
         </section>
 
         <div className={styles.confirm}>
-          <p className={styles.confirmQuestion}>Does this represent you?</p>
+          <p className={styles.confirmQuestion}>
+            {returning ? 'Still you?' : 'Does this represent you?'}
+          </p>
           <div className={styles.confirmActions}>
             <button type="button" className="btn" onClick={() => void confirm()}>
-              Yes, start listening
+              {returning ? 'Save changes' : 'Yes, start listening'}
             </button>
             <button
               type="button"
@@ -426,6 +487,11 @@ export default function UserZeroIntentFlow() {
             {hint && (
               <p className={styles.hint}>
                 Change anything above. Your Rep listens for exactly what you leave here with.
+              </p>
+            )}
+            {saved && (
+              <p className={styles.hint} role="status">
+                Saved. From the next offer on, this is what I hold them against.
               </p>
             )}
           </div>
