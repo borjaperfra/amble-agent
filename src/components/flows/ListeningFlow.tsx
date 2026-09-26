@@ -45,7 +45,7 @@ type Phase = 'arriving' | 'home'
 
 const activationMs = 2600
 
-export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
+export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   const [phase, setPhase] = useState<Phase>('arriving')
   const { wontConsider, weighs, money } = vm.revealed.rules
   const hasRevealed =

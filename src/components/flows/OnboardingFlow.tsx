@@ -13,7 +13,7 @@ interface SourceItem {
   detail: string | null
 }
 
-export default function UserZeroOnboardingFlow() {
+export default function OnboardingFlow() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sources, setSources] = useState<SourceItem[]>([])

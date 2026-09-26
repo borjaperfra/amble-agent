@@ -1,7 +1,7 @@
-import UserZeroIntentFlow from '@/components/userzero/UserZeroIntentFlow'
+import IntentFlow from '@/components/flows/IntentFlow'
 
 export const dynamic = 'force-dynamic'
 
 export default function IntentPage() {
-  return <UserZeroIntentFlow />
+  return <IntentFlow />
 }

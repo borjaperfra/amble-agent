@@ -14,7 +14,7 @@ interface MapViewProps {
   vm: MapViewModel
 }
 
-export default function UserZeroMapView({ vm }: MapViewProps) {
+export default function MapView({ vm }: MapViewProps) {
   const [openCapability, setOpenCapability] = useState<Capability | null>(null)
 
   const hasContent = vm.capabilities.length > 0

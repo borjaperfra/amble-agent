@@ -32,7 +32,7 @@ const DEFENCE_CONTEXT =
 const VOICE_NOTICE =
   "Voice is simulated in this build — it doesn't transcribe. Use the text box below."
 
-export default function UserZeroInterviewFlow() {
+export default function InterviewFlow() {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('loading')
   const [turnId, setTurnId] = useState<string | null>(null)

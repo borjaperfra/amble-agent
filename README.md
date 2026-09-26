@@ -39,6 +39,6 @@ Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly wit
 
 ## Developer trace
 
-With `next dev` running: **http://localhost:3000/dev/user-zero** shows the full graph trace — sources, claims, evidence, capabilities, uncertainties, interview turns, model runs and evaluations. It is not served in production.
+With `next dev` running: **http://localhost:3000/dev/trace** shows the full graph trace — sources, claims, evidence, capabilities, uncertainties, interview turns, model runs and evaluations. It is not served in production.
 
 Local data lives in `.amble-data/` (SQLite + uploaded sources). Delete the folder to reset the experiment.

@@ -28,7 +28,7 @@ const PROMPT_LEAD = 'One more thing.'
 const PROMPT_QUESTION =
   'What would have to be true for you to seriously consider leaving your current job?'
 
-export default function UserZeroIntentFlow() {
+export default function IntentFlow() {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('ask')
   const [answer, setAnswer] = useState('')

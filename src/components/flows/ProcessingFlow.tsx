@@ -30,7 +30,7 @@ interface StageResponse {
   newUncertainties?: number
 }
 
-export default function UserZeroProcessingFlow() {
+export default function ProcessingFlow() {
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [working, setWorking] = useState<string | null>(null)
   const [done, setDone] = useState(false)

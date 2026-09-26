@@ -77,7 +77,7 @@ function post<T>(body: Record<string, unknown>) {
   return request<T>({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 }
 
-export default function UserZeroTriageFlow() {
+export default function TriageFlow() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [triage, setTriage] = useState<Triage | null>(null)
   const [index, setIndex] = useState(0)

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getDevTrace } from '@/lib/view'
-import styles from './user-zero.module.css'
+import styles from './trace.module.css'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,13 +13,13 @@ function Count({ label, value }: { label: string; value: number }) {
   )
 }
 
-export default function UserZeroTrace() {
+export default function DevTrace() {
   if (process.env.NODE_ENV === 'production') notFound()
   const trace = getDevTrace()
 
   return (
     <main className={styles.page}>
-      <p className={styles.kicker}>USER ZERO — evaluation trace (dev only)</p>
+      <p className={styles.kicker}>Evaluation trace (dev only)</p>
       <h1 className={styles.title}>Professional Graph</h1>
 
       <div className={styles.stats}>

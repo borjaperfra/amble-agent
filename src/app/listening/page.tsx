@@ -1,8 +1,8 @@
 import { getListeningViewModel } from '@/lib/view'
-import UserZeroListeningFlow from '@/components/userzero/UserZeroListeningFlow'
+import ListeningFlow from '@/components/flows/ListeningFlow'
 
 export const dynamic = 'force-dynamic'
 
 export default function ListeningPage() {
-  return <UserZeroListeningFlow vm={getListeningViewModel()} />
+  return <ListeningFlow vm={getListeningViewModel()} />
 }

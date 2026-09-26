@@ -1,8 +1,8 @@
 import { getMapViewModel } from '@/lib/view'
-import UserZeroMapView from '@/components/userzero/UserZeroMapView'
+import MapView from '@/components/flows/MapView'
 
 export const dynamic = 'force-dynamic'
 
 export default function MapPage() {
-  return <UserZeroMapView vm={getMapViewModel()} />
+  return <MapView vm={getMapViewModel()} />
 }
