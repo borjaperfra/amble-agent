@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
+import { serverText } from '@/lib/i18n/candidate'
 import { buildCareerMarkdown, getStoredCareer, listStoredCareerVersions, NoEvidenceError } from '@/lib/career/build'
 
 export const runtime = 'nodejs'
@@ -21,7 +22,7 @@ function errorResponse(error: unknown) {
     return NextResponse.json({ error: error.message }, { status: 409 })
   }
   if (error instanceof ModelError) {
-    return NextResponse.json({ error: error.message, detail: error.detail ?? null }, { status: 502 })
+    return NextResponse.json({ error: serverText().modelUnavailable, detail: error.detail ?? error.message }, { status: 502 })
   }
   return NextResponse.json(
     { error: error instanceof Error ? error.message : 'Unknown error building career.md' },

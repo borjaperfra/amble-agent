@@ -232,5 +232,6 @@ export const exampleCareer = {
   sources: exampleSources,
   uncertainties: exampleUncertainties,
   retractions: exampleRetractions,
+  locale: 'es' as const,
   generatedAt: new Date('2026-09-01T10:00:00.000Z'),
 }

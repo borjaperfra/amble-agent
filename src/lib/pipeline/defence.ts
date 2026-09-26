@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { runStructuredTask } from '../model/provider'
+import { serverText } from '../i18n/candidate'
 import {
   getEvidence,
   listCapabilityEvidenceIds,
@@ -67,7 +68,7 @@ const judgeDefenceOutputSchema = z.preprocess(
             evidenceId: typeof e.evidenceId === 'string' ? e.evidenceId : '',
             // An unreadable verdict must never promote. It leaves the claim where it was.
             outcome: outcome === 'defended' || outcome === 'failed' ? outcome : 'partial',
-            reason: typeof e.reason === 'string' && e.reason.trim() ? e.reason.trim().slice(0, 400) : 'Sin motivo indicado.',
+            reason: typeof e.reason === 'string' && e.reason.trim() ? e.reason.trim().slice(0, 400) : serverText().noReasonGiven,
           }
         })
         .filter((entry) => entry.evidenceId.length > 0),
@@ -96,7 +97,6 @@ Rules:
 - Tone: you are checking your own understanding, not examining the person. "I don't know" must feel like a normal answer.
 - evidenceIds: the 1 to ${MAX_TARGETS_PER_QUESTION} evidence items that this single answer would confirm or defeat. Only IDs you were given. Target items that assert the candidate's JUDGMENT or skill; items that merely record an outcome (a repo exists, something was published) survive attribution and need no defence.
 - reason: one sentence on what the answer will settle.
-- Write the question in the same language as the evidence statements.
 - Respond ONLY with JSON: {"question": string, "reason": string, "evidenceIds": string[]}.`
 
 const JUDGE_SYSTEM_PROMPT = `You are Amble's defence judge, version 2.
@@ -112,7 +112,7 @@ Separate outcome from judgment. Some items assert an OUTCOME the candidate drove
 
 Be strict in the flattering direction and generous in the other: when unsure between defended and partial, choose partial. An honest "no idea" is a useful result, not a fault of the candidate — the system was wrong, not them. Judge only the listed items.
 
-reason: one sentence in Spanish quoting or paraphrasing the part of the answer you relied on.
+reason: one sentence quoting or paraphrasing the part of the answer you relied on.
 
 Respond ONLY with JSON: {"outcomes": [{"evidenceId": string, "outcome": "defended"|"partial"|"failed", "reason": string}]}.`
 
@@ -199,7 +199,7 @@ export async function judgeDefenceAnswer(
   const verdicts = new Map(data.outcomes.map((entry) => [entry.evidenceId, entry]))
   for (const evidence of targets) {
     // An item the judge skipped stays partial: asked, not settled.
-    const verdict = verdicts.get(evidence.id) ?? { outcome: 'partial' as const, reason: 'La respuesta no cubrió este punto.' }
+    const verdict = verdicts.get(evidence.id) ?? { outcome: 'partial' as const, reason: serverText().notCovered }
     if (verdict.outcome === 'defended') {
       markEvidenceDefended(evidence.id, turn.id)
       result.defended.push(evidence.id)

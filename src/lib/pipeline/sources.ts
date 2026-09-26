@@ -14,6 +14,7 @@ import {
   type SourceRow,
 } from '../db/repo'
 import { runExtractClaimsTask } from '../model/tasks'
+import { serverText } from '../i18n/candidate'
 import { classifySourceContent, detectSourceSignature } from './classify'
 import { buildGitHubDigest, GitHubError, parseGitHubHandle, type GitHubDigest } from './github'
 
@@ -82,7 +83,7 @@ export async function createFileSource(
       name: originalName,
       type: 'cv',
       status: 'failed',
-      detail: 'I can only read PDF or plain text files in this build.',
+      detail: serverText().onlyPdfOrText,
     }
   }
 
@@ -106,7 +107,7 @@ export async function createFileSource(
       name: originalName,
       type: 'cv',
       status: 'failed',
-      detail: "I couldn't read any text from this file. It may be a scanned document.",
+      detail: serverText().noTextInFile,
     }
   }
 
@@ -117,8 +118,7 @@ export async function createFileSource(
       name: originalName,
       type: 'cv',
       status: 'failed',
-      detail:
-        "I couldn't find enough readable text in this document. If it's scanned, try a text-based PDF or a plain text export.",
+      detail: serverText().notEnoughText,
     }
   }
 
@@ -139,7 +139,7 @@ export async function createFileSource(
     stored_path: textName,
     char_count: content.length,
     status: 'extracted',
-    status_detail: signature?.reason ?? null,
+    status_detail: signature?.describe() ?? null,
   })
 
   return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
@@ -182,14 +182,14 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
       stored_path: null,
       char_count: 0,
       status: 'registered',
-      status_detail: `I couldn't read this website (${error instanceof Error ? error.message : 'unknown reason'}). Your Rep stored the URL only.`,
+      status_detail: serverText().websiteUnreadableDetail(error instanceof Error ? error.message : '?'),
     })
     return {
       id,
       name: hostname,
       type: 'website',
       status: 'registered',
-      detail: "I couldn't read this website. The URL is stored, but I couldn't read its text.",
+      detail: serverText().websiteUnreadable,
     }
   }
 
@@ -205,14 +205,14 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
       stored_path: null,
       char_count: content.length,
       status: 'registered',
-      status_detail: 'The page loaded but contained almost no readable text.',
+      status_detail: serverText().websiteEmpty,
     })
     return {
       id,
       name: hostname,
       type: 'website',
       status: 'registered',
-      detail: 'The page loaded but contained almost no readable text.',
+      detail: serverText().websiteEmpty,
     }
   }
 
@@ -247,7 +247,7 @@ export async function createGitHubSource(candidateId: string, url: string): Prom
     const reason =
       error instanceof GitHubError
         ? error.message
-        : "I couldn't read this GitHub profile. The handle is stored, not read."
+        : serverText().githubUnreadable
     insertSource({
       id,
       candidate_id: candidateId,
@@ -279,7 +279,7 @@ export async function createGitHubSource(candidateId: string, url: string): Prom
     stored_path: textName,
     char_count: digest.content.length,
     status: 'extracted',
-    status_detail: `${digest.repoCount} repositorios y ${digest.ownCommitCount} commits propios leídos.`,
+    status_detail: serverText().githubRead(digest.repoCount, digest.ownCommitCount),
   })
 
   if (digest.displayName) setCandidateNameIfEmpty(candidateId, digest.displayName)
@@ -306,14 +306,14 @@ export function createLinkedInSource(candidateId: string, url: string): SourceCr
     stored_path: null,
     char_count: 0,
     status: 'registered',
-    status_detail: "LinkedIn reading isn't supported in this build. The URL is stored, not read.",
+    status_detail: serverText().linkedinUnsupported,
   })
   return {
     id: source.id,
     name: source.name,
     type: source.type,
     status: source.status,
-    detail: "LinkedIn reading isn't supported in this build. The URL is stored, not read.",
+    detail: serverText().linkedinUnsupported,
   }
 }
 
@@ -344,8 +344,8 @@ export class SourceRejectedError extends Error {
 export async function processSource(source: SourceRow, candidateId: string): Promise<ProcessedSourceResult> {
   const content = readSourceContent(source)
   if (!content) {
-    updateSourceStatus(source.id, 'failed', 'The stored source content could not be loaded.')
-    throw new Error(`The content of "${source.name}" could not be loaded.`)
+    updateSourceStatus(source.id, 'failed', serverText().sourceNotLoaded)
+    throw new Error(serverText().sourceNotLoaded)
   }
 
   // Classify before extracting. A document that isn't about this person's career

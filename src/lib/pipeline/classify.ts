@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { runStructuredTask } from '../model/provider'
+import { serverText } from '../i18n/candidate'
 
 // A file's type is decided by what is inside it, never by how it arrived or what
 // it is called. A PDF named BORJA.pdf turned out to be a quote for PVC windows;
@@ -16,7 +17,8 @@ export interface Classification {
 
 interface Signature {
   type: ClassifiedType
-  reason: string
+  // Resolved when used, so it reads in the candidate's current language.
+  describe: () => string
   test: (content: string) => boolean
 }
 
@@ -29,7 +31,7 @@ function countMarkers(content: string, markers: RegExp[]): number {
 const SIGNATURES: Signature[] = [
   {
     type: 'linkedin',
-    reason: 'Export de perfil de LinkedIn: cabecera de contacto, aptitudes y paginación propias del PDF de LinkedIn.',
+    describe: () => serverText().linkedinExport,
     test: (content) =>
       /linkedin\.com\/in\//i.test(content) &&
       countMarkers(content, [
@@ -59,7 +61,7 @@ const classifySourceOutputSchema = z.preprocess(
       reason:
         typeof obj.reason === 'string' && obj.reason.trim().length > 0
           ? obj.reason.trim().slice(0, 300)
-          : 'Sin motivo indicado.',
+          : serverText().noReasonGiven,
     }
   },
   z.object({
@@ -81,7 +83,7 @@ isProfessional: true only if the document is about a person's professional life 
 
 Be strict. A document that merely mentions a name is not evidence about that person's career.
 
-reason: one sentence in Spanish explaining the decision, naming the concrete signal you used.
+reason: one sentence explaining the decision, naming the concrete signal you used.
 
 Respond ONLY with JSON: {"type": "cv"|"linkedin"|"website"|"other", "isProfessional": boolean, "reason": string}.`
 
@@ -91,7 +93,7 @@ export async function classifySourceContent(params: {
 }): Promise<Classification> {
   const signature = detectSourceSignature(params.content)
   if (signature) {
-    return { type: signature.type, isProfessional: true, reason: signature.reason, certain: true }
+    return { type: signature.type, isProfessional: true, reason: signature.describe(), certain: true }
   }
 
   const { data } = await runStructuredTask({

@@ -27,6 +27,7 @@ import {
 } from '../db/repo'
 import { runStructuredTask } from '../model/provider'
 import { isUnverifiedAssisted } from './attribution'
+import { serverText } from '../i18n/candidate'
 
 // Revealed intent (PRODUCT_SPEC §15.1). What someone declares they want is
 // written from what they believe they value; what they reject is produced by
@@ -111,7 +112,6 @@ Design rules:
 - Realistic offers for this person's field and seniority. Salaries in EUR, anchored on the candidate's declared floor and current compensation when known, spread roughly from 30% below to 70% above the floor. Never invent a current salary: if unknown, the status quo "salaryEur" is null.
 - "title": role · company type (invented, no real company names). "description": 1 to 3 short sentences with the concrete conditions. No marketing language.
 - "attributes": the structured conditions, e.g. {"remote": "full"|"hybrid"|"onsite", "onsite_days": 3, "location": "...", "stage": "...", "team": 4, "budget_eur": 300000, "equity_pct": 1, "language": "en", "timezone": "...", "autonomy": "...", "technical_demand": "..."}.
-- Write titles and descriptions in the candidate's language (the language of the evidence and declared intent).
 
 Respond ONLY with JSON: {"probes": [{"title": string, "description": string, "salaryEur": number|null, "attributes": object, "axes": string[], "isStatusQuo": boolean}]}.`
 
@@ -142,7 +142,7 @@ export async function generateTriage(): Promise<OfferTriageRow> {
   const latest = getLatestOfferTriage(candidate.id)
   if (latest && latest.status === 'open') {
     // Two open triages would split the answers and the baseline between them.
-    throw new TriageError('There is already a triage waiting for your answers. Finish it first.', 409)
+    throw new TriageError(serverText().triageOpen, 409)
   }
 
   const declared = declaredSnapshot(candidate.id) ?? latest?.declared ?? null
@@ -184,7 +184,7 @@ export async function generateTriage(): Promise<OfferTriageRow> {
       .map((issue) => `- ${issue.path.join('.')}: ${issue.message}`)
       .join('\n')}`
   }
-  throw new TriageError("I couldn't design a valid set of offers. Nothing has been saved. Try again.", 502)
+  throw new TriageError(serverText().triageDesignFailed, 502)
 }
 
 // ── Views ────────────────────────────────────────────────────────────────
@@ -297,17 +297,17 @@ export function answerProbe(params: {
   reason?: string | null
 }): void {
   const probe = getOfferProbe(params.probeId)
-  if (!probe) throw new TriageError('Offer not found.', 404)
+  if (!probe) throw new TriageError(serverText().offerNotFound, 404)
   const triage = getOfferTriage(probe.triage_id)
   if (!triage || triage.status === 'analysed') {
-    throw new TriageError('This triage has already been analysed. Its answers are part of the record now.', 409)
+    throw new TriageError(serverText().triageFrozen, 409)
   }
   if (!VERDICTS.includes(params.verdict as Verdict)) {
     throw new TriageError(`verdict must be one of: ${VERDICTS.join(', ')}.`)
   }
   const conditions = params.conditions?.trim() || null
   if (params.verdict === 'yes_if' && !conditions) {
-    throw new TriageError('A conditional yes needs its condition.')
+    throw new TriageError(serverText().conditionRequired)
   }
   // The literal reason is stored exactly as given: it is the evidence.
   answerOfferProbe(probe.id, params.verdict, conditions, params.reason?.trim() || null)
@@ -376,8 +376,8 @@ Rules:
 - The status-quo offer is the baseline; use it.
 - A "no" with a literal reason defines a boundary; a "yes" only confirms. Weigh them accordingly.
 - Do not restate each answer. Find the few things that change how an agent should filter offers for this person. 4 to 10 preferences.
-- "label": the same preference in at most 6 words, as the Rep would list it among what it listens for (e.g. "Remoto, o casi", "No por debajo de 75K", "Nada de revisar código"). Same language as the statement.
-- Write statements in the language of the candidate's answers, second person, plain.
+- "label": the same preference in at most 6 words, as the Rep would list it among what it listens for (e.g. "Remote, or close to it", "Not below 75K", "No code review"). Same language as the statement, which is the output language.
+- Write statements in second person, plain.
 
 Respond ONLY with JSON: {"preferences": [{"kind": string, "statement": string, "label": string, "declared": string|null, "offers": number[], "quote": string|null}]}.`
 
@@ -417,13 +417,13 @@ export interface AnalysisResult {
 export async function analyseTriage(triageId?: string): Promise<AnalysisResult> {
   const candidate = getOrCreateCandidate()
   const triage = triageId ? getOfferTriage(triageId) : getLatestOfferTriage(candidate.id)
-  if (!triage || triage.candidate_id !== candidate.id) throw new TriageError('There is no triage to analyse.', 404)
+  if (!triage || triage.candidate_id !== candidate.id) throw new TriageError(serverText().noTriage, 404)
 
   const probes = listOfferProbes(triage.id)
   const unanswered = probes.filter((probe) => probe.verdict === null)
   if (unanswered.length > 0) {
     throw new TriageError(
-      `Offers ${unanswered.map((probe) => probe.idx + 1).join(', ')} are still unanswered. Every offer is part of the design.`,
+      serverText().offersUnanswered(unanswered.map((probe) => probe.idx + 1)),
       409,
     )
   }
@@ -536,7 +536,7 @@ export async function analyseTriage(triageId?: string): Promise<AnalysisResult> 
 function ownPreference(preferenceId: string): RevealedPreferenceRow {
   const candidate = getOrCreateCandidate()
   const preference = getRevealedPreference(preferenceId)
-  if (!preference || preference.candidate_id !== candidate.id) throw new TriageError('Preference not found.', 404)
+  if (!preference || preference.candidate_id !== candidate.id) throw new TriageError(serverText().preferenceNotFound, 404)
   return preference
 }
 
@@ -545,7 +545,7 @@ function ownPreference(preferenceId: string): RevealedPreferenceRow {
 export function revisePreference(preferenceId: string, statement: string, label: string | null): void {
   const preference = ownPreference(preferenceId)
   const text = statement.trim()
-  if (text.length < 10) throw new TriageError('Say it in at least a short sentence.')
+  if (text.length < 10) throw new TriageError(serverText().tooShort)
   reviseRevealedPreference(preference.id, text.slice(0, 500), label?.trim().slice(0, 60) || null)
   if (preference.status !== 'confirmed') decideRevealedPreference(preference.id, 'confirmed')
 }
@@ -562,17 +562,17 @@ export function addPreference(params: {
 }): RevealedPreferenceRow {
   const candidate = getOrCreateCandidate()
   const triage = getLatestOfferTriage(candidate.id)
-  if (!triage || triage.status !== 'analysed') throw new TriageError('There is no analysed triage to add to.', 409)
+  if (!triage || triage.status !== 'analysed') throw new TriageError(serverText().noAnalysedTriage, 409)
   if (!PREFERENCE_KINDS.includes(params.kind as PreferenceKind)) {
     throw new TriageError(`kind must be one of: ${PREFERENCE_KINDS.join(', ')}.`)
   }
   const statement = params.statement.trim()
-  if (statement.length < 10) throw new TriageError('Say it in at least a short sentence.')
+  if (statement.length < 10) throw new TriageError(serverText().tooShort)
 
   const probes = listOfferProbes(triage.id)
   const cited = [...new Set(params.offerNumbers ?? [])].map((n) => {
     const probe = probes.find((p) => p.idx + 1 === n)
-    if (!probe) throw new TriageError(`There is no offer #${n} in this triage.`)
+    if (!probe) throw new TriageError(serverText().noSuchOffer(n))
     return probe
   })
 
@@ -580,7 +580,7 @@ export function addPreference(params: {
   if (quote) {
     const needle = normalise(quote)
     const found = cited.some((probe) => [probe.reason, probe.conditions].some((text) => text !== null && normalise(text).includes(needle)))
-    if (!found) throw new TriageError('That quote is not in your answers to the cited offers.')
+    if (!found) throw new TriageError(serverText().quoteNotFound)
   }
 
   return insertCandidatePreference({
@@ -597,7 +597,7 @@ export function addPreference(params: {
 export function decidePreference(preferenceId: string, decision: string): void {
   const candidate = getOrCreateCandidate()
   const preference = getRevealedPreference(preferenceId)
-  if (!preference || preference.candidate_id !== candidate.id) throw new TriageError('Preference not found.', 404)
+  if (!preference || preference.candidate_id !== candidate.id) throw new TriageError(serverText().preferenceNotFound, 404)
   if (decision !== 'confirmed' && decision !== 'rejected') {
     throw new TriageError('decision must be "confirmed" or "rejected".')
   }

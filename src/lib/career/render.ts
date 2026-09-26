@@ -1,19 +1,12 @@
 import type { CandidateRow, EvidenceRow, RetractionRow, SourceRow, UncertaintyRow } from '../db/repo'
 import { isUnverifiedAssisted } from '../pipeline/attribution'
+import { dictionaries, type Dictionary } from '../i18n/dictionaries'
+import type { Locale } from '../i18n/locale'
 import type { CareerProfileOutput, GroundedStatement } from './synthesis'
 
 // Deterministic rendering. The model proposes structure; this module decides what
 // survives. A statement whose evidence IDs do not resolve is dropped, not softened:
 // provenance is enforced here rather than requested in a prompt.
-
-const SOURCE_TAG: Record<string, string> = {
-  cv: 'cv',
-  linkedin: 'li',
-  github: 'gh',
-  website: 'web',
-  interview: 'ent',
-  verified: 'ver',
-}
 
 export interface RenderStats {
   statementsKept: number
@@ -40,6 +33,7 @@ function yamlString(value: string): string {
 function resolve(
   statement: GroundedStatement,
   evidenceById: Map<string, EvidenceRow>,
+  sourceTags: Record<string, string>,
 ): ResolvedStatement | null {
   const resolved = statement.evidenceIds
     .map((id) => evidenceById.get(id))
@@ -48,15 +42,15 @@ function resolve(
   // Domain rule: no provenance, no statement.
   if (resolved.length === 0) return null
 
-  const tags = [...new Set(resolved.map((row) => SOURCE_TAG[row.source_type] ?? row.source_type))].sort()
+  const tags = [...new Set(resolved.map((row) => sourceTags[row.source_type] ?? row.source_type))].sort()
   // Any undefended assisted support flags the statement. A majority rule would
   // let a trivially true fact (the repo exists) launder the claim beside it.
   return { text: statement.text, tags, assisted: resolved.some(isUnverifiedAssisted) }
 }
 
-function line(statement: ResolvedStatement): string {
+function line(statement: ResolvedStatement, c: Dictionary['career']): string {
   const tags = statement.tags.map((tag) => `\`[${tag}]\``).join('')
-  const assisted = statement.assisted ? ' ⚠️ co-producido, sin defender' : ''
+  const assisted = statement.assisted ? c.assistedFlag : ''
   return `${statement.text} ${tags}${assisted}`
 }
 
@@ -85,9 +79,11 @@ export function renderCareerMarkdown(params: {
   sources: SourceRow[]
   uncertainties: UncertaintyRow[]
   retractions: RetractionRow[]
+  locale: Locale
   generatedAt?: Date
 }): RenderedCareer {
   const { profile, candidate, evidence, sources, uncertainties, retractions } = params
+  const c = dictionaries[params.locale].career
   const evidenceById = new Map(evidence.map((row) => [row.id, row]))
   const generatedAt = (params.generatedAt ?? new Date()).toISOString().slice(0, 10)
 
@@ -96,7 +92,7 @@ export function renderCareerMarkdown(params: {
   let assisted = 0
 
   const take = (statement: GroundedStatement): ResolvedStatement | null => {
-    const resolved = resolve(statement, evidenceById)
+    const resolved = resolve(statement, evidenceById, c.tags)
     if (!resolved) {
       dropped++
       return null
@@ -141,14 +137,14 @@ export function renderCareerMarkdown(params: {
   const out: string[] = []
 
   out.push('---')
-  out.push('# career.md — generado por Amble desde tu grafo de evidencia.')
-  out.push('# Cada afirmación lleva su procedencia. Lo que no la tenía, no está aquí.')
+  out.push(c.header1)
+  out.push(c.header2)
   out.push('schema: career.md/0.1')
   out.push('generated_by: amble')
   out.push(`generated_at: ${generatedAt}`)
-  out.push(`name: ${yamlString(candidate.name ?? 'Sin nombre')}`)
+  out.push(`name: ${yamlString(candidate.name ?? c.noName)}`)
   if (profile.headline) out.push(`headline: ${yamlString(profile.headline)}`)
-  out.push('headline_alt: "[hueco] tu titular, en tus palabras — este campo no lo rellena el sistema"')
+  out.push(`headline_alt: ${c.headlineAlt}`)
   out.push(`completeness: ${completeness}`)
   out.push('sources:')
   for (const source of sources) {
@@ -162,50 +158,46 @@ export function renderCareerMarkdown(params: {
   out.push(`  retracted: ${retractions.length}`)
   out.push('---')
   out.push('')
-  out.push(`# ${candidate.name ?? 'Perfil'}`)
+  out.push(`# ${candidate.name ?? c.profileFallback}`)
   out.push('')
-  out.push(
-    '> **Procedencia:** `[cv]` CV · `[li]` LinkedIn · `[gh]` GitHub · `[web]` web · `[ent]` entrevista · `[ver]` verificado.',
-  )
-  out.push(
-    '> Una afirmación marcada ⚠️ sale de una fuente co-producida con un agente y **no se ha defendido todavía**: no debe leerse como capacidad individual.',
-  )
+  out.push(c.provenance)
+  out.push(c.assistedNote)
   out.push('')
 
   if (oneLiner) {
-    out.push('## En una línea')
+    out.push(c.oneLine)
     out.push('')
-    out.push(line(oneLiner))
+    out.push(line(oneLiner, c))
     out.push('')
   }
 
   if (howIWork.length > 0) {
-    out.push('## Cómo trabajo')
+    out.push(c.howIWork)
     out.push('')
-    for (const statement of howIWork) out.push(`- ${line(statement)}`)
+    for (const statement of howIWork) out.push(`- ${line(statement, c)}`)
     out.push('')
   }
 
   if (trajectory.length > 0) {
-    out.push('## Trayectoria')
+    out.push(c.trajectory)
     out.push('')
     for (const entry of trajectory) {
       const heading = [entry.organisation, entry.role].filter(Boolean).join(' — ')
       out.push(`### ${heading}${entry.period ? ` · ${entry.period}` : ''}`)
       out.push('')
       if (entry.bullets.length === 0) {
-        out.push('_Sin afirmaciones con procedencia suficiente para esta etapa._')
+        out.push(c.noStatementsForStage)
       } else {
-        for (const bullet of entry.bullets) out.push(`- ${line(bullet)}`)
+        for (const bullet of entry.bullets) out.push(`- ${line(bullet, c)}`)
       }
       out.push('')
     }
   }
 
   if (education.length > 0) {
-    out.push('## Formación')
+    out.push(c.education)
     out.push('')
-    out.push('| Titulación | Centro | Fecha |')
+    out.push(c.educationHeader)
     out.push('| --- | --- | --- |')
     for (const entry of education) {
       out.push(`| ${entry.title} | ${entry.institution ?? '—'} | ${entry.date ?? '—'} |`)
@@ -214,34 +206,34 @@ export function renderCareerMarkdown(params: {
   }
 
   if (shipped.length > 0) {
-    out.push('## Lo que has enviado')
+    out.push(c.shipped)
     out.push('')
-    for (const entry of shipped) out.push(`- **${entry.name}** — ${line(entry.description)}`)
+    for (const entry of shipped) out.push(`- **${entry.name}** — ${line(entry.description, c)}`)
     out.push('')
   }
 
   if (contradictions.length > 0) {
-    out.push('## Contradicciones entre fuentes')
+    out.push(c.contradictions)
     out.push('')
     for (const entry of contradictions) {
       out.push(`### ${entry.title}`)
       out.push('')
-      for (const side of entry.sides) out.push(`- ${line(side)}`)
+      for (const side of entry.sides) out.push(`- ${line(side, c)}`)
       if (entry.reading) {
         out.push('')
-        out.push(`> Lectura de Amble, sin confirmar: ${entry.reading}`)
+        out.push(c.reading(entry.reading))
       }
       out.push('')
     }
   }
 
   if (openUncertainties.length > 0) {
-    out.push('## Huecos abiertos')
+    out.push(c.openGaps)
     out.push('')
-    out.push('| Hueco | Tipo | Materialidad |')
+    out.push(c.gapsHeader)
     out.push('| --- | --- | --- |')
     for (const uncertainty of openUncertainties.slice(0, 20)) {
-      const kind = uncertainty.kind === 'ATTRIBUTION' ? 'atribución' : 'materialidad'
+      const kind = uncertainty.kind === 'ATTRIBUTION' ? c.kindAttribution : c.kindMateriality
       out.push(`| ${uncertainty.description} | ${kind} | ${uncertainty.materiality} |`)
     }
     out.push('')
@@ -249,15 +241,15 @@ export function renderCareerMarkdown(params: {
 
   // PRODUCT_SPEC §12.1: what the system believed, and why it stopped believing it.
   if (retractions.length > 0) {
-    out.push('## Retirado')
+    out.push(c.retracted)
     out.push('')
-    out.push('_Afirmaciones que Amble llegó a creer y retiró. No cuentan como evidencia; se conservan como registro._')
+    out.push(c.retractedNote)
     out.push('')
     for (const retraction of retractions) {
       out.push(`- ⊘ ~~${retraction.statement}~~`)
-      if (retraction.question) out.push(`  - Pregunta: ${retraction.question}`)
+      if (retraction.question) out.push(c.question(retraction.question))
       if (retraction.answer) out.push(`  - Respuesta: ${retraction.answer.replace(/\s+/g, ' ').slice(0, 300)}`)
-      out.push(`  - Motivo: ${retraction.reason}`)
+      out.push(c.reason(retraction.reason))
     }
     out.push('')
   }
@@ -265,9 +257,7 @@ export function renderCareerMarkdown(params: {
   if (dropped > 0) {
     out.push('---')
     out.push('')
-    out.push(
-      `_${dropped} afirmación(es) propuestas por el modelo se descartaron por no tener procedencia resoluble. No aparecen arriba._`,
-    )
+    out.push(c.dropped(dropped))
     out.push('')
   }
 

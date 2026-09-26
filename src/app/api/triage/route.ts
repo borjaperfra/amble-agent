@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
 import { getOrCreateCandidate } from '@/lib/db/repo'
-import { refreshDetectedLocale } from '@/lib/i18n/candidate'
+import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
 import {
   analyseTriage,
   answerProbe,
@@ -36,7 +36,7 @@ function errorResponse(error: unknown) {
     return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
   }
   if (error instanceof ModelError) {
-    return NextResponse.json({ error: error.message }, { status: 502 })
+    return NextResponse.json({ error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
   }
   return NextResponse.json(
     { error: error instanceof Error ? error.message : 'The triage request failed.' },

@@ -175,7 +175,7 @@ The iron rule: EVERY statement you write must carry the evidenceIds it came from
 
 Rules:
 - You may ONLY cite evidence IDs from the provided list. Never invent an ID.
-- Write in Spanish, in a plain specific register. No marketing adjectives, no superlatives.
+- Write in a plain specific register. No marketing adjectives, no superlatives.
 - Write in the FIRST PERSON throughout, consistently. This is the candidate's own document, in their voice: "Lidero marketing y comunidad", never "Lidera marketing" or "Su método consiste en". Never refer to the candidate by name or in the third person anywhere, in any section.
 - A number is only as current as the source it came from. When evidence gives a figure, state it; never round it up, never present a stale figure as today's.
 - Never add a fact, number, date, title, employer or skill that is not in the evidence.

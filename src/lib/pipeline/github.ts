@@ -9,6 +9,8 @@
 // whether it shipped and is operated, how they decompose work, and their
 // debugging signature.
 
+import { serverText } from '../i18n/candidate'
+
 const API = 'https://api.github.com'
 const RAW = 'https://raw.githubusercontent.com'
 const TIMEOUT_MS = 15_000
@@ -64,10 +66,7 @@ async function api<T>(path: string): Promise<T | null> {
   try {
     const response = await fetch(`${API}${path}`, { headers: headers(), signal: controller.signal })
     if (response.status === 403 || response.status === 429) {
-      throw new GitHubError(
-        'GitHub rate limit reached. Set AMBLE_GITHUB_TOKEN and try again.',
-        response.status,
-      )
+      throw new GitHubError(serverText().githubRateLimit, response.status)
     }
     if (!response.ok) return null
     return (await response.json()) as T
@@ -129,7 +128,7 @@ export interface GitHubDigest {
 
 export async function buildGitHubDigest(handleOrUrl: string): Promise<GitHubDigest> {
   const handle = parseGitHubHandle(handleOrUrl)
-  if (!handle) throw new GitHubError(`"${handleOrUrl}" is not a valid GitHub handle.`)
+  if (!handle) throw new GitHubError(serverText().githubInvalidHandle(handleOrUrl))
 
   const profile = await api<{
     login: string
@@ -142,7 +141,7 @@ export async function buildGitHubDigest(handleOrUrl: string): Promise<GitHubDige
     followers: number
     created_at: string
   }>(`/users/${handle}`)
-  if (!profile) throw new GitHubError(`GitHub has no public profile for "${handle}".`, 404)
+  if (!profile) throw new GitHubError(serverText().githubNoProfile(handle), 404)
 
   const ownRepos = (await api<GitHubRepo[]>(`/users/${handle}/repos?per_page=${MAX_REPOS_PER_OWNER}&sort=pushed`)) ?? []
   const orgs = (await api<{ login: string }[]>(`/users/${handle}/orgs`)) ?? []

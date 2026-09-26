@@ -26,6 +26,7 @@ import {
   type EvidenceForAssessment,
 } from '../model/tasks'
 import { ASSISTED_SOURCE_TYPES, isUnverifiedAssisted } from './attribution'
+import { serverText } from '../i18n/candidate'
 
 export function claimsToEvidence(candidateId: string): number {
   const claims = listClaimsWithoutEvidence(candidateId)
@@ -95,7 +96,7 @@ export function reconcileCapabilities(candidateId: string): string[] {
         capability.id,
         capability.name,
         'NO_EVIDENCE_YET',
-        'La evidencia que sostenía esta capacidad fue retirada tras una pregunta de defensa. Queda en el registro, no en la evaluación.',
+        serverText().evidenceRetracted,
       )
       changed.push(capability.id)
       continue
@@ -108,7 +109,7 @@ export function reconcileCapabilities(candidateId: string): string[] {
         capability.id,
         capability.name,
         'SOME_EVIDENCE',
-        `${capability.reason} — Limitado a evidencia parcial: ${unverified} de ${linked.length} evidencias son trabajo co-producido sin defender.`.slice(0, 1000),
+        `${capability.reason} — ${serverText().assistedCeiling(unverified, linked.length)}`.slice(0, 1000),
       )
       changed.push(capability.id)
     }
@@ -139,8 +140,8 @@ export function syncAttributionUncertainties(candidateId: string, resolvedByTurn
         id: newId('unc'),
         candidate_id: candidateId,
         capability_id: capability.id,
-        description: `No sé de quién es el criterio detrás de "${capability.name}": ${unverified} de ${linked.length} evidencias salen de trabajo co-producido con IA y nadie las ha defendido.`,
-        reason: 'Atribución (PRODUCT_SPEC §14.1). Se resuelve solo con una pregunta de defensa.',
+        description: serverText().attributionUnknown(capability.name, unverified, linked.length),
+        reason: serverText().attributionReason,
         materiality: 'HIGH',
         status: 'OPEN',
         resolvable_by_interview: 1,
@@ -148,7 +149,7 @@ export function syncAttributionUncertainties(candidateId: string, resolvedByTurn
       })
       raised++
     } else if (!needsDefence && existing) {
-      updateUncertaintyStatus(existing.id, 'RESOLVED', resolvedByTurn, 'La evidencia asistida fue defendida o retirada.')
+      updateUncertaintyStatus(existing.id, 'RESOLVED', resolvedByTurn, serverText().attributionResolved)
     }
   }
 

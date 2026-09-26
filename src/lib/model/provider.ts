@@ -1,6 +1,8 @@
 import type { ZodType } from 'zod'
 import { getModelConfig, ModelNotConfiguredError } from '../features'
 import { insertModelRun, newId } from '../db/repo'
+import { candidateLocale } from '../i18n/candidate'
+import { LANGUAGE_NAME, type Locale } from '../i18n/locale'
 
 export class ModelError extends Error {
   status?: number
@@ -28,6 +30,19 @@ export interface StructuredTaskOptions<T> {
   user: string
   schema: ZodType<T>
   temperature?: number
+  // Language for every human-readable value the model writes. Defaults to the
+  // candidate's; null means the task writes nothing a person reads.
+  language?: Locale | null
+}
+
+// One instruction for every task, instead of each prompt naming a language.
+// Quotes are the exception: domain rules check them character by character
+// against the source or the candidate's words, so a translated quote is a
+// fabricated one.
+function languageInstruction(language: Locale): string {
+  return `
+
+OUTPUT LANGUAGE: write every human-readable value (sentences, names, labels, questions, reasons, descriptions) in ${LANGUAGE_NAME[language]}. JSON keys and enum values stay exactly as specified. Verbatim quotes and excerpts from sources or from the candidate stay in their original language, character for character: never translate a quote.`
 }
 
 interface ChatCompletionResponse {
@@ -109,7 +124,10 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
   const config = getModelConfig()
   if (!config) throw new ModelNotConfiguredError()
 
-  const { candidateId, task, version, system, user, schema } = options
+  const { candidateId, task, schema, user } = options
+  const language = options.language === undefined ? (candidateId ? candidateLocale() : null) : options.language
+  const system = language ? options.system + languageInstruction(language) : options.system
+  const version = language ? `${options.version}@${language}` : options.version
   const temperature = options.temperature ?? 0.2
 
   let lastError: ModelError | null = null

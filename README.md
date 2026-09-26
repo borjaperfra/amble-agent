@@ -34,8 +34,8 @@ Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly wit
 
 | Command | What it does |
 | --- | --- |
-| `npm run career:example` | Renders `src/fixtures/career.example.md` from a fictional candidate, through the product's renderer. |
-| `npm run career:example:check` | Fails if the renderer's output has drifted from that example. The regression test for `career.md`. |
+| `npm run career:example` | Renders `src/fixtures/career.example.md` (and the English-frame `career.example.en.md`) from a fictional candidate, through the product's renderer. |
+| `npm run career:example:check` | Fails if the renderer's output has drifted from those examples. The regression test for `career.md`, in both languages. |
 | `npx tsx scripts/import-triage.ts <file>` | Imports a triage run outside the product (offers and literal answers). Keep such files in `.amble-data/`. |
 | `npm run sourcing -- watch "Company" [careers-url]` | Finds the company's public job board (Greenhouse, Lever, Ashby, Workable) and watches it. |
 | `npm run sourcing -- run` | Reads every watched board: new offers are stored, missing ones are closed. Meant to be scheduled. |

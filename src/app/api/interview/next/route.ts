@@ -3,6 +3,7 @@ import { ModelNotConfiguredError } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { planNextQuestion } from '@/lib/pipeline/interview'
 import { ModelError } from '@/lib/model/provider'
+import { serverText } from '@/lib/i18n/candidate'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -17,7 +18,7 @@ export async function POST() {
       return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
     }
     if (error instanceof ModelError) {
-      return NextResponse.json({ error: error.message }, { status: 502 })
+      return NextResponse.json({ error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
     }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Planning the next question failed.' },

@@ -1,5 +1,6 @@
 import { getDb } from '../db/db'
 import { getOrCreateCandidate, setCandidateLocale } from '../db/repo'
+import { dictionaries, type Dictionary } from './dictionaries'
 import { DEFAULT_LOCALE, detectLocale, isLocale, localeFromAcceptLanguage, type Locale } from './locale'
 
 // The candidate's language decides the interface and everything the Rep writes.
@@ -43,4 +44,9 @@ export function refreshDetectedLocale(candidateId: string): Locale | null {
 export function chooseLocale(locale: Locale): void {
   const candidate = getOrCreateCandidate()
   setCandidateLocale(candidate.id, locale, 'chosen')
+}
+
+// Text the server writes for the candidate without the model, in their language.
+export function serverText(): Dictionary['server'] {
+  return dictionaries[candidateLocale()].server
 }

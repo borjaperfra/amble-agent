@@ -28,6 +28,7 @@ import {
 } from '../model/tasks'
 import { newEvidenceFromClaim, reconcileCapabilities, syncAttributionUncertainties } from './graph'
 import { judgeDefenceAnswer, planDefenceQuestion, type DefenceResult } from './defence'
+import { serverText } from '../i18n/candidate'
 
 const MIN_QUESTIONS_TARGET = 3
 const MAX_QUESTIONS = 12
@@ -65,7 +66,7 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
 
   if (answered.length >= MAX_QUESTIONS) {
     completeInterview(interview.id)
-    return { action: 'STOP', reason: 'The interview has reached its useful length for this build.' }
+    return { action: 'STOP', reason: serverText().interviewLongEnough }
   }
 
   const defenceAsked = turns.filter((turn) => turn.kind === 'defence').length
@@ -182,8 +183,8 @@ export async function incorporateAnswer(
   answerText: string,
 ): Promise<IncorporatedAnswer> {
   const turn = getTurn(turnId)
-  if (!turn) throw new Error('Interview turn not found.')
-  if (turn.answer !== null) throw new Error('This question has already been answered.')
+  if (!turn) throw new Error(serverText().turnNotFound)
+  if (turn.answer !== null) throw new Error(serverText().alreadyAnswered)
 
   return runInTransaction(async () => {
     answerTurn(turnId, answerText)
@@ -379,7 +380,7 @@ async function reassessScope(
         candidate_id: candidateId,
         capability_id: uncertainty.capabilitySlug ?? null,
         description: uncertainty.description,
-        reason: `Discovered from interview turn ${turn.idx + 1}`,
+        reason: serverText().discoveredInTurn(turn.idx + 1),
         materiality: uncertainty.materiality,
         status: 'OPEN',
         resolvable_by_interview: uncertainty.materiality === 'LOW' ? 0 : 1,

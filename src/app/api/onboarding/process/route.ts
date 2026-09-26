@@ -3,6 +3,8 @@ import { getOrCreateCandidate, listUnprocessedSources, listClaims } from '@/lib/
 import { processSource, SourceRejectedError } from '@/lib/pipeline/sources'
 import { claimsToEvidence, assessCapabilities, buildDistinctiveProfile, buildDescriptor } from '@/lib/pipeline/graph'
 import { ModelNotConfiguredError } from '@/lib/features'
+import { ModelError } from '@/lib/model/provider'
+import { serverText } from '@/lib/i18n/candidate'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -67,6 +69,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof ModelNotConfiguredError) {
       return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
+    }
+    if (error instanceof ModelError) {
+      return NextResponse.json({ error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
     }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Processing failed.' },

@@ -3,7 +3,7 @@ import { ModelNotConfiguredError } from '@/lib/features'
 import { confirmLatestIntent, interpretIntent } from '@/lib/pipeline/intent'
 import { ModelError } from '@/lib/model/provider'
 import { getOrCreateCandidate } from '@/lib/db/repo'
-import { refreshDetectedLocale } from '@/lib/i18n/candidate'
+import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
     }
     if (error instanceof ModelError) {
-      return NextResponse.json({ error: error.message }, { status: 502 })
+      return NextResponse.json({ error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
     }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Your intent could not be interpreted.' },

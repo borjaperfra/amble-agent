@@ -10,12 +10,13 @@ import {
   listUncertainties,
 } from '../db/repo'
 import { reconcileCapabilities, syncAttributionUncertainties } from '../pipeline/graph'
+import { candidateLocale, serverText } from '../i18n/candidate'
 import { renderCareerMarkdown, type RenderedCareer, type RenderStats } from './render'
 import { runSynthesizeCareerTask, type EvidenceForSynthesis } from './synthesis'
 
 export class NoEvidenceError extends Error {
   constructor() {
-    super('There is no evidence yet. Add sources and let your Rep read them first.')
+    super(serverText().noEvidence)
     this.name = 'NoEvidenceError'
   }
 }
@@ -72,6 +73,7 @@ export async function buildCareerMarkdown(): Promise<CareerBuildResult> {
     sources: listSources(candidate.id),
     uncertainties: listUncertainties(candidate.id),
     retractions: listRetractions(candidate.id),
+    locale: candidateLocale(),
   })
 
   const document = insertCareerDocument({

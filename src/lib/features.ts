@@ -1,3 +1,5 @@
+import { serverText } from './i18n/candidate'
+
 export interface ModelConfig {
   provider: string
   baseUrl: string
@@ -7,9 +9,7 @@ export interface ModelConfig {
 
 export class ModelNotConfiguredError extends Error {
   constructor() {
-    super(
-      "The model isn't configured. Set AMBLE_MODEL_API_KEY and AMBLE_MODEL_ID (see .env.example), then restart the server.",
-    )
+    super(serverText().modelNotConfigured)
     this.name = 'ModelNotConfiguredError'
   }
 }
