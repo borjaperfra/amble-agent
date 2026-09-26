@@ -16,6 +16,11 @@ export interface TheirStackQuery {
   titleAny: string[]
   titleNot?: string[]
   countryCodes?: string[]
+  countryNot?: string[]
+  seniority?: string[]
+  directEmployersOnly?: boolean
+  // Companies with at least this many people, or of unknown size.
+  minEmployees?: number
   workplaces?: Workplace[]
   descriptionAny?: string[]
   maxAgeDays: number
@@ -68,6 +73,10 @@ export async function searchTheirStack(query: TheirStackQuery): Promise<RawOppor
   }
   if (query.titleNot?.length) body.job_title_not = query.titleNot
   if (query.countryCodes?.length) body.job_country_code_or = query.countryCodes
+  if (query.countryNot?.length) body.job_country_code_not = query.countryNot
+  if (query.seniority?.length) body.job_seniority_or = query.seniority
+  if (query.directEmployersOnly) body.company_type = 'direct_employer'
+  if (query.minEmployees) body.min_employee_count_or_null = query.minEmployees
   if (query.workplaces?.length) body.workplace_types_or = query.workplaces.map((w) => WORKPLACE_PARAM[w])
   if (query.descriptionAny?.length) body.job_description_pattern_or = query.descriptionAny
 

@@ -63,7 +63,13 @@ export async function runMatching(options: { limit?: number } = {}): Promise<Mat
     else pending.push(opportunity)
   }
 
-  pending.sort((a, b) => (b.posted_at ?? b.first_seen_at).localeCompare(a.posted_at ?? a.first_seen_at))
+  // Offers that publish a salary go first: the candidate asked for them to be
+  // prioritised, and they can be checked against the floor. Then newest.
+  const hasSalary = (o: (typeof pending)[number]) => Number(Boolean(o.salary_raw || o.salary_min))
+  pending.sort(
+    (a, b) =>
+      hasSalary(b) - hasSalary(a) || (b.posted_at ?? b.first_seen_at).localeCompare(a.posted_at ?? a.first_seen_at),
+  )
   const batch = pending.slice(0, options.limit ?? DEFAULT_LIMIT)
   stats.waiting = pending.length - batch.length
 
@@ -101,13 +107,74 @@ export async function runMatching(options: { limit?: number } = {}): Promise<Mat
 // The same query that filters the watched boards narrows the aggregator
 // search, so TheirStack credits are only spent on offers that could pass.
 export function theirStackQueryFrom(query: RoleQuery): TheirStackQuery {
+  // Every returned offer costs a credit, so the search is narrower than the
+  // prefilter: a term that is part of an exclusion ("developer" inside
+  // "software developer") would pull in the very offers the exclusion drops.
+  const titleAny = query.titleInclude.filter((term) => !query.titleExclude.some((excluded) => excluded.includes(term)))
+  // Countries a hard filter rules out, when the role query names them.
+  const countryNot = [
+    ...new Set(query.locationExclude.map((place) => COUNTRY_CODES[place]).filter((code): code is string => Boolean(code))),
+  ]
   return {
-    titleAny: query.titleInclude.slice(0, 20),
-    titleNot: query.titleExclude.slice(0, 30),
+    titleAny: titleAny.slice(0, 20),
+    // The profile's exclusions first, then the gig and internship forms that
+    // aggregators are full of, in the languages of the region searched.
+    titleNot: [...new Set([...query.titleExclude.slice(0, 30), ...NOT_EMPLOYMENT])],
     workplaces: query.requireRemote ? ['remote'] : undefined,
+    // Remote work is realistic within the candidate's region: Europe for
+    // someone living in Europe, otherwise their own country.
+    countryCodes: query.homeCountry ? (EUROPE.includes(query.homeCountry) ? EUROPE : [query.homeCountry]) : undefined,
+    countryNot: countryNot.length > 0 ? countryNot : undefined,
+    seniority: query.seniority.length > 0 ? query.seniority : undefined,
+    // Domain rules: agencies re-post offers, and tiny outfits are mostly gigs.
+    directEmployersOnly: true,
+    minEmployees: 10,
     maxAgeDays: 14,
     limit: 50,
   }
+}
+
+// Not about the candidate: about the form of the job. Aggregators return
+// freelance gigs, internships and working-student posts under any title.
+const NOT_EMPLOYMENT = [
+  'freelance',
+  'freelancer',
+  'evaluator',
+  'werkstudent',
+  'praktikum',
+  'praktikant',
+  'stagiaire',
+  'alternance',
+  'tirocinio',
+  'collaborazione',
+  'p iva',
+  'becario',
+  'practicas',
+]
+
+// EU and EEA, the UK and Switzerland.
+const EUROPE = [
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+  'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
+]
+
+// Country names as they appear (normalised) in role-query location terms.
+const COUNTRY_CODES: Record<string, string> = {
+  'united states': 'US',
+  usa: 'US',
+  'u s': 'US',
+  'u s a': 'US',
+  'estados unidos': 'US',
+  eeuu: 'US',
+  'ee uu': 'US',
+  canada: 'CA',
+  'united kingdom': 'GB',
+  uk: 'GB',
+  india: 'IN',
+  australia: 'AU',
+  singapore: 'SG',
+  germany: 'DE',
+  france: 'FR',
 }
 
 // One listening pass: read the sources, then judge what is new.

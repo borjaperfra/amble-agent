@@ -1,5 +1,5 @@
 import { getOrCreateCandidate, listCapabilities, listConfirmedPreferences } from '../db/repo'
-import { listMatchesForKey, type MatchResponse } from '../db/matching'
+import { listMatchesForKey, type MatchListing, type MatchResponse } from '../db/matching'
 import type { Explanation, Gate, RoleFit } from './assess'
 import { currentMatchKey } from './run'
 
@@ -13,6 +13,8 @@ export interface FoundOpportunity {
   title: string
   location: string | null
   workplace: string | null
+  // As published; null when the offer does not say.
+  salary: string | null
   url: string | null
   closed: boolean
   fit: RoleFit
@@ -48,6 +50,13 @@ export interface OpportunitiesView {
   unseen: number
 }
 
+function salaryText(match: MatchListing): string | null {
+  if (match.salary_raw) return match.salary_raw
+  if (!match.salary_min && !match.salary_max) return null
+  const range = [match.salary_min, match.salary_max].filter(Boolean).map((n) => Math.round((n as number) / 1000) + 'K').join('–')
+  return `${range} ${match.salary_currency ?? ''}`.trim()
+}
+
 export function getOpportunitiesView(): OpportunitiesView {
   const candidate = getOrCreateCandidate()
   const matches = listMatchesForKey(candidate.id, currentMatchKey(candidate.id))
@@ -68,6 +77,7 @@ export function getOpportunitiesView(): OpportunitiesView {
         title: match.title,
         location: match.location,
         workplace: match.workplace,
+        salary: salaryText(match),
         url: match.url,
         closed: match.closed_at !== null,
         fit: explanation.roleFit.fit,
@@ -96,8 +106,10 @@ export function getOpportunitiesView(): OpportunitiesView {
     discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response })
   }
 
-  // Unanswered first, then newest (the query already orders by recency).
-  const byAnswered = (a: FoundOpportunity, b: FoundOpportunity) => Number(a.response !== null) - Number(b.response !== null)
+  // Unanswered first; within that, offers that publish a salary (the candidate
+  // asked for them first); then newest, as the query already orders.
+  const byAnswered = (a: FoundOpportunity, b: FoundOpportunity) =>
+    Number(a.response !== null) - Number(b.response !== null) || Number(b.salary !== null) - Number(a.salary !== null)
   const fits = found.filter((item) => item.fit === 'fits').sort(byAnswered)
   const maybe = found.filter((item) => item.fit !== 'fits').sort(byAnswered)
 

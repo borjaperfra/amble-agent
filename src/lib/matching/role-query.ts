@@ -14,7 +14,10 @@ import type { MatchingProfile } from './profile'
 // passes to the model, which can read the description.
 
 // Part of the stored query's key: a new version of the prompt means a new query.
-const ROLE_QUERY_VERSION = 'v2'
+const ROLE_QUERY_VERSION = 'v3'
+
+export const SENIORITY_LEVELS = ['junior', 'mid_level', 'senior', 'staff', 'c_level'] as const
+export type Seniority = (typeof SENIORITY_LEVELS)[number]
 
 export interface RoleQuery {
   titleInclude: string[]
@@ -25,6 +28,11 @@ export interface RoleQuery {
   // unless located in one of officeAllowed.
   requireRemote: boolean
   officeAllowed: string[]
+  // Where the candidate lives (ISO 3166-1 alpha-2), inferred from their
+  // experience: it bounds where remote work is realistic. Null if unclear.
+  homeCountry: string | null
+  // Levels this person's experience makes credible, for aggregator searches.
+  seniority: Seniority[]
 }
 
 const roleQuerySchema = z.preprocess(
@@ -43,6 +51,8 @@ const roleQuerySchema = z.preprocess(
       requireRemote: obj.requireRemote === true,
       officeAllowed: list(obj.officeAllowed, 10),
       remoteRuleIds: ids(obj.remoteRuleIds),
+      homeCountry: typeof obj.homeCountry === 'string' && /^[A-Za-z]{2}$/.test(obj.homeCountry.trim()) ? obj.homeCountry.trim().toUpperCase() : null,
+      seniority: ids(obj.seniority).filter((level): level is Seniority => (SENIORITY_LEVELS as readonly string[]).includes(level)),
     }
   },
   z.object({
@@ -53,20 +63,24 @@ const roleQuerySchema = z.preprocess(
     requireRemote: z.boolean(),
     officeAllowed: z.array(z.string()),
     remoteRuleIds: z.array(z.string()),
+    homeCountry: z.string().nullable(),
+    seniority: z.array(z.enum(SENIORITY_LEVELS)),
   }),
 )
 
-const SYSTEM_PROMPT = `You are Amble's role-query designer, version 2. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
+const SYSTEM_PROMPT = `You are Amble's role-query designer, version 3. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
 
 Output:
 - titleInclude: 8 to 30 short lowercase words or phrases; a posting passes only if its title contains one. Cover every role family this person could credibly do, in English and in the candidate's own language (e.g. "marketing", "community", "developer relations", "devrel", "developer advocate", "growth", "content", "brand"). Recall matters more than precision here: a later stage reads each survivor carefully.
 - titleExclude: lowercase words or phrases that make a title clearly wrong for this person even if it matched (e.g. "engineer", "intern", "account executive", "recruiter"). Never exclude a family the person could do.
 - locationExclude: places where this person cannot take the job AT ALL, even remotely, because a confirmed hard filter rules the place out (e.g. a filter against US-based roles gives "united states", "usa", "us only", "new york", "san francisco"...). Never list a place only because working there would mean office days: that is what requireRemote and officeAllowed are for, and a remote job listed under that place must still pass. Empty if no hard filter is about location. locationRuleIds: the ids of the hard filters that justify it.
 - requireRemote: true only if a confirmed hard filter demands remote work. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.
+- homeCountry: the ISO 3166-1 alpha-2 code of the country the candidate lives in, only if the experience states it (a city or country). Null if unclear.
+- seniority: the levels from ["junior", "mid_level", "senior", "staff", "c_level"] this person's experience makes credible to apply for. Usually one to three adjacent levels.
 
 Only confirmed rules are given to you; do not invent constraints they do not state.
 
-Respond ONLY with JSON: {"titleInclude": [], "titleExclude": [], "locationExclude": [], "locationRuleIds": [], "requireRemote": boolean, "officeAllowed": [], "remoteRuleIds": []}.`
+Respond ONLY with JSON: {"titleInclude": [], "titleExclude": [], "locationExclude": [], "locationRuleIds": [], "requireRemote": boolean, "officeAllowed": [], "remoteRuleIds": [], "homeCountry": string|null, "seniority": []}.`
 
 export async function roleQueryFor(candidateId: string, profile: MatchingProfile): Promise<RoleQuery> {
   const key = `${profile.hash}:${ROLE_QUERY_VERSION}`
@@ -101,6 +115,8 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
     locationExclude: locationJustified ? data.locationExclude : [],
     requireRemote: remoteJustified && data.requireRemote,
     officeAllowed: remoteJustified ? data.officeAllowed : [],
+    homeCountry: data.homeCountry,
+    seniority: data.seniority,
   }
   insertRoleQuery(candidateId, key, query, modelRunId)
   return query

@@ -67,6 +67,13 @@
   color: var(--ink-tertiary);
 }
 
+.salary {
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .closed {
   font-size: var(--text-body-sm);
   color: var(--clay);

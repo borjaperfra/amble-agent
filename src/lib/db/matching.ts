@@ -83,20 +83,33 @@ export function getMatch(id: string): MatchRow | undefined {
   return getDb().prepare('SELECT * FROM opportunity_matches WHERE id = ?').get(id) as unknown as MatchRow | undefined
 }
 
+export interface MatchListing {
+  title: string
+  company_name: string
+  url: string | null
+  closed_at: string | null
+  location: string | null
+  workplace: string | null
+  salary_raw: string | null
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string | null
+}
+
 export function listMatchesForKey(
   candidateId: string,
   matchKey: string,
-): (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null; location: string | null; workplace: string | null })[] {
+): (MatchRow & MatchListing)[] {
   return getDb()
     .prepare(
-      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, c.name AS company_name
+      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency, c.name AS company_name
        FROM opportunity_matches m
        JOIN opportunities o ON o.id = m.opportunity_id
        JOIN companies c ON c.id = o.company_id
        WHERE m.candidate_id = ? AND m.profile_hash = ?
        ORDER BY m.created_at DESC`,
     )
-    .all(candidateId, matchKey) as unknown as (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null; location: string | null; workplace: string | null })[]
+    .all(candidateId, matchKey) as unknown as (MatchRow & MatchListing)[]
 }
 
 export function listMatches(candidateId: string, verdict?: MatchVerdict): (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null })[] {

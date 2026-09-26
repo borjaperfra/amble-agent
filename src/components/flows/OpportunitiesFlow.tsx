@@ -129,6 +129,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
       <p className={styles.cardKicker}>{t.opportunities.worthHearing}</p>
       <h2 className={styles.cardTitle}>{item.title}</h2>
       <p className={styles.meta}>{meta}</p>
+      {item.salary && <p className={styles.salary}>{item.salary}</p>}
       {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
       <p className={styles.summary}>{item.summary}</p>
 
