@@ -316,6 +316,7 @@ export const en = {
     discardedTitle: 'What I set aside for you',
     discardedLead: 'Offers I read and decided you wouldn’t want. If I got one wrong, tell me.',
     wrongRole: (reason: string) => `Not your kind of role: ${reason}`,
+    belowLevel: (reason: string) => `Below your level: ${reason}`,
     brokeFilter: (rule: string) => `It breaks “${rule}”`,
     notEnoughReasons: 'I couldn’t find a real reason to show it to you.',
     wantedAnyway: 'I’d want this one',

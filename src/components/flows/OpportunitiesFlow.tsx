@@ -247,7 +247,9 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
         <p key={index} className={styles.discardReason}>
           {reason.kind === 'wrong_role'
             ? t.opportunities.wrongRole(reason.text)
-            : reason.kind === 'filter'
+            : reason.kind === 'below_level'
+              ? t.opportunities.belowLevel(reason.text)
+              : reason.kind === 'filter'
               ? t.opportunities.brokeFilter(reason.rule)
               : t.opportunities.notEnoughReasons}
           {reason.kind === 'filter' && reason.quote && <span className={styles.discardQuote}> — “{reason.quote}”</span>}

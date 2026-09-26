@@ -19,9 +19,9 @@ const MAX_DESCRIPTION_CHARS = 9_000
 
 // Part of every stored assessment's key (with the profile fingerprint): a new
 // version of this prompt means every offer is judged again.
-export const ASSESS_VERSION = 'v5'
+export const ASSESS_VERSION = 'v6'
 
-export type RoleFit = 'fits' | 'stretch' | 'wrong_role'
+export type RoleFit = 'fits' | 'stretch' | 'wrong_role' | 'below_level'
 
 export type GateResult = 'pass' | 'fail' | 'unknown'
 
@@ -66,7 +66,7 @@ const assessmentSchema = z.preprocess(
     const fit = str((obj.roleFit as Record<string, unknown> | undefined)?.fit, 20).toLowerCase()
     return {
       roleFit: {
-        fit: fit === 'fits' || fit === 'stretch' || fit === 'wrong_role' ? fit : 'stretch',
+        fit: fit === 'fits' || fit === 'stretch' || fit === 'wrong_role' || fit === 'below_level' ? fit : 'stretch',
         reason: str((obj.roleFit as Record<string, unknown> | undefined)?.reason, 300),
       },
       gates: gates.map((entry) => {
@@ -89,7 +89,7 @@ const assessmentSchema = z.preprocess(
     }
   },
   z.object({
-    roleFit: z.object({ fit: z.enum(['fits', 'stretch', 'wrong_role']), reason: z.string() }),
+    roleFit: z.object({ fit: z.enum(['fits', 'stretch', 'wrong_role', 'below_level']), reason: z.string() }),
     gates: z.array(z.object({ ruleId: z.string(), result: z.enum(['pass', 'fail', 'unknown']), quote: z.string().nullable(), note: z.string() })),
     summary: z.string(),
     why: z.array(z.object({ text: z.string(), capabilityId: z.string().nullable(), quote: z.string().nullable() })).max(6),
@@ -99,12 +99,13 @@ const assessmentSchema = z.preprocess(
 )
 
 
-const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 5. You read one job posting on behalf of one candidate and decide whether it deserves their attention, and why.
+const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 6. You read one job posting on behalf of one candidate and decide whether it deserves their attention, and why.
 
 1. ROLE FIT, first. Is this a job this person could credibly do, given their capabilities and experience?
    - "fits": it is their kind of role.
    - "stretch": adjacent. Includes a different specialty within their own discipline (for someone in marketing and community: paid media, performance, lifecycle, PR, communications, social, content production). They could argue for it, but it is not their core.
    - "wrong_role": the daily work belongs to another discipline altogether: finance, engineering or software, data analysis, sales or account management, recruiting, design, legal, operations. A title word from their field does not change that. Never use it for another specialty of their own discipline. Say why in one sentence.
+   - "below_level": clearly below this person's level, whatever the discipline: assistant, coordinator or executive-level execution for someone who has led the function, internships, entry-level, hourly or task-based gigs (posting, reviewing, evaluating content). Judge by the responsibility the posting describes, not only the title. Say why in one sentence.
    A title word like "marketing" does not make a role fit: judge what the person would do all day.
 
 2. GATES: one for each HARD FILTER given, nothing else.
@@ -116,7 +117,7 @@ const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 5. You read
    CONTEXT (compensation insights and what weighs most for this person) is not a gate: use it in the explanation, never to discard.
    Conditions under NEVER FILTER ON must not be used against the offer.
 
-3. EXPLANATION, only if the role is not wrong_role and no gate fails:
+3. EXPLANATION, only if the role is neither wrong_role nor below_level and no gate fails:
    - summary: one sentence, what this offer is for this person.
    - why: 1 to 4 reasons it deserves their attention. Each cites a capabilityId from the list (its id exactly) or a verbatim quote from the posting. Do not cite capabilities marked attributed:false as proof of skill.
    - considerAlso: the one thing that could make it a no, with a verbatim quote if the posting states it. If the role is a stretch, this is where you say so. Null if nothing.
@@ -124,7 +125,7 @@ const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 5. You read
 
 Never output a score or percentage. Plain, specific language; no hype.
 
-Respond ONLY with JSON: {"roleFit": {"fit": "fits"|"stretch"|"wrong_role", "reason": string}, "gates": [{"ruleId": string, "result": "pass"|"fail"|"unknown", "quote": string|null, "note": string}], "summary": string, "why": [{"text": string, "capabilityId": string|null, "quote": string|null}], "considerAlso": {"text": string, "quote": string|null}|null, "unknowns": string[]}.`
+Respond ONLY with JSON: {"roleFit": {"fit": "fits"|"stretch"|"wrong_role"|"below_level", "reason": string}, "gates": [{"ruleId": string, "result": "pass"|"fail"|"unknown", "quote": string|null, "note": string}], "summary": string, "why": [{"text": string, "capabilityId": string|null, "quote": string|null}], "considerAlso": {"text": string, "quote": string|null}|null, "unknowns": string[]}.`
 
 // Words that turn a location into a restriction on where remote work is allowed.
 const REMOTE_RESTRICTION = /\b(remote|remoto|only|based|resident|residents|citizens?|authori[sz]ed|amer|americas|emea|apac|latam)\b/i
@@ -209,7 +210,8 @@ export async function assessOpportunity(params: {
     return { ...proposed, quote: proposed.quote && inPosting(proposed.quote) ? proposed.quote : null }
   })
   const failed = gates.some((gate) => gate.result === 'fail')
-  const wrongRole = data.roleFit.fit === 'wrong_role'
+  // Another profession or a role below the candidate's level is never shown.
+  const wrongRole = data.roleFit.fit === 'wrong_role' || data.roleFit.fit === 'below_level'
 
   const why: Reason[] = []
   for (const reason of data.why) {

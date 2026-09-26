@@ -314,6 +314,7 @@ export const es: Dictionary = {
     discardedTitle: 'Lo que he descartado por ti',
     discardedLead: 'Ofertas que he leído y he decidido que no querrías. Si me he equivocado en alguna, dímelo.',
     wrongRole: (reason: string) => `No es tu tipo de rol: ${reason}`,
+    belowLevel: (reason: string) => `Por debajo de tu nivel: ${reason}`,
     brokeFilter: (rule: string) => `Incumple «${rule}»`,
     notEnoughReasons: 'No he encontrado una razón real para enseñártela.',
     wantedAnyway: 'Esta sí me interesa',

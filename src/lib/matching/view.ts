@@ -27,6 +27,7 @@ export interface FoundOpportunity {
 
 export type DiscardReason =
   | { kind: 'wrong_role'; text: string }
+  | { kind: 'below_level'; text: string }
   | { kind: 'filter'; rule: string; quote: string | null }
   | { kind: 'no_reason' }
 
@@ -99,6 +100,7 @@ export function getOpportunitiesView(): OpportunitiesView {
     const gates = JSON.parse(match.gates) as Gate[]
     const reasons: DiscardReason[] = []
     if (explanation.roleFit.fit === 'wrong_role') reasons.push({ kind: 'wrong_role', text: explanation.roleFit.reason })
+    if (explanation.roleFit.fit === 'below_level') reasons.push({ kind: 'below_level', text: explanation.roleFit.reason })
     for (const gate of gates.filter((g) => g.result === 'fail')) {
       reasons.push({ kind: 'filter', rule: ruleLabels.get(gate.ruleId) ?? gate.ruleId, quote: gate.quote })
     }

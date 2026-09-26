@@ -136,11 +136,63 @@ function locationSegments(location: string | null): string[] {
 
 export type PrefilterResult = { pass: true } | { pass: false; reason: string }
 
+// Titles that name a level below anything a candidate past junior would take,
+// in the languages of the region searched. Not a preference: a floor.
+const BELOW_LEVEL_TERMS = [
+  'intern',
+  'internship',
+  'trainee',
+  'apprentice',
+  'apprenticeship',
+  'junior',
+  'jr',
+  'entry level',
+  'graduate',
+  'assistant',
+  'asistente',
+  'assistente',
+  'assistante',
+  'werkstudent',
+  'working student',
+  'student',
+  'praktikum',
+  'praktikant',
+  'stagiaire',
+  'becario',
+  'becaria',
+  'practicas',
+  'tirocinio',
+  'alternance',
+]
+
+// "Stage" is French for internship, but "early stage" is a company, not a level.
+const INTERNSHIP_STAGE = /(^| )stage( |$)/
+const COMPANY_STAGE = /(early|late|growth|seed|multi) stage/
+
+// "$15/hr", "€20 per hour": hourly gigs, whatever the title says. Checked on the
+// raw title, since normalising drops the currency and the slash.
+const HOURLY_PAY = /[$€£]\s?\d+(?:[.,]\d+)?\s?\/\s?(?:hr|hour|h)\b|\bper hour\b/i
+
+function belowLevel(rawTitle: string, title: string): string | null {
+  if (HOURLY_PAY.test(rawTitle)) return 'hourly'
+  const term = BELOW_LEVEL_TERMS.find((candidate) => containsTerm(title, candidate))
+  if (term) return term
+  if (INTERNSHIP_STAGE.test(title) && !COMPANY_STAGE.test(title)) return 'stage'
+  return null
+}
+
 export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location' | 'workplace'>, query: RoleQuery): PrefilterResult {
   const title = normaliseTitle(opportunity.title)
   if (!query.titleInclude.some((term) => containsTerm(title, term))) return { pass: false, reason: 'title' }
   const excluded = query.titleExclude.find((term) => containsTerm(title, term))
   if (excluded) return { pass: false, reason: `title:${excluded}` }
+
+  // Domain rule: when the candidate's credible levels start above junior, a
+  // below-level title never reaches the model (nor spends its cost).
+  if (query.seniority.length > 0 && !query.seniority.includes('junior')) {
+    const below = belowLevel(opportunity.title, title)
+    if (below) return { pass: false, reason: `level:${below}` }
+  }
 
   const segments = locationSegments(opportunity.location)
   // Out only if every listed place is excluded: one acceptable place keeps it.
