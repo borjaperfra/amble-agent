@@ -6,9 +6,11 @@ import {
   answerProbe,
   createTriage,
   createTriageInputSchema,
+  addPreference,
   decidePreference,
   generateTriage,
   getTriageView,
+  revisePreference,
   TriageError,
 } from '@/lib/pipeline/triage'
 
@@ -21,6 +23,8 @@ export const maxDuration = 300
 // POST { action: 'answer', probeId, verdict, conditions?, reason? }
 // POST { action: 'analyse' }            -> propose revealed preferences (a model call)
 // POST { action: 'decide', preferenceId, decision: 'confirmed' | 'rejected' }
+// POST { action: 'revise', preferenceId, statement, label? }      -> the candidate's correction
+// POST { action: 'add', kind, statement, label?, offers?, quote? } -> something the analysis missed| 'rejected' }
 
 function errorResponse(error: unknown) {
   if (error instanceof TriageError) {
@@ -78,8 +82,29 @@ export async function POST(request: Request) {
         decidePreference(String(body.preferenceId ?? ''), String(body.decision ?? ''))
         return NextResponse.json({ ok: true })
       }
+      case 'revise': {
+        revisePreference(
+          String(body.preferenceId ?? ''),
+          String(body.statement ?? ''),
+          typeof body.label === 'string' ? body.label : null,
+        )
+        return NextResponse.json({ ok: true })
+      }
+      case 'add': {
+        const preference = addPreference({
+          kind: String(body.kind ?? ''),
+          statement: String(body.statement ?? ''),
+          label: typeof body.label === 'string' ? body.label : null,
+          offerNumbers: Array.isArray(body.offers) ? body.offers.filter((n): n is number => typeof n === 'number') : [],
+          quote: typeof body.quote === 'string' ? body.quote : null,
+        })
+        return NextResponse.json({ ok: true, id: preference.id }, { status: 201 })
+      }
       default:
-        return NextResponse.json({ error: 'action must be create, generate, answer, analyse or decide.' }, { status: 400 })
+        return NextResponse.json(
+          { error: 'action must be create, generate, answer, analyse, decide, revise or add.' },
+          { status: 400 },
+        )
     }
   } catch (error) {
     return errorResponse(error)

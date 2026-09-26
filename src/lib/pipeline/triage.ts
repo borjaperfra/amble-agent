@@ -9,6 +9,7 @@ import {
   getOfferTriage,
   getOrCreateCandidate,
   getRevealedPreference,
+  insertCandidatePreference,
   insertOfferTriage,
   listCapabilities,
   listCapabilityEvidenceIds,
@@ -18,6 +19,7 @@ import {
   listRevealedPreferences,
   parseJsonArray,
   replaceProposedPreferences,
+  reviseRevealedPreference,
   updateOfferTriageStatus,
   type OfferProbeRow,
   type OfferTriageRow,
@@ -211,6 +213,9 @@ export interface PreferenceView {
   evidenceProbeNumbers: number[]
   quote: string | null
   status: 'proposed' | 'confirmed' | 'rejected'
+  addedByYou: boolean
+  // What the analysis had proposed, when the candidate corrected it.
+  originalStatement: string | null
   // A self-filter is surfaced for discussion. It never becomes a listening rule
   // on its own: if the agent inherits it, it discards offers the candidate
   // would win, invisibly.
@@ -258,6 +263,8 @@ function preferenceView(row: RevealedPreferenceRow, numberById: Map<string, numb
       .filter((n): n is number => n !== undefined),
     quote: row.quote,
     status: row.status as PreferenceView['status'],
+    addedByYou: row.origin === 'candidate',
+    originalStatement: row.original_statement,
     neverInheritSilently: row.kind === 'self_filter',
   }
 }
@@ -524,6 +531,67 @@ export async function analyseTriage(triageId?: string): Promise<AnalysisResult> 
   })
 
   return { kept: rows.length, dropped, quotesRemoved }
+}
+
+function ownPreference(preferenceId: string): RevealedPreferenceRow {
+  const candidate = getOrCreateCandidate()
+  const preference = getRevealedPreference(preferenceId)
+  if (!preference || preference.candidate_id !== candidate.id) throw new TriageError('Preference not found.', 404)
+  return preference
+}
+
+// The candidate's own correction (PRODUCT_SPEC §18). It confirms the preference:
+// correcting something means accepting the corrected version.
+export function revisePreference(preferenceId: string, statement: string, label: string | null): void {
+  const preference = ownPreference(preferenceId)
+  const text = statement.trim()
+  if (text.length < 10) throw new TriageError('Say it in at least a short sentence.')
+  reviseRevealedPreference(preference.id, text.slice(0, 500), label?.trim().slice(0, 60) || null)
+  if (preference.status !== 'confirmed') decideRevealedPreference(preference.id, 'confirmed')
+}
+
+// Something the analysis missed, added by the candidate. It is tied to the
+// latest analysed triage and held to the same rules as a proposed preference:
+// offers must exist and a quote must be verbatim.
+export function addPreference(params: {
+  kind: string
+  statement: string
+  label?: string | null
+  offerNumbers?: number[]
+  quote?: string | null
+}): RevealedPreferenceRow {
+  const candidate = getOrCreateCandidate()
+  const triage = getLatestOfferTriage(candidate.id)
+  if (!triage || triage.status !== 'analysed') throw new TriageError('There is no analysed triage to add to.', 409)
+  if (!PREFERENCE_KINDS.includes(params.kind as PreferenceKind)) {
+    throw new TriageError(`kind must be one of: ${PREFERENCE_KINDS.join(', ')}.`)
+  }
+  const statement = params.statement.trim()
+  if (statement.length < 10) throw new TriageError('Say it in at least a short sentence.')
+
+  const probes = listOfferProbes(triage.id)
+  const cited = [...new Set(params.offerNumbers ?? [])].map((n) => {
+    const probe = probes.find((p) => p.idx + 1 === n)
+    if (!probe) throw new TriageError(`There is no offer #${n} in this triage.`)
+    return probe
+  })
+
+  const quote = params.quote?.trim() || null
+  if (quote) {
+    const needle = normalise(quote)
+    const found = cited.some((probe) => [probe.reason, probe.conditions].some((text) => text !== null && normalise(text).includes(needle)))
+    if (!found) throw new TriageError('That quote is not in your answers to the cited offers.')
+  }
+
+  return insertCandidatePreference({
+    candidateId: candidate.id,
+    triageId: triage.id,
+    kind: params.kind,
+    statement: statement.slice(0, 500),
+    label: params.label?.trim().slice(0, 60) || null,
+    evidenceProbeIds: cited.map((probe) => probe.id),
+    quote,
+  })
 }
 
 export function decidePreference(preferenceId: string, decision: string): void {

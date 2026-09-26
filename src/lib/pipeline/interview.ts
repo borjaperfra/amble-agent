@@ -26,7 +26,7 @@ import {
   runPlanNextQuestionTask,
   runReassessAfterAnswerTask,
 } from '../model/tasks'
-import { newEvidenceFromClaim, reconcileAndRefresh, syncAttributionUncertainties } from './graph'
+import { newEvidenceFromClaim, reconcileCapabilities, syncAttributionUncertainties } from './graph'
 import { judgeDefenceAnswer, planDefenceQuestion, type DefenceResult } from './defence'
 
 const MIN_QUESTIONS_TARGET = 3
@@ -171,6 +171,9 @@ export interface IncorporatedAnswer {
   resolvedUncertaintyIds: string[]
   reassessedCapabilityIds: string[]
   defence?: Omit<DefenceResult, 'affectedCapabilityIds'>
+  // A capability level moved: the distinctive profile and descriptor are stale.
+  // The caller refreshes them (refreshDerivedProfile) after answering.
+  profileNeedsRefresh: boolean
 }
 
 export async function incorporateAnswer(
@@ -243,7 +246,7 @@ async function incorporateAnswerInner(
     scope,
     evidenceIds,
   )
-  await reconcileAndRefresh(candidateId)
+  const reconciled = reconcileCapabilities(candidateId)
   syncAttributionUncertainties(candidateId, turnId)
 
   return {
@@ -251,6 +254,7 @@ async function incorporateAnswerInner(
     evidenceCreated: evidenceIds.length,
     resolvedUncertaintyIds,
     reassessedCapabilityIds,
+    profileNeedsRefresh: reassessedCapabilityIds.length > 0 || reconciled.length > 0,
   }
 }
 
@@ -278,7 +282,7 @@ async function incorporateDefenceAnswer(
 
   // A promotion can lift a capability out of the assisted ceiling only through a
   // reassessment; a retraction must lower it even when the model skipped it.
-  for (const id of await reconcileAndRefresh(candidateId)) {
+  for (const id of reconcileCapabilities(candidateId)) {
     if (!reassessedCapabilityIds.includes(id)) reassessedCapabilityIds.push(id)
   }
 
@@ -294,6 +298,7 @@ async function incorporateDefenceAnswer(
     resolvedUncertaintyIds,
     reassessedCapabilityIds,
     defence,
+    profileNeedsRefresh: reassessedCapabilityIds.length > 0,
   }
 }
 

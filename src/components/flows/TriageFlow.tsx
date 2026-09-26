@@ -31,6 +31,8 @@ interface Preference {
   evidenceProbeNumbers: number[]
   quote: string | null
   status: Decision
+  addedByYou: boolean
+  originalStatement: string | null
   neverInheritSilently: boolean
 }
 
@@ -421,6 +423,10 @@ function Result({
                 {preference.neverInheritSilently && (
                   <p className={styles.notice}>I won&rsquo;t act on this without talking to you first.</p>
                 )}
+                {preference.addedByYou && <p className={styles.meta}>Added by you.</p>}
+                {preference.originalStatement && (
+                  <p className={styles.meta}>Corrected by you. I had read: {preference.originalStatement}</p>
+                )}
                 {preference.declared && <p className={styles.meta}>You&rsquo;d said: {preference.declared}</p>}
                 {preference.quote && <blockquote className={styles.quote}>&ldquo;{preference.quote}&rdquo;</blockquote>}
                 <p className={styles.meta}>
@@ -445,6 +451,16 @@ function Result({
                     Not quite
                   </button>
                 </div>
+                {/* Each decision is saved on click; say so, there is no save button. */}
+                {preference.status !== 'proposed' && (
+                  <p className={styles.saved} role="status">
+                    {preference.status === 'rejected'
+                      ? 'Saved. I won’t use this.'
+                      : preference.kind === 'self_filter'
+                        ? 'Saved. I’ll keep it in mind, and still won’t act on it without talking to you.'
+                        : 'Saved. I’ll listen for this.'}
+                  </p>
+                )}
               </article>
             ))}
           </section>

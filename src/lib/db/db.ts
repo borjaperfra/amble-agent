@@ -365,6 +365,13 @@ function migrate(db: DatabaseSync): void {
 
   // A short form of a revealed preference, for what the Rep listens for.
   addColumn(db, 'revealed_preferences', 'label', 'TEXT')
+
+  // The candidate can correct a preference or add one (PRODUCT_SPEC §18). What
+  // the analysis proposed is kept, so the correction stays visible.
+  addColumn(db, 'revealed_preferences', 'origin', "TEXT NOT NULL DEFAULT 'analysis'")
+  addColumn(db, 'revealed_preferences', 'original_statement', 'TEXT')
+  addColumn(db, 'revealed_preferences', 'original_label', 'TEXT')
+  addColumn(db, 'revealed_preferences', 'revised_at', 'TEXT')
 }
 
 export function getDb(): DatabaseSync {

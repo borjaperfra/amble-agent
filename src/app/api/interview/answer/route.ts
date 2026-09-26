@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
+import { refreshDerivedProfile } from '@/lib/pipeline/graph'
 import { incorporateAnswer } from '@/lib/pipeline/interview'
 import { ModelError } from '@/lib/model/provider'
 
@@ -18,6 +19,11 @@ export async function POST(request: Request) {
 
   try {
     const result = await incorporateAnswer(candidate.id, turnId, answer)
+    if (result.profileNeedsRefresh) {
+      // Presentation only (the map's summary), and two model calls: the
+      // candidate should not wait for it before the next question.
+      after(() => refreshDerivedProfile(candidate.id).catch(() => undefined))
+    }
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
     if (error instanceof ModelNotConfiguredError) {

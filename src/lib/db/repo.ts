@@ -773,6 +773,10 @@ export interface RevealedPreferenceRow {
   kind: string
   statement: string
   label: string | null
+  origin: string
+  original_statement: string | null
+  original_label: string | null
+  revised_at: string | null
   declared: string | null
   evidence_probe_ids: string
   quote: string | null
@@ -858,7 +862,10 @@ export function updateOfferTriageStatus(id: string, status: string): void {
 // A re-analysis replaces the proposals it made, never what the candidate decided.
 export function replaceProposedPreferences(
   triageId: string,
-  rows: Omit<RevealedPreferenceRow, 'id' | 'created_at' | 'decided_at' | 'status'>[],
+  rows: Omit<
+    RevealedPreferenceRow,
+    'id' | 'created_at' | 'decided_at' | 'status' | 'origin' | 'original_statement' | 'original_label' | 'revised_at'
+  >[],
 ): RevealedPreferenceRow[] {
   const db = getDb()
   db.prepare("DELETE FROM revealed_preferences WHERE triage_id = ? AND status = 'proposed'").run(triageId)
@@ -903,6 +910,41 @@ export function getRevealedPreference(id: string): RevealedPreferenceRow | undef
   return getDb()
     .prepare('SELECT * FROM revealed_preferences WHERE id = ?')
     .get(id) as unknown as RevealedPreferenceRow | undefined
+}
+
+// The first revision keeps what the analysis said; later ones only move the text.
+export function reviseRevealedPreference(id: string, statement: string, label: string | null): void {
+  getDb()
+    .prepare(
+      `UPDATE revealed_preferences SET
+         original_statement = COALESCE(original_statement, statement),
+         original_label = COALESCE(original_label, label),
+         statement = ?, label = ?, revised_at = ?
+       WHERE id = ?`,
+    )
+    .run(statement, label, now(), id)
+}
+
+// Written by the candidate: confirmed by definition, and never replaced by a
+// later re-analysis (which only replaces 'proposed' rows).
+export function insertCandidatePreference(row: {
+  candidateId: string
+  triageId: string
+  kind: string
+  statement: string
+  label: string | null
+  evidenceProbeIds: string[]
+  quote: string | null
+}): RevealedPreferenceRow {
+  const id = newId('rpr')
+  const ts = now()
+  getDb()
+    .prepare(
+      `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, decided_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'candidate', NULL, ?, ?, 'confirmed', NULL, ?, ?)`,
+    )
+    .run(id, row.candidateId, row.triageId, row.kind, row.statement, row.label, JSON.stringify(row.evidenceProbeIds), row.quote, ts, ts)
+  return getRevealedPreference(id) as RevealedPreferenceRow
 }
 
 export function decideRevealedPreference(id: string, status: 'confirmed' | 'rejected'): void {
