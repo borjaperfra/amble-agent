@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "career:example": "tsx scripts/career-example.ts",
-    "career:example:check": "tsx scripts/career-example.ts --check"
+    "career:example:check": "tsx scripts/career-example.ts --check",
+    "sourcing": "tsx --env-file-if-exists=.env.local scripts/sourcing.ts"
   },
   "dependencies": {
     "next": "16.3.5",

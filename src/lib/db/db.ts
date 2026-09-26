@@ -250,6 +250,65 @@ function createDb(): DatabaseSync {
       decided_at TEXT
     );
 
+    -- Sourcing. Companies the Rep watches, and how their offers are read.
+    CREATE TABLE IF NOT EXISTS companies (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      name_norm TEXT NOT NULL UNIQUE,
+      domain TEXT,
+      careers_url TEXT,
+      ats TEXT,
+      ats_token TEXT,
+      status TEXT NOT NULL,
+      discovered_via TEXT NOT NULL,
+      last_fetched_at TEXT,
+      last_error TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS opportunities (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL REFERENCES companies(id),
+      title TEXT NOT NULL,
+      title_norm TEXT NOT NULL,
+      location TEXT,
+      workplace TEXT,
+      url TEXT,
+      url_norm TEXT,
+      description TEXT,
+      salary_min INTEGER,
+      salary_max INTEGER,
+      salary_currency TEXT,
+      salary_raw TEXT,
+      posted_at TEXT,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      closed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS opportunities_company ON opportunities(company_id);
+    CREATE INDEX IF NOT EXISTS opportunities_url ON opportunities(url_norm);
+
+    -- One offer can reach the Rep from several sources (the company's ATS and an
+    -- aggregator). Each sighting is kept, so closure is decided per source.
+    CREATE TABLE IF NOT EXISTS opportunity_sources (
+      source TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      url TEXT,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      closed_at TEXT,
+      PRIMARY KEY (source, external_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sourcing_runs (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      stats TEXT,
+      errors TEXT
+    );
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 
