@@ -237,6 +237,58 @@ measurable impact, contradictions and missing evidence.
 Avoid generic interview questions. The Rep is curious, not
 interrogative.
 
+### 10.1 Ask about episodes, not attributes
+
+Attribute questions return platitudes. Episode questions return
+behaviour.
+
+``` text
+How do you work?                         → platitude
+Tell me about the last time it went wrong → behaviour
+
+What are you looking for?                → platitude
+What would have to happen for you to leave → constraints, floor, dealbreakers
+```
+
+The strongest questions are generated from a contradiction or a gap the
+system found on its own. A question the candidate can tell was earned by
+reading them does not feel like a form.
+
+### 10.2 Defence questions
+
+A second kind of question, with a different purpose. Gap questions fill
+what is missing. **Defence questions verify what is already there.**
+
+They exist for `ASSISTED_CLAIM` evidence (§11.1), and they are the only
+mechanism that promotes it. A defence question asks the candidate to
+justify a decision visible in their own artifact:
+
+``` text
+In helmcode-whisper, transcription leaves the machine and
+diarization does not. Both are audio.
+
+Why is the line there?
+```
+
+Three outcomes:
+
+``` text
+Defended    → promote to USER_CLAIM, capability evidence stands
+Partial     → keep as ASSISTED_CLAIM, never presented as individual skill
+Failed      → retract (§12.1)
+```
+
+Defence questions must be asked **before** a profile is shown to any
+company, never after. Unverified assisted evidence is the most dangerous
+content in the system, because it fails in the flattering direction: it
+describes the candidate as more capable than they are, and the candidate
+will not correct it.
+
+Tone matters. This is not an exam. The Rep is checking its own
+understanding, not testing the person — and when the answer is "I don't
+know", that is a normal, useful result, not a failure by the candidate.
+The system was wrong, not them.
+
 ## 11. Professional Graph
 
 Core relationship:
@@ -266,6 +318,7 @@ Amble must distinguish:
 ``` text
 SOURCE FACT
 USER CLAIM
+ASSISTED CLAIM
 INFERENCE
 VERIFIED FACT
 SYSTEM ASSESSMENT
@@ -273,6 +326,41 @@ SYSTEM ASSESSMENT
 
 These states must never silently collapse into one another. Every
 meaningful professional assertion needs provenance.
+
+### 11.1 Assisted claims
+
+A source may be authored by the candidate, by a model working with the
+candidate, or by a model the candidate barely supervised. From 2026
+onward this is the normal case for code repositories, and it will spread
+to writing, design and analysis.
+
+Reading a repository as proof of individual skill is therefore invalid.
+A candidate can be the top contributor to a Go service and be unable to
+read Go.
+
+``` text
+Code in a repository proves that something shipped.
+It does not prove who decided what, or who could explain it.
+```
+
+`ASSISTED_CLAIM` marks evidence whose author is the candidate *and* a
+tool together. It is not weaker than `USER_CLAIM` — it is differently
+uncertain. The open question is not whether the statement is true; the
+artifact demonstrably exists. The open question is **whose judgment it
+represents**.
+
+Assisted claims must never be promoted to capability evidence on
+strength alone. They are promoted only by defence (§10.2).
+
+What survives regardless of attribution, and should be extracted
+separately:
+
+``` text
+Choice of what to build        (precedes any tool)
+Shipping and operating it      (outcome is real either way)
+Sustained working method       (consistency is not delegated)
+Empirical debugging signature  (behaviour, not authorship)
+```
 
 ## 12. Evidence
 
@@ -297,6 +385,13 @@ Evidence {
   contradicted_by[]
   candidate_confirmed
   human_verified
+  attribution            // sole | assisted | unknown
+  attribution_tool       // the agent, when known
+  defence_status         // undefended | defended | partial | failed
+  defence_turn_id
+  retracted_at
+  retracted_reason
+  retracted_by_turn
   valid_from
   valid_until
   created_at
@@ -305,6 +400,31 @@ Evidence {
 ```
 
 The implementation may evolve. The principle cannot.
+
+### 12.1 Retraction
+
+Evidence is retracted, never deleted.
+
+A retraction is a first-class, visible event: the claim stays in the
+record with the question that defeated it and the answer that defeated
+it. The Professional Map hides retracted evidence from capability
+assessment and shows it in the audit trail.
+
+``` text
+⊘ Retracted
+
+  "Product judgment in technical decisions"
+
+  Asked:    Why is the privacy line drawn there?
+  Answered: No idea. Claude Code decided that.
+```
+
+Deleting a retracted claim would erase the most valuable record the
+system holds: what it believed, and why it stopped believing it.
+
+Retraction applies to any epistemic state, but assisted claims are its
+main source. A system that cannot retract will inflate every candidate
+it reads, and inflation is the one failure this product cannot survive.
 
 ## 13. Professional Map
 
@@ -381,6 +501,34 @@ ownership from leadership.
 Strengthening can mean explaining something, adding a project,
 connecting a repository, providing an artifact, adding a measurable
 result or requesting verification.
+
+### 14.1 Two kinds of uncertainty
+
+``` text
+MATERIALITY   I don't know whether this matters
+ATTRIBUTION   I don't know whose this is
+```
+
+They resolve differently. Materiality is resolved by a gap question or
+by another source. Attribution is resolved only by defence (§10.2) —
+finding a second source that says the same thing proves nothing, because
+the second source may have the same author.
+
+Attribution uncertainty must be raised automatically for every capability
+whose supporting evidence is majority `ASSISTED_CLAIM`.
+
+### 14.2 Sources the system cannot read
+
+Some evidence has no machine-readable source at all. Audience size on X
+and LinkedIn, view counts, speaking history, private revenue numbers.
+
+For a community, marketing or sales profile these are not decoration —
+they are the primary evidence, and no API provides them.
+
+The honest handling is to name the gap as a gap the *system* has, ask the
+candidate to supply the figure, and mark it `USER_CLAIM` with no
+corroboration. Never infer an audience from a follower-less profile, and
+never let a missing metric read as a missing capability.
 
 ## 15. Intent
 
@@ -505,8 +653,13 @@ ModelRun
 Decision
 AuditEvent
 HumanOverride
+Retraction
 RubricVersion
 ```
+
+`Retraction` records the evidence id, the defence question asked, the
+answer given, the timestamp and the resulting state. It is append-only
+without exception.
 
 ModelRun should capture model, provider, model version, prompt version,
 input references, structured output and timestamp.

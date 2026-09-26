@@ -26,16 +26,25 @@ import {
   runPlanNextQuestionTask,
   runReassessAfterAnswerTask,
 } from '../model/tasks'
-import { newEvidenceFromClaim } from './graph'
+import { newEvidenceFromClaim, reconcileAndRefresh, syncAttributionUncertainties } from './graph'
+import { judgeDefenceAnswer, planDefenceQuestion, type DefenceResult } from './defence'
 
 const MIN_QUESTIONS_TARGET = 3
 const MAX_QUESTIONS = 12
+// Defence goes first (it must happen before any company sees the profile), but
+// it must not swallow the whole interview. Each question covers several claims.
+const MAX_DEFENCE_QUESTIONS = 4
 
 export interface NextQuestion {
   action: 'ASK' | 'STOP'
+  kind?: 'gap' | 'defence'
   turnId?: string
   question?: string
   reason?: string
+}
+
+function turnKind(turn: InterviewTurnRow): 'gap' | 'defence' {
+  return turn.kind === 'defence' ? 'defence' : 'gap'
 }
 
 export async function planNextQuestion(candidateId: string): Promise<NextQuestion> {
@@ -47,6 +56,7 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
   if (pendingTurn) {
     return {
       action: 'ASK',
+      kind: turnKind(pendingTurn),
       turnId: pendingTurn.id,
       question: pendingTurn.question ?? undefined,
       reason: pendingTurn.question_reason ?? undefined,
@@ -58,8 +68,29 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
     return { action: 'STOP', reason: 'The interview has reached its useful length for this build.' }
   }
 
+  const defenceAsked = turns.filter((turn) => turn.kind === 'defence').length
+  if (defenceAsked < MAX_DEFENCE_QUESTIONS) {
+    const defence = await planDefenceQuestion(candidateId)
+    if (defence) {
+      const turn = insertTurn({
+        id: newId('turn'),
+        interview_id: interview.id,
+        idx: turns.length,
+        question: defence.question,
+        question_reason: defence.reason,
+        target_capability_ids: JSON.stringify(defence.capabilityIds),
+        target_uncertainty_ids: '[]',
+        kind: 'defence',
+        target_evidence_ids: JSON.stringify(defence.evidenceIds),
+      })
+      return { action: 'ASK', kind: 'defence', turnId: turn.id, question: defence.question, reason: defence.reason }
+    }
+  }
+
   const capabilities = listCapabilities(candidateId)
-  const open = listUncertainties(candidateId, 'OPEN')
+  // Attribution uncertainty is settled by defence, never by a gap question: a
+  // second account of the same work may have the same co-author.
+  const open = listUncertainties(candidateId, 'OPEN').filter((uncertainty) => uncertainty.kind !== 'ATTRIBUTION')
   const resolved = listUncertainties(candidateId, 'RESOLVED')
 
   const capabilityInput = capabilities.map((capability) => ({
@@ -127,6 +158,7 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
 
   return {
     action: 'ASK',
+    kind: 'gap',
     turnId: turn.id,
     question: result.data.question ?? undefined,
     reason: result.data.reason,
@@ -138,6 +170,7 @@ export interface IncorporatedAnswer {
   evidenceCreated: number
   resolvedUncertaintyIds: string[]
   reassessedCapabilityIds: string[]
+  defence?: Omit<DefenceResult, 'affectedCapabilityIds'>
 }
 
 export async function incorporateAnswer(
@@ -161,6 +194,8 @@ async function incorporateAnswerInner(
   answerText: string,
 ): Promise<IncorporatedAnswer> {
   const turnId = turn.id
+
+  if (turnKind(turn) === 'defence') return incorporateDefenceAnswer(candidateId, turn, answerText)
 
   const { data: answerData } = await runExtractAnswerClaimsTask({
     candidateId,
@@ -201,6 +236,76 @@ async function incorporateAnswerInner(
     capabilities.some((capability) => capability.id === slug),
   )
   const scope = scopedSlugs.length > 0 ? scopedSlugs : capabilities.map((capability) => capability.id)
+  const { resolvedUncertaintyIds, reassessedCapabilityIds } = await reassessScope(
+    candidateId,
+    turn,
+    answerText,
+    scope,
+    evidenceIds,
+  )
+  await reconcileAndRefresh(candidateId)
+  syncAttributionUncertainties(candidateId, turnId)
+
+  return {
+    claimsCreated,
+    evidenceCreated: evidenceIds.length,
+    resolvedUncertaintyIds,
+    reassessedCapabilityIds,
+  }
+}
+
+// A defence answer does not add evidence; it changes the standing of evidence
+// that already exists. Promote, keep or retract, then reassess what rested on it.
+async function incorporateDefenceAnswer(
+  candidateId: string,
+  turn: InterviewTurnRow,
+  answerText: string,
+): Promise<IncorporatedAnswer> {
+  const { affectedCapabilityIds, ...defence } = await judgeDefenceAnswer(candidateId, turn, answerText)
+
+  let resolvedUncertaintyIds: string[] = []
+  let reassessedCapabilityIds: string[] = []
+  const changed = defence.defended.length > 0 || defence.retracted.length > 0
+  if (changed && affectedCapabilityIds.length > 0) {
+    ;({ resolvedUncertaintyIds, reassessedCapabilityIds } = await reassessScope(
+      candidateId,
+      turn,
+      answerText,
+      affectedCapabilityIds,
+      [],
+    ))
+  }
+
+  // A promotion can lift a capability out of the assisted ceiling only through a
+  // reassessment; a retraction must lower it even when the model skipped it.
+  for (const id of await reconcileAndRefresh(candidateId)) {
+    if (!reassessedCapabilityIds.includes(id)) reassessedCapabilityIds.push(id)
+  }
+
+  const before = new Set(listUncertainties(candidateId, 'RESOLVED').map((row) => row.id))
+  syncAttributionUncertainties(candidateId, turn.id)
+  for (const row of listUncertainties(candidateId, 'RESOLVED')) {
+    if (!before.has(row.id)) resolvedUncertaintyIds.push(row.id)
+  }
+
+  return {
+    claimsCreated: 0,
+    evidenceCreated: 0,
+    resolvedUncertaintyIds,
+    reassessedCapabilityIds,
+    defence,
+  }
+}
+
+async function reassessScope(
+  candidateId: string,
+  turn: InterviewTurnRow,
+  answerText: string,
+  scope: string[],
+  evidenceIds: string[],
+): Promise<{ resolvedUncertaintyIds: string[]; reassessedCapabilityIds: string[] }> {
+  const turnId = turn.id
+  const capabilities = listCapabilities(candidateId)
   const scopedEvidence = listEvidenceForCapabilities(candidateId, scope)
   const allScopeEvidence = [
     ...scopedEvidence,
@@ -217,11 +322,12 @@ async function incorporateAnswerInner(
       evidenceIds: listCapabilityEvidenceIds(candidateId).get(capability.id) ?? [],
     }))
 
-  const openUncertainties = listUncertainties(candidateId, 'OPEN')
+  // Attribution uncertainty is domain state (syncAttributionUncertainties), not a
+  // judgment the reassessment model may close.
+  const openUncertainties = listUncertainties(candidateId, 'OPEN').filter((uncertainty) => uncertainty.kind !== 'ATTRIBUTION')
 
   const resolvedUncertaintyIds: string[] = []
   const reassessedCapabilityIds: string[] = []
-
 
   if (allScopeEvidence.length > 0) {
     const { data: reassessData } = await runReassessAfterAnswerTask({
@@ -276,12 +382,7 @@ async function incorporateAnswerInner(
     }
   }
 
-  return {
-    claimsCreated,
-    evidenceCreated: evidenceIds.length,
-    resolvedUncertaintyIds,
-    reassessedCapabilityIds,
-  }
+  return { resolvedUncertaintyIds, reassessedCapabilityIds }
 }
 
 export function getInterviewState(candidateId: string): { interviewId: string; turns: InterviewTurnRow[] } {

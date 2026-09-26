@@ -38,6 +38,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
 export const EPISTEMIC_STATE_LABELS: Record<string, string> = {
   SOURCE_FACT: 'Source fact',
   USER_CLAIM: 'Your claim',
+  ASSISTED_CLAIM: 'Co-produced, not yet defended',
   INFERENCE: 'Inference',
   VERIFIED_FACT: 'Verified',
   SYSTEM_ASSESSMENT: 'System assessment',

@@ -10,9 +10,12 @@ import {
   parseJsonArray,
   setCandidateNameIfEmpty,
   updateSourceStatus,
+  updateSourceType,
   type SourceRow,
 } from '../db/repo'
 import { runExtractClaimsTask } from '../model/tasks'
+import { classifySourceContent, detectSourceSignature } from './classify'
+import { buildGitHubDigest, GitHubError, parseGitHubHandle, type GitHubDigest } from './github'
 
 const MAX_CONTENT_CHARS = 60_000
 
@@ -121,10 +124,14 @@ export async function createFileSource(
 
   fs.writeFileSync(storedPath, content, 'utf8')
 
+  // What a file is comes from its content, not from the field it was dropped into.
+  // The free, deterministic check runs here; the model confirms at processing time.
+  const signature = detectSourceSignature(content)
+
   const source = insertSource({
     id,
     candidate_id: candidateId,
-    type: 'cv',
+    type: signature?.type ?? 'cv',
     name: originalName,
     uri: null,
     original_filename: originalName,
@@ -132,7 +139,7 @@ export async function createFileSource(
     stored_path: textName,
     char_count: content.length,
     status: 'extracted',
-    status_detail: null,
+    status_detail: signature?.reason ?? null,
   })
 
   return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
@@ -209,6 +216,9 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     }
   }
 
+  const textName = `${id}.txt`
+  fs.mkdirSync(path.join(DATA_DIRECTORY, 'uploads'), { recursive: true })
+  fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', textName), content)
   const source = insertSource({
     id,
     candidate_id: candidateId,
@@ -217,42 +227,69 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     uri: url,
     original_filename: null,
     mime_type: 'text/html',
-    stored_path: null,
+    stored_path: textName,
     char_count: content.length,
     status: 'extracted',
     status_detail: null,
   })
-  fs.mkdirSync(path.join(DATA_DIRECTORY, 'uploads'), { recursive: true })
-  fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.txt`), content)
   return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
 }
 
-export function createGitHubSource(candidateId: string, url: string): SourceCreated {
+export async function createGitHubSource(candidateId: string, url: string): Promise<SourceCreated> {
   const id = newId('src')
-  const handle = url
-    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
-    .replace(/\/.*$/, '')
-    .trim()
-  const name = handle || url
+  const handle = parseGitHubHandle(url) ?? url.trim()
+
+  let digest: GitHubDigest
+  try {
+    digest = await buildGitHubDigest(url)
+  } catch (error) {
+    // Registering without reading is honest; pretending to have read is not.
+    const reason =
+      error instanceof GitHubError
+        ? error.message
+        : "I couldn't read this GitHub profile. The handle is stored, not read."
+    insertSource({
+      id,
+      candidate_id: candidateId,
+      type: 'github',
+      name: handle,
+      uri: `https://github.com/${handle}`,
+      original_filename: null,
+      mime_type: null,
+      stored_path: null,
+      char_count: 0,
+      status: 'registered',
+      status_detail: reason,
+    })
+    return { id, name: handle, type: 'github', status: 'registered', detail: reason }
+  }
+
+  const textName = `${id}.txt`
+  fs.mkdirSync(path.join(DATA_DIRECTORY, 'uploads'), { recursive: true })
+  fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', textName), digest.content, 'utf8')
+
   const source = insertSource({
     id,
     candidate_id: candidateId,
     type: 'github',
-    name,
-    uri: `https://github.com/${name}`,
+    name: digest.handle,
+    uri: `https://github.com/${digest.handle}`,
     original_filename: null,
-    mime_type: null,
-    stored_path: null,
-    char_count: 0,
-    status: 'registered',
-    status_detail: "GitHub reading isn't supported in this build yet. The profile is stored, not read.",
+    mime_type: 'text/plain',
+    stored_path: textName,
+    char_count: digest.content.length,
+    status: 'extracted',
+    status_detail: `${digest.repoCount} repositorios y ${digest.ownCommitCount} commits propios leídos.`,
   })
+
+  if (digest.displayName) setCandidateNameIfEmpty(candidateId, digest.displayName)
+
   return {
     id: source.id,
     name: source.name,
     type: source.type,
     status: source.status,
-    detail: "GitHub reading isn't supported in this build yet. The profile is stored, not read.",
+    detail: source.status_detail,
   }
 }
 
@@ -297,6 +334,13 @@ export interface ProcessedSourceResult {
   discoveries: { title: string; meta: string }[]
 }
 
+export class SourceRejectedError extends Error {
+  constructor(public readonly sourceName: string, public readonly reason: string) {
+    super(`"${sourceName}" isn't professional evidence: ${reason}`)
+    this.name = 'SourceRejectedError'
+  }
+}
+
 export async function processSource(source: SourceRow, candidateId: string): Promise<ProcessedSourceResult> {
   const content = readSourceContent(source)
   if (!content) {
@@ -304,10 +348,25 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
     throw new Error(`The content of "${source.name}" could not be loaded.`)
   }
 
+  // Classify before extracting. A document that isn't about this person's career
+  // must never reach claim extraction: it would produce fluent, sourced nonsense.
+  let resolvedType = source.type
+  if (source.type !== 'website') {
+    const classification = await classifySourceContent({ candidateId, content })
+    if (!classification.isProfessional) {
+      updateSourceStatus(source.id, 'rejected', classification.reason)
+      throw new SourceRejectedError(source.name, classification.reason)
+    }
+    if (classification.type !== 'other' && classification.type !== resolvedType) {
+      updateSourceType(source.id, classification.type)
+      resolvedType = classification.type
+    }
+  }
+
   const { data } = await runExtractClaimsTask({
     candidateId: source.candidate_id,
     sourceName: source.name,
-    sourceType: source.type,
+    sourceType: resolvedType,
     content: content.slice(0, MAX_CONTENT_CHARS),
   })
 

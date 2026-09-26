@@ -171,8 +171,75 @@ function createDb(): DatabaseSync {
       confirmed_at TEXT,
       valid_until TEXT
     );
+
+    -- PRODUCT_SPEC §12.1 and §19: a retraction records the evidence, the defence
+    -- question that defeated it and the answer that defeated it. Append-only.
+    CREATE TABLE IF NOT EXISTS retractions (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      evidence_id TEXT NOT NULL REFERENCES evidence(id),
+      statement TEXT NOT NULL,
+      question TEXT,
+      answer TEXT,
+      reason TEXT NOT NULL,
+      turn_id TEXT,
+      previous_state TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
+    BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
+
+    CREATE TRIGGER IF NOT EXISTS retractions_no_delete BEFORE DELETE ON retractions
+    BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
   `)
+  migrate(db)
   return db
+}
+
+function hasColumn(db: DatabaseSync, table: string, column: string): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[]
+  return columns.some((row) => row.name === column)
+}
+
+function addColumn(db: DatabaseSync, table: string, column: string, definition: string): boolean {
+  if (hasColumn(db, table, column)) return false
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  return true
+}
+
+function migrate(db: DatabaseSync): void {
+  // Attribution (PRODUCT_SPEC §11.1, §12).
+  const attributionAdded = addColumn(db, 'evidence', 'attribution', "TEXT NOT NULL DEFAULT 'sole'")
+  addColumn(db, 'evidence', 'attribution_tool', 'TEXT')
+  addColumn(db, 'evidence', 'defence_status', 'TEXT')
+  addColumn(db, 'evidence', 'defence_turn_id', 'TEXT')
+  addColumn(db, 'evidence', 'retracted_at', 'TEXT')
+  addColumn(db, 'evidence', 'retracted_reason', 'TEXT')
+  addColumn(db, 'evidence', 'retracted_by_turn', 'TEXT')
+
+  if (attributionAdded) {
+    // Evidence read from repositories before attribution existed was stored as if
+    // the candidate alone had written it. Re-read it as what it is: co-produced,
+    // and undefended. What the artifact shows (SOURCE_FACT) stands; what it was
+    // taken to say about the person's judgment (USER_CLAIM) does not, yet.
+    db.exec(`
+      UPDATE evidence SET
+        attribution = 'assisted',
+        defence_status = CASE WHEN epistemic_state = 'USER_CLAIM' THEN 'undefended' ELSE NULL END,
+        strength = CASE WHEN epistemic_state = 'USER_CLAIM' THEN 'limited' ELSE strength END,
+        candidate_confirmed = CASE WHEN epistemic_state = 'USER_CLAIM' THEN 0 ELSE candidate_confirmed END,
+        epistemic_state = CASE WHEN epistemic_state = 'USER_CLAIM' THEN 'ASSISTED_CLAIM' ELSE epistemic_state END
+      WHERE source_type = 'github'
+    `)
+  }
+
+  // Defence questions (§10.2) are interview turns aimed at evidence, not gaps.
+  addColumn(db, 'interview_turns', 'kind', "TEXT NOT NULL DEFAULT 'gap'")
+  addColumn(db, 'interview_turns', 'target_evidence_ids', "TEXT NOT NULL DEFAULT '[]'")
+
+  // Two kinds of uncertainty (§14.1): MATERIALITY and ATTRIBUTION.
+  addColumn(db, 'uncertainties', 'kind', "TEXT NOT NULL DEFAULT 'MATERIALITY'")
 }
 
 export function getDb(): DatabaseSync {

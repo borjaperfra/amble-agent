@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, listUnprocessedSources, listClaims } from '@/lib/db/repo'
-import { processSource } from '@/lib/pipeline/sources'
+import { processSource, SourceRejectedError } from '@/lib/pipeline/sources'
 import { claimsToEvidence, assessCapabilities, buildDistinctiveProfile, buildDescriptor } from '@/lib/pipeline/graph'
 import { ModelNotConfiguredError } from '@/lib/features'
 
@@ -28,17 +28,28 @@ export async function POST(request: Request) {
       const all = listUnprocessedSources(candidate.id)
       const sources = body.sourceId ? all.filter((source) => source.id === body.sourceId) : all
       const processed: { name: string; claimsCount: number; discoveries: { title: string; meta: string }[] }[] = []
+      const rejected: { name: string; reason: string }[] = []
       for (const source of sources) {
-        const result = await processSource(source, candidate.id)
-        processed.push({
-          name: result.sourceName,
-          claimsCount: result.claimsCount,
-          discoveries: result.discoveries,
-        })
+        try {
+          const result = await processSource(source, candidate.id)
+          processed.push({
+            name: result.sourceName,
+            claimsCount: result.claimsCount,
+            discoveries: result.discoveries,
+          })
+        } catch (error) {
+          // One unusable source must not abort the batch: the others are still good.
+          if (error instanceof SourceRejectedError) {
+            rejected.push({ name: error.sourceName, reason: error.reason })
+            continue
+          }
+          throw error
+        }
       }
       return NextResponse.json({
         stage,
         processed,
+        rejected,
         totalClaims: listClaims(candidate.id).length,
       })
     }

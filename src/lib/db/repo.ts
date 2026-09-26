@@ -67,8 +67,28 @@ export interface EvidenceRow {
   candidate_confirmed: number
   human_verified: number
   interview_turn_id: string | null
+  attribution: string
+  attribution_tool: string | null
+  defence_status: string | null
+  defence_turn_id: string | null
+  retracted_at: string | null
+  retracted_reason: string | null
+  retracted_by_turn: string | null
   created_at: string
   updated_at: string
+}
+
+export interface RetractionRow {
+  id: string
+  candidate_id: string
+  evidence_id: string
+  statement: string
+  question: string | null
+  answer: string | null
+  reason: string
+  turn_id: string | null
+  previous_state: string
+  created_at: string
 }
 
 export interface CapabilityRow {
@@ -89,6 +109,7 @@ export interface UncertaintyRow {
   materiality: string
   status: string
   resolvable_by_interview: number
+  kind: string
   created_at: string
   resolved_at: string | null
   resolved_by_turn: string | null
@@ -110,6 +131,8 @@ export interface InterviewTurnRow {
   question_reason: string | null
   target_capability_ids: string
   target_uncertainty_ids: string
+  kind: string
+  target_evidence_ids: string
   answer: string | null
   created_at: string
   answered_at: string | null
@@ -230,6 +253,10 @@ export function listUnprocessedSources(candidateId: string): SourceRow[] {
     .all(candidateId) as unknown as SourceRow[]
 }
 
+export function updateSourceType(id: string, type: string): void {
+  getDb().prepare('UPDATE sources SET type = ? WHERE id = ?').run(type, id)
+}
+
 export function updateSourceStatus(id: string, status: string, detail: string | null): void {
   getDb()
     .prepare('UPDATE sources SET status = ?, status_detail = ?, processed_at = ? WHERE id = ?')
@@ -276,12 +303,21 @@ export function listClaimsWithoutEvidence(candidateId: string): ClaimRow[] {
     .all(candidateId) as unknown as ClaimRow[]
 }
 
-export function insertEvidence(row: Omit<EvidenceRow, 'created_at' | 'updated_at' | 'corroborated_by' | 'contradicted_by'>): EvidenceRow {
+type EvidenceAttributionFields = 'attribution' | 'attribution_tool' | 'defence_status'
+type EvidenceLifecycleFields = 'defence_turn_id' | 'retracted_at' | 'retracted_reason' | 'retracted_by_turn'
+
+export function insertEvidence(
+  row: Omit<
+    EvidenceRow,
+    'created_at' | 'updated_at' | 'corroborated_by' | 'contradicted_by' | EvidenceAttributionFields | EvidenceLifecycleFields
+  > &
+    Partial<Pick<EvidenceRow, EvidenceAttributionFields>>,
+): EvidenceRow {
   const db = getDb()
   const ts = now()
   db.prepare(
-    `INSERT INTO evidence (id, candidate_id, claim_id, statement, epistemic_state, source_type, source_id, source_excerpt, strength, confidence, candidate_confirmed, human_verified, interview_turn_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO evidence (id, candidate_id, claim_id, statement, epistemic_state, source_type, source_id, source_excerpt, strength, confidence, candidate_confirmed, human_verified, interview_turn_id, attribution, attribution_tool, defence_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.candidate_id,
@@ -296,16 +332,100 @@ export function insertEvidence(row: Omit<EvidenceRow, 'created_at' | 'updated_at
     row.candidate_confirmed,
     row.human_verified,
     row.interview_turn_id,
+    row.attribution ?? 'sole',
+    row.attribution_tool ?? null,
+    row.defence_status ?? null,
     ts,
     ts,
   )
   return db.prepare('SELECT * FROM evidence WHERE id = ?').get(row.id) as unknown as EvidenceRow
 }
 
+// Retracted evidence is hidden from everything that assesses the candidate.
+// It is never deleted: listAllEvidence and listRetractions keep the audit trail.
 export function listEvidence(candidateId: string): EvidenceRow[] {
+  return getDb()
+    .prepare('SELECT * FROM evidence WHERE candidate_id = ? AND retracted_at IS NULL ORDER BY created_at ASC')
+    .all(candidateId) as unknown as EvidenceRow[]
+}
+
+export function listAllEvidence(candidateId: string): EvidenceRow[] {
   return getDb()
     .prepare('SELECT * FROM evidence WHERE candidate_id = ? ORDER BY created_at ASC')
     .all(candidateId) as unknown as EvidenceRow[]
+}
+
+export function listUndefendedAssistedEvidence(candidateId: string): EvidenceRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM evidence
+       WHERE candidate_id = ? AND epistemic_state = 'ASSISTED_CLAIM'
+         AND defence_status = 'undefended' AND retracted_at IS NULL
+       ORDER BY created_at ASC`,
+    )
+    .all(candidateId) as unknown as EvidenceRow[]
+}
+
+export function getEvidence(id: string): EvidenceRow | undefined {
+  return getDb().prepare('SELECT * FROM evidence WHERE id = ?').get(id) as unknown as EvidenceRow | undefined
+}
+
+// Defended: the candidate showed the judgment is theirs. The evidence becomes
+// their claim; attribution stays 'assisted' because the artifact still is.
+export function markEvidenceDefended(id: string, turnId: string): void {
+  getDb()
+    .prepare(
+      `UPDATE evidence SET epistemic_state = 'USER_CLAIM', defence_status = 'defended', defence_turn_id = ?,
+         candidate_confirmed = 1, strength = 'some', updated_at = ? WHERE id = ?`,
+    )
+    .run(turnId, now(), id)
+}
+
+export function markEvidencePartial(id: string, turnId: string): void {
+  getDb()
+    .prepare(`UPDATE evidence SET defence_status = 'partial', defence_turn_id = ?, updated_at = ? WHERE id = ?`)
+    .run(turnId, now(), id)
+}
+
+export function retractEvidence(params: {
+  evidence: EvidenceRow
+  reason: string
+  question: string | null
+  answer: string | null
+  turnId: string | null
+}): void {
+  const db = getDb()
+  const ts = now()
+  const { evidence } = params
+  db.prepare(
+    `INSERT INTO retractions (id, candidate_id, evidence_id, statement, question, answer, reason, turn_id, previous_state, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    newId('ret'),
+    evidence.candidate_id,
+    evidence.id,
+    evidence.statement,
+    params.question,
+    params.answer,
+    params.reason,
+    params.turnId,
+    evidence.epistemic_state,
+    ts,
+  )
+  db.prepare(
+    `UPDATE evidence SET defence_status = CASE WHEN defence_status IS NULL THEN NULL ELSE 'failed' END,
+       defence_turn_id = COALESCE(?, defence_turn_id), retracted_at = ?, retracted_reason = ?, retracted_by_turn = ?, updated_at = ?
+     WHERE id = ?`,
+  ).run(params.turnId, ts, params.reason, params.turnId, ts, evidence.id)
+  // The link is derived state, rebuilt by every assessment; the evidence row and
+  // its retraction record are what the audit trail keeps.
+  db.prepare('DELETE FROM capability_evidence WHERE evidence_id = ?').run(evidence.id)
+}
+
+export function listRetractions(candidateId: string): RetractionRow[] {
+  return getDb()
+    .prepare('SELECT * FROM retractions WHERE candidate_id = ? ORDER BY created_at ASC')
+    .all(candidateId) as unknown as RetractionRow[]
 }
 
 export function listEvidenceForCapabilities(candidateId: string, capabilityIds: string[]): EvidenceRow[] {
@@ -316,7 +436,7 @@ export function listEvidenceForCapabilities(candidateId: string, capabilityIds: 
     .prepare(
       `SELECT DISTINCT e.* FROM evidence e
        JOIN capability_evidence ce ON ce.evidence_id = e.id
-       WHERE e.candidate_id = ? AND ce.capability_id IN (${placeholders})
+       WHERE e.candidate_id = ? AND e.retracted_at IS NULL AND ce.capability_id IN (${placeholders})
        ORDER BY e.created_at ASC`,
     )
     .all(candidateId, ...capabilityIds) as unknown as EvidenceRow[]
@@ -367,11 +487,15 @@ export function listCapabilityEvidenceIds(candidateId: string): Map<string, stri
   return map
 }
 
-export function insertUncertainty(row: Omit<UncertaintyRow, 'created_at' | 'resolved_at' | 'resolved_by_turn'>): UncertaintyRow {
+export function insertUncertainty(
+  row: Omit<UncertaintyRow, 'created_at' | 'resolved_at' | 'resolved_by_turn' | 'kind'> & {
+    kind?: 'MATERIALITY' | 'ATTRIBUTION'
+  },
+): UncertaintyRow {
   const db = getDb()
   db.prepare(
-    `INSERT INTO uncertainties (id, candidate_id, capability_id, description, reason, materiality, status, resolvable_by_interview, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO uncertainties (id, candidate_id, capability_id, description, reason, materiality, status, resolvable_by_interview, kind, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.candidate_id,
@@ -381,6 +505,7 @@ export function insertUncertainty(row: Omit<UncertaintyRow, 'created_at' | 'reso
     row.materiality,
     row.status,
     row.resolvable_by_interview,
+    row.kind ?? 'MATERIALITY',
     now(),
   )
   return db.prepare('SELECT * FROM uncertainties WHERE id = ?').get(row.id) as unknown as UncertaintyRow
@@ -445,12 +570,26 @@ export function listTurns(interviewId: string): InterviewTurnRow[] {
     .all(interviewId) as unknown as InterviewTurnRow[]
 }
 
-export function insertTurn(row: Omit<InterviewTurnRow, 'created_at' | 'answered_at' | 'answer'>): InterviewTurnRow {
+export function insertTurn(
+  row: Omit<InterviewTurnRow, 'created_at' | 'answered_at' | 'answer' | 'kind' | 'target_evidence_ids'> &
+    Partial<Pick<InterviewTurnRow, 'kind' | 'target_evidence_ids'>>,
+): InterviewTurnRow {
   const db = getDb()
   db.prepare(
-    `INSERT INTO interview_turns (id, interview_id, idx, question, question_reason, target_capability_ids, target_uncertainty_ids, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(row.id, row.interview_id, row.idx, row.question, row.question_reason, row.target_capability_ids, row.target_uncertainty_ids, now())
+    `INSERT INTO interview_turns (id, interview_id, idx, question, question_reason, target_capability_ids, target_uncertainty_ids, kind, target_evidence_ids, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    row.id,
+    row.interview_id,
+    row.idx,
+    row.question,
+    row.question_reason,
+    row.target_capability_ids,
+    row.target_uncertainty_ids,
+    row.kind ?? 'gap',
+    row.target_evidence_ids ?? '[]',
+    now(),
+  )
   return db.prepare('SELECT * FROM interview_turns WHERE id = ?').get(row.id) as unknown as InterviewTurnRow
 }
 

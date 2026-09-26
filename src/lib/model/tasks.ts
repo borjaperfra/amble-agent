@@ -427,6 +427,7 @@ Rules:
 - Every capability you emit MUST link to at least one evidence ID you were given. A capability without evidence is forbidden.
 - Assessment levels: STRONG_EVIDENCE (multiple independent, corroborating evidence items), GOOD_EVIDENCE (several consistent items), SOME_EVIDENCE (a few items, narrow scope), LIMITED_EVIDENCE (essentially one weak or indirect item), CONTRADICTORY_EVIDENCE (evidence conflicts).
 - NEVER inflate: company-level facts do not prove personal ownership. A SOURCE_FACT about an employer supports capability claims only where the text explicitly connects the candidate.
+- ASSISTED_CLAIM evidence comes from work co-produced with an AI tool (typically code). It proves that something was chosen, shipped and operated; it does NOT prove the candidate's individual technical skill or judgment. A capability resting mostly on ASSISTED_CLAIM evidence must not be rated above SOME_EVIDENCE, and its reason must say the judgment is not yet attributed.
 - Emit at most 12 capabilities. Quality over quantity. It is fine to emit few.
 - For each capability, include 0-3 uncertainties: things the evidence cannot yet establish (scope, ownership, scale, depth, recency). Set materiality HIGH when it materially changes how a company should read the capability.
 - reason must explain what the evidence shows, referencing its nature (e.g. "two independent sources describe...").
@@ -470,10 +471,10 @@ export function runReassessAfterAnswerTask(params: {
   question: string
   answer: string
 }) {
-  const system = `You are Amble's reassessment engine, version 1. The candidate just answered an interview question. New USER_CLAIM evidence has been created from their answer and is included in the evidence list.
+  const system = `You are Amble's reassessment engine, version 2. The candidate just answered an interview question. The answer may have created new USER_CLAIM evidence, promoted co-produced evidence they defended, or retracted evidence they could not (retracted items are no longer in the list).
 
 Your job:
-1. Reassess ONLY the listed capabilities using ALL their evidence (old and new). Same rules as initial assessment: every capability must link evidence IDs; never inflate ownership; company facts are not personal evidence.
+1. Reassess ONLY the listed capabilities using ALL their evidence (old and new). Same rules as initial assessment: every capability must link evidence IDs; never inflate ownership; company facts are not personal evidence. ASSISTED_CLAIM evidence (work co-produced with an AI tool) proves something shipped, not individual skill or judgment: a capability resting mostly on it must not be rated above SOME_EVIDENCE, however substantive the work looks.
 2. For each listed open uncertainty, decide its new status: RESOLVED (the answer materially settles it), OPEN (still unknown), or ACCEPTED_UNKNOWN (it will not be resolvable and is not worth pursuing). Only reference uncertainty IDs you were given.
 3. Optionally add up to 3 genuinely important new uncertainties discovered from the answer. Use EXACTLY these field names for each: "description" (string), "materiality" (HIGH|MEDIUM|LOW), "capabilitySlug" (string or null).
 Respond ONLY with JSON: {"assessments": [...], "uncertaintyUpdates": [...], "newUncertainties": [...]}.`
@@ -503,7 +504,7 @@ ${JSON.stringify(params.openUncertainties, null, 1)}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'reassess_after_answer',
-    version: 'v1',
+    version: 'v2',
     system,
     user,
     schema: reassessOutputSchema,

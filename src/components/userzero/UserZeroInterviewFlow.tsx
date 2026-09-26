@@ -11,6 +11,7 @@ import styles from '@/app/onboarding/interview/interview.module.css'
 
 interface NextResponse {
   action?: 'ASK' | 'STOP'
+  kind?: 'gap' | 'defence'
   turnId?: string
   question?: string
   reason?: string
@@ -25,6 +26,9 @@ interface AnswerResponse {
 type Phase = 'loading' | 'ask' | 'answering' | 'gotit' | 'complete'
 
 const COMPLETION_LINE = 'I think I understand you pretty well now.'
+// PRODUCT_SPEC §10.2: a defence question checks the Rep's reading, not the person.
+const DEFENCE_CONTEXT =
+  "I'm checking my own reading of something you built with an AI tool. \"I don't know\" is a useful answer."
 const VOICE_NOTICE =
   "Voice is simulated in this build — it doesn't transcribe. Use the text box below."
 
@@ -34,6 +38,7 @@ export default function UserZeroInterviewFlow() {
   const [turnId, setTurnId] = useState<string | null>(null)
   const [question, setQuestion] = useState<string | null>(null)
   const [reason, setReason] = useState<string | null>(null)
+  const [isDefence, setIsDefence] = useState(false)
   const [answer, setAnswer] = useState('')
   const [showWhy, setShowWhy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +59,7 @@ export default function UserZeroInterviewFlow() {
       setTurnId(data.turnId ?? null)
       setQuestion(data.question ?? null)
       setReason(data.reason ?? null)
+      setIsDefence(data.kind === 'defence')
       setAnswer('')
       setShowWhy(false)
       setError(null)
@@ -183,6 +189,7 @@ export default function UserZeroInterviewFlow() {
               <p className="kicker">Your Rep</p>
             </div>
             <h1 className={styles.question}>{question}</h1>
+            {isDefence && <p className={styles.context}>{DEFENCE_CONTEXT}</p>}
 
             {phase === 'answering' ? (
               <div className={styles.workingArea} role="status">
