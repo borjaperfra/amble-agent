@@ -1,5 +1,5 @@
 import type { CandidateRow, EvidenceRow, RetractionRow, SourceRow, UncertaintyRow } from '../db/repo'
-import { isUnverifiedAssisted } from '../pipeline/graph'
+import { isUnverifiedAssisted } from '../pipeline/attribution'
 import type { CareerProfileOutput, GroundedStatement } from './synthesis'
 
 // Deterministic rendering. The model proposes structure; this module decides what
@@ -49,9 +49,9 @@ function resolve(
   if (resolved.length === 0) return null
 
   const tags = [...new Set(resolved.map((row) => SOURCE_TAG[row.source_type] ?? row.source_type))].sort()
-  const assistedCount = resolved.filter(isUnverifiedAssisted).length
-
-  return { text: statement.text, tags, assisted: assistedCount * 2 > resolved.length }
+  // Any undefended assisted support flags the statement. A majority rule would
+  // let a trivially true fact (the repo exists) launder the claim beside it.
+  return { text: statement.text, tags, assisted: resolved.some(isUnverifiedAssisted) }
 }
 
 function line(statement: ResolvedStatement): string {

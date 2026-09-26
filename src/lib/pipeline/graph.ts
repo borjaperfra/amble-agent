@@ -25,6 +25,7 @@ import {
   runDistinctiveProfileTask,
   type EvidenceForAssessment,
 } from '../model/tasks'
+import { ASSISTED_SOURCE_TYPES, isUnverifiedAssisted } from './attribution'
 
 export function claimsToEvidence(candidateId: string): number {
   const claims = listClaimsWithoutEvidence(candidateId)
@@ -68,14 +69,6 @@ export function claimsToEvidence(candidateId: string): number {
   }
 
   return created
-}
-
-// Sources whose content is routinely authored by the candidate together with a
-// tool. From 2026 this is the normal case for code repositories.
-const ASSISTED_SOURCE_TYPES = new Set(['github'])
-
-export function isUnverifiedAssisted(evidence: EvidenceRow): boolean {
-  return evidence.epistemic_state === 'ASSISTED_CLAIM' && evidence.defence_status !== 'defended'
 }
 
 const ABOVE_ASSISTED_CEILING = new Set(['STRONG_EVIDENCE', 'GOOD_EVIDENCE'])
