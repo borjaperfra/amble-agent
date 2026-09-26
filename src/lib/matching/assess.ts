@@ -19,7 +19,7 @@ const MAX_DESCRIPTION_CHARS = 9_000
 
 // Part of every stored assessment's key (with the profile fingerprint): a new
 // version of this prompt means every offer is judged again.
-export const ASSESS_VERSION = 'v4'
+export const ASSESS_VERSION = 'v5'
 
 export type RoleFit = 'fits' | 'stretch' | 'wrong_role'
 
@@ -99,12 +99,12 @@ const assessmentSchema = z.preprocess(
 )
 
 
-const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 4. You read one job posting on behalf of one candidate and decide whether it deserves their attention, and why.
+const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 5. You read one job posting on behalf of one candidate and decide whether it deserves their attention, and why.
 
 1. ROLE FIT, first. Is this a job this person could credibly do, given their capabilities and experience?
    - "fits": it is their kind of role.
-   - "stretch": adjacent; they could argue for it, but it is not their core.
-   - "wrong_role": another profession (a finance, recruiting or engineering role that merely touches their field). Say why in one sentence.
+   - "stretch": adjacent. Includes a different specialty within their own discipline (for someone in marketing and community: paid media, performance, lifecycle, PR, communications, social, content production). They could argue for it, but it is not their core.
+   - "wrong_role": the daily work belongs to another discipline altogether: finance, engineering or software, data analysis, sales or account management, recruiting, design, legal, operations. A title word from their field does not change that. Never use it for another specialty of their own discipline. Say why in one sentence.
    A title word like "marketing" does not make a role fit: judge what the person would do all day.
 
 2. GATES: one for each HARD FILTER given, nothing else.
