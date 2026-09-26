@@ -59,27 +59,9 @@ function workplaceOf(job: TheirStackJob): Workplace | null {
 
 const WORKPLACE_PARAM: Record<Workplace, string> = { remote: 'remote', hybrid: 'hybrid', onsite: 'on_site' }
 
-export async function searchTheirStack(query: TheirStackQuery): Promise<RawOpportunity[]> {
-  const apiKey = process.env.AMBLE_THEIRSTACK_API_KEY?.trim()
-  if (!apiKey) throw new SourceError('AMBLE_THEIRSTACK_API_KEY is not set', 'theirstack')
-  if (query.titleAny.length === 0) throw new SourceError('A TheirStack query needs at least one title pattern', 'theirstack')
+const PAGE_SIZE = 25
 
-  const body: Record<string, unknown> = {
-    job_title_or: query.titleAny,
-    posted_at_max_age_days: query.maxAgeDays,
-    limit: query.limit,
-    page: 0,
-    include_total_results: false,
-  }
-  if (query.titleNot?.length) body.job_title_not = query.titleNot
-  if (query.countryCodes?.length) body.job_country_code_or = query.countryCodes
-  if (query.countryNot?.length) body.job_country_code_not = query.countryNot
-  if (query.seniority?.length) body.job_seniority_or = query.seniority
-  if (query.directEmployersOnly) body.company_type = 'direct_employer'
-  if (query.minEmployees) body.min_employee_count_or_null = query.minEmployees
-  if (query.workplaces?.length) body.workplace_types_or = query.workplaces.map((w) => WORKPLACE_PARAM[w])
-  if (query.descriptionAny?.length) body.job_description_pattern_or = query.descriptionAny
-
+async function fetchPage(apiKey: string, body: Record<string, unknown>): Promise<TheirStackJob[]> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
   let response: Response
@@ -95,12 +77,48 @@ export async function searchTheirStack(query: TheirStackQuery): Promise<RawOppor
   } finally {
     clearTimeout(timeout)
   }
-  if (response.status === 401 || response.status === 403) throw new SourceError('TheirStack rejected the API key', 'theirstack', response.status)
-  if (response.status === 402) throw new SourceError('TheirStack credits are exhausted', 'theirstack', 402)
-  if (!response.ok) throw new SourceError(`TheirStack answered ${response.status}`, 'theirstack', response.status)
-
+  if (!response.ok) {
+    // Their own message says what is wrong (a key, a plan limit, a filter);
+    // a status code alone does not: a plan limit came back as 403.
+    const detail = (await response.text().catch(() => '')).slice(0, 300)
+    const what =
+      response.status === 401 ? 'rejected the API key' : response.status === 402 ? 'says credits are exhausted' : `answered ${response.status}`
+    throw new SourceError(`TheirStack ${what}${detail ? `: ${detail}` : ''}`, 'theirstack', response.status)
+  }
   const data = (await response.json()) as { data?: TheirStackJob[] }
-  return (data.data ?? [])
+  return data.data ?? []
+}
+
+export async function searchTheirStack(query: TheirStackQuery): Promise<RawOpportunity[]> {
+  const apiKey = process.env.AMBLE_THEIRSTACK_API_KEY?.trim()
+  if (!apiKey) throw new SourceError('AMBLE_THEIRSTACK_API_KEY is not set', 'theirstack')
+  if (query.titleAny.length === 0) throw new SourceError('A TheirStack query needs at least one title pattern', 'theirstack')
+
+  const body: Record<string, unknown> = {
+    job_title_or: query.titleAny,
+    posted_at_max_age_days: query.maxAgeDays,
+    include_total_results: false,
+  }
+  if (query.titleNot?.length) body.job_title_not = query.titleNot
+  if (query.countryCodes?.length) body.job_country_code_or = query.countryCodes
+  if (query.countryNot?.length) body.job_country_code_not = query.countryNot
+  if (query.seniority?.length) body.job_seniority_or = query.seniority
+  if (query.directEmployersOnly) body.company_type = 'direct_employer'
+  if (query.minEmployees) body.min_employee_count_or_null = query.minEmployees
+  if (query.workplaces?.length) body.workplace_types_or = query.workplaces.map((w) => WORKPLACE_PARAM[w])
+  if (query.descriptionAny?.length) body.job_description_pattern_or = query.descriptionAny
+
+  // The free plan caps a page at 25 results, so a larger limit is read page by
+  // page. A short page means there is nothing more to fetch.
+  const jobs: TheirStackJob[] = []
+  for (let page = 0; jobs.length < query.limit; page++) {
+    const pageSize = Math.min(PAGE_SIZE, query.limit - jobs.length)
+    const batch = await fetchPage(apiKey, { ...body, limit: pageSize, page })
+    jobs.push(...batch)
+    if (batch.length < pageSize) break
+  }
+
+  return jobs
     .filter((job) => job.job_title && (job.company_object?.name || job.company))
     .map((job) => {
       const location = job.long_location ?? job.location ?? null
