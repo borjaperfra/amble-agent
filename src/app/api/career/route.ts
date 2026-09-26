@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server'
 import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
-import { buildCareerMarkdown, NoEvidenceError } from '@/lib/career/build'
+import { buildCareerMarkdown, getStoredCareer, listStoredCareerVersions, NoEvidenceError } from '@/lib/career/build'
 
 export const runtime = 'nodejs'
 
-// GET  -> the rendered career.md as text, for downloading or diffing
-// POST -> the same build, returning stats as JSON
-async function build() {
-  return buildCareerMarkdown()
-}
+// GET                 -> the latest stored career.md, as text
+// GET ?version=N      -> a specific stored version, as text
+// GET ?versions       -> the version history, as JSON
+// POST                -> synthesize and store a new version (a model call)
+//
+// Reading never synthesizes. A version is what the system said at a point in
+// time; regenerating on read would silently replace it.
 
 function errorResponse(error: unknown) {
   if (error instanceof ModelNotConfiguredError) {
@@ -27,25 +29,47 @@ function errorResponse(error: unknown) {
   )
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!isUserZero()) {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
-  try {
-    const result = await build()
-    return new NextResponse(result.markdown, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Content-Disposition': 'inline; filename="career.md"',
-        'X-Amble-Statements-Kept': String(result.stats.statementsKept),
-        'X-Amble-Statements-Dropped': String(result.stats.statementsDropped),
-        'X-Amble-Completeness': String(result.stats.completeness),
-      },
-    })
-  } catch (error) {
-    return errorResponse(error)
+  const params = new URL(request.url).searchParams
+
+  if (params.has('versions')) {
+    return NextResponse.json({ versions: listStoredCareerVersions() })
   }
+
+  const rawVersion = params.get('version')
+  const version = rawVersion === null ? undefined : Number.parseInt(rawVersion, 10)
+  if (version !== undefined && (!Number.isInteger(version) || version < 1)) {
+    return NextResponse.json({ error: 'version must be a positive integer.' }, { status: 400 })
+  }
+
+  const stored = getStoredCareer(version)
+  if (!stored) {
+    return NextResponse.json(
+      {
+        error:
+          version === undefined
+            ? 'No career.md has been generated yet. POST to this route to generate one.'
+            : `There is no version ${version}.`,
+      },
+      { status: 404 },
+    )
+  }
+
+  return new NextResponse(stored.markdown, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `inline; filename="career.v${stored.version}.md"`,
+      'X-Amble-Version': String(stored.version),
+      'X-Amble-Generated-At': stored.createdAt,
+      'X-Amble-Statements-Kept': String(stored.stats.statementsKept),
+      'X-Amble-Statements-Dropped': String(stored.stats.statementsDropped),
+      'X-Amble-Completeness': String(stored.stats.completeness),
+    },
+  })
 }
 
 export async function POST() {
@@ -53,12 +77,13 @@ export async function POST() {
     return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
   }
   try {
-    const result = await build()
+    const result = await buildCareerMarkdown()
     return NextResponse.json({
       ok: true,
+      version: result.version,
+      createdAt: result.createdAt,
       stats: result.stats,
       modelRunId: result.modelRunId,
-      storedPath: result.storedPath,
       markdown: result.markdown,
     })
   } catch (error) {

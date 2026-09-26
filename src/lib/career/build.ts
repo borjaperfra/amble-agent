@@ -1,16 +1,16 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { DATA_DIRECTORY } from '../db/db'
 import {
+  getCareerDocument,
   getOrCreateCandidate,
+  insertCareerDocument,
   listCapabilities,
+  listCareerDocumentVersions,
   listEvidence,
   listRetractions,
   listSources,
   listUncertainties,
 } from '../db/repo'
 import { reconcileCapabilities, syncAttributionUncertainties } from '../pipeline/graph'
-import { renderCareerMarkdown, type RenderedCareer } from './render'
+import { renderCareerMarkdown, type RenderedCareer, type RenderStats } from './render'
 import { runSynthesizeCareerTask, type EvidenceForSynthesis } from './synthesis'
 
 export class NoEvidenceError extends Error {
@@ -38,7 +38,8 @@ function toSynthesisInput(candidateId: string): EvidenceForSynthesis[] {
 
 export interface CareerBuildResult extends RenderedCareer {
   modelRunId: string
-  storedPath: string
+  version: number
+  createdAt: string
 }
 
 export async function buildCareerMarkdown(): Promise<CareerBuildResult> {
@@ -73,11 +74,43 @@ export async function buildCareerMarkdown(): Promise<CareerBuildResult> {
     retractions: listRetractions(candidate.id),
   })
 
-  // Written to disk so the generated file can be diffed against the handwritten
-  // reference at the repo root, which is the regression target for this task.
-  const storedPath = path.join(DATA_DIRECTORY, 'career.md')
-  fs.mkdirSync(DATA_DIRECTORY, { recursive: true })
-  fs.writeFileSync(storedPath, rendered.markdown, 'utf8')
+  const document = insertCareerDocument({
+    candidateId: candidate.id,
+    markdown: rendered.markdown,
+    stats: rendered.stats,
+    modelRunId,
+  })
 
-  return { ...rendered, modelRunId, storedPath }
+  return { ...rendered, modelRunId, version: document.version, createdAt: document.created_at }
+}
+
+export interface StoredCareer {
+  version: number
+  markdown: string
+  stats: RenderStats
+  modelRunId: string | null
+  createdAt: string
+}
+
+export function getStoredCareer(version?: number): StoredCareer | null {
+  const candidate = getOrCreateCandidate()
+  const row = getCareerDocument(candidate.id, version)
+  if (!row) return null
+  return {
+    version: row.version,
+    markdown: row.markdown,
+    stats: JSON.parse(row.stats) as RenderStats,
+    modelRunId: row.model_run_id,
+    createdAt: row.created_at,
+  }
+}
+
+export function listStoredCareerVersions() {
+  const candidate = getOrCreateCandidate()
+  return listCareerDocumentVersions(candidate.id).map((row) => ({
+    version: row.version,
+    stats: JSON.parse(row.stats) as RenderStats,
+    modelRunId: row.model_run_id,
+    createdAt: row.created_at,
+  }))
 }

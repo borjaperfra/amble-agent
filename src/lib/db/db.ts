@@ -187,6 +187,20 @@ function createDb(): DatabaseSync {
       created_at TEXT NOT NULL
     );
 
+    -- Generated career.md, versioned per candidate. Synthesis is a model call, so
+    -- a version is a record of what the system said at a point in time, not a
+    -- cache: it is kept so changes after a defence or retraction can be compared.
+    CREATE TABLE IF NOT EXISTS career_documents (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      version INTEGER NOT NULL,
+      markdown TEXT NOT NULL,
+      stats TEXT NOT NULL,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE (candidate_id, version)
+    );
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 

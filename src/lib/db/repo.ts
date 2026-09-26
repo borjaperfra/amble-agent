@@ -422,6 +422,55 @@ export function retractEvidence(params: {
   db.prepare('DELETE FROM capability_evidence WHERE evidence_id = ?').run(evidence.id)
 }
 
+export interface CareerDocumentRow {
+  id: string
+  candidate_id: string
+  version: number
+  markdown: string
+  stats: string
+  model_run_id: string | null
+  created_at: string
+}
+
+export function insertCareerDocument(params: {
+  candidateId: string
+  markdown: string
+  stats: unknown
+  modelRunId: string | null
+}): CareerDocumentRow {
+  const db = getDb()
+  const id = newId('car')
+  // Version assigned in the same statement as the insert, so two builds cannot
+  // claim the same number.
+  db.prepare(
+    `INSERT INTO career_documents (id, candidate_id, version, markdown, stats, model_run_id, created_at)
+     VALUES (?, ?, (SELECT COALESCE(MAX(version), 0) + 1 FROM career_documents WHERE candidate_id = ?), ?, ?, ?, ?)`,
+  ).run(id, params.candidateId, params.candidateId, params.markdown, JSON.stringify(params.stats), params.modelRunId, now())
+  return db.prepare('SELECT * FROM career_documents WHERE id = ?').get(id) as unknown as CareerDocumentRow
+}
+
+export function getCareerDocument(candidateId: string, version?: number): CareerDocumentRow | undefined {
+  const db = getDb()
+  if (version !== undefined) {
+    return db
+      .prepare('SELECT * FROM career_documents WHERE candidate_id = ? AND version = ?')
+      .get(candidateId, version) as unknown as CareerDocumentRow | undefined
+  }
+  return db
+    .prepare('SELECT * FROM career_documents WHERE candidate_id = ? ORDER BY version DESC LIMIT 1')
+    .get(candidateId) as unknown as CareerDocumentRow | undefined
+}
+
+export function listCareerDocumentVersions(
+  candidateId: string,
+): Pick<CareerDocumentRow, 'version' | 'stats' | 'model_run_id' | 'created_at'>[] {
+  return getDb()
+    .prepare(
+      'SELECT version, stats, model_run_id, created_at FROM career_documents WHERE candidate_id = ? ORDER BY version DESC',
+    )
+    .all(candidateId) as unknown as Pick<CareerDocumentRow, 'version' | 'stats' | 'model_run_id' | 'created_at'>[]
+}
+
 export function listRetractions(candidateId: string): RetractionRow[] {
   return getDb()
     .prepare('SELECT * FROM retractions WHERE candidate_id = ? ORDER BY created_at ASC')
