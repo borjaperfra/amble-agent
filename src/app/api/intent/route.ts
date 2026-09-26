@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
+import { ModelNotConfiguredError } from '@/lib/features'
 import { confirmLatestIntent, interpretIntent } from '@/lib/pipeline/intent'
 import { ModelError } from '@/lib/model/provider'
 
@@ -7,9 +7,6 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   const body = (await request.json().catch(() => ({}))) as { action?: string; answer?: string; intentId?: string }
 
   if (body.action === 'confirm') {

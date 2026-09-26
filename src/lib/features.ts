@@ -1,7 +1,3 @@
-export function isUserZero(): boolean {
-  return process.env.AMBLE_USER_ZERO === 'true'
-}
-
 export interface ModelConfig {
   provider: string
   baseUrl: string

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
+import { ModelNotConfiguredError } from '@/lib/features'
 import { getOrCreateCandidate } from '@/lib/db/repo'
 import { incorporateAnswer } from '@/lib/pipeline/interview'
 import { ModelError } from '@/lib/model/provider'
@@ -8,9 +8,6 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   const candidate = getOrCreateCandidate()
   const body = (await request.json().catch(() => ({}))) as { turnId?: string; answer?: string }
   const turnId = body.turnId?.trim()

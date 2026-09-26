@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, listUnprocessedSources, listClaims } from '@/lib/db/repo'
 import { processSource, SourceRejectedError } from '@/lib/pipeline/sources'
 import { claimsToEvidence, assessCapabilities, buildDistinctiveProfile, buildDescriptor } from '@/lib/pipeline/graph'
@@ -8,17 +7,7 @@ import { ModelNotConfiguredError } from '@/lib/features'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-function guard(): NextResponse | null {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
-  return null
-}
-
 export async function POST(request: Request) {
-  const blocked = guard()
-  if (blocked) return blocked
-
   const candidate = getOrCreateCandidate()
   const body = (await request.json().catch(() => ({}))) as { stage?: string; sourceId?: string }
   const stage = body.stage

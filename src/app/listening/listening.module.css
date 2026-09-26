@@ -38,10 +38,6 @@
   max-width: 24ch;
 }
 
-.statusLineReturn {
-  max-width: 20ch;
-}
-
 .listeningFor {
   display: flex;
   flex-direction: column;
@@ -119,23 +115,6 @@
 .repLink {
   margin-top: 16px;
   margin-left: -4px;
-}
-
-.fixtureToggle {
-  display: flex;
-  justify-content: center;
-  padding-bottom: 8px;
-}
-
-.fixtureToggleBtn {
-  font-size: var(--text-body-sm);
-  color: var(--ink-tertiary);
-  opacity: 0.6;
-}
-
-.fixtureToggleBtn:hover {
-  opacity: 1;
-  color: var(--ink-tertiary);
 }
 
 @keyframes enter {

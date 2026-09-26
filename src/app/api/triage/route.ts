@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
+import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
 import {
   analyseTriage,
@@ -39,18 +39,12 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET() {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   const triage = getTriageView()
   if (!triage) return NextResponse.json({ error: 'There is no triage yet.' }, { status: 404 })
   return NextResponse.json(triage)
 }
 
 export async function POST(request: Request) {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
 
   try {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isUserZero, ModelNotConfiguredError } from '@/lib/features'
+import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
 import { buildCareerMarkdown, getStoredCareer, listStoredCareerVersions, NoEvidenceError } from '@/lib/career/build'
 
@@ -30,9 +30,6 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET(request: Request) {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   const params = new URL(request.url).searchParams
 
   if (params.has('versions')) {
@@ -73,9 +70,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST() {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   try {
     const result = await buildCareerMarkdown()
     return NextResponse.json({

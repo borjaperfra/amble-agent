@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, listSources } from '@/lib/db/repo'
 import {
   createFileSource,
@@ -11,16 +10,7 @@ import {
 
 export const runtime = 'nodejs'
 
-function guard(): NextResponse | null {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
-  return null
-}
-
 export async function GET() {
-  const blocked = guard()
-  if (blocked) return blocked
   const candidate = getOrCreateCandidate()
   const sources = listSources(candidate.id).map((source) => ({
     id: source.id,
@@ -33,9 +23,6 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const blocked = guard()
-  if (blocked) return blocked
-
   const candidate = getOrCreateCandidate()
   const contentType = request.headers.get('content-type') ?? ''
 

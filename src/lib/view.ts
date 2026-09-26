@@ -72,7 +72,6 @@ export interface GapViewItem {
 }
 
 export interface MapViewModel {
-  userZero: boolean
   name: string | null
   descriptor: string | null
   updated: string
@@ -159,7 +158,6 @@ export function getMapViewModel(): MapViewModel {
       : null
 
   return {
-    userZero: true,
     name: candidate.name,
     descriptor: candidate.descriptor,
     updated: `Last updated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`,

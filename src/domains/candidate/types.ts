@@ -1,18 +1,3 @@
-export type EpistemicState =
-  | 'source_fact'
-  | 'user_claim'
-  | 'inference'
-  | 'verified_fact'
-  | 'system_assessment'
-
-export type SourceType =
-  | 'cv'
-  | 'github'
-  | 'linkedin'
-  | 'website'
-  | 'interview'
-  | 'verified'
-
 export type EvidenceStrength =
   | 'strong'
   | 'good'
@@ -48,16 +33,6 @@ export const sourceTypeLabel: Record<string, string> = {
   verified: 'Verified',
 }
 
-export interface Source {
-  id: string
-  type: SourceType
-  label: string
-  action: string
-  identifier: string | null
-  connected: boolean
-  prominent?: boolean
-}
-
 export interface Evidence {
   id: string
   capabilityId?: string
@@ -76,27 +51,3 @@ export interface Capability {
   explanation: string
 }
 
-export interface EvidenceGap {
-  id: string
-  name: string
-  explanation: string
-  options: string[]
-}
-
-export interface InterviewQuestion {
-  id: string
-  context: string
-  question: string
-  why: string
-  fixtureTranscript: string
-}
-
-export interface IntentGroup {
-  id: string
-  label: string
-  values: string[]
-}
-
-export type ProcessingStep =
-  | { kind: 'status' | 'activity' | 'summary' | 'count'; text: string }
-  | { kind: 'discovery'; title: string; meta: string; source: string }

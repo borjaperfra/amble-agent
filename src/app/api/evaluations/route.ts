@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { isUserZero } from '@/lib/features'
 import { getOrCreateCandidate, insertEvaluation } from '@/lib/db/repo'
 
 export const runtime = 'nodejs'
@@ -8,9 +7,6 @@ const CAPABILITY_VERDICTS = ['ACCURATE', 'PARTIALLY_ACCURATE', 'WRONG', 'UNSUPPO
 const QUESTION_VERDICTS = ['USEFUL', 'REDUNDANT', 'IRRELEVANT']
 
 export async function POST(request: Request) {
-  if (!isUserZero()) {
-    return NextResponse.json({ error: 'User Zero mode is disabled.' }, { status: 404 })
-  }
   const candidate = getOrCreateCandidate()
   const body = (await request.json().catch(() => ({}))) as {
     targetType?: string
