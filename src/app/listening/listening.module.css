@@ -62,6 +62,31 @@
   color: var(--ink);
 }
 
+.revealed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.revealedGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.revealedLabel {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.revealedMuted {
+  font-size: var(--text-body);
+  color: var(--ink-tertiary);
+}
+
 .changeIntent {
   margin-top: 8px;
   display: flex;

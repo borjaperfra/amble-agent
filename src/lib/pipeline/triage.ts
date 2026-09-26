@@ -318,6 +318,7 @@ const analysisOutputSchema = z.preprocess(
         return {
           kind: typeof e.kind === 'string' ? e.kind.toLowerCase().trim() : '',
           statement: typeof e.statement === 'string' ? e.statement.trim().slice(0, 500) : '',
+          label: typeof e.label === 'string' && e.label.trim() ? e.label.trim().slice(0, 60) : null,
           declared: typeof e.declared === 'string' && e.declared.trim() ? e.declared.trim().slice(0, 300) : null,
           offers: Array.isArray(e.offers) ? e.offers.filter((n): n is number => typeof n === 'number') : [],
           quote: typeof e.quote === 'string' && e.quote.trim() ? e.quote.trim().slice(0, 300) : null,
@@ -331,6 +332,7 @@ const analysisOutputSchema = z.preprocess(
         z.object({
           kind: z.string(),
           statement: z.string(),
+          label: z.string().nullable(),
           declared: z.string().nullable(),
           offers: z.array(z.number()),
           quote: z.string().nullable(),
@@ -340,7 +342,7 @@ const analysisOutputSchema = z.preprocess(
   }),
 )
 
-const ANALYSIS_SYSTEM_PROMPT = `You are Amble's revealed-intent analyst, version 2.
+const ANALYSIS_SYSTEM_PROMPT = `You are Amble's revealed-intent analyst, version 3.
 
 The candidate answered a set of job offers. Each offer deliberately crossed two or more of their declared conditions, so every answer was a trade-off. Their literal reasons are the evidence. Your job is to state what their answers REVEAL, and where that differs from what they DECLARED.
 
@@ -367,9 +369,10 @@ Rules:
 - The status-quo offer is the baseline; use it.
 - A "no" with a literal reason defines a boundary; a "yes" only confirms. Weigh them accordingly.
 - Do not restate each answer. Find the few things that change how an agent should filter offers for this person. 4 to 10 preferences.
+- "label": the same preference in at most 6 words, as the Rep would list it among what it listens for (e.g. "Remoto, o casi", "No por debajo de 75K", "Nada de revisar código"). Same language as the statement.
 - Write statements in the language of the candidate's answers, second person, plain.
 
-Respond ONLY with JSON: {"preferences": [{"kind": string, "statement": string, "declared": string|null, "offers": number[], "quote": string|null}]}.`
+Respond ONLY with JSON: {"preferences": [{"kind": string, "statement": string, "label": string, "declared": string|null, "offers": number[], "quote": string|null}]}.`
 
 function normalise(text: string): string {
   return text
@@ -451,7 +454,7 @@ export async function analyseTriage(triageId?: string): Promise<AnalysisResult> 
   const { data, modelRunId } = await runStructuredTask({
     candidateId: candidate.id,
     task: 'analyse_offer_triage',
-    version: 'v2',
+    version: 'v3',
     system: ANALYSIS_SYSTEM_PROMPT,
     user: `DECLARED BEFORE THE TRIAGE:\n${triage.declared ?? '(nothing on record)'}\n\nCAPABILITIES (from the evidence graph):\n${JSON.stringify(capabilities, null, 1)}\n\nCOMPENSATION SIGNALS (computed):\n${JSON.stringify(compensationSignals(probes), null, 1)}\n\nOFFERS AND ANSWERS:\n${JSON.stringify(offers, null, 1)}`,
     schema: analysisOutputSchema,
@@ -507,6 +510,7 @@ export async function analyseTriage(triageId?: string): Promise<AnalysisResult> 
       triage_id: triage.id,
       kind: proposal.kind,
       statement: proposal.statement,
+      label: proposal.label,
       declared: proposal.declared,
       evidence_probe_ids: JSON.stringify(cited.map((probe) => probe.id)),
       quote,

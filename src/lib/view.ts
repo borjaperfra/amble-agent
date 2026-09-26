@@ -16,6 +16,7 @@ import {
   type EvidenceRow,
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
+import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
 
 const ASSESSMENT_TO_STRENGTH: Record<string, EvidenceStrength> = {
   STRONG_EVIDENCE: 'strong',
@@ -182,15 +183,20 @@ export function getListeningViewModel(): {
   listeningFor: string[]
   hasIntent: boolean
   intentConfirmed: boolean
+  revealed: ListeningProfile['revealed']
+  pendingReview: number
 } {
   const candidate = getOrCreateCandidate()
   const intent = getLatestIntent(candidate.id)
+  const profile = getListeningProfile(candidate.id)
   return {
     evidenceCount: listEvidence(candidate.id).length,
     capabilitiesCount: listCapabilities(candidate.id).length,
-    listeningFor: intent ? parseJsonArray(intent.listening_for) : [],
+    listeningFor: profile.declared.items,
     hasIntent: Boolean(intent),
-    intentConfirmed: Boolean(intent?.confirmed_at),
+    intentConfirmed: profile.declared.confirmed,
+    revealed: profile.revealed,
+    pendingReview: profile.pendingReview,
   }
 }
 

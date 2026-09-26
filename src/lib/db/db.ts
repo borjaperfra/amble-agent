@@ -303,6 +303,9 @@ function migrate(db: DatabaseSync): void {
 
   // Two kinds of uncertainty (§14.1): MATERIALITY and ATTRIBUTION.
   addColumn(db, 'uncertainties', 'kind', "TEXT NOT NULL DEFAULT 'MATERIALITY'")
+
+  // A short form of a revealed preference, for what the Rep listens for.
+  addColumn(db, 'revealed_preferences', 'label', 'TEXT')
 }
 
 export function getDb(): DatabaseSync {

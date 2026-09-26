@@ -772,6 +772,7 @@ export interface RevealedPreferenceRow {
   triage_id: string
   kind: string
   statement: string
+  label: string | null
   declared: string | null
   evidence_probe_ids: string
   quote: string | null
@@ -862,12 +863,24 @@ export function replaceProposedPreferences(
   const db = getDb()
   db.prepare("DELETE FROM revealed_preferences WHERE triage_id = ? AND status = 'proposed'").run(triageId)
   const insert = db.prepare(
-    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, declared, evidence_probe_ids, quote, status, model_run_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`,
+    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, label, declared, evidence_probe_ids, quote, status, model_run_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`,
   )
   const ts = now()
   for (const row of rows) {
-    insert.run(newId('rpr'), row.candidate_id, row.triage_id, row.kind, row.statement, row.declared, row.evidence_probe_ids, row.quote, row.model_run_id, ts)
+    insert.run(
+      newId('rpr'),
+      row.candidate_id,
+      row.triage_id,
+      row.kind,
+      row.statement,
+      row.label,
+      row.declared,
+      row.evidence_probe_ids,
+      row.quote,
+      row.model_run_id,
+      ts,
+    )
   }
   return listRevealedPreferences(triageId)
 }
@@ -876,6 +889,14 @@ export function listRevealedPreferences(triageId: string): RevealedPreferenceRow
   return getDb()
     .prepare('SELECT * FROM revealed_preferences WHERE triage_id = ? ORDER BY created_at ASC, rowid ASC')
     .all(triageId) as unknown as RevealedPreferenceRow[]
+}
+
+export function listConfirmedPreferences(candidateId: string): RevealedPreferenceRow[] {
+  return getDb()
+    .prepare(
+      "SELECT * FROM revealed_preferences WHERE candidate_id = ? AND status = 'confirmed' ORDER BY decided_at DESC",
+    )
+    .all(candidateId) as unknown as RevealedPreferenceRow[]
 }
 
 export function getRevealedPreference(id: string): RevealedPreferenceRow | undefined {

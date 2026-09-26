@@ -6,12 +6,39 @@ import Header from '@/components/Header'
 import StatusDot from '@/components/StatusDot'
 import styles from '@/app/listening/listening.module.css'
 
+interface ListeningItem {
+  id: string
+  label: string
+}
+
 interface ListeningVm {
   evidenceCount: number
   capabilitiesCount: number
   listeningFor: string[]
   hasIntent: boolean
   intentConfirmed: boolean
+  revealed: {
+    rules: { wontConsider: ListeningItem[]; weighs: ListeningItem[]; money: ListeningItem[] }
+    notFilteringOn: ListeningItem[]
+    staleCount: number
+  }
+  pendingReview: number
+}
+
+function RevealedGroup({ label, items, muted }: { label: string; items: ListeningItem[]; muted?: boolean }) {
+  if (items.length === 0) return null
+  return (
+    <div className={styles.revealedGroup}>
+      <p className={styles.revealedLabel}>{label}</p>
+      <div className={styles.listeningForValues}>
+        {items.map((item) => (
+          <span key={item.id} className={muted ? styles.revealedMuted : styles.listeningForValue}>
+            {item.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 type Phase = 'arriving' | 'home'
@@ -21,6 +48,9 @@ const activationMs = 2600
 export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
   const [phase, setPhase] = useState<Phase>('arriving')
   const [returnState, setReturnState] = useState(false)
+  const { wontConsider, weighs, money } = vm.revealed.rules
+  const hasRevealed =
+    wontConsider.length + weighs.length + money.length + vm.revealed.notFilteringOn.length > 0
 
   useEffect(() => {
     let activated = false
@@ -81,15 +111,32 @@ export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
                 <p className={styles.listeningForValue}>
                   {vm.hasIntent
                     ? 'Confirm what your Rep should listen for.'
-                    : 'You haven\u2019t told your Rep what to listen for yet.'}
+                    : hasRevealed
+                      ? 'You haven’t told me in your own words yet.'
+                      : 'You haven’t told your Rep what to listen for yet.'}
                 </p>
               )}
+
+              {hasRevealed && (
+                <div className={styles.revealed}>
+                  <p className="kicker">From what you chose</p>
+                  <RevealedGroup label="Won't consider" items={wontConsider} />
+                  <RevealedGroup label="Weighs most" items={weighs} />
+                  <RevealedGroup label="On money" items={money} />
+                  <RevealedGroup label="Not filtering on" items={vm.revealed.notFilteringOn} muted />
+                </div>
+              )}
+
               <div className={styles.changeIntent}>
                 <Link href="/me/intent" className="text-btn">
                   Change what I&rsquo;m listening for
                 </Link>
                 <Link href="/me/triage" className="text-btn">
-                  Test what you&rsquo;d actually trade →
+                  {vm.pendingReview > 0
+                    ? `${vm.pendingReview} ${vm.pendingReview === 1 ? 'thing' : 'things'} from your offers to review →`
+                    : vm.revealed.staleCount > 0
+                      ? 'Some of what you chose has gone stale. Try another set →'
+                      : 'Test what you’d actually trade →'}
                 </Link>
               </div>
             </div>
