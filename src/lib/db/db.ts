@@ -201,6 +201,55 @@ function createDb(): DatabaseSync {
       UNIQUE (candidate_id, version)
     );
 
+    -- Revealed intent (PRODUCT_SPEC §15.1). A triage is a set of offers that each
+    -- cross two or more declared conditions, forcing a trade-off. The axes an
+    -- offer tests are stored but never shown to the candidate before answering.
+    CREATE TABLE IF NOT EXISTS offer_triages (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      method TEXT,
+      -- What the candidate had declared when the triage was built. Revealed
+      -- preferences are measured against this, not against a later intent.
+      declared TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      analysed_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS offer_probes (
+      id TEXT PRIMARY KEY,
+      triage_id TEXT NOT NULL REFERENCES offer_triages(id),
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      idx INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      salary_eur INTEGER,
+      attributes TEXT NOT NULL DEFAULT '{}',
+      axes TEXT NOT NULL DEFAULT '[]',
+      is_status_quo INTEGER NOT NULL DEFAULT 0,
+      verdict TEXT,
+      conditions TEXT,
+      reason TEXT,
+      answered_at TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE (triage_id, idx)
+    );
+
+    CREATE TABLE IF NOT EXISTS revealed_preferences (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      triage_id TEXT NOT NULL REFERENCES offer_triages(id),
+      kind TEXT NOT NULL,
+      statement TEXT NOT NULL,
+      declared TEXT,
+      evidence_probe_ids TEXT NOT NULL,
+      quote TEXT,
+      status TEXT NOT NULL,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL,
+      decided_at TEXT
+    );
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 

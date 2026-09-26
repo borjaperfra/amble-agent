@@ -576,6 +576,58 @@ it.
 Intent must have `created_at`, `confirmed_at` and `valid_until`. Stale
 intent must not silently be treated as current forever.
 
+### 15.1 Revealed intent
+
+Declared intent is written from what a person believes they value. A
+rejection is produced by what they will not tolerate. Only the second is
+measurable, and nobody lists their own hard filters correctly.
+
+A **triage** measures it. The candidate answers a small set of offers
+(eight is enough) in which every offer crosses two or more declared
+conditions, so each answer is a trade-off rather than a comfortable
+preference.
+
+``` text
+Cross axes, don't list them    "How much do you value remote?" returns nothing.
+                               Remote against €85K and a team of six does.
+Hide the axis being tested     A candidate who sees the design answers the test.
+Include the status quo         Without a baseline every answer is measured in a vacuum.
+The "no" is the data           A yes confirms. A no with a literal reason draws a boundary.
+```
+
+Each answer stores a verdict (`yes`, `yes_if` with its condition,
+`depends`, `no`) and the literal reason, verbatim. The triage stores a
+snapshot of what was declared when it was built; revealed preferences are
+measured against that snapshot.
+
+Analysis proposes revealed preferences, each citing the offers that show
+it:
+
+``` text
+hard_filter    kills an offer at any price — needs a rejection behind it
+strong         decides once hard filters pass — "depends" alone is not enough
+weak           declared or inferred, and decided nothing when it was on the table
+neutral        expected to matter, shown not to
+compensation   the floor the yeses reveal, what equity is worth, what a condition costs
+self_filter    a rejection contradicted by the candidate's own evidence
+```
+
+Domain rules apply before anything is stored: no cited offer, no
+preference; a quote that is not verbatim in the cited answers is removed.
+
+A system inference about character (for example, "needs to publish
+without legal review", deduced from public posts) enters the triage as a
+hypothesis and is confirmed or retracted by it, never assumed.
+
+A `self_filter` is surfaced for discussion and never becomes a listening
+rule on its own. An agent that inherits it discards offers the candidate
+would win, and does so invisibly: nobody ever learns about the offer that
+never arrived. It must never rest on capabilities whose evidence is
+undefended assisted work (§11.1).
+
+Revealed preferences are proposals until the candidate confirms or
+rejects each one.
+
 ## 16. Listening
 
 Route: `/listening`

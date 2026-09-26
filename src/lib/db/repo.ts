@@ -738,4 +738,154 @@ export function confirmIntent(id: string): void {
     .run(now(), validUntil, id)
 }
 
+export interface OfferTriageRow {
+  id: string
+  candidate_id: string
+  method: string | null
+  declared: string | null
+  status: string
+  created_at: string
+  analysed_at: string | null
+}
+
+export interface OfferProbeRow {
+  id: string
+  triage_id: string
+  candidate_id: string
+  idx: number
+  title: string
+  description: string
+  salary_eur: number | null
+  attributes: string
+  axes: string
+  is_status_quo: number
+  verdict: string | null
+  conditions: string | null
+  reason: string | null
+  answered_at: string | null
+  created_at: string
+}
+
+export interface RevealedPreferenceRow {
+  id: string
+  candidate_id: string
+  triage_id: string
+  kind: string
+  statement: string
+  declared: string | null
+  evidence_probe_ids: string
+  quote: string | null
+  status: string
+  model_run_id: string | null
+  created_at: string
+  decided_at: string | null
+}
+
+export function insertOfferTriage(params: {
+  candidateId: string
+  method: string | null
+  declared: string | null
+  probes: {
+    title: string
+    description: string
+    salaryEur: number | null
+    attributes: Record<string, unknown>
+    axes: string[]
+    isStatusQuo: boolean
+  }[]
+}): OfferTriageRow {
+  const db = getDb()
+  const id = newId('tri')
+  const ts = now()
+  db.prepare(
+    'INSERT INTO offer_triages (id, candidate_id, method, declared, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(id, params.candidateId, params.method, params.declared, 'open', ts)
+  const insert = db.prepare(
+    `INSERT INTO offer_probes (id, triage_id, candidate_id, idx, title, description, salary_eur, attributes, axes, is_status_quo, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+  params.probes.forEach((probe, idx) => {
+    insert.run(
+      newId('prb'),
+      id,
+      params.candidateId,
+      idx,
+      probe.title,
+      probe.description,
+      probe.salaryEur,
+      JSON.stringify(probe.attributes),
+      JSON.stringify(probe.axes),
+      probe.isStatusQuo ? 1 : 0,
+      ts,
+    )
+  })
+  return db.prepare('SELECT * FROM offer_triages WHERE id = ?').get(id) as unknown as OfferTriageRow
+}
+
+export function getLatestOfferTriage(candidateId: string): OfferTriageRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM offer_triages WHERE candidate_id = ? ORDER BY created_at DESC LIMIT 1')
+    .get(candidateId) as unknown as OfferTriageRow | undefined
+}
+
+export function getOfferTriage(id: string): OfferTriageRow | undefined {
+  return getDb().prepare('SELECT * FROM offer_triages WHERE id = ?').get(id) as unknown as OfferTriageRow | undefined
+}
+
+export function listOfferProbes(triageId: string): OfferProbeRow[] {
+  return getDb()
+    .prepare('SELECT * FROM offer_probes WHERE triage_id = ? ORDER BY idx ASC')
+    .all(triageId) as unknown as OfferProbeRow[]
+}
+
+export function getOfferProbe(id: string): OfferProbeRow | undefined {
+  return getDb().prepare('SELECT * FROM offer_probes WHERE id = ?').get(id) as unknown as OfferProbeRow | undefined
+}
+
+export function answerOfferProbe(id: string, verdict: string, conditions: string | null, reason: string | null): void {
+  getDb()
+    .prepare('UPDATE offer_probes SET verdict = ?, conditions = ?, reason = ?, answered_at = ? WHERE id = ?')
+    .run(verdict, conditions, reason, now(), id)
+}
+
+export function updateOfferTriageStatus(id: string, status: string): void {
+  getDb()
+    .prepare('UPDATE offer_triages SET status = ?, analysed_at = CASE WHEN ? = \'analysed\' THEN ? ELSE analysed_at END WHERE id = ?')
+    .run(status, status, now(), id)
+}
+
+// A re-analysis replaces the proposals it made, never what the candidate decided.
+export function replaceProposedPreferences(
+  triageId: string,
+  rows: Omit<RevealedPreferenceRow, 'id' | 'created_at' | 'decided_at' | 'status'>[],
+): RevealedPreferenceRow[] {
+  const db = getDb()
+  db.prepare("DELETE FROM revealed_preferences WHERE triage_id = ? AND status = 'proposed'").run(triageId)
+  const insert = db.prepare(
+    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, declared, evidence_probe_ids, quote, status, model_run_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`,
+  )
+  const ts = now()
+  for (const row of rows) {
+    insert.run(newId('rpr'), row.candidate_id, row.triage_id, row.kind, row.statement, row.declared, row.evidence_probe_ids, row.quote, row.model_run_id, ts)
+  }
+  return listRevealedPreferences(triageId)
+}
+
+export function listRevealedPreferences(triageId: string): RevealedPreferenceRow[] {
+  return getDb()
+    .prepare('SELECT * FROM revealed_preferences WHERE triage_id = ? ORDER BY created_at ASC, rowid ASC')
+    .all(triageId) as unknown as RevealedPreferenceRow[]
+}
+
+export function getRevealedPreference(id: string): RevealedPreferenceRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM revealed_preferences WHERE id = ?')
+    .get(id) as unknown as RevealedPreferenceRow | undefined
+}
+
+export function decideRevealedPreference(id: string, status: 'confirmed' | 'rejected'): void {
+  getDb().prepare('UPDATE revealed_preferences SET status = ?, decided_at = ? WHERE id = ?').run(status, now(), id)
+}
+
 export { parseJsonArray }
