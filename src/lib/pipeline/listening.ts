@@ -21,6 +21,8 @@ const REVEALED_VALID_DAYS = 90
 export interface ListeningItem {
   id: string
   label: string
+  // The full sentence: what a matcher checks an offer against.
+  statement: string
 }
 
 export interface ListeningProfile {
@@ -70,7 +72,7 @@ export function getListeningProfile(candidateId: string): ListeningProfile {
       staleCount++
       continue
     }
-    const item = { id: row.id, label: shortLabel(row) }
+    const item = { id: row.id, label: shortLabel(row), statement: row.statement }
     if (row.kind === 'hard_filter') wontConsider.push(item)
     else if (row.kind === 'strong') weighs.push(item)
     else if (row.kind === 'compensation') money.push(item)

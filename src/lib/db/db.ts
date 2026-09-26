@@ -309,6 +309,37 @@ function createDb(): DatabaseSync {
       errors TEXT
     );
 
+    -- Matching. A role query turns the candidate's profile into a free,
+    -- deterministic prefilter; it is regenerated only when the profile changes
+    -- (profile_hash).
+    CREATE TABLE IF NOT EXISTS role_queries (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      profile_hash TEXT NOT NULL,
+      query TEXT NOT NULL,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- One assessment per offer per profile: when what the candidate wants
+    -- changes, offers are judged again against the new profile.
+    CREATE TABLE IF NOT EXISTS opportunity_matches (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      profile_hash TEXT NOT NULL,
+      verdict TEXT NOT NULL,
+      gates TEXT NOT NULL,
+      explanation TEXT NOT NULL,
+      dropped TEXT NOT NULL DEFAULT '[]',
+      model_run_id TEXT,
+      created_at TEXT NOT NULL,
+      response TEXT,
+      response_reason TEXT,
+      responded_at TEXT,
+      UNIQUE (opportunity_id, profile_hash)
+    );
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 

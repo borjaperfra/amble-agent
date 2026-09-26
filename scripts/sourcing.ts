@@ -4,9 +4,16 @@
 //   npm run sourcing -- watch "Company" [careers-url]   find its board and watch it
 //   npm run sourcing -- run                             read every watched board
 //   npm run sourcing -- status                          companies and offer counts
+//   npm run sourcing -- match [limit]                   judge offers not yet judged (model calls)
+//   npm run sourcing -- listen [limit]                  run, then match: one listening pass
+//   npm run sourcing -- matches                         what the Rep would show you, and why
 
 import { countOpportunities, listCompanies } from '../src/lib/db/opportunities'
+import { getOrCreateCandidate } from '../src/lib/db/repo'
 import { runSourcing, watchCompany } from '../src/lib/sourcing/run'
+import { listMatches } from '../src/lib/db/matching'
+import { runListening, runMatching } from '../src/lib/matching/run'
+import type { Explanation } from '../src/lib/matching/assess'
 
 async function main() {
   const [command, ...args] = process.argv.slice(2)
@@ -29,6 +36,25 @@ async function main() {
     return
   }
 
+  if (command === 'match' || command === 'listen') {
+    const limit = args[0] ? Number.parseInt(args[0], 10) : undefined
+    const result = command === 'match' ? await runMatching({ limit }) : await runListening({ limit })
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
+
+  if (command === 'matches') {
+    for (const match of listMatches(getOrCreateCandidate().id, 'show')) {
+      const explanation = JSON.parse(match.explanation) as Explanation
+      console.log(`\n${match.company_name} · ${match.title}${match.closed_at ? ' (closed)' : ''}`)
+      console.log(`  ${match.url ?? ''}\n  ${explanation.summary}`)
+      for (const reason of explanation.why) console.log(`  + ${reason.text}`)
+      if (explanation.considerAlso) console.log(`  ? ${explanation.considerAlso.text}`)
+      if (explanation.unknowns.length) console.log(`  … ${explanation.unknowns.join(' · ')}`)
+    }
+    return
+  }
+
   if (command === 'status') {
     for (const company of listCompanies()) {
       const board = company.ats ? `${company.ats}/${company.ats_token}` : '—'
@@ -38,7 +64,7 @@ async function main() {
     return
   }
 
-  throw new Error('Commands: watch "Company" [careers-url] | run | status')
+  throw new Error('Commands: watch "Company" [careers-url] | run | status | match [limit] | listen [limit] | matches')
 }
 
 main().catch((error) => {

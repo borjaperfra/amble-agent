@@ -40,6 +40,9 @@ Without `AMBLE_MODEL_API_KEY` / `AMBLE_MODEL_ID` the pipeline fails honestly wit
 | `npm run sourcing -- watch "Company" [careers-url]` | Finds the company's public job board (Greenhouse, Lever, Ashby, Workable) and watches it. |
 | `npm run sourcing -- run` | Reads every watched board: new offers are stored, missing ones are closed. Meant to be scheduled. |
 | `npm run sourcing -- status` | Watched companies, their boards and offer counts. |
+| `npm run listen` | One listening pass: read every watched board, then judge new offers against your confirmed preferences (at most 25 model calls a run). Meant to be scheduled. |
+| `npm run sourcing -- match [limit]` | Judge offers not yet judged, without reading the boards again. |
+| `npm run sourcing -- matches` | What the Rep would show you, and why. |
 
 ## Developer trace
 
