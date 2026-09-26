@@ -214,7 +214,10 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
       if (error instanceof ModelNotConfiguredError) throw error
       if (!(error instanceof ModelError)) throw modelError
       lastError = modelError
-      if (!/^Schema validation failed|^Invalid JSON/.test(modelError.message)) {
+      // Invalid JSON was already recorded under this run id inside the try, and
+      // deserves the retry. Anything else (HTTP, network, timeout) is recorded
+      // here and ends the task.
+      if (modelError.detail !== 'json_parse') {
         insertModelRun({
           id: runId,
           candidate_id: candidateId,

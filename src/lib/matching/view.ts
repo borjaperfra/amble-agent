@@ -38,7 +38,11 @@ export interface DiscardedOpportunity {
 }
 
 export interface OpportunitiesView {
+  // Roles that fit: the only ones that interrupt the candidate.
   found: FoundOpportunity[]
+  // Adjacent roles (stretch): worth a look, never an interruption. Showing them
+  // alongside the real ones would spend the trust the interruption relies on.
+  maybe: FoundOpportunity[]
   discarded: DiscardedOpportunity[]
   // Shown, open and not yet answered: what makes Listening say "I found something".
   unseen: number
@@ -93,11 +97,14 @@ export function getOpportunitiesView(): OpportunitiesView {
   }
 
   // Unanswered first, then newest (the query already orders by recency).
-  found.sort((a, b) => Number(a.response !== null) - Number(b.response !== null))
+  const byAnswered = (a: FoundOpportunity, b: FoundOpportunity) => Number(a.response !== null) - Number(b.response !== null)
+  const fits = found.filter((item) => item.fit === 'fits').sort(byAnswered)
+  const maybe = found.filter((item) => item.fit !== 'fits').sort(byAnswered)
 
   return {
-    found,
+    found: fits,
+    maybe,
     discarded,
-    unseen: found.filter((item) => !item.closed && item.response === null).length,
+    unseen: fits.filter((item) => !item.closed && item.response === null).length,
   }
 }

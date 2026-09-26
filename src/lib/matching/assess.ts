@@ -19,7 +19,7 @@ const MAX_DESCRIPTION_CHARS = 9_000
 
 // Part of every stored assessment's key (with the profile fingerprint): a new
 // version of this prompt means every offer is judged again.
-export const ASSESS_VERSION = 'v3'
+export const ASSESS_VERSION = 'v4'
 
 export type RoleFit = 'fits' | 'stretch' | 'wrong_role'
 
@@ -99,7 +99,7 @@ const assessmentSchema = z.preprocess(
 )
 
 
-const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 3. You read one job posting on behalf of one candidate and decide whether it deserves their attention, and why.
+const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 4. You read one job posting on behalf of one candidate and decide whether it deserves their attention, and why.
 
 1. ROLE FIT, first. Is this a job this person could credibly do, given their capabilities and experience?
    - "fits": it is their kind of role.
@@ -112,6 +112,7 @@ const SYSTEM_PROMPT = `You are Amble's opportunity assessor, version 3. You read
    - "pass": the posting clearly satisfies it.
    - "unknown": the posting does not say. Missing information is unknown, never fail.
    - The office locations listed for a REMOTE role are hubs, not requirements. They prove a location filter is broken only if the posting says where the remote work must be done from ("Remote - US", "must be based in", "US only").
+   - A market named in the title or role ("Field Marketing - DACH", "B2B Marketing - Sweden", "Growth - Italy", "ASEAN") means the role serves that market and usually requires living there or speaking its language. Treat it as a location requirement unless the posting says the role can be done from elsewhere; the title words are a valid quote.
    CONTEXT (compensation insights and what weighs most for this person) is not a gate: use it in the explanation, never to discard.
    Conditions under NEVER FILTER ON must not be used against the offer.
 

@@ -309,6 +309,8 @@ export const es: Dictionary = {
     skip: 'Omitir',
     savedInterested: 'Entendido. Esta la tengo presente.',
     savedNotForMe: 'Entendido. No te la volveré a enseñar.',
+    maybeTitle: 'Quizá merezca una mirada',
+    maybeLead: 'Cerca de lo que haces, pero no del todo tu rol. Por estas no te interrumpo.',
     discardedTitle: 'Lo que he descartado por ti',
     discardedLead: 'Ofertas que he leído y he decidido que no querrías. Si me he equivocado en alguna, dímelo.',
     wrongRole: (reason: string) => `No es tu tipo de rol: ${reason}`,

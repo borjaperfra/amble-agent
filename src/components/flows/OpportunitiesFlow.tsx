@@ -26,6 +26,7 @@ async function respond(matchId: string, response: Response, reason?: string): Pr
 export default function OpportunitiesFlow({ view }: { view: OpportunitiesView }) {
   const t = useT()
   const [found, setFound] = useState(view.found)
+  const [maybe, setMaybe] = useState(view.maybe)
   const [discarded, setDiscarded] = useState(view.discarded)
 
   const open = found.filter((item) => item.response === null)
@@ -38,7 +39,7 @@ export default function OpportunitiesFlow({ view }: { view: OpportunitiesView })
         <p className="kicker">{t.opportunities.kicker}</p>
         <h1 className={styles.title}>{t.opportunities.title}</h1>
 
-        {found.length === 0 && (
+        {found.length === 0 && maybe.length === 0 && (
           <div className={styles.empty}>
             <StatusDot label={t.listening.label} />
             <p className={styles.emptyLine}>{t.opportunities.empty}</p>
@@ -55,6 +56,24 @@ export default function OpportunitiesFlow({ view }: { view: OpportunitiesView })
             }
           />
         ))}
+
+        {maybe.length > 0 && (
+          <details className={styles.discarded} open={found.length === 0}>
+            <summary className={styles.discardedSummary}>
+              {t.opportunities.maybeTitle} ({maybe.length})
+            </summary>
+            <p className={styles.discardedLead}>{t.opportunities.maybeLead}</p>
+            {maybe.map((item) => (
+              <FoundCard
+                key={item.id}
+                item={item}
+                onAnswered={(response) =>
+                  setMaybe((current) => current.map((entry) => (entry.id === item.id ? { ...entry, response } : entry)))
+                }
+              />
+            ))}
+          </details>
+        )}
 
         {discarded.length > 0 && (
           <details className={styles.discarded}>

@@ -311,6 +311,8 @@ export const en = {
     skip: 'Skip',
     savedInterested: 'Got it. I’ll keep this one close.',
     savedNotForMe: 'Got it. I won’t show you this one again.',
+    maybeTitle: 'Maybe worth a look',
+    maybeLead: 'Close to what you do, not quite your role. I won’t interrupt you for these.',
     discardedTitle: 'What I set aside for you',
     discardedLead: 'Offers I read and decided you wouldn’t want. If I got one wrong, tell me.',
     wrongRole: (reason: string) => `Not your kind of role: ${reason}`,
