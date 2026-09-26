@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { useI18n } from './I18nProvider'
 import styles from './Header.module.css'
 
-const navRoutes = ['/me', '/me/intent', '/listening']
+const navRoutes = ['/me', '/me/intent', '/listening', '/opportunities']
 
 interface HeaderProps {
   right?: React.ReactNode
@@ -23,6 +23,7 @@ export default function Header({ right }: HeaderProps) {
     { href: '/listening', label: t.header.rep },
     { href: '/me', label: t.header.map },
     { href: '/me/intent', label: t.header.listeningFor },
+    { href: '/opportunities', label: t.opportunities.nav },
   ]
 
   async function switchLanguage() {

@@ -24,11 +24,15 @@ export interface MatchingStats {
   errors: { opportunity: string; message: string }[]
 }
 
+// An assessment belongs to a profile and to a version of the assessor.
+export function currentMatchKey(candidateId: string): string {
+  return `${buildMatchingProfile(candidateId).hash}:${ASSESS_VERSION}`
+}
+
 export async function runMatching(options: { limit?: number } = {}): Promise<MatchingStats> {
   const candidate = getOrCreateCandidate()
   const profile = buildMatchingProfile(candidate.id)
   const query = await roleQueryFor(candidate.id, profile)
-  // An assessment belongs to a profile and to a version of the assessor.
   const matchKey = `${profile.hash}:${ASSESS_VERSION}`
   const assessed = assessedOpportunityIds(matchKey)
 

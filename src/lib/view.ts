@@ -17,6 +17,7 @@ import {
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
+import { getOpportunitiesView } from './matching/view'
 import { dictionaries, type Dictionary } from './i18n/dictionaries'
 import type { Locale } from './i18n/locale'
 
@@ -165,6 +166,7 @@ export function getListeningViewModel(): {
   intentConfirmed: boolean
   revealed: ListeningProfile['revealed']
   pendingReview: number
+  unseenOpportunities: number
 } {
   const candidate = getOrCreateCandidate()
   const intent = getLatestIntent(candidate.id)
@@ -177,6 +179,7 @@ export function getListeningViewModel(): {
     intentConfirmed: profile.declared.confirmed,
     revealed: profile.revealed,
     pendingReview: profile.pendingReview,
+    unseenOpportunities: getOpportunitiesView().unseen,
   }
 }
 

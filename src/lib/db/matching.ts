@@ -79,6 +79,26 @@ export function insertMatch(row: {
     )
 }
 
+export function getMatch(id: string): MatchRow | undefined {
+  return getDb().prepare('SELECT * FROM opportunity_matches WHERE id = ?').get(id) as unknown as MatchRow | undefined
+}
+
+export function listMatchesForKey(
+  candidateId: string,
+  matchKey: string,
+): (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null; location: string | null; workplace: string | null })[] {
+  return getDb()
+    .prepare(
+      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, c.name AS company_name
+       FROM opportunity_matches m
+       JOIN opportunities o ON o.id = m.opportunity_id
+       JOIN companies c ON c.id = o.company_id
+       WHERE m.candidate_id = ? AND m.profile_hash = ?
+       ORDER BY m.created_at DESC`,
+    )
+    .all(candidateId, matchKey) as unknown as (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null; location: string | null; workplace: string | null })[]
+}
+
 export function listMatches(candidateId: string, verdict?: MatchVerdict): (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null })[] {
   const where = verdict ? 'AND m.verdict = ?' : ''
   const params = verdict ? [candidateId, verdict] : [candidateId]
@@ -94,7 +114,11 @@ export function listMatches(candidateId: string, verdict?: MatchVerdict): (Match
     .all(...params) as unknown as (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null })[]
 }
 
-export function respondToMatch(id: string, response: 'interested' | 'not_for_me', reason: string | null): void {
+// 'wanted_anyway' is the candidate overruling a discard: the signal that a
+// filter or a role-fit judgment was wrong.
+export type MatchResponse = 'interested' | 'not_for_me' | 'wanted_anyway'
+
+export function respondToMatch(id: string, response: MatchResponse, reason: string | null): void {
   getDb()
     .prepare('UPDATE opportunity_matches SET response = ?, response_reason = ?, responded_at = ? WHERE id = ?')
     .run(response, reason, now(), id)

@@ -11,8 +11,8 @@
 import { countOpportunities, listCompanies } from '../src/lib/db/opportunities'
 import { getOrCreateCandidate } from '../src/lib/db/repo'
 import { runSourcing, watchCompany } from '../src/lib/sourcing/run'
-import { listMatches } from '../src/lib/db/matching'
-import { runListening, runMatching } from '../src/lib/matching/run'
+import { listMatchesForKey } from '../src/lib/db/matching'
+import { currentMatchKey, runListening, runMatching } from '../src/lib/matching/run'
 import type { Explanation } from '../src/lib/matching/assess'
 
 async function main() {
@@ -44,7 +44,8 @@ async function main() {
   }
 
   if (command === 'matches') {
-    for (const match of listMatches(getOrCreateCandidate().id, 'show')) {
+    const candidateId = getOrCreateCandidate().id
+    for (const match of listMatchesForKey(candidateId, currentMatchKey(candidateId)).filter((m) => m.verdict === 'show')) {
       const explanation = JSON.parse(match.explanation) as Explanation
       console.log(`\n${match.company_name} · ${match.title}${match.closed_at ? ' (closed)' : ''}`)
       console.log(`  ${match.url ?? ''}\n  ${explanation.summary}`)

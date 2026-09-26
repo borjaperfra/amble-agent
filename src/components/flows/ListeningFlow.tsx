@@ -24,6 +24,7 @@ interface ListeningVm {
     staleCount: number
   }
   pendingReview: number
+  unseenOpportunities: number
 }
 
 function RevealedGroup({ label, items, muted }: { label: string; items: ListeningItem[]; muted?: boolean }) {
@@ -84,8 +85,17 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     <>
       <Header />
       <main className={styles.page}>
-        {/* The "Nothing worth bothering you with" return state (PRODUCT_SPEC §16)
-            belongs here once there is something to have found nothing in. */}
+        {/* DESIGN_SYSTEM §24: the interruption, only when there is something.
+            No counts on the page itself: silence is the normal state. */}
+        {vm.unseenOpportunities > 0 && (
+          <div className={styles.found}>
+            <p className={styles.foundTitle}>{t.opportunities.foundTitle}</p>
+            <p className={styles.foundLead}>{t.opportunities.foundLead}</p>
+            <Link href="/opportunities" className="btn">
+              {t.opportunities.seeIt}
+            </Link>
+          </div>
+        )}
         <div className={styles.center}>
           <StatusDot label={t.listening.label} />
           <p className={styles.statusLine}>
