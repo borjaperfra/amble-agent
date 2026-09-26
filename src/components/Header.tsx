@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useI18n } from './I18nProvider'
+import Symbol from './Symbol'
 import styles from './Header.module.css'
 
 const navRoutes = ['/me', '/me/intent', '/listening', '/opportunities']
@@ -43,8 +44,11 @@ export default function Header({ right }: HeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.wordmark}>
-          amble
+        <Link href="/" className={styles.wordmark} aria-label="Amble">
+          <Symbol size={26} />
+          <span className={styles.word} aria-hidden="true">
+            amble
+          </span>
         </Link>
         {showNav && (
           <nav className={styles.nav} aria-label={t.header.nav}>

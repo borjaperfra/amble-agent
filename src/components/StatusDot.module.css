@@ -2,15 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-}
-
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--moss);
-  animation: breathe 5s var(--ease-standard) infinite;
-  transform-origin: center;
+  color: var(--ink);
 }
 
 .label {
@@ -19,22 +11,4 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--moss-dark);
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.75;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dot {
-    animation: none;
-  }
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
-import StatusDot from '@/components/StatusDot'
+import Symbol from '@/components/Symbol'
 import { useT } from '@/components/I18nProvider'
 import styles from '@/app/listening/listening.module.css'
 
@@ -73,7 +73,8 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
         <Header />
         <main className={styles.page}>
           <div className={styles.center} role="status">
-            <StatusDot />
+            {/* Activating listening is the eye waking up (DESIGN_SYSTEM §21). */}
+            <Symbol size={120} wake watch breathe className={styles.eye} />
             <p className={styles.arrivingLine}>{t.listening.arriving}</p>
           </div>
         </main>
@@ -97,7 +98,8 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
           </div>
         )}
         <div className={styles.center}>
-          <StatusDot label={t.listening.label} />
+          <Symbol size={104} watch breathe label={t.listening.label} className={styles.eye} />
+          <p className="kicker">{t.listening.label}</p>
           <p className={styles.statusLine}>
             {t.listening.status}
           </p>

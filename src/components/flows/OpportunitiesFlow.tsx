@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import Header from '@/components/Header'
-import StatusDot from '@/components/StatusDot'
+import Symbol from '@/components/Symbol'
 import { useT } from '@/components/I18nProvider'
 import type { DiscardedOpportunity, FoundOpportunity, OpportunitiesView } from '@/lib/matching/view'
 import styles from '@/app/opportunities/opportunities.module.css'
@@ -36,12 +36,14 @@ export default function OpportunitiesFlow({ view }: { view: OpportunitiesView })
     <>
       <Header />
       <main className={styles.page}>
-        <p className="kicker">{t.opportunities.kicker}</p>
+        <p className="kicker rep-kicker">
+          <Symbol size={20} /> {t.opportunities.kicker}
+        </p>
         <h1 className={styles.title}>{t.opportunities.title}</h1>
 
         {found.length === 0 && maybe.length === 0 && (
           <div className={styles.empty}>
-            <StatusDot label={t.listening.label} />
+            <Symbol size={96} watch breathe label={t.listening.label} />
             <p className={styles.emptyLine}>{t.opportunities.empty}</p>
             <p className={styles.emptyLead}>{t.opportunities.emptyLead}</p>
           </div>
@@ -126,7 +128,9 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
 
   return (
     <article className={styles.card} data-answered={item.response !== null}>
-      <p className={styles.cardKicker}>{t.opportunities.worthHearing}</p>
+      <p className={styles.cardKicker}>
+        <Symbol size={20} /> {t.opportunities.worthHearing}
+      </p>
       <h2 className={styles.cardTitle}>{item.title}</h2>
       <p className={styles.meta}>{meta}</p>
       {item.salary && <p className={styles.salary}>{item.salary}</p>}

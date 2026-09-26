@@ -4,6 +4,7 @@
 export const en = {
   meta: {
     title: 'Amble — your professional Rep',
+    away: 'Still listening.',
     description: "I'm not looking. Amble is. Meet your professional Rep: it gets to know you, learns what matters, then listens.",
   },
   common: {

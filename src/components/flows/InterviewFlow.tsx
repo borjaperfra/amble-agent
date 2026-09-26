@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
+import Symbol from '@/components/Symbol'
 import StatusDot from '@/components/StatusDot'
 import VoiceRecorder from '@/components/VoiceRecorder'
 import { useT } from '@/components/I18nProvider'
@@ -152,7 +153,9 @@ export default function InterviewFlow() {
         {phase === 'loading' && (
           <div className={styles.stage} role="status">
             <div className={styles.kickerCenter}>
-              <p className="kicker">{t.common.yourRep}</p>
+              <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
             </div>
             <StatusDot />
             <p className={styles.context}>{t.interview.deciding}</p>
@@ -178,7 +181,9 @@ export default function InterviewFlow() {
         {(phase === 'ask' || phase === 'answering') && question && (
           <div className={`${styles.stage} ${styles.entrance}`}>
             <div className={styles.kickerCenter}>
-              <p className="kicker">{t.common.yourRep}</p>
+              <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
             </div>
             <h1 className={styles.question}>{question}</h1>
             {isDefence && <p className={styles.context}>{t.interview.defenceContext}</p>}

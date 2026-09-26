@@ -6,17 +6,18 @@
 
   --ink: #25251f;
   --ink-secondary: #67675f;
-  --ink-tertiary: #929187;
+  /* Darkened from the spec's #929187 (2.8:1 on paper) to pass WCAG AA (4.6:1), as on amble-web. */
+  --ink-tertiary: #6f6e65;
 
   --moss: #52634f;
   --moss-dark: #3f4d3d;
   --moss-soft: #dde3d8;
   --moss-wash: #ebefe7;
 
-  --clay: #a76e58;
+  --clay: #8a5240; /* AA as text on paper (spec #A76E58 is 3.7:1) */
   --clay-soft: #efe0d9;
 
-  --ochre: #a0834f;
+  --ochre: #795e30; /* AA as text on paper (spec #A0834F is 3.2:1) */
   --ochre-soft: #eee7d6;
 
   --slate: #667074;
@@ -54,6 +55,8 @@
   --motion-fast: 140ms;
   --motion-default: 220ms;
   --motion-slow: 380ms;
+  --motion-arrive: 640ms;
+  --motion-breath: 5s;
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Fonts */
@@ -213,4 +216,15 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* "Your Rep", signed with its eye, as on amble-web's interview scene. */
+.rep-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rep-kicker svg {
+  color: var(--ink);
 }

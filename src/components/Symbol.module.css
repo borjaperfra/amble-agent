@@ -1,0 +1,64 @@
+/* Mirrors amble-web/src/components/Symbol.astro. */
+
+.symbol {
+  flex: none;
+  overflow: visible;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lid {
+  fill: currentColor;
+}
+
+.dot {
+  fill: var(--moss);
+  transform-origin: 24.6px 27.4px;
+}
+
+.breathe .dot {
+  animation: breathe var(--motion-breath) ease-in-out infinite;
+}
+
+/* Watch: the eye opens once, then looks where you look. */
+.watch .draw {
+  transform-origin: 4px 0;
+  animation: draw 1.5s var(--ease-standard) 0.15s both;
+}
+
+.watch .iris {
+  animation: open var(--motion-arrive) ease 1.05s both;
+  will-change: transform;
+}
+
+@keyframes draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes open {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathe .dot,
+  .watch .draw,
+  .watch .iris {
+    animation: none;
+  }
+}

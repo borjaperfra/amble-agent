@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import Header from '@/components/Header'
+import Symbol from '@/components/Symbol'
 import StatusDot from '@/components/StatusDot'
 import { useI18n } from '@/components/I18nProvider'
 import type { Locale } from '@/lib/i18n/locale'
@@ -223,7 +224,9 @@ export default function TriageFlow() {
 
         {phase === 'empty' && (
           <div className={styles.center}>
-            <p className="kicker">{t.common.yourRep}</p>
+            <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
             <h1 className={styles.question}>{t.triage.emptyTitle}</h1>
             <p className={styles.lead}>
               {t.triage.emptyLead(total || 8)}
@@ -335,7 +338,9 @@ export default function TriageFlow() {
 
         {phase === 'ready' && (
           <div className={styles.center}>
-            <p className="kicker">{t.common.yourRep}</p>
+            <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
             <h1 className={styles.question}>{t.triage.allDone(total)}</h1>
             <p className={styles.lead}>{t.triage.notRandom}</p>
             <button type="button" className="btn" onClick={() => void analyse()}>
@@ -393,7 +398,9 @@ function Result({
 
   return (
     <div className={styles.result}>
-      <p className="kicker">{t.common.yourRep}</p>
+      <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
       <h1 className={styles.resultTitle}>{t.triage.resultTitle}</h1>
       <p className={styles.lead}>{t.triage.resultLead}</p>
       <p className={styles.hint} role="status">

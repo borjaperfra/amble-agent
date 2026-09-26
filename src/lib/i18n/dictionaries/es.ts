@@ -5,6 +5,7 @@ import type { Dictionary } from './en'
 export const es: Dictionary = {
   meta: {
     title: 'Amble — tu Rep profesional',
+    away: 'Sigo escuchando.',
     description: 'No estoy buscando. Amble sí. Conoce a tu Rep profesional: te conoce, aprende qué importa y luego escucha.',
   },
   common: {

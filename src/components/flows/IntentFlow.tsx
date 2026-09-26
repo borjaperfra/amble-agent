@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Header from '@/components/Header'
+import Symbol from '@/components/Symbol'
 import InlineEdit from '@/components/InlineEdit'
 import StatusDot from '@/components/StatusDot'
 import VoiceRecorder from '@/components/VoiceRecorder'
@@ -96,7 +97,9 @@ export default function IntentFlow() {
         <Header />
         <main className={styles.page}>
           <div className={styles.ask}>
-            <p className="kicker">{t.common.yourRep}</p>
+            <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
             <p className={styles.lead}>{t.intent.lead}</p>
             <h1 className={styles.question}>{t.intent.question}</h1>
 
@@ -161,7 +164,9 @@ export default function IntentFlow() {
       <Header />
       <main className={styles.page}>
         <div className={styles.reveal}>
-          <p className="kicker">{t.common.yourRep}</p>
+          <p className="kicker rep-kicker">
+              <Symbol size={20} /> {t.common.yourRep}
+            </p>
           <h1 className={styles.revealLead}>{t.intent.revealLead}</h1>
           {result && !result.structured && (
             <p className={styles.hint}>
