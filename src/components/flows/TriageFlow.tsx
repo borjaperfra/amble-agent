@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import StatusDot from '@/components/StatusDot'
+import { useI18n } from '@/components/I18nProvider'
+import type { Locale } from '@/lib/i18n/locale'
 import styles from '@/app/me/triage/triage.module.css'
 
 type Verdict = 'yes' | 'yes_if' | 'depends' | 'no'
@@ -45,29 +47,15 @@ interface Triage {
 
 type Phase = 'loading' | 'empty' | 'designing' | 'offer' | 'ready' | 'analysing' | 'result'
 
-const VERDICTS: { value: Verdict; label: string }[] = [
-  { value: 'yes', label: "I'd take it" },
-  { value: 'yes_if', label: 'Yes, if…' },
-  { value: 'depends', label: 'It depends' },
-  { value: 'no', label: 'Not for me' },
-]
-
-const VERDICT_LABEL: Record<Verdict, string> = Object.fromEntries(VERDICTS.map((v) => [v.value, v.label])) as Record<
-  Verdict,
-  string
->
+const VERDICTS: Verdict[] = ['yes', 'yes_if', 'depends', 'no']
 
 // Order is the order an agent would apply them in.
-const KINDS: { kind: Kind; label: string }[] = [
-  { kind: 'hard_filter', label: 'Ends an offer, at any price' },
-  { kind: 'strong', label: 'Decides between offers' },
-  { kind: 'compensation', label: 'What money does' },
-  { kind: 'weak', label: "Didn't decide anything" },
-  { kind: 'neutral', label: "Doesn't filter" },
-  { kind: 'self_filter', label: 'Worth talking about' },
-]
+const KINDS: Kind[] = ['hard_filter', 'strong', 'compensation', 'weak', 'neutral', 'self_filter']
 
-const salaryFormat = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+const salaryFormats: Record<Locale, Intl.NumberFormat> = {
+  en: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }),
+  es: new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }),
+}
 
 async function request<T>(init?: RequestInit): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
   const response = await fetch('/api/triage', init)
@@ -80,6 +68,8 @@ function post<T>(body: Record<string, unknown>) {
 }
 
 export default function TriageFlow() {
+  const { locale, t } = useI18n()
+  const salaryFormat = salaryFormats[locale]
   const [phase, setPhase] = useState<Phase>('loading')
   const [triage, setTriage] = useState<Triage | null>(null)
   const [index, setIndex] = useState(0)
@@ -127,14 +117,14 @@ export default function TriageFlow() {
       if (status === 404) setPhase('empty')
       else if (ok) show(data)
       else {
-        setError(data.error ?? "I couldn't load your offers. Nothing has been lost.")
+        setError(data.error ?? t.triage.loadFailed)
         setPhase('empty')
       }
     })
     return () => {
       cancelled = true
     }
-  }, [show])
+  }, [show, t])
 
   async function design() {
     setPhase('designing')
@@ -142,7 +132,7 @@ export default function TriageFlow() {
     const { ok, data } = await post<Triage>({ action: 'generate' })
     if (ok) show(data)
     else {
-      setError(data.error ?? "I couldn't put the offers together. Nothing has been saved.")
+      setError(data.error ?? t.triage.designFailed)
       setPhase(triage ? 'result' : 'empty')
     }
   }
@@ -161,13 +151,13 @@ export default function TriageFlow() {
     })
     if (!ok) {
       setSaving(false)
-      setError(data.error ?? "Your answer couldn't be saved. It's still here — try again.")
+      setError(data.error ?? t.triage.saveFailed)
       return
     }
     const refreshed = await request<Triage>()
     setSaving(false)
     if (!refreshed.ok) {
-      setError("Saved, but I couldn't load the next offer. Reload the page.")
+      setError(t.triage.nextFailed)
       return
     }
     // Move forward from where the candidate is, not to the first gap: going back
@@ -198,7 +188,7 @@ export default function TriageFlow() {
     const { ok, data } = await post<{ triage: Triage }>({ action: 'analyse' })
     if (ok) show(data.triage)
     else {
-      setError(data.error ?? "I couldn't read your answers just now. They're all saved — try again.")
+      setError(data.error ?? t.triage.analyseFailed)
       setPhase('ready')
     }
   }
@@ -213,7 +203,7 @@ export default function TriageFlow() {
     const { ok } = await post({ action: 'decide', preferenceId, decision })
     if (!ok) {
       setTriage(previous)
-      setError("That didn't save. Try again.")
+      setError(t.triage.decideFailed)
     }
   }
 
@@ -233,14 +223,13 @@ export default function TriageFlow() {
 
         {phase === 'empty' && (
           <div className={styles.center}>
-            <p className="kicker">Your Rep</p>
-            <h1 className={styles.question}>What would you actually trade?</h1>
+            <p className="kicker">{t.common.yourRep}</p>
+            <h1 className={styles.question}>{t.triage.emptyTitle}</h1>
             <p className={styles.lead}>
-              I&rsquo;ll show you {total || 'eight'} offers. Each one costs you something you said you want. Answer the
-              way you would if it were real.
+              {t.triage.emptyLead(total || 8)}
             </p>
             <button type="button" className="btn" onClick={() => void design()}>
-              Show me the offers
+              {t.triage.showOffers}
             </button>
             {error && (
               <p className={styles.error} role="alert">
@@ -253,7 +242,7 @@ export default function TriageFlow() {
         {phase === 'designing' && (
           <div className={styles.center} role="status">
             <StatusDot />
-            <p className={styles.working}>Putting together offers that cost you something…</p>
+            <p className={styles.working}>{t.triage.designing}</p>
           </div>
         )}
 
@@ -267,25 +256,25 @@ export default function TriageFlow() {
             }}
           >
             <p className="kicker">
-              Offer {probe.number} of {total}
+              {t.triage.offerOf(probe.number, total)}
             </p>
             <h1 className={styles.offerTitle}>{probe.title}</h1>
             {probe.salaryEur !== null && <p className={styles.salary}>{salaryFormat.format(probe.salaryEur)}</p>}
             <p className={styles.offerDescription}>{probe.description}</p>
 
             <fieldset className={styles.verdicts}>
-              <legend className="visually-hidden">Would you take it?</legend>
+              <legend className="visually-hidden">{t.triage.wouldYouTakeIt}</legend>
               {VERDICTS.map((option) => (
-                <label key={option.value} className={styles.verdict} data-selected={verdict === option.value}>
+                <label key={option} className={styles.verdict} data-selected={verdict === option}>
                   <input
                     type="radio"
                     name="verdict"
-                    value={option.value}
-                    checked={verdict === option.value}
-                    onChange={() => setVerdict(option.value)}
+                    value={option}
+                    checked={verdict === option}
+                    onChange={() => setVerdict(option)}
                     className="visually-hidden"
                   />
-                  {option.label}
+                  {t.triage.verdicts[option]}
                 </label>
               ))}
             </fieldset>
@@ -293,7 +282,7 @@ export default function TriageFlow() {
             {verdict === 'yes_if' && (
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="triage-conditions">
-                  If what?
+                  {t.triage.ifWhat}
                 </label>
                 <input
                   id="triage-conditions"
@@ -307,7 +296,7 @@ export default function TriageFlow() {
 
             <div className={styles.field}>
               <label className={styles.label} htmlFor="triage-reason">
-                What decided it?
+                {t.triage.whatDecided}
               </label>
               <textarea
                 id="triage-reason"
@@ -321,18 +310,18 @@ export default function TriageFlow() {
               />
               <p className={styles.hint}>
                 {verdict === 'no' || verdict === 'depends'
-                  ? 'A no with its reason tells me more than any yes. Your words are kept exactly.'
-                  : 'Optional. Your words are kept exactly.'}
+                  ? t.triage.hintNo
+                  : t.triage.hintOptional}
               </p>
             </div>
 
             <div className={styles.actions}>
               <button type="submit" className="btn" disabled={!canSave}>
-                {saving ? 'Saving…' : probe.number === total ? "That's the last one" : 'Next offer →'}
+                {saving ? t.triage.saving : probe.number === total ? t.triage.lastOne : t.triage.nextOffer}
               </button>
               {index > 0 && (
                 <button type="button" className="text-btn" onClick={goBack} disabled={saving}>
-                  ← Previous offer
+                  {t.triage.previous}
                 </button>
               )}
             </div>
@@ -346,11 +335,11 @@ export default function TriageFlow() {
 
         {phase === 'ready' && (
           <div className={styles.center}>
-            <p className="kicker">Your Rep</p>
-            <h1 className={styles.question}>That&rsquo;s all {total}.</h1>
-            <p className={styles.lead}>None of them was random. Want to see what your answers say?</p>
+            <p className="kicker">{t.common.yourRep}</p>
+            <h1 className={styles.question}>{t.triage.allDone(total)}</h1>
+            <p className={styles.lead}>{t.triage.notRandom}</p>
             <button type="button" className="btn" onClick={() => void analyse()}>
-              Show me
+              {t.triage.showMe}
             </button>
             <button
               type="button"
@@ -362,7 +351,7 @@ export default function TriageFlow() {
                 setPhase('offer')
               }}
             >
-              ← Change an answer
+              {t.triage.changeAnswer}
             </button>
             {error && (
               <p className={styles.error} role="alert">
@@ -375,7 +364,7 @@ export default function TriageFlow() {
         {phase === 'analysing' && (
           <div className={styles.center} role="status">
             <StatusDot />
-            <p className={styles.working}>Reading your answers against what you told me…</p>
+            <p className={styles.working}>{t.triage.analysing}</p>
           </div>
         )}
 
@@ -398,20 +387,23 @@ function Result({
   onDecide: (id: string, decision: 'confirmed' | 'rejected') => void
   onDesign: () => void
 }) {
+  const { locale, t } = useI18n()
+  const salaryFormat = salaryFormats[locale]
   const pending = triage.preferences.filter((p) => p.status === 'proposed').length
 
   return (
     <div className={styles.result}>
-      <p className="kicker">Your Rep</p>
-      <h1 className={styles.resultTitle}>Here&rsquo;s what your answers say.</h1>
-      <p className={styles.lead}>Not what you told me you want. What you chose when it cost something.</p>
+      <p className="kicker">{t.common.yourRep}</p>
+      <h1 className={styles.resultTitle}>{t.triage.resultTitle}</h1>
+      <p className={styles.lead}>{t.triage.resultLead}</p>
       <p className={styles.hint} role="status">
         {pending > 0
-          ? `Nothing here changes what I listen for until you confirm it. ${pending} still to review.`
-          : 'All reviewed. Only what you confirmed will shape what I listen for.'}
+          ? t.triage.pending(pending)
+          : t.triage.allReviewed}
       </p>
 
-      {KINDS.map(({ kind, label }) => {
+      {KINDS.map((kind) => {
+        const label = t.triage.kinds[kind]
         const items = triage.preferences.filter((p) => p.kind === kind)
         if (items.length === 0) return null
         return (
@@ -421,26 +413,25 @@ function Result({
               <article key={preference.id} className={styles.preference} data-status={preference.status}>
                 <p className={styles.statement}>{preference.statement}</p>
                 {preference.neverInheritSilently && (
-                  <p className={styles.notice}>I won&rsquo;t act on this without talking to you first.</p>
+                  <p className={styles.notice}>{t.triage.neverInherit}</p>
                 )}
-                {preference.addedByYou && <p className={styles.meta}>Added by you.</p>}
+                {preference.addedByYou && <p className={styles.meta}>{t.triage.addedByYou}</p>}
                 {preference.originalStatement && (
-                  <p className={styles.meta}>Corrected by you. I had read: {preference.originalStatement}</p>
+                  <p className={styles.meta}>{t.triage.correctedByYou(preference.originalStatement)}</p>
                 )}
-                {preference.declared && <p className={styles.meta}>You&rsquo;d said: {preference.declared}</p>}
+                {preference.declared && <p className={styles.meta}>{t.triage.youdSaid(preference.declared)}</p>}
                 {preference.quote && <blockquote className={styles.quote}>&ldquo;{preference.quote}&rdquo;</blockquote>}
-                <p className={styles.meta}>
-                  From offer{preference.evidenceProbeNumbers.length > 1 ? 's' : ''}{' '}
-                  {preference.evidenceProbeNumbers.map((n) => `#${n}`).join(', ')}
-                </p>
-                <div className={styles.decision} role="group" aria-label="Is this right?">
+                {preference.evidenceProbeNumbers.length > 0 && (
+                  <p className={styles.meta}>{t.triage.fromOffers(preference.evidenceProbeNumbers)}</p>
+                )}
+                <div className={styles.decision} role="group" aria-label={t.triage.isThisRight}>
                   <button
                     type="button"
                     className={styles.decisionBtn}
                     aria-pressed={preference.status === 'confirmed'}
                     onClick={() => onDecide(preference.id, 'confirmed')}
                   >
-                    That&rsquo;s right
+                    {t.triage.right}
                   </button>
                   <button
                     type="button"
@@ -448,17 +439,17 @@ function Result({
                     aria-pressed={preference.status === 'rejected'}
                     onClick={() => onDecide(preference.id, 'rejected')}
                   >
-                    Not quite
+                    {t.triage.notQuite}
                   </button>
                 </div>
                 {/* Each decision is saved on click; say so, there is no save button. */}
                 {preference.status !== 'proposed' && (
                   <p className={styles.saved} role="status">
                     {preference.status === 'rejected'
-                      ? 'Saved. I won’t use this.'
+                      ? t.triage.savedRejected
                       : preference.kind === 'self_filter'
-                        ? 'Saved. I’ll keep it in mind, and still won’t act on it without talking to you.'
-                        : 'Saved. I’ll listen for this.'}
+                        ? t.triage.savedSelfFilter
+                        : t.triage.savedConfirmed}
                   </p>
                 )}
               </article>
@@ -474,7 +465,7 @@ function Result({
       )}
 
       <details className={styles.offers}>
-        <summary className={styles.offersSummary}>What each offer was testing</summary>
+        <summary className={styles.offersSummary}>{t.triage.whatTesting}</summary>
         <ol className={styles.offerList}>
           {triage.probes.map((probe) => (
             <li key={probe.id} className={styles.offerItem}>
@@ -483,11 +474,11 @@ function Result({
                 {probe.salaryEur !== null && ` · ${salaryFormat.format(probe.salaryEur)}`}
               </p>
               <p className={styles.meta}>
-                {probe.verdict ? VERDICT_LABEL[probe.verdict] : '—'}
+                {probe.verdict ? t.triage.verdicts[probe.verdict] : '—'}
                 {probe.conditions && ` — ${probe.conditions}`}
               </p>
               {probe.reason && <p className={styles.offerReason}>&ldquo;{probe.reason}&rdquo;</p>}
-              {probe.axes && probe.axes.length > 0 && <p className={styles.meta}>Testing: {probe.axes.join(' × ')}</p>}
+              {probe.axes && probe.axes.length > 0 && <p className={styles.meta}>{t.triage.testing(probe.axes)}</p>}
             </li>
           ))}
         </ol>
@@ -495,10 +486,10 @@ function Result({
 
       <div className={styles.footer}>
         <button type="button" className="text-btn" onClick={onDesign}>
-          Try another set of offers →
+          {t.triage.anotherSet}
         </button>
         <Link href="/listening" className="text-btn">
-          Back to listening
+          {t.triage.backToListening}
         </Link>
       </div>
     </div>

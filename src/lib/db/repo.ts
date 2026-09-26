@@ -16,7 +16,13 @@ export interface CandidateRow {
   name: string | null
   descriptor: string | null
   descriptor_grounded: number
+  locale: string | null
+  locale_source: string | null
   created_at: string
+}
+
+export function setCandidateLocale(id: string, locale: string, source: 'chosen' | 'detected'): void {
+  getDb().prepare('UPDATE candidates SET locale = ?, locale_source = ? WHERE id = ?').run(locale, source, id)
 }
 
 export interface SourceRow {

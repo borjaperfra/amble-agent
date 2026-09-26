@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
 import StatusDot from '@/components/StatusDot'
+import { useT } from '@/components/I18nProvider'
 import styles from '@/app/onboarding/processing/processing.module.css'
 
 interface LogEntry {
@@ -31,6 +32,7 @@ interface StageResponse {
 }
 
 export default function ProcessingFlow() {
+  const t = useT()
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [working, setWorking] = useState<string | null>(null)
   const [done, setDone] = useState(false)
@@ -50,12 +52,12 @@ export default function ProcessingFlow() {
       })
       const data = (await response.json()) as StageResponse
       if (!response.ok) {
-        setFailure(data.error ?? 'Processing failed.')
+        setFailure(data.error ?? t.processing.failed)
         return null
       }
       return data
     } catch {
-      setFailure('Processing failed: the server could not be reached.')
+      setFailure(t.processing.unreachable)
       return null
     }
   }
@@ -72,15 +74,15 @@ export default function ProcessingFlow() {
     const sources = (await listResponse.json()) as SourceItem[]
     const pending = sources.filter((source) => source.status === 'extracted')
     if (pending.length === 0) {
-      setFailure('There are no unread sources to process. Go back and add one.')
+      setFailure(t.processing.nothingToRead)
       return
     }
 
     let keptStatements = 0
 
     for (const source of pending) {
-      push({ kind: 'activity', text: `Reading ${source.name}...` })
-      setWorking(`Reading ${source.name}...`)
+      push({ kind: 'activity', text: t.processing.reading(source.name) })
+      setWorking(t.processing.reading(source.name))
       const result = await callStage('sources', source.id)
       if (!result) {
         setWorking(null)
@@ -92,40 +94,38 @@ export default function ProcessingFlow() {
           await pause(300)
         }
         keptStatements += processed.claimsCount
-        push({ kind: 'summary', text: `I kept ${processed.claimsCount} statements from ${processed.name}.` })
+        push({ kind: 'summary', text: t.processing.kept(processed.claimsCount, processed.name) })
         await pause(400)
       }
     }
 
     if (keptStatements === 0) {
       setWorking(null)
-      setFailure(
-        'I read your sources but could not extract a single professional statement. That is probably my failure, not yours. Try again, or use a plain text export.',
-      )
+      setFailure(t.processing.nothingExtracted)
       return
     }
 
-    push({ kind: 'activity', text: 'Looking at what it all means...' })
-    setWorking('Looking at what it all means...')
+    push({ kind: 'activity', text: t.processing.meaning })
+    setWorking(t.processing.meaning)
     const evidenceResult = await callStage('evidence')
     if (!evidenceResult) {
       setWorking(null)
       return
     }
-    push({ kind: 'count', text: `Grounded ${evidenceResult.evidenceCreated ?? 0} pieces of evidence.` })
+    push({ kind: 'count', text: t.processing.grounded(evidenceResult.evidenceCreated ?? 0) })
     await pause(500)
 
-    push({ kind: 'activity', text: 'Connecting the dots...' })
-    setWorking('Connecting the dots...')
+    push({ kind: 'activity', text: t.processing.connecting })
+    setWorking(t.processing.connecting)
     const capabilitiesResult = await callStage('capabilities')
     if (!capabilitiesResult) {
       setWorking(null)
       return
     }
-    push({ kind: 'count', text: `Found ${capabilitiesResult.capabilitiesCount ?? 0} capabilities.` })
+    push({ kind: 'count', text: t.processing.found(capabilitiesResult.capabilitiesCount ?? 0) })
     await pause(500)
 
-    setWorking("Noting what I still don't know...")
+    setWorking(t.processing.unknowns)
     const profileResult = await callStage('profile')
     if (!profileResult) {
       setWorking(null)
@@ -147,7 +147,7 @@ export default function ProcessingFlow() {
     <>
       <Header />
       <main className={styles.page}>
-        <h1 className={styles.status}>Getting to know you.</h1>
+        <h1 className={styles.status}>{t.processing.status}</h1>
 
         <div className={styles.log} aria-live="polite">
           {entries.map((entry) =>
@@ -157,7 +157,7 @@ export default function ProcessingFlow() {
                   <p className={styles.discoveryTitle}>{entry.title}</p>
                   <p className={styles.discoveryMeta}>{entry.meta}</p>
                 </div>
-                <span className={styles.discoveryCheck} aria-label="Found">
+                <span className={styles.discoveryCheck} aria-label={t.processing.foundLabel}>
                   ✓
                 </span>
               </div>
@@ -181,12 +181,12 @@ export default function ProcessingFlow() {
 
         {failure && (
           <div className={styles.done}>
-            <p className={styles.doneLine}>Something didn&apos;t work.</p>
+            <p className={styles.doneLine}>{t.processing.failedTitle}</p>
             <p className={styles.doneDetail}>{failure}</p>
-            <p className={styles.doneDetail}>Nothing has been invented to fill the gap.</p>
+            <p className={styles.doneDetail}>{t.processing.nothingInvented}</p>
             <div className={styles.doneCta}>
               <button type="button" className="btn" onClick={() => void run()}>
-                Try again →
+                {t.common.tryAgain}
               </button>
             </div>
           </div>
@@ -194,13 +194,13 @@ export default function ProcessingFlow() {
 
         {done && (
           <div className={styles.done}>
-            <p className={styles.doneLine}>I have the basics.</p>
+            <p className={styles.doneLine}>{t.processing.doneTitle}</p>
             <p className={styles.doneDetail}>
-              {'There are a few things\nI\u2019d rather ask you myself.'}
+              {t.processing.doneDetail}
             </p>
             <div className={styles.doneCta}>
               <Link href="/onboarding/interview" className="btn">
-                Continue →
+                {t.common.continue}
               </Link>
             </div>
           </div>

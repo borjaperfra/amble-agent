@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import Header from '@/components/Header'
+import { useT } from '@/components/I18nProvider'
 import styles from '@/app/onboarding/onboarding.module.css'
 
 interface SourceItem {
@@ -15,6 +16,7 @@ interface SourceItem {
 
 export default function OnboardingFlow() {
   const router = useRouter()
+  const t = useT()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sources, setSources] = useState<SourceItem[]>([])
   const [linkedinUrl, setLinkedinUrl] = useState('')
@@ -34,12 +36,12 @@ export default function OnboardingFlow() {
       const response = await fetch('/api/onboarding/sources', { method: 'POST', body: form })
       const data = (await response.json()) as SourceItem & { error?: string }
       if (!response.ok) {
-        setError(data.error ?? 'The file could not be stored.')
+        setError(data.error ?? t.onboarding.fileNotStored)
         return
       }
       setSources((prev) => [...prev, data])
     } catch {
-      setError('The file could not be uploaded.')
+      setError(t.onboarding.fileNotUploaded)
     } finally {
       setBusy(false)
     }
@@ -57,13 +59,13 @@ export default function OnboardingFlow() {
       })
       const data = (await response.json()) as SourceItem & { error?: string }
       if (!response.ok) {
-        setError(data.error ?? 'The URL could not be stored.')
+        setError(data.error ?? t.onboarding.urlNotStored)
         return
       }
       setSources((prev) => [...prev, data])
       reset()
     } catch {
-      setError('The URL could not be stored.')
+      setError(t.onboarding.urlNotStored)
     } finally {
       setBusy(false)
     }
@@ -73,9 +75,9 @@ export default function OnboardingFlow() {
     <>
       <Header />
       <main className={styles.page}>
-        <h1 className={styles.title}>Let&rsquo;s build your Rep.</h1>
+        <h1 className={styles.title}>{t.onboarding.title}</h1>
         <p className={styles.body}>
-          {'Start with what already exists.\nI\u2019ll read it before asking you anything.'}
+          {t.onboarding.body}
         </p>
 
         <div className={styles.sources}>
@@ -84,7 +86,7 @@ export default function OnboardingFlow() {
             type="file"
             accept=".pdf,.txt,.md"
             className="visually-hidden"
-            aria-label="Upload your CV as PDF or text"
+            aria-label={t.onboarding.cvUploadLabel}
             onChange={(event) => {
               const file = event.target.files?.[0]
               if (file) void addFile(file)
@@ -96,16 +98,16 @@ export default function OnboardingFlow() {
             className={styles.fileDrop}
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
-            aria-label="Add your CV as a PDF or text file"
+            aria-label={t.onboarding.cvAddLabel}
           >
             <span className={styles.fileDropMain}>
-              <span className={styles.fileDropLabel}>CV</span>
+              <span className={styles.fileDropLabel}>{t.onboarding.cv}</span>
               <span className={styles.fileDropHint}>
-                {busy ? 'Reading...' : 'Upload a PDF or text file'}
+                {busy ? t.onboarding.reading : t.onboarding.uploadHint}
               </span>
             </span>
             <span className={styles.rowRight}>
-              <span className={styles.rowAction}>Add →</span>
+              <span className={styles.rowAction}>{t.common.add}</span>
             </span>
           </button>
 
@@ -118,7 +120,7 @@ export default function OnboardingFlow() {
               <span className={styles.rowRight}>
                 {source.status === 'extracted' ? (
                   <>
-                    <span className={styles.rowIdentifier}>read</span>
+                    <span className={styles.rowIdentifier}>{t.onboarding.read}</span>
                     <span className={styles.check} aria-hidden="true">
                       ✓
                     </span>
@@ -136,8 +138,8 @@ export default function OnboardingFlow() {
               <input
                 type="text"
                 className={styles.urlInput}
-                placeholder="username"
-                aria-label="GitHub username or profile URL"
+                placeholder={t.onboarding.githubPlaceholder}
+                aria-label={t.onboarding.githubLabel}
                 value={githubHandle}
                 onChange={(event) => setGithubHandle(event.target.value)}
               />
@@ -151,7 +153,7 @@ export default function OnboardingFlow() {
                   addUrl('github', url, () => setGithubHandle(''))
                 }}
               >
-                Add →
+                {t.common.add}
               </button>
             </span>
           </div>
@@ -162,8 +164,8 @@ export default function OnboardingFlow() {
               <input
                 type="url"
                 className={styles.urlInput}
-                placeholder="Profile URL"
-                aria-label="LinkedIn profile URL"
+                placeholder={t.onboarding.linkedinPlaceholder}
+                aria-label={t.onboarding.linkedinLabel}
                 value={linkedinUrl}
                 onChange={(event) => setLinkedinUrl(event.target.value)}
               />
@@ -173,19 +175,19 @@ export default function OnboardingFlow() {
                 disabled={busy || !linkedinUrl.trim()}
                 onClick={() => addUrl('linkedin', linkedinUrl, () => setLinkedinUrl(''))}
               >
-                Add →
+                {t.common.add}
               </button>
             </span>
           </div>
 
           <div className={`${styles.row} ${styles.enter}`}>
-            <span className={styles.rowLabel}>Website</span>
+            <span className={styles.rowLabel}>{t.onboarding.website}</span>
             <span className={styles.rowRight}>
               <input
                 type="url"
                 className={styles.urlInput}
                 placeholder="https://"
-                aria-label="Personal website URL"
+                aria-label={t.onboarding.websiteLabel}
                 value={websiteUrl}
                 onChange={(event) => setWebsiteUrl(event.target.value)}
               />
@@ -195,14 +197,14 @@ export default function OnboardingFlow() {
                 disabled={busy || !websiteUrl.trim()}
                 onClick={() => addUrl('website', websiteUrl, () => setWebsiteUrl(''))}
               >
-                Add →
+                {t.common.add}
               </button>
             </span>
           </div>
         </div>
 
         <p className={styles.notice}>
-          A readable CV is what powers this first real test. LinkedIn and websites help less.
+          {t.onboarding.notice}
         </p>
 
         {error && (
@@ -218,7 +220,7 @@ export default function OnboardingFlow() {
             disabled={readableCount === 0 || busy}
             onClick={() => router.push('/onboarding/processing')}
           >
-            Continue →
+            {t.common.continue}
           </button>
         </div>
       </main>

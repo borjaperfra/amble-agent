@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useT } from '@/components/I18nProvider'
 import styles from './evaluation.module.css'
 
 interface EvaluationControlProps {
@@ -11,6 +12,7 @@ interface EvaluationControlProps {
 }
 
 export function EvaluationControl({ targetType, targetId, label, verdicts }: EvaluationControlProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [verdict, setVerdict] = useState<string | null>(null)
   const [comment, setComment] = useState('')
@@ -56,21 +58,21 @@ export function EvaluationControl({ targetType, targetId, label, verdicts }: Eva
           <input
             type="text"
             className={styles.comment}
-            placeholder="Optional comment"
+            placeholder={t.evaluation.comment}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
           />
           <div className={styles.actions}>
             <button type="button" className={styles.cancel} onClick={() => setOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </button>
             <button type="button" className={styles.send} disabled={!verdict} onClick={() => void send()}>
-              Record
+              {t.evaluation.record}
             </button>
           </div>
         </div>
       )}
-      {sent && <p className={styles.sent}>Recorded. Thank you.</p>}
+      {sent && <p className={styles.sent}>{t.evaluation.recorded}</p>}
     </div>
   )
 }

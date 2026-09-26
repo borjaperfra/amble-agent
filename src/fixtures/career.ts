@@ -22,6 +22,8 @@ export const exampleCandidate: CandidateRow = {
   name: 'Marta Quiroga Lez',
   descriptor: 'Developer relations · Developer tooling · Technical content',
   descriptor_grounded: 1,
+  locale: 'es',
+  locale_source: 'chosen',
   created_at: T,
 }
 

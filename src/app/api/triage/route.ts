@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
+import { getOrCreateCandidate } from '@/lib/db/repo'
+import { refreshDetectedLocale } from '@/lib/i18n/candidate'
 import {
   analyseTriage,
   answerProbe,
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
           conditions: typeof body.conditions === 'string' ? body.conditions : null,
           reason: typeof body.reason === 'string' ? body.reason : null,
         })
+        refreshDetectedLocale(getOrCreateCandidate().id)
         return NextResponse.json({ ok: true })
       }
       case 'analyse': {

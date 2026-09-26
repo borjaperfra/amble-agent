@@ -6,15 +6,6 @@ export type EvidenceStrength =
   | 'none'
   | 'contradictory'
 
-export const strengthLabel: Record<EvidenceStrength, string> = {
-  strong: 'Strong evidence',
-  good: 'Good evidence',
-  some: 'Some evidence',
-  limited: 'Limited evidence',
-  none: 'No evidence yet',
-  contradictory: 'Contradictory evidence',
-}
-
 export const strengthLevel: Record<EvidenceStrength, number> = {
   strong: 4,
   good: 3,
@@ -22,15 +13,6 @@ export const strengthLevel: Record<EvidenceStrength, number> = {
   limited: 1,
   none: 0,
   contradictory: 2,
-}
-
-export const sourceTypeLabel: Record<string, string> = {
-  cv: 'CV',
-  github: 'GitHub',
-  linkedin: 'LinkedIn',
-  website: 'Website',
-  interview: 'Interview',
-  verified: 'Verified',
 }
 
 export interface Evidence {

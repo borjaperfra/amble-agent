@@ -54,6 +54,26 @@
 
 .right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.language {
+  min-height: 36px;
+  padding: 6px 2px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--motion-fast) ease;
+}
+
+.language:hover:not(:disabled) {
+  color: var(--ink);
 }
 
 .inner nav + .right {

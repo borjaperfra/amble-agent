@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useT } from './I18nProvider'
 import styles from './InlineEdit.module.css'
 
 interface InlineEditProps {
@@ -10,6 +11,7 @@ interface InlineEditProps {
 }
 
 export default function InlineEdit({ value, onChange, label }: InlineEditProps) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
@@ -57,7 +59,7 @@ export default function InlineEdit({ value, onChange, label }: InlineEditProps) 
       type="button"
       className={styles.trigger}
       onClick={() => setEditing(true)}
-      aria-label={`Change ${label.toLowerCase()}: ${value}`}
+      aria-label={t.voice.change(label, value)}
     >
       {value}
     </button>

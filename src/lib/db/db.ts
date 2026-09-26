@@ -366,6 +366,11 @@ function migrate(db: DatabaseSync): void {
   // A short form of a revealed preference, for what the Rep listens for.
   addColumn(db, 'revealed_preferences', 'label', 'TEXT')
 
+  // The candidate's language: what the interface and everything the Rep writes
+  // use. 'chosen' by the candidate always wins over 'detected' from their words.
+  addColumn(db, 'candidates', 'locale', 'TEXT')
+  addColumn(db, 'candidates', 'locale_source', 'TEXT')
+
   // The candidate can correct a preference or add one (PRODUCT_SPEC §18). What
   // the analysis proposed is kept, so the correction stays visible.
   addColumn(db, 'revealed_preferences', 'origin', "TEXT NOT NULL DEFAULT 'analysis'")

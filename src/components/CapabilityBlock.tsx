@@ -1,4 +1,7 @@
+'use client'
+
 import EvidenceState from './EvidenceState'
+import { useT } from './I18nProvider'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import styles from './CapabilityBlock.module.css'
 
@@ -17,6 +20,7 @@ export default function CapabilityBlock({
   count,
   onView,
 }: CapabilityBlockProps) {
+  const t = useT()
   return (
     <article className={styles.block}>
       <div className={styles.head}>
@@ -26,10 +30,10 @@ export default function CapabilityBlock({
       <p className={styles.explanation}>{explanation}</p>
       <div className={styles.meta}>
         <span className={styles.count}>
-          {count} {count === 1 ? 'piece' : 'pieces'} of evidence
+          {t.map.pieces(count)}
         </span>
         <button type="button" className="text-btn" onClick={onView}>
-          View →
+          {t.map.view}
         </button>
       </div>
     </article>

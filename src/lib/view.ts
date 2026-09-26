@@ -17,6 +17,8 @@ import {
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
+import { dictionaries, type Dictionary } from './i18n/dictionaries'
+import type { Locale } from './i18n/locale'
 
 const ASSESSMENT_TO_STRENGTH: Record<string, EvidenceStrength> = {
   STRONG_EVIDENCE: 'strong',
@@ -25,24 +27,6 @@ const ASSESSMENT_TO_STRENGTH: Record<string, EvidenceStrength> = {
   LIMITED_EVIDENCE: 'limited',
   NO_EVIDENCE_YET: 'none',
   CONTRADICTORY_EVIDENCE: 'contradictory',
-}
-
-const SOURCE_TYPE_LABELS: Record<string, string> = {
-  cv: 'CV',
-  github: 'GitHub',
-  linkedin: 'LinkedIn',
-  website: 'Website',
-  interview: 'Interview',
-  verified: 'Verified',
-}
-
-export const EPISTEMIC_STATE_LABELS: Record<string, string> = {
-  SOURCE_FACT: 'Source fact',
-  USER_CLAIM: 'Your claim',
-  ASSISTED_CLAIM: 'Co-produced, not yet defended',
-  INFERENCE: 'Inference',
-  VERIFIED_FACT: 'Verified',
-  SYSTEM_ASSESSMENT: 'System assessment',
 }
 
 export interface EvidenceViewItem {
@@ -88,31 +72,29 @@ export interface MapViewModel {
   }
 }
 
-function sourceLabel(sourceType: string): string {
-  return SOURCE_TYPE_LABELS[sourceType] ?? sourceType
-}
-
-function evidenceToViewItem(item: EvidenceRow, sourceNames: Map<string, string>): EvidenceViewItem {
+function evidenceToViewItem(item: EvidenceRow, sourceNames: Map<string, string>, t: Dictionary): EvidenceViewItem {
   const origin = item.source_id ? sourceNames.get(item.source_id) : null
   const excerpt = item.source_excerpt
   return {
     id: item.id,
     claim: item.statement,
-    sourceType: sourceLabel(item.source_type),
+    // Raw type: the interface labels it in the candidate's language.
+    sourceType: item.source_type,
     date: item.created_at.slice(0, 10),
     confirmed: item.candidate_confirmed === 1,
     supports: excerpt
       ? origin
-        ? `From ${origin}: \u201C${excerpt}\u201D`
+        ? t.evidence.fromSource(origin, excerpt)
         : `\u201C${excerpt}\u201D`
       : origin
-        ? `From ${origin}.`
-        : 'From your interview.',
-    epistemicState: EPISTEMIC_STATE_LABELS[item.epistemic_state] ?? item.epistemic_state,
+        ? t.evidence.fromSourceOnly(origin)
+        : t.evidence.fromInterview,
+    epistemicState: t.evidence.epistemic[item.epistemic_state] ?? item.epistemic_state,
   }
 }
 
-export function getMapViewModel(): MapViewModel {
+export function getMapViewModel(locale: Locale): MapViewModel {
+  const t = dictionaries[locale]
   const candidate = getOrCreateCandidate()
   const capabilities = listCapabilities(candidate.id)
   const capabilityEvidence = listCapabilityEvidenceIds(candidate.id)
@@ -127,7 +109,7 @@ export function getMapViewModel(): MapViewModel {
     const items = ids
       .map((id) => evidenceById.get(id))
       .filter((item): item is EvidenceRow => Boolean(item))
-      .map((item) => evidenceToViewItem(item, sourceNames))
+      .map((item) => evidenceToViewItem(item, sourceNames, t))
     return {
       id: capability.id,
       name: capability.name,
@@ -144,8 +126,8 @@ export function getMapViewModel(): MapViewModel {
       id: uncertainty.id,
       name: uncertainty.capability_id
         ? (capabilities.find((capability) => capability.id === uncertainty.capability_id)?.name ??
-          'Something unresolved')
-        : 'Something unresolved',
+          t.evidence.somethingUnresolved)
+        : t.evidence.somethingUnresolved,
       explanation: uncertainty.description,
       materiality: uncertainty.materiality,
     }))
@@ -160,7 +142,7 @@ export function getMapViewModel(): MapViewModel {
   return {
     name: candidate.name,
     descriptor: candidate.descriptor,
-    updated: `Last updated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`,
+    updated: t.evidence.lastUpdated(new Date().toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-GB', { day: 'numeric', month: 'long' })),
     capabilities: capabilityItems,
     gaps,
     distinctive: distinctiveNames,
@@ -272,7 +254,7 @@ export function getDevTrace(): DevTrace {
       id: item.id,
       statement: item.statement,
       epistemic: item.epistemic_state,
-      sourceType: sourceLabel(item.source_type),
+      sourceType: item.source_type,
       confirmed: item.candidate_confirmed === 1,
       turn: item.interview_turn_id,
     })),

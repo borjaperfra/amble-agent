@@ -1,14 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { useI18n } from './I18nProvider'
 import styles from './Header.module.css'
-
-const navItems = [
-  { href: '/listening', label: 'Your Rep' },
-  { href: '/me', label: 'Your Map' },
-  { href: '/me/intent', label: 'Listening for' },
-]
 
 const navRoutes = ['/me', '/me/intent', '/listening']
 
@@ -18,7 +14,30 @@ interface HeaderProps {
 
 export default function Header({ right }: HeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { locale, t } = useI18n()
+  const [switching, setSwitching] = useState(false)
   const showNav = navRoutes.includes(pathname)
+
+  const navItems = [
+    { href: '/listening', label: t.header.rep },
+    { href: '/me', label: t.header.map },
+    { href: '/me/intent', label: t.header.listeningFor },
+  ]
+
+  async function switchLanguage() {
+    setSwitching(true)
+    try {
+      await fetch('/api/locale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale: locale === 'es' ? 'en' : 'es' }),
+      })
+      router.refresh()
+    } finally {
+      setSwitching(false)
+    }
+  }
 
   return (
     <header className={styles.header}>
@@ -27,16 +46,14 @@ export default function Header({ right }: HeaderProps) {
           amble
         </Link>
         {showNav && (
-          <nav className={styles.nav} aria-label="Primary">
+          <nav className={styles.nav} aria-label={t.header.nav}>
             {navItems.map((item) => {
               const active = pathname === item.href
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={
-                    active ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-                  }
+                  className={active ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
                   aria-current={active ? 'page' : undefined}
                 >
                   {item.label}
@@ -45,7 +62,19 @@ export default function Header({ right }: HeaderProps) {
             })}
           </nav>
         )}
-        {right ? <div className={styles.right}>{right}</div> : null}
+        <div className={styles.right}>
+          {right}
+          <button
+            type="button"
+            className={styles.language}
+            onClick={() => void switchLanguage()}
+            disabled={switching}
+            aria-label={t.header.switchToLabel}
+            lang={locale === 'es' ? 'en' : 'es'}
+          >
+            {t.header.switchTo}
+          </button>
+        </div>
       </div>
     </header>
   )

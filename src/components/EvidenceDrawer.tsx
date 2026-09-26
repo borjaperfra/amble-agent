@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { Capability, Evidence } from '@/domains/candidate/types'
-import { sourceTypeLabel } from '@/domains/candidate/types'
+import { useT } from './I18nProvider'
 import styles from './EvidenceDrawer.module.css'
 
 interface EvidenceDrawerProps {
@@ -34,6 +34,7 @@ export default function EvidenceDrawer({
   showEpistemicState = false,
   onClose,
 }: EvidenceDrawerProps) {
+  const t = useT()
   const panelRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -73,7 +74,7 @@ export default function EvidenceDrawer({
       >
         <div className={styles.head}>
           <div>
-            <p className="kicker">Evidence</p>
+            <p className="kicker">{t.evidence.kicker}</p>
             <h2 id="evidence-drawer-title" className={styles.title}>
               {capability.name}
             </h2>
@@ -83,9 +84,9 @@ export default function EvidenceDrawer({
             type="button"
             className={styles.close}
             onClick={onClose}
-            aria-label="Close evidence"
+            aria-label={t.evidence.closeLabel}
           >
-            Close
+            {t.common.close}
           </button>
         </div>
 
@@ -96,14 +97,14 @@ export default function EvidenceDrawer({
             <li key={item.id} className={styles.item}>
               <div className={styles.itemHead}>
                 <span className={styles.source}>
-                  {sourceTypeLabel[item.sourceType] ?? item.sourceType}
+                  {t.source[item.sourceType as keyof typeof t.source] ?? item.sourceType}
                 </span>
                 {showEpistemicState && item.epistemicState ? (
                   <span className={styles.epistemic}>{item.epistemicState}</span>
                 ) : null}
                 {item.date ? <span className={styles.date}>{item.date}</span> : null}
                 {item.confirmed ? (
-                  <span className={styles.confirmed}>You confirmed this</span>
+                  <span className={styles.confirmed}>{t.evidence.confirmed}</span>
                 ) : null}
               </div>
               <p className={styles.claim}>{item.claim}</p>
@@ -112,7 +113,7 @@ export default function EvidenceDrawer({
           ))}
         </ul>
 
-        <p className={styles.note}>Private. Only you can see this.</p>
+        <p className={styles.note}>{t.evidence.private}</p>
       </div>
     </div>
   )

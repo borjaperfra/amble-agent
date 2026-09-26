@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useT } from './I18nProvider'
 import styles from './VoiceRecorder.module.css'
 
 interface VoiceRecorderProps {
@@ -17,6 +18,7 @@ function formatTime(totalSeconds: number): string {
 }
 
 export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRecorderProps) {
+  const t = useT()
   const [phase, setPhase] = useState<Phase>('idle')
   const [seconds, setSeconds] = useState(0)
   const [draft, setDraft] = useState('')
@@ -88,8 +90,8 @@ export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRec
           }
           aria-label={
             phase === 'recording'
-              ? `Recording, ${formatTime(seconds)}. Release to finish.`
-              : 'Hold to talk, or press and hold the space key'
+              ? t.voice.recording(formatTime(seconds))
+              : t.voice.holdToTalkLabel
           }
           onPointerDown={(event) => {
             event.preventDefault()
@@ -116,7 +118,7 @@ export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRec
           {phase === 'recording' ? (
             <>
               <span className={styles.time}>{formatTime(seconds)}</span>
-              <span className={styles.listening}>Listening</span>
+              <span className={styles.listening}>{t.voice.listening}</span>
               <span className={styles.wave} aria-hidden="true">
                 {Array.from({ length: 7 }, (_, i) => (
                   <span key={i} className={styles.bar} />
@@ -124,16 +126,16 @@ export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRec
               </span>
             </>
           ) : (
-            <span className={styles.hint}>Hold to talk</span>
+            <span className={styles.hint}>{t.voice.holdToTalk}</span>
           )}
         </button>
       )}
 
       {phase === 'idle' && (
         <p className={styles.alt}>
-          {holdHint ? 'Hold the button a little longer. ' : ''}
+          {holdHint ? t.voice.holdLonger : ''}
           <button type="button" className={styles.altBtn} onClick={beginTyping}>
-            or type
+            {t.common.orType}
           </button>
         </p>
       )}
@@ -145,8 +147,8 @@ export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRec
             className={styles.textarea}
             value={draft}
             rows={4}
-            placeholder="Take your time. Write it the way you'd say it."
-            aria-label="Type your answer"
+            placeholder={t.common.typePlaceholder}
+            aria-label={t.voice.typeLabel}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) sendTyped()
@@ -154,7 +156,7 @@ export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRec
           />
           <div className={styles.typingActions}>
             <button type="button" className="text-btn" onClick={cancelTyping}>
-              Back
+              {t.common.back}
             </button>
             <button
               type="button"
@@ -162,7 +164,7 @@ export default function VoiceRecorder({ fixtureTranscript, onCapture }: VoiceRec
               disabled={!draft.trim()}
               onClick={sendTyped}
             >
-              Send
+              {t.common.send}
             </button>
           </div>
         </div>

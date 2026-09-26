@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
 import StatusDot from '@/components/StatusDot'
 import VoiceRecorder from '@/components/VoiceRecorder'
+import { useT } from '@/components/I18nProvider'
 import { EvaluationControl } from './EvaluationControl'
 import styles from '@/app/onboarding/interview/interview.module.css'
 
@@ -25,15 +26,9 @@ interface AnswerResponse {
 
 type Phase = 'loading' | 'ask' | 'answering' | 'gotit' | 'complete'
 
-const COMPLETION_LINE = 'I think I understand you pretty well now.'
-// PRODUCT_SPEC §10.2: a defence question checks the Rep's reading, not the person.
-const DEFENCE_CONTEXT =
-  "I'm checking my own reading of something you built with an AI tool. \"I don't know\" is a useful answer."
-const VOICE_NOTICE =
-  "Voice is simulated in this build — it doesn't transcribe. Use the text box below."
-
 export default function InterviewFlow() {
   const router = useRouter()
+  const t = useT()
   const [phase, setPhase] = useState<Phase>('loading')
   const [turnId, setTurnId] = useState<string | null>(null)
   const [question, setQuestion] = useState<string | null>(null)
@@ -47,7 +42,7 @@ export default function InterviewFlow() {
   const applyPlan = useCallback(
     (data: NextResponse | null, failed?: string) => {
       if (failed || !data) {
-        setError(failed ?? "Your Rep couldn't be reached. Nothing has been lost.")
+        setError(failed ?? t.common.unreachable)
         setPhase('ask')
         return
       }
@@ -65,7 +60,7 @@ export default function InterviewFlow() {
       setError(null)
       setPhase('ask')
     },
-    [router],
+    [router, t],
   )
 
   const loadNext = useCallback(async () => {
@@ -75,16 +70,16 @@ export default function InterviewFlow() {
       const response = await fetch('/api/interview/next', { method: 'POST' })
       const data = (await response.json()) as NextResponse
       if (!response.ok) {
-        setError(data.error ?? "Your Rep couldn't plan the next question.")
+        setError(data.error ?? t.interview.planFailed)
         return
       }
       applyPlan(data)
     } catch {
-      setError("Your Rep couldn't be reached. Nothing has been lost.")
+      setError(t.common.unreachable)
       setPhase('ask')
       setQuestion((current) => current)
     }
-  }, [applyPlan])
+  }, [applyPlan, t])
 
   useEffect(() => {
     const id = window.setTimeout(() => void loadNext(), 0)
@@ -104,11 +99,11 @@ export default function InterviewFlow() {
       const response = await fetch('/api/interview/next', { method: 'POST' })
       data = (await response.json()) as NextResponse
       if (!response.ok) {
-        failure = data.error ?? "Your Rep couldn't plan the next question."
+        failure = data.error ?? t.interview.planFailed
         data = null
       }
     } catch {
-      failure = "Your Rep couldn't be reached. Nothing has been lost."
+      failure = t.common.unreachable
     }
     const wait = Math.max(0, 800 - (Date.now() - startedAt))
     window.setTimeout(() => {
@@ -133,16 +128,13 @@ export default function InterviewFlow() {
       })
       const data = (await response.json()) as AnswerResponse
       if (!response.ok) {
-        setError(
-          data.error ??
-            "Your answer couldn't be incorporated. It is still here — send it again.",
-        )
+        setError(data.error ?? t.interview.answerFailed)
         setPhase('ask')
         return
       }
       void loadNextAfterAnswer()
     } catch {
-      setError("Your answer couldn't be sent. It is still here — try again.")
+      setError(t.interview.answerUnsent)
       setPhase('ask')
     }
   }
@@ -152,7 +144,7 @@ export default function InterviewFlow() {
       <Header
         right={
           <Link href="/me" className="text-btn">
-            Save &amp; leave
+            {t.interview.saveAndLeave}
           </Link>
         }
       />
@@ -160,41 +152,41 @@ export default function InterviewFlow() {
         {phase === 'loading' && (
           <div className={styles.stage} role="status">
             <div className={styles.kickerCenter}>
-              <p className="kicker">Your Rep</p>
+              <p className="kicker">{t.common.yourRep}</p>
             </div>
             <StatusDot />
-            <p className={styles.context}>Deciding what to ask you next.</p>
+            <p className={styles.context}>{t.interview.deciding}</p>
           </div>
         )}
 
         {phase === 'gotit' && (
           <div className={styles.stage} role="status">
-            <p className={styles.gotit}>Got it.</p>
+            <p className={styles.gotit}>{t.interview.gotIt}</p>
             <div className={styles.workingArea}>
               <StatusDot />
-              <span>Thinking about what to ask next.</span>
+              <span>{t.interview.thinking}</span>
             </div>
           </div>
         )}
 
         {phase === 'complete' && (
           <div className={styles.stage} role="status">
-            <p className={styles.complete}>{COMPLETION_LINE}</p>
+            <p className={styles.complete}>{t.interview.completion}</p>
           </div>
         )}
 
         {(phase === 'ask' || phase === 'answering') && question && (
           <div className={`${styles.stage} ${styles.entrance}`}>
             <div className={styles.kickerCenter}>
-              <p className="kicker">Your Rep</p>
+              <p className="kicker">{t.common.yourRep}</p>
             </div>
             <h1 className={styles.question}>{question}</h1>
-            {isDefence && <p className={styles.context}>{DEFENCE_CONTEXT}</p>}
+            {isDefence && <p className={styles.context}>{t.interview.defenceContext}</p>}
 
             {phase === 'answering' ? (
               <div className={styles.workingArea} role="status">
                 <StatusDot />
-                <span>Updating what I understand about you...</span>
+                <span>{t.interview.updating}</span>
               </div>
             ) : (
               <>
@@ -202,13 +194,13 @@ export default function InterviewFlow() {
                   <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
                 </div>
 
-                <p className={styles.voiceNotice}>{VOICE_NOTICE}</p>
+                <p className={styles.voiceNotice}>{t.interview.voiceNotice}</p>
               </>
             )}
 
             <div className={styles.typingArea}>
               <label className={styles.typeLabel} htmlFor="interview-answer">
-                or type
+                {t.common.orType}
               </label>
               <textarea
                 id="interview-answer"
@@ -216,7 +208,7 @@ export default function InterviewFlow() {
                 className={styles.answerTextarea}
                 value={answer}
                 rows={4}
-                placeholder="Take your time. Write it the way you'd say it."
+                placeholder={t.common.typePlaceholder}
                 disabled={phase === 'answering'}
                 onChange={(event) => setAnswer(event.target.value)}
                 onKeyDown={(event) => {
@@ -230,7 +222,7 @@ export default function InterviewFlow() {
                   disabled={!answer.trim() || phase === 'answering'}
                   onClick={() => void submitAnswer()}
                 >
-                  {phase === 'answering' ? 'Listening to your answer…' : 'Send'}
+                  {phase === 'answering' ? t.interview.sending : t.common.send}
                 </button>
               </div>
             </div>
@@ -242,13 +234,13 @@ export default function InterviewFlow() {
                 aria-expanded={showWhy}
                 onClick={() => setShowWhy((value) => !value)}
               >
-                Why this question?
+                {t.interview.whyThisQuestion}
               </button>
               {showWhy && reason && <p className={styles.whyText}>{reason}</p>}
               <EvaluationControl
                 targetType="interview_question"
                 targetId={turnId ?? ''}
-                label="Evaluate this question"
+                label={t.interview.evaluateQuestion}
                 verdicts={['USEFUL', 'REDUNDANT', 'IRRELEVANT']}
               />
             </div>
@@ -261,7 +253,7 @@ export default function InterviewFlow() {
               {error}
             </p>
             <button type="button" className="text-btn" onClick={() => void loadNext()}>
-              Continue →
+              {t.common.continue}
             </button>
           </div>
         )}

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { confirmLatestIntent, interpretIntent } from '@/lib/pipeline/intent'
 import { ModelError } from '@/lib/model/provider'
+import { getOrCreateCandidate } from '@/lib/db/repo'
+import { refreshDetectedLocale } from '@/lib/i18n/candidate'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -24,6 +26,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await interpretIntent(answer)
+    refreshDetectedLocale(getOrCreateCandidate().id)
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof ModelNotConfiguredError) {

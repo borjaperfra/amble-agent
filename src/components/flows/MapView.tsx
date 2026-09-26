@@ -5,6 +5,7 @@ import { useState } from 'react'
 import CapabilityBlock from '@/components/CapabilityBlock'
 import EvidenceDrawer from '@/components/EvidenceDrawer'
 import Header from '@/components/Header'
+import { useT } from '@/components/I18nProvider'
 import type { Capability } from '@/domains/candidate/types'
 import type { MapViewModel } from '@/lib/view'
 import { EvaluationControl } from './EvaluationControl'
@@ -15,6 +16,7 @@ interface MapViewProps {
 }
 
 export default function MapView({ vm }: MapViewProps) {
+  const t = useT()
   const [openCapability, setOpenCapability] = useState<Capability | null>(null)
 
   const hasContent = vm.capabilities.length > 0
@@ -25,20 +27,20 @@ export default function MapView({ vm }: MapViewProps) {
       <main className={styles.page}>
         <section className={styles.intro} aria-labelledby="map-name">
           <div className={styles.introKicker}>
-            <p className="kicker">Your professional map</p>
+            <p className="kicker">{t.map.kicker}</p>
           </div>
           <h1 id="map-name" className={styles.name}>
-            {vm.name ?? 'Your name will appear once your Rep reads a source.'}
+            {vm.name ?? t.map.noName}
           </h1>
           <p className={styles.headline}>
-            {vm.descriptor ?? 'Your Rep is still forming a picture of your work.'}
+            {vm.descriptor ?? t.map.noDescriptor}
           </p>
           <p className={styles.updated}>{vm.updated}</p>
         </section>
 
         <section className={styles.section} aria-labelledby="demonstrates">
           <p id="demonstrates" className={`kicker ${styles.sectionKicker}`}>
-            What your work demonstrates
+            {t.map.demonstrates}
           </p>
           {hasContent ? (
             <div className={styles.blocks}>
@@ -61,7 +63,7 @@ export default function MapView({ vm }: MapViewProps) {
                   <EvaluationControl
                     targetType="capability"
                     targetId={capability.id}
-                    label="Evaluate"
+                    label={t.map.evaluate}
                     verdicts={['ACCURATE', 'PARTIALLY_ACCURATE', 'WRONG', 'UNSUPPORTED']}
                   />
                 </div>
@@ -70,8 +72,8 @@ export default function MapView({ vm }: MapViewProps) {
           ) : (
             <p className={styles.headline}>
               {vm.counts.sources === 0
-                ? 'There is nothing here yet. Give your Rep a source to read and it will start building your map.'
-                : 'Your Rep has read your sources but cannot yet demonstrate any capability from them. That is an honest result — talk to your Rep to go deeper.'}
+                ? t.map.emptyNoSources
+                : t.map.emptyWithSources}
             </p>
           )}
         </section>
@@ -79,7 +81,7 @@ export default function MapView({ vm }: MapViewProps) {
         {vm.distinctive && vm.distinctive.length >= 2 && (
           <section className={styles.distinctive} aria-labelledby="distinctive">
             <p id="distinctive" className="kicker" style={{ marginBottom: 40 }}>
-              Your distinctive profile
+              {t.map.distinctive}
             </p>
             <p className={styles.distinctiveLine}>
               {vm.distinctive.map((name, index) => (
@@ -89,7 +91,7 @@ export default function MapView({ vm }: MapViewProps) {
                       ×
                     </span>
                   )}
-                  {index > 0 && <span className="visually-hidden">combined with </span>}
+                  {index > 0 && <span className="visually-hidden">{t.map.combinedWith}</span>}
                   {name}
                 </span>
               ))}
@@ -100,11 +102,10 @@ export default function MapView({ vm }: MapViewProps) {
         {vm.distinctive === null && hasContent && (
           <section className={styles.distinctive} aria-labelledby="distinctive-empty">
             <p id="distinctive-empty" className="kicker" style={{ marginBottom: 20 }}>
-              Your distinctive profile
+              {t.map.distinctive}
             </p>
             <p className={styles.headline} style={{ textAlign: 'center' }}>
-              I can&apos;t describe what makes your profile distinctive yet — there isn&apos;t
-              enough strong evidence. That&apos;s not a flaw in you; it&apos;s what I know so far.
+              {t.map.distinctiveEmpty}
             </p>
           </section>
         )}
@@ -112,7 +113,7 @@ export default function MapView({ vm }: MapViewProps) {
         {vm.gaps.length > 0 && (
           <section className={styles.section} aria-labelledby="gaps">
             <p id="gaps" className={`kicker ${styles.sectionKicker}`}>
-              Things I don&apos;t know yet
+              {t.map.gaps}
             </p>
             <div className={styles.gaps}>
               {vm.gaps.map((gap) => (
@@ -120,7 +121,7 @@ export default function MapView({ vm }: MapViewProps) {
                   <h3 className={styles.gapName}>{gap.name}</h3>
                   <p className={styles.gapExplanation}>{gap.explanation}</p>
                   <Link href="/onboarding/interview" className={`text-btn ${styles.gapAction}`}>
-                    Talk it through with your Rep →
+                    {t.map.talkItThrough}
                   </Link>
                 </article>
               ))}
@@ -130,20 +131,18 @@ export default function MapView({ vm }: MapViewProps) {
 
         <section className={styles.outro} aria-labelledby="outro">
           <p id="outro" className="kicker">
-            One more thing
+            {t.map.oneMore}
           </p>
           <h2 className={styles.outroTitle}>
-            Tell your Rep what would make something worth your attention.
+            {t.map.outro}
           </h2>
           <div className={styles.outroCta}>
             <Link href="/me/intent" className="btn">
-              Set what I&apos;m listening for →
+              {t.map.setListening}
             </Link>
           </div>
           <p className={styles.privacy}>
-            This map is private. Only you can see it. Built from {vm.counts.claims} extracted
-            claims, {vm.counts.evidence} pieces of evidence and {vm.counts.sources} source
-            {vm.counts.sources === 1 ? '' : 's'} — every one inspectable.
+            {t.map.privacy(vm.counts.claims, vm.counts.evidence, vm.counts.sources)}
           </p>
         </section>
       </main>

@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import InlineEdit from '@/components/InlineEdit'
 import StatusDot from '@/components/StatusDot'
 import VoiceRecorder from '@/components/VoiceRecorder'
+import { useT } from '@/components/I18nProvider'
 import styles from '@/app/me/intent/intent.module.css'
 
 interface IntentGroup {
@@ -24,12 +25,9 @@ interface IntentResponse {
 
 type Phase = 'ask' | 'sending' | 'reveal'
 
-const PROMPT_LEAD = 'One more thing.'
-const PROMPT_QUESTION =
-  'What would have to be true for you to seriously consider leaving your current job?'
-
 export default function IntentFlow() {
   const router = useRouter()
+  const t = useT()
   const [phase, setPhase] = useState<Phase>('ask')
   const [answer, setAnswer] = useState('')
   const [result, setResult] = useState<IntentResponse | null>(null)
@@ -49,7 +47,7 @@ export default function IntentFlow() {
       })
       const data = (await response.json()) as IntentResponse
       if (!response.ok) {
-        setError(data.error ?? "Your intent couldn't be interpreted.")
+        setError(data.error ?? t.intent.interpretFailed)
         setPhase('ask')
         return
       }
@@ -57,7 +55,7 @@ export default function IntentFlow() {
       setEditedGroups(data.groups ?? [])
       setPhase('reveal')
     } catch {
-      setError("Your intent couldn't be sent. It is still here — try again.")
+      setError(t.intent.unsent)
       setPhase('ask')
     }
   }
@@ -98,14 +96,14 @@ export default function IntentFlow() {
         <Header />
         <main className={styles.page}>
           <div className={styles.ask}>
-            <p className="kicker">Your Rep</p>
-            <p className={styles.lead}>{PROMPT_LEAD}</p>
-            <h1 className={styles.question}>{PROMPT_QUESTION}</h1>
+            <p className="kicker">{t.common.yourRep}</p>
+            <p className={styles.lead}>{t.intent.lead}</p>
+            <h1 className={styles.question}>{t.intent.question}</h1>
 
             {phase === 'sending' && (
               <div className={styles.workingArea} role="status">
                 <StatusDot />
-                <span>Reading what matters to you...</span>
+                <span>{t.intent.reading}</span>
               </div>
             )}
 
@@ -116,20 +114,19 @@ export default function IntentFlow() {
             )}
 
             <p className={styles.hint} role="status">
-              Voice is simulated in this build — it doesn&apos;t transcribe. Use the text box
-              below.
+              {t.intent.voiceNotice}
             </p>
 
             <div className={styles.typingAreaIntent}>
               <label className={styles.groupLabel} htmlFor="intent-answer">
-                or type
+                {t.common.orType}
               </label>
               <textarea
                 id="intent-answer"
                 className={styles.answerTextarea}
                 value={answer}
                 rows={5}
-                placeholder="Say it however it comes out. Your Rep will structure it."
+                placeholder={t.intent.placeholder}
                 disabled={phase === 'sending'}
                 onChange={(event) => setAnswer(event.target.value)}
                 onKeyDown={(event) => {
@@ -143,7 +140,7 @@ export default function IntentFlow() {
                   disabled={!answer.trim() || phase === 'sending'}
                   onClick={() => void submit()}
                 >
-                  {phase === 'sending' ? 'Reading what matters to you…' : 'Send'}
+                  {phase === 'sending' ? t.intent.reading : t.common.send}
                 </button>
               </div>
             </div>
@@ -164,12 +161,11 @@ export default function IntentFlow() {
       <Header />
       <main className={styles.page}>
         <div className={styles.reveal}>
-          <p className="kicker">Your Rep</p>
-          <h1 className={styles.revealLead}>&quot;Here&apos;s what I&apos;ll listen for.&quot;</h1>
+          <p className="kicker">{t.common.yourRep}</p>
+          <h1 className={styles.revealLead}>{t.intent.revealLead}</h1>
           {result && !result.structured && (
             <p className={styles.hint}>
-              I couldn&apos;t structure this automatically, so your words are kept exactly. Edit
-              anything below.
+              {t.intent.unstructured}
             </p>
           )}
         </div>
@@ -188,7 +184,7 @@ export default function IntentFlow() {
                   <div key={`${groupIndex}-${valueIndex}`} className={styles.value}>
                     <InlineEdit
                       value={value}
-                      label={`${group.label} value`}
+                      label={t.intent.valueLabel(group.label)}
                       onChange={(next) => updateValue(groupIndex, valueIndex, next)}
                     />
                   </div>
@@ -199,10 +195,10 @@ export default function IntentFlow() {
         </div>
 
         <div className={styles.confirm}>
-          <p className={styles.confirmQuestion}>Does this represent you?</p>
+          <p className={styles.confirmQuestion}>{t.intent.confirmQuestion}</p>
           <div className={styles.confirmActions}>
             <button type="button" className="btn" onClick={() => void confirm()}>
-              Yes, start listening
+              {t.intent.confirm}
             </button>
             <button
               type="button"
@@ -210,11 +206,11 @@ export default function IntentFlow() {
               aria-expanded={hint}
               onClick={() => setHint(true)}
             >
-              Something isn&apos;t right
+              {t.intent.somethingWrong}
             </button>
             {hint && (
               <p className={styles.hint}>
-                Change anything above. Your Rep listens for exactly what you leave here with.
+                {t.intent.changeHint}
               </p>
             )}
           </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useId } from 'react'
+import { useT } from './I18nProvider'
 import styles from './TranscriptReview.module.css'
 
 interface TranscriptReviewProps {
@@ -17,11 +18,12 @@ export default function TranscriptReview({
   onDiscard,
 }: TranscriptReviewProps) {
   const id = useId()
+  const t = useT()
 
   return (
     <div className={styles.wrap}>
       <label className={styles.label} htmlFor={id}>
-        Your answer — edit it if you&rsquo;d like
+        {t.voice.transcriptLabel}
       </label>
       <textarea
         id={id}
@@ -32,10 +34,10 @@ export default function TranscriptReview({
       />
       <div className={styles.actions}>
         <button type="button" className="text-btn" onClick={onDiscard}>
-          Discard
+          {t.voice.discard}
         </button>
         <button type="button" className="btn" onClick={onKeep}>
-          Keep this answer
+          {t.voice.keep}
         </button>
       </div>
     </div>
