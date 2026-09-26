@@ -7,6 +7,7 @@ import {
   createTriage,
   createTriageInputSchema,
   decidePreference,
+  generateTriage,
   getTriageView,
   TriageError,
 } from '@/lib/pipeline/triage'
@@ -16,6 +17,7 @@ export const maxDuration = 300
 
 // GET                                   -> the latest triage (axes hidden until analysed)
 // POST { action: 'create', ...triage }  -> a new triage from given offers
+// POST { action: 'generate' }           -> a new triage designed by the Rep (a model call)
 // POST { action: 'answer', probeId, verdict, conditions?, reason? }
 // POST { action: 'analyse' }            -> propose revealed preferences (a model call)
 // POST { action: 'decide', preferenceId, decision: 'confirmed' | 'rejected' }
@@ -61,6 +63,10 @@ export async function POST(request: Request) {
         const triage = createTriage(parsed.data)
         return NextResponse.json(getTriageView(triage.id), { status: 201 })
       }
+      case 'generate': {
+        const triage = await generateTriage()
+        return NextResponse.json(getTriageView(triage.id), { status: 201 })
+      }
       case 'answer': {
         answerProbe({
           probeId: String(body.probeId ?? ''),
@@ -79,7 +85,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true })
       }
       default:
-        return NextResponse.json({ error: 'action must be create, answer, analyse or decide.' }, { status: 400 })
+        return NextResponse.json({ error: 'action must be create, generate, answer, analyse or decide.' }, { status: 400 })
     }
   } catch (error) {
     return errorResponse(error)

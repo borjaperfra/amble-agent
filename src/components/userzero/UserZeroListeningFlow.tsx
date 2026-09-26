@@ -88,6 +88,9 @@ export default function UserZeroListeningFlow({ vm }: { vm: ListeningVm }) {
                 <Link href="/me/intent" className="text-btn">
                   Change what I&rsquo;m listening for
                 </Link>
+                <Link href="/me/triage" className="text-btn">
+                  Test what you&rsquo;d actually trade →
+                </Link>
               </div>
             </div>
           </div>

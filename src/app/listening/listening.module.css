@@ -64,6 +64,9 @@
 
 .changeIntent {
   margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .repSummary {

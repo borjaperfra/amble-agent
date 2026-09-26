@@ -12,6 +12,7 @@ import {
   insertOfferTriage,
   listCapabilities,
   listCapabilityEvidenceIds,
+  listClaims,
   listEvidence,
   listOfferProbes,
   listRevealedPreferences,
@@ -90,6 +91,98 @@ export function createTriage(input: CreateTriageInput): OfferTriageRow {
     declared: input.declared ?? declaredSnapshot(candidate.id),
     probes: input.probes,
   })
+}
+
+// ── Generation ───────────────────────────────────────────────────────────
+
+const GENERATE_SYSTEM_PROMPT = `You are Amble's triage designer, version 1.
+
+You design a set of job offers that measure what a candidate will actually trade, as opposed to what they say they want. The candidate will answer each offer with yes / yes if / depends / no and a reason.
+
+Design rules:
+- 8 offers. Exactly ONE is the status quo: staying in their current job, described plainly from the evidence. Set "isStatusQuo": true on it and "axes": ["statu quo"].
+- Every other offer crosses AT LEAST TWO of the candidate's declared conditions against each other, so saying yes costs something they claim to want. Never design an offer that is simply good or simply bad.
+- "axes" names the conditions each offer tests (2 to 4 short labels). The candidate will NOT see them.
+- Cover, across the set: money, location / office days, stage, team and budget, autonomy, language or time zone, and the technical ceiling of the role. Test each declared condition at least twice, from different sides.
+- If CONFIRMED or REJECTED revealed preferences exist from an earlier triage, do not re-test what is settled. Aim offers at what is still uncertain, especially rejected proposals.
+- Things marked as inferred by the system are hypotheses: test them.
+- Realistic offers for this person's field and seniority. Salaries in EUR, anchored on the candidate's declared floor and current compensation when known, spread roughly from 30% below to 70% above the floor. Never invent a current salary: if unknown, the status quo "salaryEur" is null.
+- "title": role · company type (invented, no real company names). "description": 1 to 3 short sentences with the concrete conditions. No marketing language.
+- "attributes": the structured conditions, e.g. {"remote": "full"|"hybrid"|"onsite", "onsite_days": 3, "location": "...", "stage": "...", "team": 4, "budget_eur": 300000, "equity_pct": 1, "language": "en", "timezone": "...", "autonomy": "...", "technical_demand": "..."}.
+- Write titles and descriptions in the candidate's language (the language of the evidence and declared intent).
+
+Respond ONLY with JSON: {"probes": [{"title": string, "description": string, "salaryEur": number|null, "attributes": object, "axes": string[], "isStatusQuo": boolean}]}.`
+
+const generatedProbesSchema = z.preprocess(
+  (raw) => {
+    const obj = (raw ?? {}) as Record<string, unknown>
+    const list = Array.isArray(obj.probes) ? obj.probes : []
+    return {
+      probes: list.map((entry) => {
+        const e = (entry ?? {}) as Record<string, unknown>
+        const salary = typeof e.salaryEur === 'number' && Number.isFinite(e.salaryEur) ? Math.round(e.salaryEur) : null
+        return {
+          title: typeof e.title === 'string' ? e.title.trim().slice(0, 200) : '',
+          description: typeof e.description === 'string' ? e.description.trim().slice(0, 1000) : '',
+          salaryEur: salary !== null && salary > 0 ? salary : null,
+          attributes: e.attributes && typeof e.attributes === 'object' && !Array.isArray(e.attributes) ? e.attributes : {},
+          axes: Array.isArray(e.axes) ? e.axes.filter((axis): axis is string => typeof axis === 'string').slice(0, 8) : [],
+          isStatusQuo: e.isStatusQuo === true,
+        }
+      }),
+    }
+  },
+  z.object({ probes: z.array(probeInputSchema) }),
+)
+
+export async function generateTriage(): Promise<OfferTriageRow> {
+  const candidate = getOrCreateCandidate()
+  const latest = getLatestOfferTriage(candidate.id)
+  if (latest && latest.status === 'open') {
+    // Two open triages would split the answers and the baseline between them.
+    throw new TriageError('There is already a triage waiting for your answers. Finish it first.', 409)
+  }
+
+  const declared = declaredSnapshot(candidate.id) ?? latest?.declared ?? null
+  const experience = listClaims(candidate.id)
+    .filter((claim) => claim.claim_type === 'experience')
+    .slice(0, 40)
+    .map((claim) => claim.statement)
+  const capabilities = listCapabilities(candidate.id)
+    .filter((capability) => capability.assessment !== 'NO_EVIDENCE_YET')
+    .map((capability) => ({ name: capability.name, assessment: capability.assessment }))
+  const earlier = latest
+    ? listRevealedPreferences(latest.id)
+        .filter((row) => row.status !== 'proposed')
+        .map((row) => ({ kind: row.kind, statement: row.statement, status: row.status }))
+    : []
+
+  const user = `DECLARED INTENT:\n${declared ?? '(nothing declared yet: test the conditions implied by the evidence)'}\n\nCURRENT AND PAST EXPERIENCE:\n${experience.map((line) => `- ${line}`).join('\n') || '(none)'}\n\nCAPABILITIES:\n${JSON.stringify(capabilities, null, 1)}\n\nREVEALED PREFERENCES FROM THE PREVIOUS TRIAGE:\n${earlier.length > 0 ? JSON.stringify(earlier, null, 1) : '(none)'}`
+
+  // The shape is checked by the same rules as a hand-built triage. One retry,
+  // with the violations fed back, before giving up.
+  let feedback = ''
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, modelRunId } = await runStructuredTask({
+      candidateId: candidate.id,
+      task: 'generate_offer_triage',
+      version: 'v1',
+      system: GENERATE_SYSTEM_PROMPT,
+      user: user + feedback,
+      schema: generatedProbesSchema,
+      temperature: 0.6,
+    })
+    const parsed = createTriageInputSchema.safeParse({
+      method: `Diseñado por Amble (model run ${modelRunId}). El candidato no ve qué eje prueba cada oferta.`,
+      declared,
+      probes: data.probes,
+    })
+    if (parsed.success) return createTriage(parsed.data)
+    feedback = `\n\nYOUR PREVIOUS DESIGN WAS INVALID. Fix exactly these problems:\n${parsed.error.issues
+      .map((issue) => `- ${issue.path.join('.')}: ${issue.message}`)
+      .join('\n')}`
+  }
+  throw new TriageError("I couldn't design a valid set of offers. Nothing has been saved. Try again.", 502)
 }
 
 // ── Views ────────────────────────────────────────────────────────────────
