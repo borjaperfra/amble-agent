@@ -1,4 +1,5 @@
 import { runInTransaction } from '../db/db'
+import { applyRetention, type RetentionStats } from '../db/retention'
 import { now } from '../db/repo'
 import {
   closeMissing,
@@ -6,13 +7,18 @@ import {
   finishSourcingRun,
   listCompanies,
   recordCompanyFetch,
+  clearCompanyBoard,
+  getCompany,
   recordSighting,
+  setCompanyDirectoryInfo,
   startSourcingRun,
   upsertCompany,
   type CompanyRow,
 } from '../db/opportunities'
 import { detectBoard, readAtsBoard, type DetectedBoard } from './ats'
+import { DIRECTORY, type DirectoryEntry } from './directory'
 import { searchTheirStack, theirStackConfigured, type TheirStackQuery } from './theirstack'
+import { normaliseName } from './text'
 import { SourceError, type AtsKind, type RawOpportunity } from './types'
 
 // A read never stalls on one slow board, and never hammers the APIs either.
@@ -25,6 +31,7 @@ export interface SourcingStats {
   created: number
   closed: number
   theirstack: { ran: boolean; returned: number; newCompanies: number } | null
+  retention: RetentionStats | null
   totals: { open: number; closed: number; companies: number }
   errors: { company?: string; source: string; message: string }[]
 }
@@ -55,6 +62,7 @@ export async function runSourcing(options: { theirstack?: TheirStackQuery | null
     created: 0,
     closed: 0,
     theirstack: null,
+    retention: null,
     totals: { open: 0, closed: 0, companies: 0 },
     errors: [],
   }
@@ -110,6 +118,13 @@ export async function runSourcing(options: { theirstack?: TheirStackQuery | null
     }
   }
 
+  // Every read also forgets what is no longer worth keeping (src/lib/db/retention.ts).
+  try {
+    stats.retention = applyRetention()
+  } catch (error) {
+    errors.push({ source: 'retention', message: error instanceof Error ? error.message : 'unknown error' })
+  }
+
   stats.totals = countOpportunities()
   finishSourcingRun(runId, stats, errors)
   return stats
@@ -137,4 +152,61 @@ export async function watchCompany(params: { name: string; careersUrl?: string |
     discoveredVia: params.discoveredVia ?? 'manual',
   })
   return { company, board }
+}
+
+export interface DirectoryStats {
+  entries: number
+  watching: number
+  resolvedNow: string[]
+  unresolved: string[]
+  errors: { company: string; message: string }[]
+}
+
+// Brings the directory into the database. A company whose board is already
+// known is only relabelled; the others are resolved (a pinned board is checked,
+// the rest detected). refresh resolves every entry again.
+export async function syncDirectory(options: { refresh?: boolean; entries?: DirectoryEntry[] } = {}): Promise<DirectoryStats> {
+  const entries = options.entries ?? DIRECTORY
+  const stats: DirectoryStats = { entries: entries.length, watching: 0, resolvedNow: [], unresolved: [], errors: [] }
+  const known = new Map(listCompanies().map((company) => [company.name_norm, company]))
+
+  await pool(entries, async (entry) => {
+    try {
+      let company = known.get(normaliseName(entry.name))
+      if (!company || !company.ats || options.refresh) {
+        if (entry.board) {
+          const jobs = await readAtsBoard(entry.board.ats, entry.board.token, entry.name)
+          if (!jobs && company?.ats) clearCompanyBoard(company.id)
+          company = upsertCompany({
+            name: entry.name,
+            domain: entry.domain,
+            careersUrl: entry.careersUrl ?? null,
+            ats: jobs ? entry.board.ats : null,
+            atsToken: jobs ? entry.board.token : null,
+            status: jobs ? 'watching' : 'unresolved',
+            discoveredVia: company?.discovered_via ?? 'directory',
+          })
+        } else {
+          const result = await watchCompany({
+            name: entry.name,
+            domain: entry.domain,
+            careersUrl: entry.careersUrl ?? `https://${entry.domain}/careers`,
+            discoveredVia: company?.discovered_via ?? 'directory',
+          })
+          company = result.company
+          if (!result.board && company.ats) {
+            clearCompanyBoard(company.id)
+            company = getCompany(company.id) as CompanyRow
+          }
+        }
+        if (company.status === 'watching') stats.resolvedNow.push(entry.name)
+      }
+      setCompanyDirectoryInfo(company.id, entry.segment, Boolean(entry.publicSalary))
+      if (company.status === 'watching') stats.watching++
+      else stats.unresolved.push(entry.name)
+    } catch (error) {
+      stats.errors.push({ company: entry.name, message: error instanceof Error ? error.message : 'unknown error' })
+    }
+  })
+  return stats
 }

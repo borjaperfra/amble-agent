@@ -408,6 +408,12 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'revealed_preferences', 'original_statement', 'TEXT')
   addColumn(db, 'revealed_preferences', 'original_label', 'TEXT')
   addColumn(db, 'revealed_preferences', 'revised_at', 'TEXT')
+
+  // The directory (src/lib/sourcing/directory.ts): whether a company is built in
+  // Spain or hires people there from elsewhere, and whether its offers carry a
+  // salary.
+  addColumn(db, 'companies', 'segment', 'TEXT')
+  addColumn(db, 'companies', 'public_salary', 'INTEGER NOT NULL DEFAULT 0')
 }
 
 export function getDb(): DatabaseSync {

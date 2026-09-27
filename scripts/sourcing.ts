@@ -2,7 +2,9 @@
 // their offers. Meant to be scheduled (cron, Windows Task Scheduler).
 //
 //   npm run sourcing -- watch "Company" [careers-url]   find its board and watch it
-//   npm run sourcing -- run                             read every watched board
+//   npm run sourcing -- directory [--refresh]           watch every company in the directory
+//   npm run sourcing -- run                             read every watched board, then apply retention
+//   npm run sourcing -- prune                           apply retention only (src/lib/db/retention.ts)
 //   npm run sourcing -- status                          companies and offer counts
 //   npm run sourcing -- match [limit]                   judge offers not yet judged (model calls)
 //   npm run sourcing -- listen [limit]                  run, then match: one listening pass
@@ -10,7 +12,8 @@
 
 import { countOpportunities, listCompanies } from '../src/lib/db/opportunities'
 import { getOrCreateCandidate } from '../src/lib/db/repo'
-import { runSourcing, watchCompany } from '../src/lib/sourcing/run'
+import { applyRetention } from '../src/lib/db/retention'
+import { runSourcing, syncDirectory, watchCompany } from '../src/lib/sourcing/run'
 import { listMatchesForKey } from '../src/lib/db/matching'
 import { currentMatchKey, runListening, runMatching } from '../src/lib/matching/run'
 import type { Explanation } from '../src/lib/matching/assess'
@@ -27,6 +30,20 @@ async function main() {
         ? `Watching ${company.name}: ${board.ats}/${board.token}, ${board.openCount} open offers (found via ${board.via}).`
         : `No public board found for ${company.name}. Kept as unresolved; aggregators may still cover it.`,
     )
+    return
+  }
+
+  if (command === 'directory') {
+    const stats = await syncDirectory({ refresh: args.includes('--refresh') })
+    console.log(`${stats.watching}/${stats.entries} directory companies watched (${stats.resolvedNow.length} resolved now).`)
+    if (stats.unresolved.length) console.log(`No public board found: ${stats.unresolved.join(', ')}`)
+    for (const error of stats.errors) console.log(`  ! ${error.company}: ${error.message}`)
+    return
+  }
+
+  if (command === 'prune') {
+    console.log(JSON.stringify(applyRetention(), null, 2))
+    console.log(countOpportunities())
     return
   }
 

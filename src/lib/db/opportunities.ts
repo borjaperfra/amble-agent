@@ -18,6 +18,8 @@ export interface CompanyRow {
   last_fetched_at: string | null
   last_error: string | null
   created_at: string
+  segment: string | null
+  public_salary: number
 }
 
 export interface OpportunityRow {
@@ -90,6 +92,15 @@ export function upsertCompany(params: {
     now(),
   )
   return getCompany(id) as CompanyRow
+}
+
+// upsertCompany never forgets a board; a refresh that no longer finds one does.
+export function clearCompanyBoard(id: string): void {
+  getDb().prepare("UPDATE companies SET ats = NULL, ats_token = NULL, status = 'unresolved' WHERE id = ? AND status != 'ignored'").run(id)
+}
+
+export function setCompanyDirectoryInfo(id: string, segment: string, publicSalary: boolean): void {
+  getDb().prepare('UPDATE companies SET segment = ?, public_salary = ? WHERE id = ?').run(segment, publicSalary ? 1 : 0, id)
 }
 
 export function listCompanies(status?: CompanyStatus): CompanyRow[] {
