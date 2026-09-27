@@ -131,8 +131,18 @@ export function listMatches(candidateId: string, verdict?: MatchVerdict): (Match
 // filter or a role-fit judgment was wrong.
 export type MatchResponse = 'interested' | 'not_for_me' | 'wanted_anyway'
 
+// An answer is about the role, so it reaches every city's posting judged with
+// it (same model run, same profile).
 export function respondToMatch(id: string, response: MatchResponse, reason: string | null): void {
   getDb()
-    .prepare('UPDATE opportunity_matches SET response = ?, response_reason = ?, responded_at = ? WHERE id = ?')
-    .run(response, reason, now(), id)
+    .prepare(
+      `UPDATE opportunity_matches SET response = ?, response_reason = ?, responded_at = ?
+       WHERE id = ? OR id IN (
+         SELECT sibling.id FROM opportunity_matches m
+         JOIN opportunity_matches sibling
+           ON sibling.model_run_id = m.model_run_id AND sibling.profile_hash = m.profile_hash AND sibling.candidate_id = m.candidate_id
+         WHERE m.id = ? AND m.model_run_id IS NOT NULL
+       )`,
+    )
+    .run(response, reason, now(), id, id)
 }

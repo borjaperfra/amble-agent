@@ -8,7 +8,7 @@ import { buildMatchingProfile } from './profile'
 import { EUROPE } from './places'
 import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
 
-// Each assessment is a model call. A run judges at most this many new offers;
+// Each assessment is a model call. A run judges at most this many new roles;
 // the rest wait for the next run, newest first.
 const DEFAULT_LIMIT = 25
 const CONCURRENCY = 3
@@ -20,6 +20,8 @@ export interface MatchingStats {
   prefilterOut: Record<string, number>
   alreadyAssessed: number
   assessedNow: number
+  // Offers judged together with another city's posting of the same role.
+  sharedAssessments: number
   verdicts: Record<MatchVerdict, number>
   waiting: number
   errors: { opportunity: string; message: string }[]
@@ -44,6 +46,7 @@ export async function runMatching(options: { limit?: number } = {}): Promise<Mat
     prefilterOut: {},
     alreadyAssessed: 0,
     assessedNow: 0,
+    sharedAssessments: 0,
     verdicts: { show: 0, hold: 0, discarded: 0 },
     waiting: 0,
     errors: [],
@@ -71,30 +74,48 @@ export async function runMatching(options: { limit?: number } = {}): Promise<Mat
     (a, b) =>
       hasSalary(b) - hasSalary(a) || (b.posted_at ?? b.first_seen_at).localeCompare(a.posted_at ?? a.first_seen_at),
   )
-  const batch = pending.slice(0, options.limit ?? DEFAULT_LIMIT)
-  stats.waiting = pending.length - batch.length
+  // One role posted in several cities is one judgment: the model reads it once,
+  // with every city, and the verdict is kept on each posting. The shared model
+  // run marks them as one role on the screen. Remote and on-site postings of a
+  // title are different jobs, so the way of working is part of the role.
+  const roles = new Map<string, typeof pending>()
+  for (const opportunity of pending) {
+    const key = `${opportunity.company_id}|${opportunity.title_norm}|${opportunity.workplace ?? ''}`
+    roles.set(key, [...(roles.get(key) ?? []), opportunity])
+  }
+  const batch = [...roles.values()].slice(0, options.limit ?? DEFAULT_LIMIT)
+  stats.waiting = pending.length - batch.reduce((sum, postings) => sum + postings.length, 0)
 
   const queue = [...batch]
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
-      for (let opportunity = queue.shift(); opportunity; opportunity = queue.shift()) {
+      for (let postings = queue.shift(); postings; postings = queue.shift()) {
+        const [first] = postings
+        const opportunity = {
+          ...first,
+          location: [...new Set(postings.map((posting) => posting.location).filter(Boolean))].join(' · ') || null,
+          description: first.description ?? postings.find((posting) => posting.description)?.description ?? null,
+        }
         try {
           const assessment = await assessOpportunity({ candidateId: candidate.id, opportunity, profile })
-          insertMatch({
-            candidateId: candidate.id,
-            opportunityId: opportunity.id,
-            profileHash: matchKey,
-            verdict: assessment.verdict,
-            gates: assessment.gates,
-            explanation: assessment.explanation,
-            dropped: assessment.dropped,
-            modelRunId: assessment.modelRunId,
-          })
+          for (const posting of postings) {
+            insertMatch({
+              candidateId: candidate.id,
+              opportunityId: posting.id,
+              profileHash: matchKey,
+              verdict: assessment.verdict,
+              gates: assessment.gates,
+              explanation: assessment.explanation,
+              dropped: assessment.dropped,
+              modelRunId: assessment.modelRunId,
+            })
+          }
           stats.assessedNow++
+          stats.sharedAssessments += postings.length - 1
           stats.verdicts[assessment.verdict]++
         } catch (error) {
           stats.errors.push({
-            opportunity: `${opportunity.company_name} · ${opportunity.title}`,
+            opportunity: `${first.company_name} · ${first.title}`,
             message: error instanceof Error ? error.message : 'unknown error',
           })
         }

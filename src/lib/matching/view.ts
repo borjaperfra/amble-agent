@@ -1,5 +1,5 @@
 import { getOrCreateCandidate, listCapabilities, listConfirmedPreferences } from '../db/repo'
-import { listMatchesForKey, type MatchListing, type MatchResponse } from '../db/matching'
+import { listMatchesForKey, type MatchListing, type MatchResponse, type MatchRow } from '../db/matching'
 import type { Explanation, Gate, RoleFit } from './assess'
 import { currentMatchKey } from './run'
 
@@ -58,9 +58,26 @@ function salaryText(match: MatchListing): string | null {
   return `${range} ${match.salary_currency ?? ''}`.trim()
 }
 
+// Postings of one role in several cities were judged together (one model run):
+// the screen shows the role once, with every city. The link and the state are
+// those of a posting still open, if any is.
+function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchListing)[] {
+  const roles = new Map<string, (MatchRow & MatchListing)[]>()
+  for (const match of matches) {
+    const key = match.model_run_id ? `${match.model_run_id}|${match.title}` : match.id
+    roles.set(key, [...(roles.get(key) ?? []), match])
+  }
+  return [...roles.values()].map((postings) => {
+    const lead = postings.find((posting) => !posting.closed_at) ?? postings[0]
+    const open = postings.filter((posting) => !posting.closed_at)
+    const places = [...new Set((open.length ? open : postings).map((posting) => posting.location).filter(Boolean))]
+    return { ...lead, location: places.join(' · ') || null }
+  })
+}
+
 export function getOpportunitiesView(): OpportunitiesView {
   const candidate = getOrCreateCandidate()
-  const matches = listMatchesForKey(candidate.id, currentMatchKey(candidate.id))
+  const matches = collapseRoles(listMatchesForKey(candidate.id, currentMatchKey(candidate.id)))
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map(listConfirmedPreferences(candidate.id).map((row) => [row.id, row.label ?? row.statement]))
 
