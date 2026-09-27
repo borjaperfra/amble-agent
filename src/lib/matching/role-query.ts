@@ -3,6 +3,7 @@ import { getRoleQuery, insertRoleQuery } from '../db/matching'
 import type { OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import { normaliseTitle } from '../sourcing/text'
+import { EUROPE, placeMatches, placeOf, remoteOutsideEurope } from './places'
 import type { MatchingProfile } from './profile'
 
 // The role query turns the profile into a free, deterministic prefilter: most
@@ -195,13 +196,27 @@ export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location'
   }
 
   const segments = locationSegments(opportunity.location)
+  // "Remote - US" is one place, the US: the way of working is not a place.
+  const places = segments.map(placeOf).filter((place): place is string => place !== null)
   // Out only if every listed place is excluded: one acceptable place keeps it.
   if (
-    segments.length > 0 &&
+    places.length > 0 &&
     query.locationExclude.length > 0 &&
-    segments.every((segment) => query.locationExclude.some((term) => containsTerm(segment, term)))
+    places.every((place) => query.locationExclude.some((term) => placeMatches(place, term)))
   ) {
     return { pass: false, reason: 'location' }
+  }
+
+  // Domain rule: remote work tied to a place outside the candidate's region is
+  // not open to them, whatever they prefer ("Remote - India" for someone in
+  // Madrid). Not a preference, so no confirmed rule is needed. Every segment
+  // must be so tied: a bare "Remote" among them leaves it to the model. Only
+  // for Europe, the region the rule knows.
+  const remote = opportunity.workplace === 'remote' || segments.some((segment) => /\b(remote|remoto)\b/.test(segment))
+  // Listed places only: "Remote - India" is one place, not "Remote" and "India".
+  const listed = (opportunity.location ?? '').split(/[·;|/•]/).filter((item) => item.trim())
+  if (remote && query.homeCountry && EUROPE.includes(query.homeCountry) && listed.length > 0 && listed.every(remoteOutsideEurope)) {
+    return { pass: false, reason: 'region' }
   }
 
   if (query.requireRemote && (opportunity.workplace === 'onsite' || opportunity.workplace === 'hybrid')) {

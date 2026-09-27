@@ -5,6 +5,7 @@ import { runSourcing, type SourcingStats } from '../sourcing/run'
 import type { TheirStackQuery } from '../sourcing/theirstack'
 import { ASSESS_VERSION, assessOpportunity } from './assess'
 import { buildMatchingProfile } from './profile'
+import { EUROPE } from './places'
 import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
 
 // Each assessment is a model call. A run judges at most this many new offers;
@@ -150,12 +151,6 @@ const NOT_EMPLOYMENT = [
   'p iva',
   'becario',
   'practicas',
-]
-
-// EU and EEA, the UK and Switzerland.
-const EUROPE = [
-  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
-  'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
 ]
 
 // Country names as they appear (normalised) in role-query location terms.
