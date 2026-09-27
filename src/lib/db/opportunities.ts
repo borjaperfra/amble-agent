@@ -264,6 +264,14 @@ export function startSourcingRun(): string {
   return id
 }
 
+// When the aggregator was last searched, whatever it returned.
+export function lastTheirStackSearchAt(): string | null {
+  const row = getDb()
+    .prepare("SELECT started_at FROM sourcing_runs WHERE json_extract(stats, '$.theirstack.ran') = 1 ORDER BY started_at DESC LIMIT 1")
+    .get() as { started_at: string } | undefined
+  return row?.started_at ?? null
+}
+
 export function finishSourcingRun(id: string, stats: unknown, errors: unknown[]): void {
   getDb()
     .prepare('UPDATE sourcing_runs SET finished_at = ?, stats = ?, errors = ? WHERE id = ?')

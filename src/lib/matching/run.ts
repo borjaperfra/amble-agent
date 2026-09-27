@@ -1,6 +1,6 @@
 import { getOrCreateCandidate } from '../db/repo'
 import { assessedOpportunityIds, insertMatch, type MatchVerdict } from '../db/matching'
-import { listOpenOpportunities } from '../db/opportunities'
+import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
 import { runSourcing, type SourcingStats } from '../sourcing/run'
 import type { TheirStackQuery } from '../sourcing/theirstack'
 import { ASSESS_VERSION, assessOpportunity } from './assess'
@@ -193,11 +193,17 @@ const COUNTRY_CODES: Record<string, string> = {
   france: 'FR',
 }
 
+// Boards are free and read on every pass; the aggregator costs a credit per
+// offer and its search already spans two weeks, so it runs once a day.
+const THEIRSTACK_EVERY_HOURS = 20
+
 // One listening pass: read the sources, then judge what is new.
 export async function runListening(options: { limit?: number } = {}): Promise<{ sourcing: SourcingStats; matching: MatchingStats }> {
   const candidate = getOrCreateCandidate()
   const query = await roleQueryFor(candidate.id, buildMatchingProfile(candidate.id))
-  const sourcing = await runSourcing({ theirstack: theirStackQueryFrom(query) })
+  const last = lastTheirStackSearchAt()
+  const aggregatorDue = !last || Date.now() - Date.parse(last) >= THEIRSTACK_EVERY_HOURS * 60 * 60 * 1000
+  const sourcing = await runSourcing({ theirstack: aggregatorDue ? theirStackQueryFrom(query) : null })
   const matching = await runMatching(options)
   return { sourcing, matching }
 }
