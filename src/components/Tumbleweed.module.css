@@ -1,0 +1,51 @@
+/* Rolls along the bottom edge of its parent, which clips it at the sides. */
+
+.roll {
+  position: absolute;
+  left: 0;
+  bottom: 1px;
+  color: var(--moss-soft);
+  opacity: 0.85;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
+  transform: translate3d(-40px, 0, 0);
+  transition: opacity var(--motion-fast) ease;
+}
+
+.roll:hover {
+  opacity: 1;
+}
+
+.squash {
+  display: block;
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
+
+.body {
+  display: block;
+  width: 40px;
+  height: 40px;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.body svg {
+  display: block;
+}
+
+/* Its shadow on the line: wider when it lands, faint when it hops. */
+.shadow {
+  position: absolute;
+  left: 4px;
+  bottom: -2px;
+  width: 32px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.35);
+  filter: blur(2px);
+  opacity: 0;
+  will-change: transform, opacity;
+}

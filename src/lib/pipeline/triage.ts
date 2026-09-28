@@ -352,7 +352,7 @@ const analysisOutputSchema = z.preprocess(
   }),
 )
 
-const ANALYSIS_SYSTEM_PROMPT = `You are Amble's revealed-intent analyst, version 3.
+const ANALYSIS_SYSTEM_PROMPT = `You are Amble's revealed-intent analyst, version 4.
 
 The candidate answered a set of job offers. Each offer deliberately crossed two or more of their declared conditions, so every answer was a trade-off. Their literal reasons are the evidence. Your job is to state what their answers REVEAL, and where that differs from what they DECLARED.
 
@@ -379,7 +379,7 @@ Rules:
 - The status-quo offer is the baseline; use it.
 - A "no" with a literal reason defines a boundary; a "yes" only confirms. Weigh them accordingly.
 - Do not restate each answer. Find the few things that change how an agent should filter offers for this person. 4 to 10 preferences.
-- "label": the same preference in at most 6 words, as the Rep would list it among what it listens for (e.g. "Remote, or close to it", "Not below 75K", "No code review"). Same language as the statement, which is the output language.
+- "label": the preference as it stands now, in at most 6 words, written as the candidate would write it on a list of their conditions (e.g. "Minimum salary: 75K", "Remote, or 1–2 days in Valencia", "Writing or reviewing code", "Offers in English"). A plain fact, never the story of how it was found: no "real", "actual", "declared", "unconfirmed", no "not X" correcting an earlier figure, no comparison with what they said before. That story belongs in the statement. Same language as the statement, which is the output language.
 - Write statements in second person, plain.
 
 Respond ONLY with JSON: {"preferences": [{"kind": string, "statement": string, "label": string, "declared": string|null, "offers": number[], "quote": string|null}]}.`
@@ -464,7 +464,7 @@ export async function analyseTriage(candidateId: string, triageId?: string): Pro
   const { data, modelRunId } = await runStructuredTask({
     candidateId: candidate.id,
     task: 'analyse_offer_triage',
-    version: 'v3',
+    version: 'v4',
     system: ANALYSIS_SYSTEM_PROMPT,
     user: `DECLARED BEFORE THE TRIAGE:\n${triage.declared ?? '(nothing on record)'}\n\nCAPABILITIES (from the evidence graph):\n${JSON.stringify(capabilities, null, 1)}\n\nCOMPENSATION SIGNALS (computed):\n${JSON.stringify(compensationSignals(probes), null, 1)}\n\nOFFERS AND ANSWERS:\n${JSON.stringify(offers, null, 1)}`,
     schema: analysisOutputSchema,

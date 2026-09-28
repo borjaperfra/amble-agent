@@ -43,6 +43,27 @@ export interface DiscardedOpportunity {
   response: MatchResponse | null
 }
 
+// What the Rep read in the last week, for the listening screen: a few of
+// them, each with its verdict, so the work is visible as judgment, not as
+// activity. What passed comes first.
+export interface WeekEntry {
+  id: string
+  company: string
+  title: string
+  status: 'found' | 'maybe' | 'aside'
+  reason: DiscardReason | null
+}
+
+export interface WeekLedger {
+  read: number
+  worth: number
+  entries: WeekEntry[]
+}
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+const WEEK_ENTRIES = 6
+const WEEK_FOUND_FIRST = 3
+
 export interface OpportunitiesView {
   // Roles that fit: the only ones that interrupt the candidate.
   found: FoundOpportunity[]
@@ -52,6 +73,7 @@ export interface OpportunitiesView {
   discarded: DiscardedOpportunity[]
   // Shown, open and not yet answered: what makes Listening say "I found something".
   unseen: number
+  week: WeekLedger
 }
 
 function salaryText(match: MatchListing): string | null {
@@ -86,10 +108,15 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
 
   const found: FoundOpportunity[] = []
   const discarded: DiscardedOpportunity[] = []
+  const since = Date.now() - WEEK_MS
+  const week: (WeekEntry & { at: string })[] = []
+  let read = 0
 
   for (const match of matches) {
     const explanation = JSON.parse(match.explanation) as Explanation
     const response = match.response as MatchResponse | null
+    const thisWeek = Date.parse(match.created_at) >= since
+    if (thisWeek) read++
 
     if (match.verdict === 'show') {
       found.push({
@@ -112,6 +139,10 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
         unknowns: explanation.unknowns,
         response,
       })
+      if (thisWeek && !match.closed_at) {
+        const status = explanation.roleFit.fit === 'fits' ? 'found' : 'maybe'
+        week.push({ id: match.id, company: match.company_name, title: match.title, status, reason: null, at: match.created_at })
+      }
       continue
     }
 
@@ -130,7 +161,15 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     }
     if (reasons.length === 0) reasons.push({ kind: 'no_reason' })
     discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response })
+    if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason: reasons[0], at: match.created_at })
   }
+
+  const newest = (a: { at: string }, b: { at: string }) => b.at.localeCompare(a.at)
+  const passed = week.filter((entry) => entry.status === 'found').sort(newest).slice(0, WEEK_FOUND_FIRST)
+  const rest = week.filter((entry) => !passed.includes(entry)).sort(newest)
+  const entries = [...passed, ...rest]
+    .slice(0, WEEK_ENTRIES)
+    .map((entry) => ({ id: entry.id, company: entry.company, title: entry.title, status: entry.status, reason: entry.reason }))
 
   // Unanswered first; within that, offers that publish a salary (the candidate
   // asked for them first); then newest, as the query already orders.
@@ -144,5 +183,6 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     maybe,
     discarded,
     unseen: fits.filter((item) => !item.closed && item.response === null).length,
+    week: { read, worth: week.filter((entry) => entry.status === 'found').length, entries },
   }
 }

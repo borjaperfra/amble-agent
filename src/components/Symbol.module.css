@@ -11,8 +11,10 @@
   fill: currentColor;
 }
 
+/* The iris is the Rep. On a dark ground a surface sets --symbol-iris, as on
+   amble-web. */
 .dot {
-  fill: var(--moss);
+  fill: var(--symbol-iris, var(--moss));
   transform-origin: 24.6px 27.4px;
 }
 

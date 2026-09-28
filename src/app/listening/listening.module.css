@@ -1,153 +1,399 @@
+/* The listening home. The one moment of colour in the product, as on
+   amble-web: moss, full bleed, the eye awake, and almost nothing to read.
+   Below it, on paper, what was read this week. */
+
 .page {
-  max-width: var(--conversation-max);
-  margin: 0 auto;
-  padding: 24px var(--page-pad) 64px;
-  min-height: calc(100svh - 72px);
+  padding-bottom: 96px;
+}
+
+.moment {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  padding: 96px var(--page-pad) 88px;
+  text-align: center;
+  color: var(--paper-light);
+  background: var(--moss-dark);
+  /* The iris on moss: the soft moss, so the dot still reads as the Rep. */
+  --symbol-iris: var(--moss-soft);
 }
 
 .eye {
-  color: var(--ink);
-}
-
-.center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 32px;
-  padding: 48px 0;
+  color: var(--paper-light);
 }
 
 .arriving {
-  animation: enter 600ms var(--ease-standard) both;
-}
-
-.arrivingLine {
+  margin-top: 40px;
   font-family: var(--font-display);
   font-size: var(--heading-lg);
-  font-weight: 400;
-  letter-spacing: -0.015em;
+  animation: rise var(--motion-arrive) var(--ease-standard) 0.9s both;
 }
 
-.statusLine {
-  font-family: var(--font-display);
-  font-size: var(--heading-lg);
-  font-weight: 400;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
-  max-width: 24ch;
-}
-
-.listeningFor {
+.say {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  animation: rise var(--motion-arrive) var(--ease-standard) both;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
   gap: 10px;
+  margin-top: 40px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--moss-soft);
+}
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--moss-soft);
+  animation: pulse var(--motion-breath) ease-in-out infinite;
+}
+
+.title {
+  margin-top: 16px;
+  font-family: var(--font-display);
+  font-size: var(--heading-xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.line {
+  margin-top: 10px;
+  font-size: var(--text-body);
+  color: var(--moss-soft);
+}
+
+/* On moss the primary button turns to paper. */
+.seeIt {
+  margin-top: 28px;
+  color: var(--ink);
+  background: var(--paper-light);
+  border-color: var(--paper-light);
+}
+
+.seeIt:hover:not(:disabled) {
+  background: var(--paper);
+  border-color: var(--paper);
+}
+
+/* The horizon under "still listening": a line, and now and then a tumbleweed
+   rolling along it, the way a quiet road looks. Tall enough for its hops. */
+.horizon {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  height: 64px;
+  margin-top: 4px;
+  border-bottom: 1px solid rgb(250 248 243 / 0.16);
+  /* Cut at the sides, where it comes and goes; free above, where it jumps. */
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* What it listens for: a title, then each group as a column with its own
+   small heading above what it holds. */
+.for {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 36px;
+}
+
+.forTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.learnedNote {
+  margin-top: 6px;
+  font-size: var(--text-body-sm);
+  color: var(--moss-soft);
+}
+
+.groups {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 32px 48px;
+  margin-top: 40px;
+  text-align: left;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Each group named like a small heading, a step below the section title. */
+.groupTitle {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--moss-soft);
+}
+
+/* The two group headings are underlined, like headings in a notebook. */
+.group .groupTitle {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgb(221 227 216 / 0.55);
+  text-underline-offset: 6px;
+}
+
+.groupItems {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.condition {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
+.condition .mark {
+  transform: translateY(-1px);
+}
+
+.mark {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--moss-soft);
+  box-shadow: 0 0 0 3px rgb(221 227 216 / 0.22);
+}
+
+/* What does not decide: set apart below, quieter. */
+.notFiltering {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid rgb(250 248 243 / 0.12);
+  text-align: left;
+}
+
+.notFilteringItems {
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: rgb(250 248 243 / 0.78);
+}
+
+.nothing {
+  margin-top: 16px;
+  font-size: var(--text-body-sm);
+  color: rgb(250 248 243 / 0.62);
+  text-wrap: balance;
+}
+
+/* A real button, in paper on moss: the one thing to do here. */
+.change {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin-top: 40px;
+  padding: 0 20px;
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--paper-light);
+  text-decoration: none;
+  border: 1px solid rgb(250 248 243 / 0.45);
+  border-radius: var(--radius-md);
+  transition:
+    background var(--motion-default) ease,
+    border-color var(--motion-default) ease,
+    color var(--motion-default) ease;
+}
+
+.change:hover {
+  color: var(--ink);
+  background: var(--paper-light);
+  border-color: var(--paper-light);
+}
+
+/* This week, on paper. */
+.week {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 72px var(--page-pad) 0;
+  box-sizing: content-box;
+}
+
+.tally {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   margin-top: 16px;
 }
 
-.listeningForValues {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+.tallyNumber {
+  font-family: var(--font-display);
+  font-size: var(--display-lg);
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
-.listeningForValue {
-  font-size: var(--text-body-lg);
+.tallyText {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.rows {
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--paper-light);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  text-decoration: none;
   color: var(--ink);
 }
 
-.revealed {
+.rowMain {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  margin-top: 28px;
+  min-width: 0;
 }
 
-.revealedGroup {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.revealedLabel {
+.rowTitle {
   font-size: var(--text-body-sm);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowCompany {
+  font-size: 13px;
   color: var(--ink-tertiary);
 }
 
-.revealedMuted {
+.rowReason {
+  flex: none;
+  max-width: 45%;
+  font-size: 13px;
+  color: var(--clay);
+  text-align: right;
+}
+
+/* Set aside: crossed out, the reason beside it. */
+.rowAside .rowTitle {
+  color: var(--ink-tertiary);
+  text-decoration: line-through;
+  text-decoration-color: var(--border);
+}
+
+.rowMaybe .rowReason {
+  color: var(--ink-tertiary);
+}
+
+/* What passed: the one row with colour, and a way to it. */
+.rowFound {
+  background: var(--moss-wash);
+  border-color: var(--moss);
+  transition: background var(--motion-fast) ease;
+}
+
+.rowFound:hover {
+  background: var(--moss-soft);
+}
+
+.rowPassed {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: var(--paper-light);
+  background: var(--moss-dark);
+  border-radius: 50%;
+}
+
+.seeAll {
+  margin-top: 12px;
+  font-size: var(--text-body-sm);
+}
+
+.weekEmpty {
+  margin-top: 12px;
   font-size: var(--text-body);
-  color: var(--ink-tertiary);
-}
-
-.found {
-  margin: 32px auto 0;
-  max-width: var(--conversation-max);
-  padding: 28px 0 32px;
-  border-bottom: 1px solid var(--border-soft);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
-  animation: enter var(--motion-slow) var(--ease-standard) both;
-}
-
-.foundTitle {
-  font-family: var(--font-display);
-  font-size: var(--heading-md);
-}
-
-.foundLead {
   color: var(--ink-secondary);
-  margin-bottom: 8px;
 }
 
-.changeIntent {
-  margin-top: 8px;
+/* Your Rep, in one line at the foot. */
+.rep {
+  max-width: 560px;
+  margin: 64px auto 0;
+  padding: 24px var(--page-pad) 0;
+  box-sizing: content-box;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.repSummary {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
   border-top: 1px solid var(--border-soft);
-  padding: 40px 0 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
 }
 
 .repLabel {
   font-family: var(--font-display);
-  font-size: var(--heading-md);
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  margin-bottom: 6px;
-}
-
-.repCount {
-  font-size: var(--text-body);
-  color: var(--ink-secondary);
+  font-size: var(--heading-sm);
+  color: var(--ink);
+  margin-right: 6px;
 }
 
 .repLink {
-  margin-top: 16px;
-  margin-left: -4px;
+  margin-left: auto;
+  color: var(--ink-secondary);
+  text-underline-offset: 3px;
 }
 
-@keyframes enter {
+.repLink:hover {
+  color: var(--ink);
+}
+
+@keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -155,8 +401,47 @@
   }
 }
 
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+@media (max-width: 560px) {
+  .moment {
+    padding: 64px 20px 56px;
+  }
+
+  .groups {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .rowReason {
+    max-width: none;
+    text-align: left;
+  }
+
+  .repLink {
+    margin-left: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .arriving {
+  .arriving,
+  .say,
+  .pulse {
     animation: none;
   }
 }

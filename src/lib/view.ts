@@ -17,7 +17,7 @@ import {
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
-import { getOpportunitiesView } from './matching/view'
+import { getOpportunitiesView, type WeekLedger } from './matching/view'
 import { dictionaries, type Dictionary } from './i18n/dictionaries'
 import type { Locale } from './i18n/locale'
 
@@ -167,10 +167,12 @@ export function getListeningViewModel(candidateId: string): {
   revealed: ListeningProfile['revealed']
   pendingReview: number
   unseenOpportunities: number
+  week: WeekLedger
 } {
   const candidate = candidateById(candidateId)
   const intent = getLatestIntent(candidate.id)
   const profile = getListeningProfile(candidate.id)
+  const opportunities = getOpportunitiesView(candidate.id)
   return {
     evidenceCount: listEvidence(candidate.id).length,
     capabilitiesCount: listCapabilities(candidate.id).length,
@@ -179,7 +181,8 @@ export function getListeningViewModel(candidateId: string): {
     intentConfirmed: profile.declared.confirmed,
     revealed: profile.revealed,
     pendingReview: profile.pendingReview,
-    unseenOpportunities: getOpportunitiesView(candidate.id).unseen,
+    unseenOpportunities: opportunities.unseen,
+    week: opportunities.week,
   }
 }
 
