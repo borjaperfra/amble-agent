@@ -18,7 +18,20 @@ export interface CandidateRow {
   descriptor_grounded: number
   locale: string | null
   locale_source: string | null
+  email: string | null
+  role: 'owner' | 'member'
   created_at: string
+}
+
+export function getCandidateByEmail(email: string): CandidateRow | undefined {
+  return getDb().prepare('SELECT * FROM candidates WHERE email = ?').get(email) as unknown as CandidateRow | undefined
+}
+
+// The owner's account signs in with this email.
+export function setOwnerEmail(email: string): CandidateRow {
+  const owner = getOrCreateCandidate()
+  getDb().prepare("UPDATE candidates SET email = ?, role = 'owner' WHERE id = ?").run(email, owner.id)
+  return getOrCreateCandidate()
 }
 
 export function setCandidateLocale(id: string, locale: string, source: 'chosen' | 'detected'): void {

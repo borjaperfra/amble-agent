@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { requireCandidate } from '@/lib/auth/session'
+import { isOwner, requireCandidate } from '@/lib/auth/session'
 import { getDevTrace } from '@/lib/view'
 import styles from './trace.module.css'
 
@@ -15,7 +15,7 @@ function Count({ label, value }: { label: string; value: number }) {
 }
 
 export default async function DevTrace() {
-  if (process.env.NODE_ENV === 'production') notFound()
+  if (process.env.NODE_ENV === 'production' || !(await isOwner())) notFound()
   const trace = getDevTrace((await requireCandidate()).id)
 
   return (

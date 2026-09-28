@@ -27,6 +27,12 @@ export default function Header({ right }: HeaderProps) {
     { href: '/opportunities', label: t.opportunities.nav },
   ]
 
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
+    router.replace('/login')
+    router.refresh()
+  }
+
   async function switchLanguage() {
     setSwitching(true)
     try {
@@ -69,6 +75,11 @@ export default function Header({ right }: HeaderProps) {
         )}
         <div className={styles.right}>
           {right}
+          {showNav && (
+            <button type="button" className={styles.language} onClick={() => void signOut()}>
+              {t.login.signOut}
+            </button>
+          )}
           <button
             type="button"
             className={styles.language}

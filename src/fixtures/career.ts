@@ -24,6 +24,8 @@ export const exampleCandidate: CandidateRow = {
   descriptor_grounded: 1,
   locale: 'es',
   locale_source: 'chosen',
+  email: null,
+  role: 'member',
   created_at: T,
 }
 

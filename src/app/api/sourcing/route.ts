@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isOwner } from '@/lib/auth/session'
 import { countOpportunities, listCompanies } from '@/lib/db/opportunities'
 import { runSourcing, watchCompany } from '@/lib/sourcing/run'
 import { theirStackConfigured } from '@/lib/sourcing/theirstack'
@@ -9,8 +10,11 @@ export const maxDuration = 300
 // GET                                            -> watched companies and offer counts
 // POST { action: 'watch', name, careersUrl? }    -> find a company's board and watch it
 // POST { action: 'run' }                         -> read every watched board now
+//
+// The owner's tools: for anyone else there is nothing here.
 
 export async function GET() {
+  if (!(await isOwner())) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
   return NextResponse.json({
     totals: countOpportunities(),
     theirstack: theirStackConfigured(),
@@ -27,6 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!(await isOwner())) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
   const body = (await request.json().catch(() => ({}))) as { action?: string; name?: string; careersUrl?: string }
   try {
     if (body.action === 'watch') {

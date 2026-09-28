@@ -340,6 +340,28 @@ function createDb(): DatabaseSync {
       UNIQUE (opportunity_id, profile_hash)
     );
 
+    -- Signing in: a one-time code sent by email, then a session. Neither the
+    -- code nor the session token is stored, only their hashes.
+    CREATE TABLE IF NOT EXISTS login_codes (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS login_codes_email ON login_codes (email, created_at);
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS sessions_candidate ON sessions (candidate_id);
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 
@@ -414,6 +436,12 @@ function migrate(db: DatabaseSync): void {
   // salary.
   addColumn(db, 'companies', 'segment', 'TEXT')
   addColumn(db, 'companies', 'public_salary', 'INTEGER NOT NULL DEFAULT 0')
+
+  // Accounts: the email a candidate signs in with, and whether they own the
+  // installation (the sourcing tools and the trace are theirs alone).
+  addColumn(db, 'candidates', 'email', 'TEXT')
+  addColumn(db, 'candidates', 'role', "TEXT NOT NULL DEFAULT 'member'")
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS candidates_email ON candidates (email) WHERE email IS NOT NULL')
 }
 
 export function getDb(): DatabaseSync {

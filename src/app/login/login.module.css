@@ -1,0 +1,85 @@
+.page {
+  max-width: var(--conversation-max);
+  margin: 0 auto;
+  padding: 40px var(--page-pad) 96px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--heading-xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 48px;
+}
+
+.lead {
+  margin-top: 20px;
+  font-size: var(--text-body-lg);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 44ch;
+}
+
+.form {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.label {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.input {
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  height: 48px;
+  padding: 0 14px;
+  transition: border-color var(--motion-fast) ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px var(--moss-wash);
+}
+
+.code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+  font-size: var(--heading-sm);
+}
+
+.actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+.error {
+  margin-top: 8px;
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  color: var(--clay);
+}
+
+.beta {
+  margin-top: 64px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.beta a {
+  color: var(--moss-dark);
+}

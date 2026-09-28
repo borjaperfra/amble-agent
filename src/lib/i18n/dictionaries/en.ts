@@ -212,6 +212,33 @@ export const en = {
   },
   // Text the server writes for the candidate without the model: source
   // statuses, graph entries the Rep adds on its own, errors that reach a screen.
+  login: {
+    title: 'Sign in to Amble',
+    lead: 'I’ll email you a code. No passwords.',
+    emailLabel: 'Your email',
+    send: 'Send me the code',
+    sending: 'Sending…',
+    codeTitle: 'Check your email',
+    codeLead: (email: string) => `If ${email} has an Amble account, a 6-digit code is on its way. It lasts 10 minutes.`,
+    codeLabel: 'Code',
+    verify: 'Sign in',
+    verifying: 'Checking…',
+    wrongCode: 'That’s not the code. Check it and try again.',
+    expiredCode: 'That code no longer works. Ask for a new one.',
+    tooMany: 'You’ve asked for several codes in a row. Wait a quarter of an hour and try again.',
+    invalidEmail: 'That doesn’t look like an email.',
+    failed: 'I couldn’t send it. Nothing has been lost: try again.',
+    otherEmail: 'Use another email',
+    resend: 'Send me another code',
+    noAccount: 'Amble is in closed beta. No access yet?',
+    waitlist: 'Join at amble.fyi',
+    signOut: 'Sign out',
+    email: {
+      subject: (code: string) => `${code} is your Amble sign-in code`,
+      body: (code: string) =>
+        `Your code to sign in to Amble is ${code}.\n\nIt lasts 10 minutes. If you didn’t ask for it, you can ignore this email.`,
+    },
+  },
   server: {
     onlyPdfOrText: 'I can only read PDF or plain text files in this build.',
     noTextInFile: "I couldn't read any text from this file. It may be a scanned document.",
