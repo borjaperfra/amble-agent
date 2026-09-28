@@ -1,0 +1,203 @@
+/* The pile rests on the horizon's line, in the middle, where the tumbleweed
+   would roll, and is drawn like it: a loose line in soft moss, small. */
+
+.pile {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  transform: translateX(-50%);
+}
+
+.envelope {
+  position: relative;
+  display: block;
+  padding: 14px 3px 1px;
+  color: var(--moss-soft);
+  opacity: 0.85;
+  text-decoration: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transform: translateY(calc(var(--rise) * -1)) rotate(var(--tilt));
+  transform-origin: 50% 100%;
+  animation: land 560ms var(--ease-standard) var(--delay) backwards;
+  transition:
+    transform var(--motion-default) var(--ease-standard),
+    opacity var(--motion-fast) ease;
+}
+
+.envelope:hover,
+.envelope:focus-visible {
+  z-index: 2;
+  opacity: 1;
+  transform: translateY(-5px) rotate(0deg);
+}
+
+.drawing {
+  display: block;
+  overflow: visible;
+}
+
+/* Filled with the moss behind it, so the letter hides inside. */
+.body {
+  fill: var(--moss-dark);
+}
+
+.letter,
+.flapOpen {
+  opacity: 0;
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-default) var(--ease-standard);
+}
+
+.letter {
+  transform: translateY(4px);
+}
+
+.flapClosed,
+.seal {
+  transition: opacity var(--motion-fast) ease;
+}
+
+.sent {
+  opacity: 0.6;
+}
+
+/* Wanted: already open, the letter showing. Hovered, a new one opens too. */
+.wanted .flapClosed,
+.new:hover .flapClosed,
+.new:focus-visible .flapClosed,
+.new:hover .seal,
+.new:focus-visible .seal {
+  opacity: 0;
+}
+
+.wanted .flapOpen,
+.wanted .letter,
+.new:hover .flapOpen,
+.new:hover .letter,
+.new:focus-visible .flapOpen,
+.new:focus-visible .letter {
+  opacity: 1;
+}
+
+.wanted .letter {
+  transform: translateY(0);
+}
+
+.new:hover .letter,
+.new:focus-visible .letter,
+.wanted:hover .letter,
+.wanted:focus-visible .letter {
+  transform: translateY(-2px);
+}
+
+.envelope:focus-visible .drawing {
+  outline: 1.5px solid var(--moss-soft);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* Its shadow on the line, as the tumbleweed's. */
+.shadow {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -2px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.3);
+  filter: blur(2px);
+}
+
+/* What it is, above it while it is lifted. */
+.tag {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 9px 7px;
+  border-radius: 6px;
+  background: rgb(37 37 31 / 0.9);
+  color: var(--paper-light);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px) rotate(calc(var(--tilt) * -1));
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-default) var(--ease-standard);
+}
+
+.envelope:hover .tag,
+.envelope:focus-visible .tag {
+  opacity: 1;
+  transform: translate(-50%, 0) rotate(0deg);
+}
+
+.kind {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss-soft);
+}
+
+.company {
+  font-weight: 600;
+}
+
+.title {
+  color: rgb(250 248 243 / 0.78);
+}
+
+.more {
+  align-self: center;
+  margin: 0 0 4px 6px;
+  font-size: 12px;
+  color: var(--moss-soft);
+  opacity: 0.75;
+  text-decoration: none;
+}
+
+.more:hover {
+  opacity: 1;
+}
+
+/* Dropped from a little height, each after the last, and settling. */
+@keyframes land {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px) rotate(calc(var(--tilt) * 3));
+  }
+  60% {
+    opacity: 0.85;
+    transform: translateY(1px) rotate(var(--tilt));
+  }
+  80% {
+    transform: translateY(calc(var(--rise) * -1 - 2px)) rotate(var(--tilt));
+  }
+  100% {
+    transform: translateY(calc(var(--rise) * -1)) rotate(var(--tilt));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .envelope,
+  .letter,
+  .flapOpen,
+  .flapClosed,
+  .seal,
+  .tag {
+    animation: none;
+    transition: none;
+  }
+}

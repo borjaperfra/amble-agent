@@ -18,6 +18,14 @@ import {
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
 import { getOpportunitiesView, type WeekLedger } from './matching/view'
+
+// An offer still in their hands, as an envelope on the listening horizon.
+export interface PileEnvelope {
+  id: string
+  company: string
+  title: string
+  kind: 'new' | 'wanted' | 'sent'
+}
 import { dictionaries, type Dictionary } from './i18n/dictionaries'
 import type { Locale } from './i18n/locale'
 
@@ -167,6 +175,7 @@ export function getListeningViewModel(candidateId: string): {
   revealed: ListeningProfile['revealed']
   pendingReview: number
   unseenOpportunities: number
+  pile: PileEnvelope[]
   week: WeekLedger
 } {
   const candidate = candidateById(candidateId)
@@ -182,6 +191,16 @@ export function getListeningViewModel(candidateId: string): {
     revealed: profile.revealed,
     pendingReview: profile.pendingReview,
     unseenOpportunities: opportunities.unseen,
+    // New to answer first, then what they want to send, then what went out.
+    pile: [
+      ...opportunities.found
+        .filter((item) => !item.closed && item.response === null)
+        .map((item) => ({ id: item.id, company: item.company, title: item.title, kind: 'new' as const })),
+      ...opportunities.wanted
+        .filter((item) => !item.closed)
+        .map((item) => ({ id: item.key, company: item.company, title: item.title, kind: 'wanted' as const })),
+      ...opportunities.sent.map((item) => ({ id: item.key, company: item.company, title: item.title, kind: 'sent' as const })),
+    ],
     week: opportunities.week,
   }
 }

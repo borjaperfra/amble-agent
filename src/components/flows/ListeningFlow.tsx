@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
+import EnvelopePile from '@/components/EnvelopePile'
+import type { PileEnvelope } from '@/lib/view'
 import Tumbleweed from '@/components/Tumbleweed'
 import { useT } from '@/components/I18nProvider'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
@@ -28,6 +30,7 @@ interface ListeningVm {
   }
   pendingReview: number
   unseenOpportunities: number
+  pile: PileEnvelope[]
   week: WeekLedger
 }
 
@@ -148,6 +151,9 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   // Learned and declared side by side: only then do learned ones need a mark.
   const mixed = learned > 0 && vm.listeningFor.length > 0
   const found = vm.unseenOpportunities > 0
+  // Any offer still in their hands: new, wanted or sent. Then the horizon holds
+  // those, not a tumbleweed.
+  const holding = vm.pile.length > 0
   const quietLines = t.listening.quiet
 
   useEffect(() => {
@@ -169,11 +175,11 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     return () => window.clearTimeout(id)
   }, [quietLines.length])
 
-  // Now and then, while nothing comes in, a tumbleweed rolls across. In
-  // development, ?tumbleweed brings it out whatever there is, to play with.
+  // Now and then, while they have no offer at all, a tumbleweed rolls across.
+  // In development, ?tumbleweed brings it out whatever there is, to play with.
   useEffect(() => {
     const forced = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('tumbleweed')
-    if (arriving || (found && !forced) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (arriving || (holding && !forced) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let id = 0
     const next = (ms: number) => {
       id = window.setTimeout(() => {
@@ -184,7 +190,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     }
     next(FIRST_ROLL_MS)
     return () => window.clearTimeout(id)
-  }, [arriving, found])
+  }, [arriving, holding])
 
   return (
     <>
@@ -213,8 +219,9 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 </Link>
               )}
 
-              {/* The horizon: now and then something rolls by, and nothing more. */}
-              <div className={styles.horizon} aria-hidden="true">
+              {/* The horizon: the offers in their hands, or now and then something rolling by. */}
+              <div className={styles.horizon} aria-hidden={holding ? undefined : true}>
+                {holding && <EnvelopePile items={vm.pile} />}
                 {rolls > 0 && <Tumbleweed key={rolls} />}
               </div>
 

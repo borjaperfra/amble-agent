@@ -134,6 +134,11 @@ export const es: Dictionary = {
       'Nada nuevo a la altura de lo que pides.',
     ],
     stillListening: 'Sigo escuchando.',
+    pile: {
+      label: (count: number) => (count === 1 ? 'Una oferta en tus manos' : `${count} ofertas en tus manos`),
+      kinds: { new: 'Nueva', wanted: 'Te interesa', sent: 'Enviada' },
+      more: (count: number) => `+${count}`,
+    },
     attentiveTo: 'Estoy atento a',
     groups: {
       must: 'Imprescindible',

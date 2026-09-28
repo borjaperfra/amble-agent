@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 // PRODUCT_SPEC §17 and DESIGN_SYSTEM §24: what the Rep found, why, and what it
 // set aside. The explanation is the product; there is no match score.
-const TABS: Tab[] = ['new', 'wanted', 'aside']
+const TABS: Tab[] = ['new', 'wanted', 'sent', 'aside']
 
 export default async function OpportunitiesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const candidate = await requireCandidate()

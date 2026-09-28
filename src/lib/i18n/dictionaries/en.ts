@@ -133,6 +133,11 @@ export const en = {
       'Nothing new up to what you ask for.',
     ],
     stillListening: 'Still listening.',
+    pile: {
+      label: (count: number) => (count === 1 ? 'One offer in your hands' : `${count} offers in your hands`),
+      kinds: { new: 'New', wanted: 'You want it', sent: 'Sent' },
+      more: (count: number) => `+${count}`,
+    },
     attentiveTo: 'What I listen for',
     groups: {
       must: 'Must have',
