@@ -1,4 +1,4 @@
-import { runInTransaction } from '../db/db'
+import { inTransaction } from '../db/db'
 import { applyRetention, type RetentionStats } from '../db/retention'
 import { now } from '../db/repo'
 import {
@@ -47,7 +47,7 @@ async function pool<T>(items: T[], worker: (item: T) => Promise<void>): Promise<
 
 async function store(raws: RawOpportunity[], companyId: string, seenAt: string): Promise<{ seen: number; created: number }> {
   let created = 0
-  await runInTransaction(async () => {
+  inTransaction(() => {
     for (const raw of raws) if (recordSighting(raw, companyId, seenAt).created) created++
   })
   return { seen: raws.length, created }

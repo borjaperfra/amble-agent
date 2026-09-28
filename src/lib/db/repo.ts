@@ -1,5 +1,5 @@
 ﻿import { randomUUID } from 'node:crypto'
-import { getDb, queueWrite } from './db'
+import { getDb } from './db'
 
 export const DEFAULT_CANDIDATE_ID = 'user-zero'
 
@@ -700,14 +700,28 @@ export function ownsCapability(candidateId: string, capabilityId: string): boole
   return getDb().prepare('SELECT 1 FROM capabilities WHERE id = ? AND candidate_id = ?').get(capabilityId, candidateId) !== undefined
 }
 
+// An answer the Rep could not take in is undone whole, so it can be given
+// again: the answer, and the claims and evidence it had produced. Nothing else
+// is written before the last model call of an answer.
+export function undoTurnAnswer(turnId: string): void {
+  const db = getDb()
+  db.prepare('DELETE FROM evidence WHERE interview_turn_id = ? AND claim_id IN (SELECT id FROM claims WHERE interview_turn_id = ?)').run(
+    turnId,
+    turnId,
+  )
+  db.prepare('DELETE FROM claims WHERE interview_turn_id = ?').run(turnId)
+  db.prepare('UPDATE interview_turns SET answer = NULL, answered_at = NULL WHERE id = ?').run(turnId)
+}
+
 export function answerTurn(id: string, answer: string): void {
   getDb()
     .prepare('UPDATE interview_turns SET answer = ?, answered_at = ? WHERE id = ?')
     .run(answer, now(), id)
 }
 
+// An audit write must never break the flow that produced it.
 export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
-  queueWrite(() =>
+  try {
     getDb()
       .prepare(
         `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output, created_at)
@@ -727,8 +741,10 @@ export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
         row.error,
         row.raw_output,
         now(),
-      ),
-  )
+      )
+  } catch {
+    // The run happened; only its record is missing.
+  }
 }
 
 export function listModelRuns(candidateId: string, limit = 100): ModelRunRow[] {

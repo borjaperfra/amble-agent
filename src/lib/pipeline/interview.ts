@@ -1,5 +1,6 @@
 import {
   answerTurn,
+  undoTurnAnswer,
   completeInterview,
   getOrCreateInterview,
   getTurn,
@@ -20,7 +21,6 @@ import {
   linkCapabilityEvidence,
   type InterviewTurnRow,
 } from '../db/repo'
-import { runInTransaction } from '../db/db'
 import {
   runExtractAnswerClaimsTask,
   runPlanNextQuestionTask,
@@ -186,10 +186,15 @@ export async function incorporateAnswer(
   if (!turn) throw new Error(serverText().turnNotFound)
   if (turn.answer !== null) throw new Error(serverText().alreadyAnswered)
 
-  return runInTransaction(async () => {
-    answerTurn(turnId, answerText)
-    return incorporateAnswerInner(candidateId, turn, answerText)
-  })
+  // Marked answered first, so the same answer sent twice is taken in once.
+  // If taking it in fails, it is undone whole and can be given again.
+  answerTurn(turnId, answerText)
+  try {
+    return await incorporateAnswerInner(candidateId, turn, answerText)
+  } catch (error) {
+    undoTurnAnswer(turnId)
+    throw error
+  }
 }
 
 async function incorporateAnswerInner(
@@ -272,13 +277,20 @@ async function incorporateDefenceAnswer(
   let reassessedCapabilityIds: string[] = []
   const changed = defence.defended.length > 0 || defence.retracted.length > 0
   if (changed && affectedCapabilityIds.length > 0) {
-    ;({ resolvedUncertaintyIds, reassessedCapabilityIds } = await reassessScope(
-      candidateId,
-      turn,
-      answerText,
-      affectedCapabilityIds,
-      [],
-    ))
+    // The verdict is written by now, and a retraction is permanent: it stands
+    // even if the reassessment fails. The deterministic ceiling below still
+    // applies; only a level the model would have raised is missed.
+    try {
+      ;({ resolvedUncertaintyIds, reassessedCapabilityIds } = await reassessScope(
+        candidateId,
+        turn,
+        answerText,
+        affectedCapabilityIds,
+        [],
+      ))
+    } catch {
+      // Reassessment is best-effort once the defence is judged.
+    }
   }
 
   // A promotion can lift a capability out of the assisted ceiling only through a

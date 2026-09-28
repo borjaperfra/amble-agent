@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { runInTransaction } from '../db/db'
+import { inTransaction } from '../db/db'
 import {
   answerOfferProbe,
   decideRevealedPreference,
@@ -528,7 +528,7 @@ export async function analyseTriage(candidateId: string, triageId?: string): Pro
     })
   }
 
-  await runInTransaction(async () => {
+  inTransaction(() => {
     replaceProposedPreferences(triage.id, rows)
     updateOfferTriageStatus(triage.id, 'analysed')
   })

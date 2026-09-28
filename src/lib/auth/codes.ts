@@ -1,5 +1,5 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto'
-import { getDb } from '../db/db'
+import { getDb, inTransaction } from '../db/db'
 import { getCandidateByEmail, newId, now, type CandidateRow } from '../db/repo'
 import type { Locale } from '../i18n/locale'
 import { sendLoginCode } from './email'
@@ -107,23 +107,22 @@ export function verifyLoginCode(email: string, code: string, locale: Locale): Co
 }
 
 // The account and the used invitation are one step: if the invitation was
-// taken meanwhile, or the beta filled up, no account is left behind. The
-// statements are synchronous with nothing awaited between them, so no other
-// request runs in the middle; an explicit transaction could collide with one
-// runInTransaction holds open.
+// taken meanwhile, or the beta filled up, no account is left behind.
 function createAccount(email: string, invitationId: string, locale: Locale): CodeCheck {
   const db = getDb()
   const invitation = getInvitation(invitationId)
   if (!invitation || invitation.accepted_at) return { ok: false, reason: 'invitation_used' }
   if (betaIsFull()) return { ok: false, reason: 'beta_full' }
   const id = newId('cand')
-  db.prepare(
-    "INSERT INTO candidates (id, created_at, email, role, locale, locale_source) VALUES (?, ?, ?, 'member', ?, 'detected')",
-  ).run(id, now(), email, locale)
-  if (!acceptInvitation(invitationId, id)) {
+  const accepted = inTransaction(() => {
+    db.prepare(
+      "INSERT INTO candidates (id, created_at, email, role, locale, locale_source) VALUES (?, ?, ?, 'member', ?, 'detected')",
+    ).run(id, now(), email, locale)
+    if (acceptInvitation(invitationId, id)) return true
     db.prepare('DELETE FROM candidates WHERE id = ?').run(id)
-    return { ok: false, reason: 'invitation_used' }
-  }
+    return false
+  })
+  if (!accepted) return { ok: false, reason: 'invitation_used' }
   const candidate = getCandidateByEmail(email)
   return candidate ? { ok: true, candidate, joined: true } : { ok: false, reason: 'expired' }
 }
