@@ -42,7 +42,7 @@ export interface StructuredTaskOptions<T> {
 function languageInstruction(language: Locale): string {
   return `
 
-OUTPUT LANGUAGE: write every human-readable value (sentences, names, labels, questions, reasons, descriptions) in ${LANGUAGE_NAME[language]}. JSON keys and enum values stay exactly as specified. Verbatim quotes and excerpts from sources or from the candidate stay in their original language, character for character: never translate a quote. Never assume the candidate's gender: when addressing or describing them, use phrasing that does not mark it.`
+OUTPUT LANGUAGE: write every human-readable value (sentences, names, labels, questions, reasons, descriptions) in ${LANGUAGE_NAME[language]}. JSON keys and enum values stay exactly as specified. Verbatim quotes and excerpts from sources or from the candidate stay in their original language, character for character: never translate a quote. Never assume the candidate's gender: when addressing or describing them, use phrasing that does not mark it. The product's name is written amble, always lowercase, even at the start of a sentence.`
 }
 
 interface ChatCompletionResponse {

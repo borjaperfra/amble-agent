@@ -14,7 +14,7 @@ export default async function Landing() {
           <h1 id="hero-title" className={`${styles.heroTitle} ${styles.rise}`}>
             {t.landing.heroLine1}
             <br />
-            <em>Amble</em> {t.landing.heroLine2}
+            <em>amble</em> {t.landing.heroLine2}
           </h1>
           <p className={`${styles.heroSub} ${styles.rise} ${styles.delay1}`}>{t.landing.heroSub}</p>
           <div className={`${styles.heroCta} ${styles.rise} ${styles.delay2}`}>

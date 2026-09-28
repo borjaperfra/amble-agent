@@ -1,4 +1,4 @@
-import { createHash, randomInt, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { getDb, inTransaction } from '../db/db'
 import { getCandidateByEmail, newId, now, type CandidateRow } from '../db/repo'
 import type { Locale } from '../i18n/locale'
@@ -7,7 +7,9 @@ import { acceptInvitation, betaIsFull, getInvitation, type InvitationRow } from 
 
 // Signing in with a one-time code sent by email: no passwords to keep.
 // A code lasts ten minutes and survives five wrong guesses; a new one
-// replaces the last. Only its hash is stored.
+// replaces the last. The same email carries a link that does what the code
+// does, for someone reading it on the device they sign in on; using either
+// spends both. Only hashes of the code and the link are stored.
 
 const CODE_MINUTES = 10
 const MAX_ATTEMPTS = 5
@@ -23,6 +25,15 @@ export function normaliseEmail(value: unknown): string | null {
 
 function hashCode(codeId: string, code: string): string {
   return createHash('sha256').update(`${codeId}:${code}`).digest('hex')
+}
+
+function hashLink(token: string): string {
+  return createHash('sha256').update(`link:${token}`).digest('hex')
+}
+
+export function signInLink(token: string): string {
+  const base = (process.env.AMBLE_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  return `${base}/login/link?token=${encodeURIComponent(token)}`
 }
 
 export type CodeRequest = { sent: true } | { sent: false; reason: 'too_many' }
@@ -55,19 +66,15 @@ export async function requestLoginCode(email: string, locale: Locale, invitation
 
   const id = newId('lc')
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0')
+  const linkToken = randomBytes(24).toString('base64url')
   const expiresAt = new Date(Date.now() + CODE_MINUTES * 60_000).toISOString()
   // A new code replaces any earlier one still waiting.
   db.prepare('UPDATE login_codes SET used_at = ? WHERE email = ? AND used_at IS NULL').run(now(), email)
-  db.prepare('INSERT INTO login_codes (id, email, code_hash, created_at, expires_at, invitation_id) VALUES (?, ?, ?, ?, ?, ?)').run(
-    id,
-    email,
-    hashCode(id, code),
-    now(),
-    expiresAt,
-    joining ? invitation.id : null,
-  )
+  db.prepare(
+    'INSERT INTO login_codes (id, email, code_hash, link_hash, created_at, expires_at, invitation_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).run(id, email, hashCode(id, code), hashLink(linkToken), now(), expiresAt, joining ? invitation.id : null)
   const candidateLocale = candidate?.locale === 'es' || candidate?.locale === 'en' ? candidate.locale : null
-  await sendLoginCode({ to: email, code, locale: candidateLocale ?? locale, idempotencyKey: id })
+  await sendLoginCode({ to: email, code, link: signInLink(linkToken), locale: candidateLocale ?? locale, idempotencyKey: id })
   return { sent: true }
 }
 
@@ -99,11 +106,42 @@ export function verifyLoginCode(email: string, code: string, locale: Locale): Co
     return { ok: false, reason: row.attempts + 1 >= MAX_ATTEMPTS ? 'expired' : 'wrong' }
   }
 
-  db.prepare('UPDATE login_codes SET used_at = ? WHERE id = ?').run(now(), row.id)
+  return spend(row, email, locale)
+}
+
+// A code or link that worked is spent, with its twin: then the account, or a
+// new one if it came from an invitation.
+function spend(row: { id: string; invitation_id: string | null }, email: string, locale: Locale): CodeCheck {
+  getDb().prepare('UPDATE login_codes SET used_at = ? WHERE id = ?').run(now(), row.id)
   const candidate = getCandidateByEmail(email)
   if (candidate) return { ok: true, candidate, joined: false }
   if (!row.invitation_id) return { ok: false, reason: 'expired' }
   return createAccount(email, row.invitation_id, locale)
+}
+
+interface LinkRow {
+  id: string
+  email: string
+  invitation_id: string | null
+}
+
+function openLink(token: string): LinkRow | undefined {
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return undefined
+  return getDb()
+    .prepare('SELECT id, email, invitation_id FROM login_codes WHERE link_hash = ? AND used_at IS NULL AND expires_at > ? AND attempts < ?')
+    .get(hashLink(token), now(), MAX_ATTEMPTS) as LinkRow | undefined
+}
+
+// Who a link would sign in, without spending it: the page it opens asks
+// before signing in, because mail scanners open links on their own.
+export function peekLoginLink(token: string): string | null {
+  return openLink(token)?.email ?? null
+}
+
+export function verifyLoginLink(token: string, locale: Locale): CodeCheck {
+  const row = openLink(token)
+  if (!row) return { ok: false, reason: 'expired' }
+  return spend(row, row.email, locale)
 }
 
 // The account and the used invitation are one step: if the invitation was

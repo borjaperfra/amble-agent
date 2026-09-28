@@ -1,41 +1,89 @@
+/* The door: signing in, accepting an invitation, and the first two questions.
+   One quiet column in the middle of the page, with the eye above it. */
+
 .page {
-  max-width: var(--conversation-max);
-  margin: 0 auto;
-  padding: 40px var(--page-pad) 96px;
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100svh - 84px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 var(--page-pad);
+}
+
+/* Paper: a grain barely there, felt more than seen (DESIGN_SYSTEM §7). */
+.page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.12 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* Optically centred: a little above the middle, as a page is read. */
+.stage {
+  flex: 1;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0 12vh;
+  text-align: center;
+  animation: arrive var(--motion-arrive) var(--ease-standard) both;
+}
+
+.eye {
+  color: var(--ink);
+  margin-bottom: 32px;
 }
 
 .title {
   font-family: var(--font-display);
-  font-size: var(--heading-xl);
+  font-size: var(--display-lg);
   font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin-top: 48px;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  text-wrap: balance;
 }
 
 .lead {
-  margin-top: 20px;
+  margin-top: 16px;
   font-size: var(--text-body-lg);
-  line-height: 1.6;
+  line-height: 1.55;
   color: var(--ink-secondary);
-  max-width: 44ch;
+  max-width: 40ch;
+  text-wrap: balance;
 }
 
 .form {
   margin-top: 40px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 360px;
+  text-align: left;
 }
 
 .label {
   font-size: var(--text-body-sm);
   font-weight: 500;
   color: var(--ink);
+  padding-left: 2px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
 }
 
 .input {
+  flex: 1;
+  min-width: 0;
   font: inherit;
   font-size: var(--text-body);
   color: var(--ink);
@@ -43,8 +91,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   height: 48px;
-  padding: 0 14px;
-  transition: border-color var(--motion-fast) ease;
+  padding: 0 16px;
+  transition:
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
 }
 
 .input:focus {
@@ -53,43 +103,178 @@
   box-shadow: 0 0 0 3px var(--moss-wash);
 }
 
-.code {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.3em;
-  font-size: var(--heading-sm);
+.input[aria-invalid='true'] {
+  border-color: var(--clay);
 }
 
-.actions {
-  margin-top: 16px;
+.input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--clay-soft);
+}
+
+/* Each step of the door: the eye above stays, the words below change. */
+.step {
+  width: 100%;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 8px 20px;
+}
+
+.enter {
+  animation: arrive var(--motion-arrive) var(--ease-standard) both;
+}
+
+/* The address the code went to, underlined as if by hand. */
+.email {
+  color: var(--ink);
+  background-image: linear-gradient(var(--moss-soft), var(--moss-soft));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 2px;
+  padding-bottom: 1px;
+  animation: underline 900ms var(--ease-standard) 420ms both;
+}
+
+/* The code: one field as tall as the button below it, the figures set like
+   type, not boxes to fill. The field itself stays for typing and pasting; what
+   it shows is drawn on top, each figure settling into its own place. */
+.codeField {
+  position: relative;
+}
+
+.code {
+  display: block;
+  width: 100%;
+  text-align: center;
+  color: transparent;
+  caret-color: transparent;
+}
+
+.code::selection {
+  background: transparent;
+}
+
+.figures {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32em;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink);
+  transition: opacity var(--motion-slow) ease;
+}
+
+.figure,
+.place {
+  width: 0.62em;
+  text-align: center;
+}
+
+.figure {
+  animation: settle var(--motion-slow) var(--ease-standard) both;
+}
+
+.place {
+  color: var(--border);
+}
+
+.codeField:focus-within .next {
+  color: var(--moss);
+  animation: waiting 1.4s ease-in-out infinite;
+}
+
+.clearing {
+  opacity: 0;
+}
+
+.buttonText {
+  position: relative;
+  display: inline-block;
+}
+
+/* Waiting: a fine moss line crosses under the words, like a stroke of the pen. */
+.tracing::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--moss-soft);
+  transform-origin: left;
+  animation: trace 1.1s var(--ease-standard) infinite;
+}
+
+/* Signed in: everything fades upward while the eye closes. */
+.leaving .stage > :not(svg),
+.leaving .note {
+  animation: leave 520ms var(--ease-standard) both;
 }
 
 .error {
-  margin-top: 8px;
+  margin-top: 4px;
+  padding-left: 2px;
   font-size: var(--text-body-sm);
   line-height: 1.55;
   color: var(--clay);
+  animation: arrive var(--motion-slow) var(--ease-standard) both;
 }
 
-.beta {
-  margin-top: 64px;
+.submit {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* Secondary ways out, below the main one and quieter than it. */
+.aside {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 20px;
+}
+
+.aside :global(.text-btn) {
   font-size: var(--text-body-sm);
-  color: var(--ink-secondary);
 }
 
-.beta a {
+.note {
+  padding: 24px 0 32px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.note a {
   color: var(--moss-dark);
+  text-decoration-color: var(--moss-soft);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--motion-fast) ease;
 }
 
+.note a:hover {
+  text-decoration-color: var(--moss);
+}
+
+.actions {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Two choices side by side, each named in its own language. */
 .choices {
   margin: 24px 0 0;
   padding: 0;
   border: none;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
@@ -98,10 +283,10 @@
 }
 
 .choice {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  height: 44px;
-  padding: 0 18px;
+  justify-content: center;
+  height: 48px;
   font-size: var(--text-body);
   color: var(--ink-secondary);
   background: var(--paper-light);
@@ -116,6 +301,7 @@
 
 .choice:hover {
   color: var(--ink);
+  border-color: var(--ink-tertiary);
 }
 
 .choice[data-selected='true'] {
@@ -126,4 +312,97 @@
 
 .choice:has(input:focus-visible) {
   box-shadow: 0 0 0 3px var(--moss-soft);
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes waiting {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes underline {
+  from {
+    background-size: 0 2px;
+  }
+}
+
+@keyframes trace {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  50% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  50.01% {
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
+@keyframes leave {
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .stage {
+    padding: 32px 0 8vh;
+  }
+
+  .row {
+    flex-direction: column;
+  }
+
+  .row :global(.btn) {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .enter,
+  .error,
+  .email,
+  .figure,
+  .tracing::after,
+  .codeField:focus-within .next,
+  .leaving .stage > :not(svg),
+  .leaving .note {
+    animation: none;
+  }
 }

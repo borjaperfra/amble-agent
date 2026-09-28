@@ -175,7 +175,7 @@ export async function generateTriage(candidateId: string): Promise<OfferTriageRo
       temperature: 0.6,
     })
     const parsed = createTriageInputSchema.safeParse({
-      method: `Diseñado por Amble (model run ${modelRunId}). El candidato no ve qué eje prueba cada oferta.`,
+      method: `Diseñado por amble (model run ${modelRunId}). El candidato no ve qué eje prueba cada oferta.`,
       declared,
       probes: data.probes,
     })

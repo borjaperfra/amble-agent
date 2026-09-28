@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import Header from '@/components/Header'
+import Symbol from '@/components/Symbol'
 import LoginFlow from '@/components/flows/LoginFlow'
 import { betaIsFull, openInvitation } from '@/lib/auth/invitations'
 import { currentCandidate } from '@/lib/auth/session'
@@ -23,18 +24,21 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
     <>
       <Header />
       <main className={styles.page}>
-        <h1 className={styles.title}>{full ? t.betaFullTitle : t.invitationUsedTitle}</h1>
-        <p className={styles.lead}>{full ? t.betaFullLead : t.invitationUsedLead}</p>
-        <div className={styles.actions}>
-          {full ? (
-            <a href="https://amble.fyi" className="btn">
-              {t.waitlist}
-            </a>
-          ) : (
-            <Link href="/login" className="btn">
-              {t.signInInstead}
-            </Link>
-          )}
+        <div className={styles.stage}>
+          <Symbol size={72} className={styles.eye} />
+          <h1 className={styles.title}>{full ? t.betaFullTitle : t.invitationUsedTitle}</h1>
+          <p className={styles.lead}>{full ? t.betaFullLead : t.invitationUsedLead}</p>
+          <div className={styles.actions}>
+            {full ? (
+              <a href="https://amble.fyi" className="btn">
+                {t.waitlist}
+              </a>
+            ) : (
+              <Link href="/login" className="btn">
+                {t.signInInstead}
+              </Link>
+            )}
+          </div>
         </div>
       </main>
     </>

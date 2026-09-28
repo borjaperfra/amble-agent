@@ -14,5 +14,6 @@ export async function POST(request: Request) {
   const check = verifyLoginCode(email, body.code, await serverLocale())
   if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 401 })
   await startSession(check.candidate.id)
-  return NextResponse.json({ ok: true, joined: check.joined })
+  // The name goes back only now, once the code has proved who this is.
+  return NextResponse.json({ ok: true, joined: check.joined, name: check.candidate.name })
 }

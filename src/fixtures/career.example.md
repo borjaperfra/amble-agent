@@ -1,5 +1,5 @@
 ---
-# career.md — generado por Amble desde tu grafo de evidencia.
+# career.md — generado por amble desde tu grafo de evidencia.
 # Cada afirmación lleva su procedencia. Lo que no la tenía, no está aquí.
 schema: career.md/0.1
 generated_by: amble
@@ -64,7 +64,7 @@ Hace que los equipos de plataforma adopten herramientas explicándolas antes de 
 - El CV dice 2019. `[cv]`
 - LinkedIn dice 2020. `[li]`
 
-> Lectura de Amble, sin confirmar: Puede que 2019 cuente un periodo freelance previo al contrato. Solo ella puede confirmarlo.
+> Lectura de amble, sin confirmar: Puede que 2019 cuente un periodo freelance previo al contrato. Solo ella puede confirmarlo.
 
 ## Huecos abiertos
 
@@ -75,7 +75,7 @@ Hace que los equipos de plataforma adopten herramientas explicándolas antes de 
 
 ## Retirado
 
-_Afirmaciones que Amble llegó a creer y retiró. No cuentan como evidencia; se conservan como registro._
+_Afirmaciones que amble llegó a creer y retiró. No cuentan como evidencia; se conservan como registro._
 
 - ⊘ ~~Optimizó el rendimiento del parser de sonda con un algoritmo de streaming propio.~~
   - Pregunta: En sonda, el parser procesa por bloques en lugar de cargar el fichero entero. ¿Por qué ahí y no en el exportador?

@@ -46,53 +46,51 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
     <>
       <Header />
       <main className={styles.page}>
-        <p className="kicker rep-kicker">
-          <Symbol size={20} /> {t.common.yourRep}
-        </p>
-        <h1 className={styles.title}>{t.welcome.title}</h1>
-        <p className={styles.lead}>{t.welcome.lead}</p>
-        <form className={styles.form} onSubmit={(event) => void submit(event)}>
-          <label className={styles.label} htmlFor="welcome-name">
-            {t.welcome.nameLabel}
-          </label>
-          <input
-            id="welcome-name"
-            className={styles.input}
-            autoComplete="given-name"
-            maxLength={80}
-            required
-            autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
+        <div className={styles.stage}>
+          <Symbol size={72} watch className={styles.eye} label={t.common.yourRep} />
+          <h1 className={styles.title}>{t.welcome.title}</h1>
+          <p className={styles.lead}>{t.welcome.lead}</p>
+          <form className={styles.form} onSubmit={(event) => void submit(event)}>
+            <label className={styles.label} htmlFor="welcome-name">
+              {t.welcome.nameLabel}
+            </label>
+            <input
+              id="welcome-name"
+              className={styles.input}
+              autoComplete="given-name"
+              maxLength={80}
+              required
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
 
-          <fieldset className={styles.choices}>
-            <legend className={styles.label}>{t.welcome.languageLabel}</legend>
-            {LANGUAGES.map((language) => (
-              <label key={language.locale} className={styles.choice} data-selected={locale === language.locale} lang={language.locale}>
-                <input
-                  type="radio"
-                  name="language"
-                  className="visually-hidden"
-                  checked={locale === language.locale}
-                  onChange={() => setLocale(language.locale)}
-                />
-                {language.name}
-              </label>
-            ))}
-          </fieldset>
+            <fieldset className={styles.choices}>
+              <legend className={styles.label}>{t.welcome.languageLabel}</legend>
+              {LANGUAGES.map((language) => (
+                <label key={language.locale} className={styles.choice} data-selected={locale === language.locale} lang={language.locale}>
+                  <input
+                    type="radio"
+                    name="language"
+                    className="visually-hidden"
+                    checked={locale === language.locale}
+                    onChange={() => setLocale(language.locale)}
+                  />
+                  {language.name}
+                </label>
+              ))}
+            </fieldset>
 
-          {failed && (
-            <p className={styles.error} role="alert">
-              {t.welcome.failed}
-            </p>
-          )}
-          <div className={styles.actions}>
-            <button type="submit" className="btn" disabled={busy || !name.trim()}>
+            {failed && (
+              <p className={styles.error} role="alert">
+                {t.welcome.failed}
+              </p>
+            )}
+            <button type="submit" className={`btn ${styles.submit}`} disabled={busy || !name.trim()}>
               {busy ? t.welcome.saving : t.welcome.continue}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </main>
     </>
   )

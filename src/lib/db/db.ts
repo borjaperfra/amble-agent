@@ -462,6 +462,9 @@ function migrate(db: DatabaseSync): void {
   // A code asked for from an invitation creates the account when it is used.
   addColumn(db, 'login_codes', 'invitation_id', 'TEXT')
 
+  // The same sign-in, by one click from the email: the hash of the link's token.
+  addColumn(db, 'login_codes', 'link_hash', 'TEXT')
+
   // When the candidate told the Rep their name and language, the first time in.
   addColumn(db, 'candidates', 'setup_at', 'TEXT')
 }

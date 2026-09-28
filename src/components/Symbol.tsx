@@ -21,6 +21,13 @@ interface SymbolProps {
   watch?: boolean
   // Starts closed and opens a moment after mounting (activation).
   wake?: boolean
+  // Where the eye looks instead of the pointer: the field being written in.
+  gaze?: HTMLElement | null
+  // Each new value is one blink: the eye saying "got it".
+  blinkSignal?: number
+  // How far the lid rests closed, from 0 (open) to 1 (shut). A half-closed
+  // eye is a quiet "no"; a shut one says goodbye before the next page opens.
+  lid?: number
   label?: string
   className?: string
 }
@@ -46,13 +53,35 @@ function reducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-export default function Symbol({ size = 28, breathe = false, watch = false, wake = false, label, className }: SymbolProps) {
+// A resting lid moves slowly: it is a mood, not a blink.
+const REST_MS = 520
+
+interface EyeControls {
+  blink: () => void
+  rest: (k: number) => void
+  follow: () => void
+}
+
+export default function Symbol({
+  size = 28,
+  breathe = false,
+  watch = false,
+  wake = false,
+  gaze = null,
+  blinkSignal,
+  lid = 0,
+  label,
+  className,
+}: SymbolProps) {
   const uid = useId().replace(/:/g, '')
   const svgRef = useRef<SVGSVGElement>(null)
   const lidRef = useRef<SVGPathElement>(null)
   const clipRef = useRef<SVGPathElement>(null)
   const irisRef = useRef<SVGGElement>(null)
   const blinking = useRef(false)
+  const gazeRef = useRef<HTMLElement | null>(gaze)
+  const restRef = useRef(0)
+  const controls = useRef<EyeControls | null>(null)
   const start = wake ? CLOSED : OPEN
 
   useEffect(() => {
@@ -84,16 +113,34 @@ export default function Symbol({ size = 28, breathe = false, watch = false, wake
       blinking.current = true
       animate(
         CLOSE_MS + hold + OPEN_MS,
-        (e) => (e < CLOSE_MS ? easeIn(e / CLOSE_MS) : e < CLOSE_MS + hold ? 1 : 1 - easeOut((e - CLOSE_MS - hold) / OPEN_MS)),
+        (e) => {
+          const from = restRef.current
+          if (e < CLOSE_MS) return from + (1 - from) * easeIn(e / CLOSE_MS)
+          if (e < CLOSE_MS + hold) return 1
+          return 1 - (1 - from) * easeOut((e - CLOSE_MS - hold) / OPEN_MS)
+        },
         () => {
-          setLid(0)
+          setLid(restRef.current)
           blinking.current = false
         },
       )
     }
 
-    // Open slowly from closed: the eye waking up.
-    const open = (ms: number) => (calm ? setLid(0) : animate(ms, (e) => 1 - easeOut(Math.min(1, e / ms))))
+    // Open slowly from closed: the eye waking up, to where the lid rests.
+    const open = (ms: number) => {
+      const to = restRef.current
+      if (calm) setLid(to)
+      else animate(ms, (e) => 1 - (1 - to) * easeOut(Math.min(1, e / ms)))
+    }
+
+    // The lid settles at a new resting place, unhurried.
+    const rest = (k: number) => {
+      const from = restRef.current
+      restRef.current = k
+      if (blinking.current) return
+      if (calm) setLid(k)
+      else animate(REST_MS, (e) => from + (k - from) * easeOut(Math.min(1, e / REST_MS)))
+    }
 
     // Clicked or tapped, any eye closes deliberately. Inside a link (the logo),
     // the eye itself only blinks; the wordmark still navigates.
@@ -129,14 +176,16 @@ export default function Symbol({ size = 28, breathe = false, watch = false, wake
     const iris = { x: 0, y: 0, tx: 0, ty: 0 }
     let following = false
     const aim = () => {
-      if (!pointer) {
+      const target = gazeRef.current?.getBoundingClientRect()
+      const at = target ? { x: target.left + target.width / 2, y: target.top + target.height / 2 } : pointer
+      if (!at) {
         iris.tx = 0
         iris.ty = 0
         return
       }
       const box = svg.getBoundingClientRect()
-      const dx = pointer.x - (box.left + box.width / 2)
-      const dy = pointer.y - (box.top + box.height * 0.57)
+      const dx = at.x - (box.left + box.width / 2)
+      const dy = at.y - (box.top + box.height * 0.57)
       const dist = Math.hypot(dx, dy) || 1
       const reach = Math.min(1, dist / FULL_AT)
       iris.tx = (dx / dist) * RANGE_X * reach
@@ -165,6 +214,9 @@ export default function Symbol({ size = 28, breathe = false, watch = false, wake
       pointer = null
       follow()
     }
+    controls.current = { blink: () => blink(), rest, follow: () => (calm ? undefined : follow()) }
+    if (restRef.current > 0) setLid(restRef.current)
+
     if (watch && !calm) {
       window.addEventListener('pointermove', onPointerMove, { passive: true })
       window.addEventListener('scroll', follow, { passive: true })
@@ -179,8 +231,26 @@ export default function Symbol({ size = 28, breathe = false, watch = false, wake
       document.documentElement.removeEventListener('pointerleave', onPointerLeave)
       timers.forEach((id) => window.clearTimeout(id))
       cancelAnimationFrame(frame)
+      controls.current = null
     }
   }, [watch, wake])
+
+  // What the page asks of the eye, after it is set up.
+  useEffect(() => {
+    gazeRef.current = gaze
+    controls.current?.follow()
+  }, [gaze])
+
+  const firstBlink = useRef(blinkSignal)
+  useEffect(() => {
+    if (blinkSignal === undefined || blinkSignal === firstBlink.current) return
+    controls.current?.blink()
+  }, [blinkSignal])
+
+  useEffect(() => {
+    const k = Math.max(0, Math.min(1, lid))
+    if (k !== restRef.current) controls.current?.rest(k)
+  }, [lid])
 
   const classes = [styles.symbol, breathe ? styles.breathe : '', watch ? styles.watch : '', className ?? ''].filter(Boolean).join(' ')
 

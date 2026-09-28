@@ -51,7 +51,7 @@ export default function Header({ right }: HeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.wordmark} aria-label="Amble">
+        <Link href="/" className={styles.wordmark} aria-label="amble">
           <Symbol size={26} />
           <span className={styles.word} aria-hidden="true">
             amble
