@@ -73,6 +73,9 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
   const hash = createHash('sha1')
     .update(
       JSON.stringify({
+        // Whose profile it is: two people with the same rules are still two
+        // people, and their assessments must never be shared.
+        candidateId,
         rules: rules.map((rule) => [rule.id, rule.statement]),
         notFilteringOn: listening.revealed.notFilteringOn.map((item) => [item.id, item.statement]),
         capabilities: capabilities.map((capability) => [capability.id, capability.assessment, capability.attributed]),

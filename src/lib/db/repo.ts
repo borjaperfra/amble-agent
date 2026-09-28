@@ -969,6 +969,21 @@ export function listRevealedPreferences(triageId: string): RevealedPreferenceRow
     .all(triageId) as unknown as RevealedPreferenceRow[]
 }
 
+// Everyone the Rep listens for: something confirmed to listen for, a
+// preference from their triage or an intent still current. Oldest account first.
+export function listListeningCandidateIds(): string[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT c.id FROM candidates c
+       WHERE EXISTS (SELECT 1 FROM revealed_preferences p WHERE p.candidate_id = c.id AND p.status = 'confirmed')
+          OR EXISTS (SELECT 1 FROM intent_profiles i WHERE i.candidate_id = c.id AND i.confirmed_at IS NOT NULL
+                     AND (i.valid_until IS NULL OR i.valid_until > ?))
+       ORDER BY c.created_at ASC`,
+    )
+    .all(now()) as { id: string }[]
+  return rows.map((row) => row.id)
+}
+
 export function listConfirmedPreferences(candidateId: string): RevealedPreferenceRow[] {
   return getDb()
     .prepare(

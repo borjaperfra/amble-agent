@@ -1,4 +1,4 @@
-import { candidateById, getOrCreateCandidate } from '../db/repo'
+import { candidateById, getOrCreateCandidate, listListeningCandidateIds } from '../db/repo'
 import { assessedOpportunityIds, insertMatch, type MatchVerdict } from '../db/matching'
 import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
 import { runSourcing, type SourcingStats } from '../sourcing/run'
@@ -8,8 +8,9 @@ import { buildMatchingProfile } from './profile'
 import { EUROPE } from './places'
 import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
 
-// Each assessment is a model call. A run judges at most this many new roles;
-// the rest wait for the next run, newest first.
+// Each assessment is a model call. A run reads at most this many new roles
+// per candidate; the rest wait for the next run. It is a reading pace, not
+// how many are shown: most of what is read is set aside.
 const DEFAULT_LIMIT = 25
 const CONCURRENCY = 3
 
@@ -37,7 +38,7 @@ export async function runMatching(options: { candidateId: string; limit?: number
   const profile = buildMatchingProfile(candidate.id)
   const query = await roleQueryFor(candidate.id, profile)
   const matchKey = `${profile.hash}:${ASSESS_VERSION}`
-  const assessed = assessedOpportunityIds(matchKey)
+  const assessed = assessedOpportunityIds(candidate.id, matchKey)
 
   const stats: MatchingStats = {
     profileHash: matchKey,
@@ -197,13 +198,28 @@ const COUNTRY_CODES: Record<string, string> = {
 // offer and its search already spans two weeks, so it runs once a day.
 const THEIRSTACK_EVERY_HOURS = 20
 
-// One listening pass: read the sources, then judge what is new.
-export async function runListening(options: { limit?: number } = {}): Promise<{ sourcing: SourcingStats; matching: MatchingStats }> {
-  const candidate = getOrCreateCandidate()
-  const query = await roleQueryFor(candidate.id, buildMatchingProfile(candidate.id))
+export type CandidatePass = { candidateId: string } & ({ stats: MatchingStats } | { error: string })
+
+// One listening pass: read the sources once, then judge what is new for each
+// person the Rep listens for, against their own profile. One person's failure
+// does not stop the others.
+//
+// The aggregator is searched with the owner's query only, for now: it costs
+// credits for every offer it returns, and the boards cost nothing.
+export async function runListening(options: { limit?: number } = {}): Promise<{ sourcing: SourcingStats; matching: CandidatePass[] }> {
+  const owner = getOrCreateCandidate()
+  const query = await roleQueryFor(owner.id, buildMatchingProfile(owner.id))
   const last = lastTheirStackSearchAt()
   const aggregatorDue = !last || Date.now() - Date.parse(last) >= THEIRSTACK_EVERY_HOURS * 60 * 60 * 1000
   const sourcing = await runSourcing({ theirstack: aggregatorDue ? theirStackQueryFrom(query) : null })
-  const matching = await runMatching({ candidateId: candidate.id, limit: options.limit })
+
+  const matching: CandidatePass[] = []
+  for (const candidateId of listListeningCandidateIds()) {
+    try {
+      matching.push({ candidateId, stats: await runMatching({ candidateId, limit: options.limit }) })
+    } catch (error) {
+      matching.push({ candidateId, error: error instanceof Error ? error.message : 'matching failed' })
+    }
+  }
   return { sourcing, matching }
 }

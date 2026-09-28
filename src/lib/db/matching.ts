@@ -42,10 +42,10 @@ export function insertRoleQuery(candidateId: string, profileHash: string, query:
   return getDb().prepare('SELECT * FROM role_queries WHERE id = ?').get(id) as unknown as RoleQueryRow
 }
 
-export function assessedOpportunityIds(profileHash: string): Set<string> {
+export function assessedOpportunityIds(candidateId: string, profileHash: string): Set<string> {
   const rows = getDb()
-    .prepare('SELECT opportunity_id FROM opportunity_matches WHERE profile_hash = ?')
-    .all(profileHash) as unknown as { opportunity_id: string }[]
+    .prepare('SELECT opportunity_id FROM opportunity_matches WHERE candidate_id = ? AND profile_hash = ?')
+    .all(candidateId, profileHash) as unknown as { opportunity_id: string }[]
   return new Set(rows.map((row) => row.opportunity_id))
 }
 
