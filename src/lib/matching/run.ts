@@ -1,6 +1,7 @@
 import { candidateById, getOrCreateCandidate, listListeningCandidateIds } from '../db/repo'
 import { assessedOpportunityIds, insertMatch, type MatchVerdict } from '../db/matching'
 import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
+import { describeWhenMissing } from '../sourcing/describe'
 import { runSourcing, type SourcingStats } from '../sourcing/run'
 import type { TheirStackQuery } from '../sourcing/theirstack'
 import { ASSESS_VERSION, assessOpportunity } from './assess'
@@ -98,6 +99,8 @@ export async function runMatching(options: { candidateId: string; limit?: number
           description: first.description ?? postings.find((posting) => posting.description)?.description ?? null,
         }
         try {
+          // Some boards list offers without their text: read it now, before judging.
+          if (!opportunity.description) opportunity.description = await describeWhenMissing(first.id)
           const assessment = await assessOpportunity({ candidateId: candidate.id, opportunity, profile, query })
           for (const posting of postings) {
             insertMatch({

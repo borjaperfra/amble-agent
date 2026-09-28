@@ -440,9 +440,200 @@ async function readBambooHr(token: string, companyName: string): Promise<RawOppo
   return opportunities
 }
 
+// ── Workday ──────────────────────────────────────────────────────────────
+//
+// The board's token is "tenant.wdN/site" (acme.wd3/External), from the URL of
+// its careers site. The list gives no description: it is fetched when an offer
+// is about to be judged (describeOpportunity), not for the thousands a big
+// company posts.
+
+const WORKDAY_PAGE = 20
+const BOARD_MAX = 1000
+
+function workdayParts(token: string): { host: string; tenant: string; site: string } | null {
+  const match = token.match(/^([a-z0-9-]+)\.(wd\d+)\/([A-Za-z0-9_-]+)$/i)
+  if (!match) return null
+  const [, tenant, wd, site] = match
+  return { host: `https://${tenant}.${wd}.myworkdayjobs.com`, tenant, site }
+}
+
+interface WorkdayPosting {
+  title: string
+  externalPath: string
+  locationsText?: string
+  postedOn?: string
+}
+
+// "Posted Today", "Posted Yesterday", "Posted 3 Days Ago", "Posted 30+ Days Ago".
+function workdayPostedAt(text: string | undefined): string | null {
+  if (!text) return null
+  const days = /today/i.test(text) ? 0 : /yesterday/i.test(text) ? 1 : Number(text.match(/(\d+)\+?\s+days?/i)?.[1] ?? NaN)
+  if (!Number.isFinite(days)) return null
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+}
+
+// "6 Locations" says nothing; the posting's path names the first one.
+function workdayLocation(posting: WorkdayPosting): string | null {
+  const text = posting.locationsText?.trim() ?? ''
+  if (text && !/^\d+\s+locations?$/i.test(text)) return text
+  const first = posting.externalPath.split('/')[2]
+  if (!first) return text || null
+  const place = decodeURIComponent(first).replace(/---/g, ' - ').replace(/-/g, ' ').trim()
+  return text ? `${place} (+${Number(text.match(/\d+/)?.[0] ?? 1) - 1})` : place
+}
+
+async function readWorkday(token: string, companyName: string): Promise<RawOpportunity[] | null> {
+  const parts = workdayParts(token)
+  if (!parts) return null
+  const endpoint = `${parts.host}/wday/cxs/${parts.tenant}/${parts.site}/jobs`
+  const postings: WorkdayPosting[] = []
+  // Workday gives the total on the first page only; later pages say 0.
+  let total = 0
+  for (let offset = 0; offset < BOARD_MAX; offset += WORKDAY_PAGE) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    let page: { total?: number; jobPostings?: WorkdayPosting[] } | null
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE, offset, searchText: '' }),
+        signal: controller.signal,
+      })
+      if (response.status === 404 || response.status === 422) return offset === 0 ? null : postings.map((p) => workdayOpportunity(p, parts, companyName))
+      if (!response.ok) throw new SourceError(`workday answered ${response.status}`, 'workday', response.status)
+      page = (await response.json()) as { total?: number; jobPostings?: WorkdayPosting[] }
+    } catch (error) {
+      if (error instanceof SourceError) throw error
+      throw new SourceError(`workday could not be read: ${error instanceof Error ? error.message : 'unknown error'}`, 'workday')
+    } finally {
+      clearTimeout(timeout)
+    }
+    const batch = page?.jobPostings ?? []
+    postings.push(...batch)
+    if (offset === 0) total = page?.total ?? 0
+    if (batch.length < WORKDAY_PAGE || postings.length >= total) break
+  }
+  return postings.map((posting) => workdayOpportunity(posting, parts, companyName))
+}
+
+function workdayOpportunity(posting: WorkdayPosting, parts: { host: string; site: string }, companyName: string): RawOpportunity {
+  const location = workdayLocation(posting)
+  return {
+    source: 'workday',
+    externalId: posting.externalPath,
+    companyName,
+    title: posting.title.trim(),
+    location,
+    workplace: inferWorkplace(location, posting.title),
+    url: `${parts.host}/en-US/${parts.site}${posting.externalPath}`,
+    description: null,
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    salaryRaw: null,
+    postedAt: workdayPostedAt(posting.postedOn),
+  }
+}
+
+// ── SmartRecruiters ──────────────────────────────────────────────────────
+//
+// The token is the company's identifier (jobs.smartrecruiters.com/<id>). As
+// with Workday, descriptions are fetched when an offer is about to be judged.
+
+const SMARTRECRUITERS_PAGE = 100
+
+interface SmartRecruitersPosting {
+  id: string
+  name: string
+  releasedDate?: string
+  company?: { identifier?: string; name?: string }
+  location?: { city?: string; region?: string; country?: string; remote?: boolean; hybrid?: boolean; fullLocation?: string }
+}
+
+async function readSmartRecruiters(token: string, companyName: string): Promise<RawOpportunity[] | null> {
+  const postings: SmartRecruitersPosting[] = []
+  for (let offset = 0; offset < BOARD_MAX; offset += SMARTRECRUITERS_PAGE) {
+    const page = (await getJson(
+      `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(token)}/postings?limit=${SMARTRECRUITERS_PAGE}&offset=${offset}`,
+      'smartrecruiters',
+    )) as { totalFound?: number; content?: SmartRecruitersPosting[] } | null
+    if (!page) return offset === 0 ? null : postings.map((p) => smartRecruitersOpportunity(p, token, companyName))
+    const batch = page.content ?? []
+    postings.push(...batch)
+    if (batch.length < SMARTRECRUITERS_PAGE || postings.length >= (page.totalFound ?? 0)) break
+  }
+  // An identifier nobody uses answers with an empty list, not a 404.
+  if (postings.length === 0) return []
+  return postings.map((posting) => smartRecruitersOpportunity(posting, token, companyName))
+}
+
+function smartRecruitersOpportunity(posting: SmartRecruitersPosting, token: string, companyName: string): RawOpportunity {
+  const place = posting.location
+  const location = place?.fullLocation ?? ([place?.city, place?.region, place?.country?.toUpperCase()].filter(Boolean).join(', ') || null)
+  const workplace = place?.remote ? 'remote' : place?.hybrid ? 'hybrid' : inferWorkplace(location, posting.name)
+  return {
+    source: 'smartrecruiters',
+    externalId: posting.id,
+    companyName,
+    title: posting.name.trim(),
+    location,
+    workplace,
+    url: `https://jobs.smartrecruiters.com/${encodeURIComponent(token)}/${encodeURIComponent(posting.id)}`,
+    description: null,
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    salaryRaw: null,
+    postedAt: toIso(posting.releasedDate),
+  }
+}
+
+// The description of an offer whose board lists none, read when it is about
+// to be judged. Null when the source gives none.
+export async function describeOpportunity(source: string, token: string, externalId: string): Promise<string | null> {
+  if (source === 'workday') {
+    const parts = workdayParts(token)
+    if (!parts) return null
+    const data = (await getJson(`${parts.host}/wday/cxs/${parts.tenant}/${parts.site}${externalId}`, 'workday')) as {
+      jobPostingInfo?: { jobDescription?: string; location?: string; additionalLocations?: string[]; remoteType?: string }
+    } | null
+    const info = data?.jobPostingInfo
+    if (!info) return null
+    const where = [info.location, ...(info.additionalLocations ?? [])].filter(Boolean).join(' · ')
+    const body = htmlToText(info.jobDescription) ?? ''
+    return clampText([where && `Locations: ${where}`, info.remoteType && `Workplace: ${info.remoteType}`, body].filter(Boolean).join('\n\n'))
+  }
+  if (source === 'smartrecruiters') {
+    const data = (await getJson(
+      `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(token)}/postings/${encodeURIComponent(externalId)}`,
+      'smartrecruiters',
+    )) as { jobAd?: { sections?: Record<string, { title?: string; text?: string }> } } | null
+    const sections = data?.jobAd?.sections ?? {}
+    const text = ['jobDescription', 'qualifications', 'additionalInformation', 'companyDescription']
+      .map((key) => sections[key])
+      .filter((section): section is { title?: string; text?: string } => Boolean(section?.text))
+      .map((section) => [section.title, htmlToText(section.text)].filter(Boolean).join('\n'))
+      .join('\n\n')
+    return clampText(text)
+  }
+  return null
+}
+
 // ── Dispatch and detection ───────────────────────────────────────────────
 
-export const ATS_KINDS: AtsKind[] = ['greenhouse', 'lever', 'ashby', 'workable', 'teamtailor', 'recruitee', 'personio', 'bamboohr']
+export const ATS_KINDS: AtsKind[] = [
+  'greenhouse',
+  'lever',
+  'ashby',
+  'workable',
+  'teamtailor',
+  'recruitee',
+  'personio',
+  'bamboohr',
+  'workday',
+  'smartrecruiters',
+]
 
 // null: the board does not exist. []: it exists and has no open offers.
 export function readAtsBoard(ats: AtsKind, token: string, companyName: string): Promise<RawOpportunity[] | null> {
@@ -463,6 +654,10 @@ export function readAtsBoard(ats: AtsKind, token: string, companyName: string): 
       return readPersonio(token, companyName)
     case 'bamboohr':
       return readBambooHr(token, companyName)
+    case 'workday':
+      return readWorkday(token, companyName)
+    case 'smartrecruiters':
+      return readSmartRecruiters(token, companyName)
   }
 }
 
@@ -493,6 +688,12 @@ async function boardOwner(ats: AtsKind, token: string): Promise<string | null> {
       // Most feeds leave subcompany out; the board's page is titled "Jobs at <owner>".
       const html = await getText(`https://${encodeURIComponent(token)}.jobs.personio.de/`, ats)
       return html?.match(/<title>\s*(?:Jobs|Stellenangebote|Empleos|Ofertas de empleo)\s+(?:at|bei|en|de)\s+([^<]+?)\s*<\/title>/i)?.[1] ?? null
+    }
+    case 'smartrecruiters': {
+      const data = (await getJson(`https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(token)}/postings?limit=1`, ats)) as {
+        content?: SmartRecruitersPosting[]
+      } | null
+      return data?.content?.[0]?.company?.name ?? null
     }
     default:
       return null
@@ -527,6 +728,9 @@ const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp }[] = [
   { ats: 'recruitee', pattern: /\b([a-z0-9-]+)\.recruitee\.com/i },
   { ats: 'personio', pattern: /\b([a-z0-9-]+)\.jobs\.personio\.(?:de|com)/i },
   { ats: 'bamboohr', pattern: /\b([a-z0-9-]+)\.bamboohr\.com/i },
+  // tenant.wdN/site: the site is the path's first segment after an optional locale.
+  { ats: 'workday', pattern: /\b([a-z0-9-]+\.wd\d+)\.myworkdayjobs\.com\/(?:[a-z]{2}-[A-Z]{2}\/)?([A-Za-z0-9_-]+)/ },
+  { ats: 'smartrecruiters', pattern: /(?:jobs|careers)\.smartrecruiters\.com\/([A-Za-z0-9_-]+)/i },
 ]
 
 const NOT_TOKENS = new Set(['api', 'app', 'assets', 'careers-analytics', 'cdn', 'embed', 'j', 'jobs', 'static', 'v1', 'widget', 'www'])
@@ -541,7 +745,8 @@ const SUBDOMAIN_ATS = new Set<AtsKind>(['teamtailor', 'recruitee', 'personio', '
 // short names are taken ("chorus" is a London firm, not Chorus One). Their
 // boards are taken only from a careers page that links them, or pinned in the
 // directory.
-const NEVER_PROBED = new Set<AtsKind>(['workable', 'bamboohr'])
+// A Workday token (tenant, server, site) cannot be guessed from a name at all.
+const NEVER_PROBED = new Set<AtsKind>(['workable', 'bamboohr', 'workday'])
 
 // Personio names the owner on most boards, not all; a guess there stands only
 // when it does ("neon" is NEON, a German bank, not Neon).
@@ -566,8 +771,8 @@ export async function detectBoard(params: { name: string; careersUrl?: string | 
       const html = response.ok ? await response.text() : ''
       const found: { ats: AtsKind; token: string }[] = []
       for (const { ats, pattern } of BOARD_PATTERNS) {
-        for (const match of html.matchAll(new RegExp(pattern.source, 'gi'))) {
-          const token = match[1]
+        for (const match of html.matchAll(new RegExp(pattern.source, ats === 'workday' ? 'g' : 'gi'))) {
+          const token = ats === 'workday' ? `${match[1].toLowerCase()}/${match[2]}` : match[1]
           if (!NOT_TOKENS.has(token.split('.')[0].toLowerCase()) && !found.some((f) => f.ats === ats && f.token === token)) found.push({ ats, token })
         }
       }

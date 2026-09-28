@@ -1,7 +1,17 @@
 // The one shape every source produces. Adapters differ in how they read a
 // source; nothing downstream knows which source an offer came from.
 
-export type AtsKind = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'teamtailor' | 'recruitee' | 'personio' | 'bamboohr'
+export type AtsKind =
+  | 'greenhouse'
+  | 'lever'
+  | 'ashby'
+  | 'workable'
+  | 'teamtailor'
+  | 'recruitee'
+  | 'personio'
+  | 'bamboohr'
+  | 'workday'
+  | 'smartrecruiters'
 export type SourceKind = AtsKind | 'theirstack'
 export type Workplace = 'remote' | 'hybrid' | 'onsite'
 
