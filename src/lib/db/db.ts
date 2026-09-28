@@ -2,7 +2,9 @@ import { DatabaseSync } from 'node:sqlite'
 import path from 'node:path'
 import fs from 'node:fs'
 
-const DATA_DIR = path.join(process.cwd(), '.amble-data')
+// Where everything the product keeps lives: the database and the files people
+// give it. On a server, a persistent volume (AMBLE_DATA_DIR).
+const DATA_DIR = process.env.AMBLE_DATA_DIR ?? path.join(process.cwd(), '.amble-data')
 const DB_PATH = path.join(DATA_DIR, 'amble.db')
 
 declare global {

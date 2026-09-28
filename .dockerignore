@@ -1,0 +1,9 @@
+# Never in the image: people's data, secrets, and what the build makes itself.
+.amble-data
+.env*
+.git
+.next
+node_modules
+*.log
+tsconfig.tsbuildinfo
+scratch*

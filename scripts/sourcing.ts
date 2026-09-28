@@ -17,24 +17,12 @@ import { runSourcing, syncDirectory, watchCompany } from '../src/lib/sourcing/ru
 import { listMatchesForKey } from '../src/lib/db/matching'
 import { currentMatchKey, runListening, runMatching } from '../src/lib/matching/run'
 import type { Explanation } from '../src/lib/matching/assess'
-import { DATA_DIRECTORY } from '../src/lib/db/db'
-import fs from 'node:fs'
-import path from 'node:path'
-
-// Scheduled passes must not overlap: two would judge the same offers twice. A
-// lock older than this is left by a pass that died, and is taken over.
-const LOCK_PATH = path.join(DATA_DIRECTORY, 'sourcing.lock')
-const LOCK_STALE_MS = 3 * 60 * 60 * 1000
+import { LOCK_PATH, releaseLock, takeLock as takeSharedLock } from '../src/lib/sourcing/lock'
 
 function takeLock(): boolean {
-  try {
-    if (fs.existsSync(LOCK_PATH) && Date.now() - fs.statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) fs.rmSync(LOCK_PATH)
-    fs.writeFileSync(LOCK_PATH, String(process.pid), { flag: 'wx' })
-    process.on('exit', () => fs.rmSync(LOCK_PATH, { force: true }))
-    return true
-  } catch {
-    return false
-  }
+  if (!takeSharedLock()) return false
+  process.on('exit', releaseLock)
+  return true
 }
 
 const WRITES = new Set(['run', 'match', 'listen', 'directory', 'prune'])
