@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
@@ -28,7 +27,6 @@ function withEmail(sentence: string, email: string) {
 // The one-click way in: the same goodbye as the code, the eye closing here to
 // wake on the next page.
 export default function LinkFlow({ token, email }: { token: string; email: string | null }) {
-  const router = useRouter()
   const t = useT()
   const [busy, setBusy] = useState(false)
   const [expired, setExpired] = useState(email === null)
@@ -54,8 +52,9 @@ export default function LinkFlow({ token, email }: { token: string; email: strin
       setLid(1)
       setLeaving(true)
       await wait(LEAVE_MS)
-      router.replace('/start')
-      router.refresh()
+      // A full load, not a client navigation: the page that fades out here must
+      // not stay on screen if the new session's first render stalls.
+      window.location.replace('/start')
     } catch {
       setBusy(false)
       setExpired(true)

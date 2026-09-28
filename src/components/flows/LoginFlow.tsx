@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useRef, useState, useSyncExternalStore } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
@@ -73,7 +72,6 @@ function withEmail(sentence: string, email: string) {
 // what you write, blinks when the code is on its way, listens while it waits,
 // narrows at a wrong code, and closes when you are in, to wake on the next page.
 export default function LoginFlow({ next, invitation = null }: { next: string; invitation?: string | null }) {
-  const router = useRouter()
   const t = useT()
   const [phase, setPhase] = useState<Phase>('email')
   // Only the browser knows it: empty while rendering on the server.
@@ -145,8 +143,9 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
       setLid(1)
       setLeaving(true)
       await wait(LEAVE_MS)
-      router.replace(next)
-      router.refresh()
+      // A full load, not a client navigation: the page that fades out here must
+      // not stay on screen if the new session's first render stalls.
+      window.location.replace(next)
       return
     }
     // A quiet no: the eye narrows, the figures fade, the field empties.
