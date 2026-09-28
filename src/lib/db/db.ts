@@ -395,6 +395,17 @@ function createDb(): DatabaseSync {
       PRIMARY KEY (candidate_id, opportunity_id)
     );
 
+    -- What beta users tell us, from the app or from WhatsApp.
+    CREATE TABLE IF NOT EXISTS feedback (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      channel TEXT NOT NULL,
+      page TEXT,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      seen_at TEXT
+    );
+
     -- What the candidate answered themselves in application forms, kept for
     -- the next form that asks the same; and the CV they send, as a file.
     CREATE TABLE IF NOT EXISTS candidate_answers (

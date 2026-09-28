@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { Inter, Newsreader } from 'next/font/google'
 import { I18nProvider } from '@/components/I18nProvider'
+import FeedbackButton from '@/components/FeedbackButton'
 import TabEye from '@/components/TabEye'
+import { currentCandidate } from '@/lib/auth/session'
 import { serverDictionary, serverLocale } from '@/lib/i18n/server'
 import './globals.css'
 
@@ -30,11 +32,14 @@ export async function generateMetadata(): Promise<Metadata> {
 // so it is read from their record, not from the URL.
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await serverLocale()
+  // Feedback is for people in the beta: once they have signed in.
+  const signedIn = Boolean(await currentCandidate())
   return (
     <html lang={locale} className={`${inter.variable} ${newsreader.variable}`}>
       <body>
         <I18nProvider locale={locale}>
           <TabEye />
+          {signedIn && <FeedbackButton />}
           {children}
         </I18nProvider>
       </body>

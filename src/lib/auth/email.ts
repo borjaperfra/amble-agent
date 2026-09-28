@@ -23,6 +23,23 @@ function loginHtml(t: (typeof dictionaries)['en']['login']['email'], code: strin
 </table></td></tr></table></body></html>`
 }
 
+// Any plain email from amble; without a key (local development) it goes to the log.
+export async function sendEmail(params: { to: string; subject: string; text: string; idempotencyKey: string }): Promise<void> {
+  const key = process.env.RESEND_API_KEY
+  if (!key) {
+    console.info(`[amble] email to ${params.to}: ${params.subject}
+${params.text}`)
+    return
+  }
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Idempotency-Key': params.idempotencyKey },
+    body: JSON.stringify({ from: FROM, to: [params.to], subject: params.subject, text: params.text }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!response.ok) throw new Error(`Resend refused the email (${response.status})`)
+}
+
 export async function sendLoginCode(params: {
   to: string
   code: string
