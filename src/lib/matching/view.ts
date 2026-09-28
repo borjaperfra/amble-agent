@@ -1,3 +1,4 @@
+import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
@@ -84,6 +85,8 @@ export interface WantedOpportunity {
   progress: MatchProgress | null
   // When they applied or stopped following; otherwise when they said they wanted it.
   since: string
+  // What the Rep prepared to apply, if they asked for it.
+  prepared: PreparedApplication | null
 }
 
 export interface OpportunitiesView {
@@ -136,6 +139,7 @@ function wantedOpportunities(candidateId: string): WantedOpportunity[] {
       unknowns: explanation?.unknowns ?? [],
       progress: row.progress,
       since: row.progress_at ?? row.decided_at,
+      prepared: getPreparedApplication(candidateId, row.opportunity_id),
     })
   }
   return [...byRole.values()]

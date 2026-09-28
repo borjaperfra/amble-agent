@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import Header from '@/components/Header'
+import ApplicationPanel from '@/components/flows/ApplicationPanel'
 import Symbol from '@/components/Symbol'
 import { useI18n, useT } from '@/components/I18nProvider'
 import type { DiscardedOpportunity, FoundOpportunity, OpportunitiesView, WantedOpportunity } from '@/lib/matching/view'
@@ -467,6 +468,8 @@ function WantedCard({ item, arrived, onChanged }: { item: WantedOpportunity; arr
             <p className={styles.consider}>{item.considerAlso.text}</p>
           </section>
         )}
+
+        {item.progress !== 'applied' && !item.closed && <ApplicationPanel opportunityId={item.opportunityIds[0]} initial={item.prepared} />}
 
         <div className={styles.wantedActions}>
           {item.url && !item.closed && (

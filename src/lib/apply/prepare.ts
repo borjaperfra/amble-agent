@@ -1,0 +1,278 @@
+import { z } from 'zod'
+import { getDb } from '../db/db'
+import { candidateById, listEvidence, listSources, newId, now } from '../db/repo'
+import { candidateLocale } from '../i18n/candidate'
+import { LANGUAGE_NAME } from '../i18n/locale'
+import { buildMatchingProfile } from '../matching/profile'
+import { runStructuredTask } from '../model/provider'
+import { isUnverifiedAssisted } from '../pipeline/attribution'
+import { readApplicationForm, type FormField } from './form'
+
+// "Prepare my application": for an offer the candidate wants, how best to
+// apply, a short message, and an answer for each field of the form.
+//
+// Who writes what:
+//   - facts the Rep holds (name, email, links) are filled in here, not by the model
+//   - what only the candidate can say (work permits, visas, where they will
+//     live, consents, salary, who referred them) is never answered: it is
+//     marked for them
+//   - the model writes the advice, the message and the open answers, and
+//     every claim cites the candidate's evidence; an answer that cites none
+//     is dropped, so nothing is invented about them
+
+const PREPARE_VERSION = 'v2'
+const MAX_DESCRIPTION_CHARS = 8_000
+const MAX_EVIDENCE = 90
+
+export type AnswerSource = 'fact' | 'rep' | 'you'
+
+export interface PreparedAnswer {
+  fieldId: string
+  label: string
+  kind: FormField['kind']
+  required: boolean
+  options: string[]
+  source: AnswerSource
+  // The text to paste, when there is one.
+  answer: string | null
+  // For 'you': what they need to decide or provide.
+  note: string | null
+}
+
+export interface PreparedApplication {
+  advice: {
+    channel: 'form' | 'referral' | 'direct'
+    channelWhy: string
+    cv: string
+    coverLetter: 'required' | 'worth_it' | 'skip'
+    coverLetterWhy: string
+    emphasise: string[]
+  }
+  message: string | null
+  answers: PreparedAnswer[]
+  formSource: 'greenhouse' | 'ashby' | 'generic'
+  createdAt: string
+}
+
+// Fields whose answer is a decision or a fact of the candidate's life.
+const THEIRS =
+  /authori[sz]|sponsor|visa|permit|right to work|relocat|salary|compensation|expectation|notice period|start date|available|refer|hear about|find out about|how did you (hear|find|learn)|consent|gdpr|privacy|acknowledge|gender|race|ethnic|veteran|disabilit|pronoun|located|location|based|work from|live|country|city|address|citizen/i
+
+const prepareSchema = z.preprocess(
+  (raw) => {
+    const obj = (raw ?? {}) as Record<string, unknown>
+    const advice = (obj.advice ?? {}) as Record<string, unknown>
+    const str = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
+    const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [])
+    const channel = str(advice.channel, 20)
+    const letter = str(advice.coverLetter, 20)
+    const message = (obj.message ?? {}) as Record<string, unknown>
+    return {
+      advice: {
+        channel: channel === 'referral' || channel === 'direct' ? channel : 'form',
+        channelWhy: str(advice.channelWhy, 500),
+        cv: str(advice.cv, 500),
+        coverLetter: letter === 'required' || letter === 'skip' ? letter : 'worth_it',
+        coverLetterWhy: str(advice.coverLetterWhy, 400),
+        emphasise: (Array.isArray(advice.emphasise) ? advice.emphasise : []).map((item) => str(item, 320)).filter(Boolean).slice(0, 4),
+      },
+      message: { text: str(message.text, 2400), evidenceIds: ids(message.evidenceIds) },
+      answers: (Array.isArray(obj.answers) ? obj.answers : []).map((entry) => {
+        const e = (entry ?? {}) as Record<string, unknown>
+        return {
+          fieldId: str(e.fieldId, 120),
+          answer: str(e.answer, 3000) || null,
+          evidenceIds: ids(e.evidenceIds),
+          needsYou: str(e.needsYou, 600) || null,
+        }
+      }),
+    }
+  },
+  z.object({
+    advice: z.object({
+      channel: z.enum(['form', 'referral', 'direct']),
+      channelWhy: z.string(),
+      cv: z.string(),
+      coverLetter: z.enum(['required', 'worth_it', 'skip']),
+      coverLetterWhy: z.string(),
+      emphasise: z.array(z.string()),
+    }),
+    message: z.object({ text: z.string(), evidenceIds: z.array(z.string()) }),
+    answers: z.array(z.object({ fieldId: z.string(), answer: z.string().nullable(), evidenceIds: z.array(z.string()), needsYou: z.string().nullable() })),
+  }),
+)
+
+function systemPrompt(adviceLanguage: string): string {
+  return `You are amble's application writer, version 2. The candidate wants this job. Help them apply well, using only what their evidence shows.
+
+1. ADVICE, written in ${adviceLanguage}:
+   - channel: "form" (apply through the posting), "referral" (worth finding someone inside first) or "direct" (write to the hiring manager as well). channelWhy: one or two sentences grounded in the posting and the candidate's situation.
+   - cv: one or two sentences on whether and how to adapt their CV for this role: what to lead with.
+   - coverLetter: "required" if the form requires one, "worth_it" if it would clearly help here, "skip" otherwise; coverLetterWhy in one sentence.
+   - emphasise: up to 4 points to lead with, each under 25 words and backed by their evidence.
+
+2. MESSAGE, written in the language of the posting: a short cover letter or intro message (120 to 200 words) in first person, plain and specific, no hype, no clichés ("I am excited to apply"). Every claim about the candidate must be backed by evidence listed; list those ids in evidenceIds. If the evidence does not support something, leave it out.
+
+3. ANSWERS, written in the language of the posting, one per field given under FIELDS TO ANSWER, by its id:
+   - Answer in first person, as the candidate, with concrete examples from the evidence. Keep within what a person would write in a form (a short paragraph, at most 180 words).
+   - evidenceIds: the evidence the answer rests on. An answer with no evidence behind it must not be written: set answer to null and explain in needsYou, in ${adviceLanguage}, what the candidate should add.
+   - Never invent numbers, names, links, dates or results. Never answer on the candidate's behalf what only they can decide (salary, availability, who referred them, what they have used): set answer to null and say in needsYou, in ${adviceLanguage}, what to write.
+
+Evidence marked attributed:false rests on work the candidate has not defended as their own: do not use it.
+
+Respond ONLY with JSON: {"advice": {"channel": string, "channelWhy": string, "cv": string, "coverLetter": string, "coverLetterWhy": string, "emphasise": string[]}, "message": {"text": string, "evidenceIds": string[]}, "answers": [{"fieldId": string, "answer": string|null, "evidenceIds": string[], "needsYou": string|null}]}.`
+}
+
+// What the Rep knows of their links: GitHub and a website from their sources.
+function links(candidateId: string): { github: string | null; website: string | null } {
+  const sources = listSources(candidateId)
+  const github = sources.find((source) => source.type === 'github' && source.uri)?.uri ?? null
+  const site = sources.find((source) => source.type === 'website' && source.uri)?.uri ?? null
+  let website: string | null = null
+  if (site) {
+    try {
+      website = new URL(site).origin
+    } catch {
+      website = site
+    }
+  }
+  return { github, website }
+}
+
+interface DraftRow {
+  content: string
+}
+
+export function getPreparedApplication(candidateId: string, opportunityId: string): PreparedApplication | null {
+  const row = getDb()
+    .prepare('SELECT content FROM application_drafts WHERE candidate_id = ? AND opportunity_id = ?')
+    .get(candidateId, opportunityId) as DraftRow | undefined
+  return row ? (JSON.parse(row.content) as PreparedApplication) : null
+}
+
+export class NotWantedError extends Error {}
+
+export async function prepareApplication(candidateId: string, opportunityId: string): Promise<PreparedApplication> {
+  const db = getDb()
+  const offer = db
+    .prepare(
+      `SELECT o.title, o.description, o.location, c.name AS company FROM opportunity_decisions d
+       JOIN opportunities o ON o.id = d.opportunity_id JOIN companies c ON c.id = o.company_id
+       WHERE d.candidate_id = ? AND d.opportunity_id = ? AND d.decision IN ('interested', 'wanted_anyway')`,
+    )
+    .get(candidateId, opportunityId) as { title: string; description: string | null; location: string | null; company: string } | undefined
+  if (!offer) throw new NotWantedError('Only an offer the candidate wants can be prepared.')
+
+  const candidate = candidateById(candidateId)
+  const locale = candidateLocale(candidate)
+  const form = await readApplicationForm(opportunityId)
+  const profile = buildMatchingProfile(candidateId)
+  const evidence = listEvidence(candidateId)
+    .filter((item) => !isUnverifiedAssisted(item))
+    .slice(0, MAX_EVIDENCE)
+  const evidenceIds = new Set(evidence.map((item) => item.id))
+  const { github, website } = links(candidateId)
+
+  // Filled in here, or left to the candidate, before any model call.
+  const decided = new Map<string, PreparedAnswer>()
+  const toWrite: FormField[] = []
+  for (const field of form.fields) {
+    const base = { fieldId: field.id, label: field.label, kind: field.kind, required: field.required, options: field.options }
+    const fact = (answer: string | null, missing: string) =>
+      decided.set(field.id, answer ? { ...base, source: 'fact', answer, note: null } : { ...base, source: 'you', answer: null, note: missing })
+    const t = NOTES[locale]
+    if (field.kind === 'name') fact(candidate.name, t.name)
+    else if (field.kind === 'email') fact(candidate.email, t.email)
+    else if (field.kind === 'phone') fact(null, t.phone)
+    else if (field.kind === 'linkedin') fact(null, t.linkedin)
+    else if (field.kind === 'website') fact(website ?? github, t.website)
+    else if (field.kind === 'resume') decided.set(field.id, { ...base, source: 'you', answer: null, note: t.resume })
+    else if (field.kind === 'cover_letter') decided.set(field.id, { ...base, source: 'rep', answer: null, note: t.coverLetter })
+    else if (field.kind === 'yes_no' || field.kind === 'choice' || field.kind === 'file' || THEIRS.test(field.label))
+      decided.set(field.id, { ...base, source: 'you', answer: null, note: t.yours })
+    else toWrite.push(field)
+  }
+
+  const { data, modelRunId } = await runStructuredTask({
+    candidateId,
+    task: 'prepare_application',
+    version: PREPARE_VERSION,
+    // Two languages in one answer: the advice in theirs, the rest in the posting's.
+    language: null,
+    system: systemPrompt(LANGUAGE_NAME[locale]),
+    user: `POSTING:\n${JSON.stringify(
+      { company: offer.company, title: offer.title, location: offer.location, description: (offer.description ?? '').slice(0, MAX_DESCRIPTION_CHARS) },
+      null,
+      1,
+    )}\n\nFORM (all fields, for context; a cover letter is ${form.fields.some((f) => f.kind === 'cover_letter' && f.required) ? 'required' : 'optional or not asked'}):\n${form.fields.map((f) => `- ${f.label}${f.required ? ' (required)' : ''}`).join('\n')}\n\nFIELDS TO ANSWER:\n${JSON.stringify(
+      toWrite.map((f) => ({ id: f.id, question: f.label, required: f.required })),
+      null,
+      1,
+    )}\n\nCAPABILITIES:\n${JSON.stringify(profile.capabilities, null, 1)}\n\nEVIDENCE:\n${JSON.stringify(
+      evidence.map((item) => ({ id: item.id, statement: item.statement, source: item.source_type, confirmed: item.candidate_confirmed === 1 })),
+      null,
+      1,
+    )}\n\nEXPERIENCE:\n${profile.experience.map((line) => `- ${line}`).join('\n') || '(none)'}`,
+    schema: prepareSchema,
+    temperature: 0.4,
+  })
+
+  const backed = (ids: string[]) => ids.some((id) => evidenceIds.has(id))
+  for (const field of toWrite) {
+    const proposed = data.answers.find((answer) => answer.fieldId === field.id)
+    const base = { fieldId: field.id, label: field.label, kind: field.kind, required: field.required, options: field.options }
+    // Nothing about the candidate is said without their evidence behind it.
+    if (proposed?.answer && backed(proposed.evidenceIds)) decided.set(field.id, { ...base, source: 'rep', answer: proposed.answer, note: null })
+    else decided.set(field.id, { ...base, source: 'you', answer: null, note: proposed?.needsYou || NOTES[locale].noEvidence })
+  }
+
+  const message = data.message.text && backed(data.message.evidenceIds) ? data.message.text : null
+  // The cover letter field takes the message, when there is one to give.
+  for (const answer of decided.values()) {
+    if (answer.kind === 'cover_letter') {
+      answer.answer = message
+      if (!message) {
+        answer.source = 'you'
+        answer.note = NOTES[locale].noEvidence
+      }
+    }
+  }
+
+  const prepared: PreparedApplication = {
+    advice: data.advice,
+    message,
+    answers: form.fields.map((field) => decided.get(field.id) as PreparedAnswer),
+    formSource: form.source,
+    createdAt: now(),
+  }
+  db.prepare(
+    `INSERT INTO application_drafts (id, candidate_id, opportunity_id, content, model_run_id, created_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (candidate_id, opportunity_id) DO UPDATE SET content = excluded.content, model_run_id = excluded.model_run_id, created_at = excluded.created_at`,
+  ).run(newId('app'), candidateId, opportunityId, JSON.stringify(prepared), modelRunId, prepared.createdAt)
+  return prepared
+}
+
+const NOTES = {
+  es: {
+    name: 'Tu nombre completo.',
+    email: 'El email con el que quieres que te contacten.',
+    phone: 'Tu teléfono, si quieres darlo.',
+    linkedin: 'La dirección de tu perfil de LinkedIn: no la tengo, solo tu exportación.',
+    website: 'Tu web o tu GitHub.',
+    resume: 'Sube tu CV.',
+    coverLetter: 'Te propongo el mensaje de arriba.',
+    yours: 'Esto lo decides tú.',
+    noEvidence: 'No tengo evidencia para contestarlo por ti: escríbelo tú.',
+  },
+  en: {
+    name: 'Your full name.',
+    email: 'The email you want to be contacted at.',
+    phone: 'Your phone number, if you want to give it.',
+    linkedin: 'The address of your LinkedIn profile: I only have your export.',
+    website: 'Your website or GitHub.',
+    resume: 'Upload your CV.',
+    coverLetter: 'I suggest the message above.',
+    yours: 'This one is yours to decide.',
+    noEvidence: 'I have no evidence to answer this for you: write it yourself.',
+  },
+} as const

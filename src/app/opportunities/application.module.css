@@ -1,0 +1,283 @@
+/* "Prepare my application", inside a wanted offer's card. */
+
+.start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+
+.startLead {
+  flex: 1 1 220px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.working {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 16px;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--ink-secondary);
+  background: var(--paper);
+  border-radius: var(--radius-md);
+}
+
+.panel {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 16px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summaryTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+}
+
+.summaryTitle::before {
+  content: '▸';
+  display: inline-block;
+  width: 18px;
+  font-size: 13px;
+  color: var(--ink-tertiary);
+  transition: transform var(--motion-fast) ease;
+}
+
+.panel[open] .summaryTitle::before {
+  transform: rotate(90deg);
+}
+
+.summaryMeta {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.section {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.advice {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.advice div {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 12px;
+}
+
+.advice dt {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.advice dd {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.emphasiseLabel {
+  margin-top: 6px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.emphasise {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+}
+
+/* The message, set like a letter on paper. */
+.letter {
+  position: relative;
+  padding: 20px 20px 16px;
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  line-height: 1.6;
+  white-space: pre-line;
+  background: var(--paper);
+  border-radius: var(--radius-md);
+}
+
+.letter .copy {
+  margin-top: 12px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13px;
+  color: var(--ink-tertiary);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 8px;
+  border-radius: 50%;
+}
+
+.dot:first-child {
+  margin-left: 0;
+}
+
+.dotFact {
+  background: var(--slate);
+}
+
+.dotRep {
+  background: var(--moss);
+}
+
+.dotYou {
+  background: var(--ochre);
+}
+
+.fields {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Each field marked by who answers it: a fact, the Rep, or you. */
+.field {
+  padding: 12px 14px;
+  border-left: 3px solid var(--border);
+  background: var(--paper);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.fact {
+  border-left-color: var(--slate);
+}
+
+.rep {
+  border-left-color: var(--moss);
+}
+
+.you {
+  border-left-color: var(--ochre);
+  background: var(--ochre-soft);
+}
+
+.fieldLabel {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.required {
+  color: var(--clay);
+}
+
+.fieldAnswer {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.answerText {
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-line;
+}
+
+.note {
+  margin-top: 4px;
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+.yours {
+  margin-right: 6px;
+  font-weight: 600;
+  color: var(--ochre);
+}
+
+.options {
+  color: var(--ink-tertiary);
+}
+
+.copy {
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.copy:hover {
+  color: var(--ink);
+  border-color: var(--ink-tertiary);
+}
+
+.footer {
+  margin-top: 16px;
+}
+
+.error {
+  font-size: var(--text-body-sm);
+  color: var(--clay);
+}
+
+@media (max-width: 560px) {
+  .advice div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
