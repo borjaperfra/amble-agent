@@ -1,6 +1,6 @@
 import { getOrCreateCandidate, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { listMatchesForKey, type MatchListing, type MatchResponse, type MatchRow } from '../db/matching'
-import type { Explanation, Gate, RoleFit } from './assess'
+import { LANGUAGE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey } from './run'
 
 // What the opportunities screen shows. Only assessments made against the
@@ -29,6 +29,9 @@ export type DiscardReason =
   | { kind: 'wrong_role'; text: string }
   | { kind: 'below_level'; text: string }
   | { kind: 'filter'; rule: string; quote: string | null }
+  | { kind: 'salary_floor'; quote: string | null }
+  | { kind: 'language'; quote: string | null }
+  | { kind: 'remote_unconfirmed'; places: string | null }
   | { kind: 'no_reason' }
 
 export interface DiscardedOpportunity {
@@ -118,8 +121,12 @@ export function getOpportunitiesView(): OpportunitiesView {
     const reasons: DiscardReason[] = []
     if (explanation.roleFit.fit === 'wrong_role') reasons.push({ kind: 'wrong_role', text: explanation.roleFit.reason })
     if (explanation.roleFit.fit === 'below_level') reasons.push({ kind: 'below_level', text: explanation.roleFit.reason })
-    for (const gate of gates.filter((g) => g.result === 'fail')) {
-      reasons.push({ kind: 'filter', rule: ruleLabels.get(gate.ruleId) ?? gate.ruleId, quote: gate.quote })
+    for (const gate of gates) {
+      if (gate.ruleId === REMOTE_UNCONFIRMED_GATE) reasons.push({ kind: 'remote_unconfirmed', places: gate.quote })
+      else if (gate.result !== 'fail') continue
+      else if (gate.ruleId === SALARY_FLOOR_GATE) reasons.push({ kind: 'salary_floor', quote: gate.quote })
+      else if (gate.ruleId === LANGUAGE_GATE) reasons.push({ kind: 'language', quote: gate.quote })
+      else reasons.push({ kind: 'filter', rule: ruleLabels.get(gate.ruleId) ?? gate.ruleId, quote: gate.quote })
     }
     if (reasons.length === 0) reasons.push({ kind: 'no_reason' })
     discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response })

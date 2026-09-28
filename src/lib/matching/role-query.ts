@@ -15,7 +15,7 @@ import type { MatchingProfile } from './profile'
 // passes to the model, which can read the description.
 
 // Part of the stored query's key: a new version of the prompt means a new query.
-const ROLE_QUERY_VERSION = 'v3'
+const ROLE_QUERY_VERSION = 'v4'
 
 export const SENIORITY_LEVELS = ['junior', 'mid_level', 'senior', 'staff', 'c_level'] as const
 export type Seniority = (typeof SENIORITY_LEVELS)[number]
@@ -34,6 +34,12 @@ export interface RoleQuery {
   homeCountry: string | null
   // Levels this person's experience makes credible, for aggregator searches.
   seniority: Seniority[]
+  // The yearly salary below which an offer is a no, from a confirmed
+  // compensation rule. Null when no confirmed rule states one.
+  salaryFloor: { amount: number; currency: string; ruleId: string } | null
+  // Languages the candidate works in (ISO 639-1), from what they said about
+  // themselves. Empty when unknown: then no offer is judged on language.
+  languages: string[]
 }
 
 const roleQuerySchema = z.preprocess(
@@ -54,6 +60,8 @@ const roleQuerySchema = z.preprocess(
       remoteRuleIds: ids(obj.remoteRuleIds),
       homeCountry: typeof obj.homeCountry === 'string' && /^[A-Za-z]{2}$/.test(obj.homeCountry.trim()) ? obj.homeCountry.trim().toUpperCase() : null,
       seniority: ids(obj.seniority).filter((level): level is Seniority => (SENIORITY_LEVELS as readonly string[]).includes(level)),
+      salaryFloor: salaryFloorOf(obj.salaryFloor),
+      languages: [...new Set(ids(obj.languages).map((code) => code.trim().toLowerCase()).filter((code) => /^[a-z]{2}$/.test(code)))],
     }
   },
   z.object({
@@ -66,8 +74,20 @@ const roleQuerySchema = z.preprocess(
     remoteRuleIds: z.array(z.string()),
     homeCountry: z.string().nullable(),
     seniority: z.array(z.enum(SENIORITY_LEVELS)),
+    salaryFloor: z.object({ amount: z.number(), currency: z.string(), ruleId: z.string() }).nullable(),
+    languages: z.array(z.string()),
   }),
 )
+
+function salaryFloorOf(value: unknown): RoleQuery['salaryFloor'] {
+  const floor = (value ?? {}) as Record<string, unknown>
+  const amount = typeof floor.amount === 'number' ? floor.amount : Number(floor.amount)
+  const currency = typeof floor.currency === 'string' ? floor.currency.trim().toUpperCase() : ''
+  const ruleId = typeof floor.ruleId === 'string' ? floor.ruleId.trim() : ''
+  // A yearly figure: anything under 1,000 is a monthly or hourly rate, or "75" for 75K.
+  if (!Number.isFinite(amount) || amount < 1000 || !/^[A-Z]{3}$/.test(currency) || !ruleId) return null
+  return { amount: Math.round(amount), currency, ruleId }
+}
 
 const SYSTEM_PROMPT = `You are Amble's role-query designer, version 3. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
 
@@ -78,10 +98,12 @@ Output:
 - requireRemote: true only if a confirmed hard filter demands remote work. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.
 - homeCountry: the ISO 3166-1 alpha-2 code of the country the candidate lives in, only if the experience states it (a city or country). Null if unclear.
 - seniority: the levels from ["junior", "mid_level", "senior", "staff", "c_level"] this person's experience makes credible to apply for. Usually one to three adjacent levels.
+- salaryFloor: the gross yearly salary below which this person says no, only if a confirmed rule states it as a figure: {"amount": the full number (75000, not 75), "currency": ISO 4217 code, "ruleId": the id of the rule that states it}. When the rules give several figures, the one they call the real floor. Null if no rule states a floor.
+- languages: ISO 639-1 codes of the languages this person can work in, only as LANGUAGES states them. Empty if it says nothing.
 
 Only confirmed rules are given to you; do not invent constraints they do not state.
 
-Respond ONLY with JSON: {"titleInclude": [], "titleExclude": [], "locationExclude": [], "locationRuleIds": [], "requireRemote": boolean, "officeAllowed": [], "remoteRuleIds": [], "homeCountry": string|null, "seniority": []}.`
+Respond ONLY with JSON: {"titleInclude": [], "titleExclude": [], "locationExclude": [], "locationRuleIds": [], "requireRemote": boolean, "officeAllowed": [], "remoteRuleIds": [], "homeCountry": string|null, "seniority": [], "salaryFloor": {"amount": number, "currency": string, "ruleId": string}|null, "languages": []}.`
 
 export async function roleQueryFor(candidateId: string, profile: MatchingProfile): Promise<RoleQuery> {
   const key = `${profile.hash}:${ROLE_QUERY_VERSION}`
@@ -100,7 +122,7 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
       profile.rules.map((rule) => ({ id: rule.id, kind: rule.kind, statement: rule.statement })),
       null,
       1,
-    )}\n\nCAPABILITIES:\n${JSON.stringify(profile.capabilities.map((c) => ({ name: c.name, assessment: c.assessment })), null, 1)}\n\nEXPERIENCE:\n${profile.experience.map((line) => `- ${line}`).join('\n') || '(none)'}`,
+    )}\n\nLANGUAGES:\n${profile.languageClaims.map((line) => `- ${line}`).join('\n') || '(none)'}\n\nCAPABILITIES:\n${JSON.stringify(profile.capabilities.map((c) => ({ name: c.name, assessment: c.assessment })), null, 1)}\n\nEXPERIENCE:\n${profile.experience.map((line) => `- ${line}`).join('\n') || '(none)'}`,
     schema: roleQuerySchema,
     temperature: 0.2,
   })
@@ -110,6 +132,7 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
   const hardFilterIds = new Set(profile.rules.filter((rule) => rule.kind === 'hard_filter').map((rule) => rule.id))
   const locationJustified = data.locationRuleIds.some((id) => hardFilterIds.has(id))
   const remoteJustified = data.remoteRuleIds.some((id) => hardFilterIds.has(id))
+  const ruleIds = new Set(profile.rules.map((rule) => rule.id))
   const query: RoleQuery = {
     titleInclude: data.titleInclude,
     titleExclude: data.titleExclude.filter((term) => !data.titleInclude.includes(term)),
@@ -118,6 +141,9 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
     officeAllowed: remoteJustified ? data.officeAllowed : [],
     homeCountry: data.homeCountry,
     seniority: data.seniority,
+    // A floor stands only on a confirmed rule the candidate stated.
+    salaryFloor: data.salaryFloor && ruleIds.has(data.salaryFloor.ruleId) ? data.salaryFloor : null,
+    languages: profile.languageClaims.length > 0 ? data.languages : [],
   }
   insertRoleQuery(candidateId, key, query, modelRunId)
   return query

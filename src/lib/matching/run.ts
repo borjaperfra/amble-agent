@@ -97,7 +97,7 @@ export async function runMatching(options: { limit?: number } = {}): Promise<Mat
           description: first.description ?? postings.find((posting) => posting.description)?.description ?? null,
         }
         try {
-          const assessment = await assessOpportunity({ candidateId: candidate.id, opportunity, profile })
+          const assessment = await assessOpportunity({ candidateId: candidate.id, opportunity, profile, query })
           for (const posting of postings) {
             insertMatch({
               candidateId: candidate.id,

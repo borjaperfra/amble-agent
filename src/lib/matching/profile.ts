@@ -25,8 +25,14 @@ export interface MatchingProfile {
   notFilteringOn: ListeningItem[]
   capabilities: MatchingCapability[]
   experience: string[]
+  // What the candidate said about the languages they speak, as said.
+  languageClaims: string[]
   hash: string
 }
+
+// Claims that talk about spoken languages, not programming ones.
+const LANGUAGE_CLAIM = /\b(languages?|idiomas?|speaker|native|nativo|nativa|fluent|fluido|fluida|bilingual|biling[uü]e)\b/i
+const PROGRAMMING = /\bprogramming\b|\bprogramaci[oó]n\b/i
 
 export function buildMatchingProfile(candidateId: string): MatchingProfile {
   const listening = getListeningProfile(candidateId)
@@ -57,18 +63,24 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
     .slice(0, 30)
     .map((claim) => claim.statement)
 
+  const languageClaims = listClaims(candidateId)
+    .filter((claim) => claim.claim_type === 'skill' && LANGUAGE_CLAIM.test(claim.statement) && !PROGRAMMING.test(claim.statement))
+    .slice(0, 10)
+    .map((claim) => claim.statement)
+
   // The fingerprint covers what changes a verdict: rules, what must not be
-  // filtered on, and capability levels. When it moves, offers are judged again.
+  // filtered on, capability levels and the languages spoken. When it moves, offers are judged again.
   const hash = createHash('sha1')
     .update(
       JSON.stringify({
         rules: rules.map((rule) => [rule.id, rule.statement]),
         notFilteringOn: listening.revealed.notFilteringOn.map((item) => [item.id, item.statement]),
         capabilities: capabilities.map((capability) => [capability.id, capability.assessment, capability.attributed]),
+        languageClaims,
       }),
     )
     .digest('hex')
     .slice(0, 16)
 
-  return { rules, notFilteringOn: listening.revealed.notFilteringOn, capabilities, experience, hash }
+  return { rules, notFilteringOn: listening.revealed.notFilteringOn, capabilities, experience, languageClaims, hash }
 }
