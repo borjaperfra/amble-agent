@@ -362,6 +362,19 @@ function createDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS sessions_candidate ON sessions (candidate_id);
 
+    -- The beta is by invitation: a link that creates one account. Each member
+    -- has a few to give; the owner issues as many as needed. The token is kept
+    -- so a member can see and copy their links again.
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      inviter_id TEXT REFERENCES candidates(id),
+      created_at TEXT NOT NULL,
+      accepted_by TEXT REFERENCES candidates(id),
+      accepted_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS invitations_inviter ON invitations (inviter_id);
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 
@@ -442,6 +455,9 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'candidates', 'email', 'TEXT')
   addColumn(db, 'candidates', 'role', "TEXT NOT NULL DEFAULT 'member'")
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS candidates_email ON candidates (email) WHERE email IS NOT NULL')
+
+  // A code asked for from an invitation creates the account when it is used.
+  addColumn(db, 'login_codes', 'invitation_id', 'TEXT')
 }
 
 export function getDb(): DatabaseSync {

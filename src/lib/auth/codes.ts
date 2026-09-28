@@ -3,6 +3,7 @@ import { getDb } from '../db/db'
 import { getCandidateByEmail, newId, now, type CandidateRow } from '../db/repo'
 import type { Locale } from '../i18n/locale'
 import { sendLoginCode } from './email'
+import { acceptInvitation, betaIsFull, getInvitation, type InvitationRow } from './invitations'
 
 // Signing in with a one-time code sent by email: no passwords to keep.
 // A code lasts ten minutes and survives five wrong guesses; a new one
@@ -27,15 +28,19 @@ function hashCode(codeId: string, code: string): string {
 export type CodeRequest = { sent: true } | { sent: false; reason: 'too_many' }
 
 // Whether an address has an account is never revealed: the answer is the same
-// either way, and only an account receives a code.
-export async function requestLoginCode(email: string, locale: Locale): Promise<CodeRequest> {
+// either way, and only an account receives a code. From an open invitation,
+// an address without an account receives one too: using it creates the
+// account. An address that already has one simply signs in, and the
+// invitation stays unused.
+export async function requestLoginCode(email: string, locale: Locale, invitation: InvitationRow | null = null): Promise<CodeRequest> {
   const db = getDb()
   const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString()
   const recent = db.prepare('SELECT COUNT(*) AS n FROM login_codes WHERE email = ? AND created_at > ?').get(email, since) as { n: number }
   if (recent.n >= MAX_CODES_PER_WINDOW) return { sent: false, reason: 'too_many' }
 
   const candidate = getCandidateByEmail(email)
-  if (!candidate) {
+  const joining = !candidate && invitation !== null
+  if (!candidate && !joining) {
     // Counted like a real one, so the limit says nothing either.
     db.prepare('INSERT INTO login_codes (id, email, code_hash, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?, ?)').run(
       newId('lc'),
@@ -53,14 +58,16 @@ export async function requestLoginCode(email: string, locale: Locale): Promise<C
   const expiresAt = new Date(Date.now() + CODE_MINUTES * 60_000).toISOString()
   // A new code replaces any earlier one still waiting.
   db.prepare('UPDATE login_codes SET used_at = ? WHERE email = ? AND used_at IS NULL').run(now(), email)
-  db.prepare('INSERT INTO login_codes (id, email, code_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)').run(
+  db.prepare('INSERT INTO login_codes (id, email, code_hash, created_at, expires_at, invitation_id) VALUES (?, ?, ?, ?, ?, ?)').run(
     id,
     email,
     hashCode(id, code),
     now(),
     expiresAt,
+    joining ? invitation.id : null,
   )
-  await sendLoginCode({ to: email, code, locale: candidate.locale === 'es' || candidate.locale === 'en' ? candidate.locale : locale, idempotencyKey: id })
+  const candidateLocale = candidate?.locale === 'es' || candidate?.locale === 'en' ? candidate.locale : null
+  await sendLoginCode({ to: email, code, locale: candidateLocale ?? locale, idempotencyKey: id })
   return { sent: true }
 }
 
@@ -69,14 +76,19 @@ interface LoginCodeRow {
   code_hash: string
   attempts: number
   expires_at: string
+  invitation_id: string | null
 }
 
-export type CodeCheck = { ok: true; candidate: CandidateRow } | { ok: false; reason: 'wrong' | 'expired' }
+export type CodeCheck =
+  | { ok: true; candidate: CandidateRow; joined: boolean }
+  | { ok: false; reason: 'wrong' | 'expired' | 'invitation_used' | 'beta_full' }
 
-export function verifyLoginCode(email: string, code: string): CodeCheck {
+export function verifyLoginCode(email: string, code: string, locale: Locale): CodeCheck {
   const db = getDb()
   const row = db
-    .prepare('SELECT id, code_hash, attempts, expires_at FROM login_codes WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1')
+    .prepare(
+      'SELECT id, code_hash, attempts, expires_at, invitation_id FROM login_codes WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1',
+    )
     .get(email) as LoginCodeRow | undefined
   if (!row || row.expires_at < now() || row.attempts >= MAX_ATTEMPTS) return { ok: false, reason: 'expired' }
 
@@ -89,5 +101,29 @@ export function verifyLoginCode(email: string, code: string): CodeCheck {
 
   db.prepare('UPDATE login_codes SET used_at = ? WHERE id = ?').run(now(), row.id)
   const candidate = getCandidateByEmail(email)
-  return candidate ? { ok: true, candidate } : { ok: false, reason: 'expired' }
+  if (candidate) return { ok: true, candidate, joined: false }
+  if (!row.invitation_id) return { ok: false, reason: 'expired' }
+  return createAccount(email, row.invitation_id, locale)
+}
+
+// The account and the used invitation are one step: if the invitation was
+// taken meanwhile, or the beta filled up, no account is left behind. The
+// statements are synchronous with nothing awaited between them, so no other
+// request runs in the middle; an explicit transaction could collide with one
+// runInTransaction holds open.
+function createAccount(email: string, invitationId: string, locale: Locale): CodeCheck {
+  const db = getDb()
+  const invitation = getInvitation(invitationId)
+  if (!invitation || invitation.accepted_at) return { ok: false, reason: 'invitation_used' }
+  if (betaIsFull()) return { ok: false, reason: 'beta_full' }
+  const id = newId('cand')
+  db.prepare(
+    "INSERT INTO candidates (id, created_at, email, role, locale, locale_source) VALUES (?, ?, ?, 'member', ?, 'detected')",
+  ).run(id, now(), email, locale)
+  if (!acceptInvitation(invitationId, id)) {
+    db.prepare('DELETE FROM candidates WHERE id = ?').run(id)
+    return { ok: false, reason: 'invitation_used' }
+  }
+  const candidate = getCandidateByEmail(email)
+  return candidate ? { ok: true, candidate, joined: true } : { ok: false, reason: 'expired' }
 }

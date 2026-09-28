@@ -8,7 +8,7 @@ import { useT } from '@/components/I18nProvider'
 import styles from '@/app/login/login.module.css'
 
 type Phase = 'email' | 'code'
-type ErrorKey = 'invalidEmail' | 'tooMany' | 'failed' | 'wrongCode' | 'expiredCode'
+type ErrorKey = 'invalidEmail' | 'tooMany' | 'failed' | 'wrongCode' | 'expiredCode' | 'invitationUsed' | 'betaFull'
 
 // What the auth routes answer, as the screen says it.
 const ERRORS: Record<string, ErrorKey> = {
@@ -17,9 +17,13 @@ const ERRORS: Record<string, ErrorKey> = {
   failed: 'failed',
   wrong: 'wrongCode',
   expired: 'expiredCode',
+  invitation_used: 'invitationUsed',
+  beta_full: 'betaFull',
 }
 
-export default function LoginFlow({ next }: { next: string }) {
+// Signing in, or, with an invitation, creating an account: the same two
+// steps, email then code.
+export default function LoginFlow({ next, invitation = null }: { next: string; invitation?: string | null }) {
   const router = useRouter()
   const t = useT()
   const [phase, setPhase] = useState<Phase>('email')
@@ -47,7 +51,7 @@ export default function LoginFlow({ next }: { next: string }) {
     event?.preventDefault()
     setBusy(true)
     setError(null)
-    const failure = await post('/api/auth/code', { email })
+    const failure = await post('/api/auth/code', invitation ? { email, invitation } : { email })
     setBusy(false)
     if (failure) {
       setError(ERRORS[failure] ?? 'failed')
@@ -81,8 +85,8 @@ export default function LoginFlow({ next }: { next: string }) {
 
         {phase === 'email' ? (
           <>
-            <h1 className={styles.title}>{t.login.title}</h1>
-            <p className={styles.lead}>{t.login.lead}</p>
+            <h1 className={styles.title}>{invitation ? t.login.joinTitle : t.login.title}</h1>
+            <p className={styles.lead}>{invitation ? t.login.joinLead : t.login.lead}</p>
             <form className={styles.form} onSubmit={(event) => void sendCode(event)}>
               <label className={styles.label} htmlFor="login-email">
                 {t.login.emailLabel}
@@ -107,9 +111,11 @@ export default function LoginFlow({ next }: { next: string }) {
                 </button>
               </div>
             </form>
-            <p className={styles.beta}>
-              {t.login.noAccount} <a href="https://amble.fyi">{t.login.waitlist}</a>
-            </p>
+            {!invitation && (
+              <p className={styles.beta}>
+                {t.login.noAccount} <a href="https://amble.fyi">{t.login.waitlist}</a>
+              </p>
+            )}
           </>
         ) : (
           <>
