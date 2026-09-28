@@ -3,7 +3,7 @@ import type { MatchVerdict } from '../db/matching'
 import type { OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import type { MatchingProfile } from './profile'
-import { placeOf } from './places'
+import { EUROPE, placeOf, placeOutsideEurope } from './places'
 import type { RoleQuery } from './role-query'
 
 // Judging one offer (PRODUCT_SPEC §17, §24): hard filters first, then the
@@ -23,7 +23,7 @@ const MAX_DESCRIPTION_CHARS = 9_000
 
 // Part of every stored assessment's key (with the profile fingerprint): a new
 // version of this prompt means every offer is judged again.
-export const ASSESS_VERSION = 'v7'
+export const ASSESS_VERSION = 'v8'
 
 export type RoleFit = 'fits' | 'stretch' | 'wrong_role' | 'below_level'
 
@@ -35,6 +35,7 @@ export type GateResult = 'pass' | 'fail' | 'unknown'
 export const SALARY_FLOOR_GATE = 'amble:salary_floor'
 export const LANGUAGE_GATE = 'amble:language'
 export const REMOTE_UNCONFIRMED_GATE = 'amble:remote_unconfirmed'
+export const REMOTE_ELSEWHERE_GATE = 'amble:remote_elsewhere'
 
 // A published maximum within this share of the floor is still worth a look:
 // the floor is what the candidate said, not a precise number.
@@ -149,6 +150,23 @@ export function amountsIn(quote: string): number[] {
     if (Number.isFinite(value)) amounts.push(thousands ? value * 1000 : value)
   }
   return amounts
+}
+
+// Words that open a remote role to someone in Europe, whatever its offices.
+// They count only when the sentence is about where the work is done: a
+// company "serving EMEA" or telling its story "globally" says nothing about
+// where its people can live.
+const EUROPE_WORD =
+  /\b(anywhere|worldwide|world wide|any country|any location|europe|european|emea|cet|spain|espana|madrid|barcelona|valencia)\b/g
+const WHERE_YOU_WORK =
+  /\b(remote|remotely|work|working|based|located|location|live|living|reside|residing|hire|hiring|candidates?|applicants?|time ?zones?|distributed)\b/
+
+function openToEurope(text: string): boolean {
+  for (const match of text.matchAll(EUROPE_WORD)) {
+    const before = text.slice(Math.max(0, (match.index ?? 0) - 60), match.index)
+    if (WHERE_YOU_WORK.test(before)) return true
+  }
+  return false
 }
 
 // Words that say, somewhere in the posting, that the work can be remote.
@@ -334,6 +352,23 @@ export async function assessOpportunity(params: {
   if (remoteUnconfirmed) {
     gates.push({ ruleId: REMOTE_UNCONFIRMED_GATE, result: 'unknown', quote: opportunity.location, note: 'the posting never says the role can be remote' })
   }
+
+  // Remote, but every place it names is outside Europe and it never says it is
+  // open to Europe: in practice, remote from there ("Toronto · San Francisco ·
+  // New York"). Set aside like the one above: the posting does not forbid it,
+  // but nothing shows it is open to someone living in Europe.
+  const remoteElsewhere =
+    !failed &&
+    !remoteUnconfirmed &&
+    query.requireRemote &&
+    query.homeCountry !== null &&
+    EUROPE.includes(query.homeCountry) &&
+    listedPlaces.length > 0 &&
+    listedPlaces.every(placeOutsideEurope) &&
+    !openToEurope(haystack)
+  if (remoteElsewhere) {
+    gates.push({ ruleId: REMOTE_ELSEWHERE_GATE, result: 'unknown', quote: opportunity.location, note: 'remote, but every place it names is outside Europe' })
+  }
   // Another profession or a role below the candidate's level is never shown.
   const wrongRole = data.roleFit.fit === 'wrong_role' || data.roleFit.fit === 'below_level'
 
@@ -359,7 +394,8 @@ export async function assessOpportunity(params: {
 
   // Domain verdict: another profession or a broken hard filter is never shown,
   // whatever reasons the model found.
-  const verdict: MatchVerdict = failed || wrongRole ? 'discarded' : remoteUnconfirmed ? 'hold' : why.length > 0 ? 'show' : 'hold'
+  const verdict: MatchVerdict =
+    failed || wrongRole ? 'discarded' : remoteUnconfirmed || remoteElsewhere ? 'hold' : why.length > 0 ? 'show' : 'hold'
 
   return {
     verdict,

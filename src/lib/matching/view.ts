@@ -1,6 +1,6 @@
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { listMatchesForKey, type MatchListing, type MatchResponse, type MatchRow } from '../db/matching'
-import { LANGUAGE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
+import { LANGUAGE_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey } from './run'
 
 // What the opportunities screen shows. Only assessments made against the
@@ -32,6 +32,7 @@ export type DiscardReason =
   | { kind: 'salary_floor'; quote: string | null }
   | { kind: 'language'; quote: string | null }
   | { kind: 'remote_unconfirmed'; places: string | null }
+  | { kind: 'remote_elsewhere'; places: string | null }
   | { kind: 'no_reason' }
 
 export interface DiscardedOpportunity {
@@ -154,6 +155,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     if (explanation.roleFit.fit === 'below_level') reasons.push({ kind: 'below_level', text: explanation.roleFit.reason })
     for (const gate of gates) {
       if (gate.ruleId === REMOTE_UNCONFIRMED_GATE) reasons.push({ kind: 'remote_unconfirmed', places: gate.quote })
+      else if (gate.ruleId === REMOTE_ELSEWHERE_GATE) reasons.push({ kind: 'remote_elsewhere', places: gate.quote })
       else if (gate.result !== 'fail') continue
       else if (gate.ruleId === SALARY_FLOOR_GATE) reasons.push({ kind: 'salary_floor', quote: gate.quote })
       else if (gate.ruleId === LANGUAGE_GATE) reasons.push({ kind: 'language', quote: gate.quote })

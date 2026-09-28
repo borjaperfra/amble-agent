@@ -261,11 +261,15 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
               ? t.opportunities.requiredLanguage
               : reason.kind === 'remote_unconfirmed'
               ? t.opportunities.remoteUnconfirmed
+              : reason.kind === 'remote_elsewhere'
+              ? t.opportunities.remoteElsewhere
               : t.opportunities.notEnoughReasons}
           {(reason.kind === 'filter' || reason.kind === 'salary_floor' || reason.kind === 'language') && reason.quote && (
             <span className={styles.discardQuote}> — “{reason.quote}”</span>
           )}
-          {reason.kind === 'remote_unconfirmed' && reason.places && <span className={styles.discardQuote}> — {reason.places}</span>}
+          {(reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere') && reason.places && (
+            <span className={styles.discardQuote}> — {reason.places}</span>
+          )}
         </p>
       ))}
       {item.response === 'wanted_anyway' ? (

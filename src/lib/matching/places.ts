@@ -78,6 +78,14 @@ export function remoteOutsideEurope(segment: string): boolean {
   return REMOTE_WORD.test(normaliseTitle(segment)) && OUTSIDE_EUROPE_CITIES.some((term) => names(place, term))
 }
 
+// A place outside Europe, named on its own: a country, a region or a city
+// ("Toronto", "North America"). Unlike remoteOutsideEurope, no "Remote" is
+// needed in it: it is used where the offer is already known to be remote.
+export function placeOutsideEurope(place: string): boolean {
+  if (EUROPE_OR_ANYWHERE.some((term) => names(place, term))) return false
+  return OUTSIDE_EUROPE_AREAS.some((term) => names(place, term)) || OUTSIDE_EUROPE_CITIES.some((term) => names(place, term))
+}
+
 export function placeMatches(place: string, term: string): boolean {
   return placeTerms(term).some((form) => names(place, form))
 }
