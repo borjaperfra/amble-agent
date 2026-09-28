@@ -303,3 +303,168 @@
     gap: 2px;
   }
 }
+
+/* ── What only they can answer ──────────────────────────────────────── */
+
+.input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px var(--moss-wash);
+}
+
+.choices {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.choice {
+  min-width: 64px;
+  height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.choiceOn {
+  color: var(--ink);
+  border-color: var(--moss);
+  background: var(--moss-wash);
+}
+
+.cv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.cvName {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+}
+
+/* ── Filling and sending ────────────────────────────────────────────── */
+
+.fillBar {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.fillLead {
+  flex: 1 1 240px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.review {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reviewTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+  font-weight: 400;
+}
+
+.reviewLead {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.warning {
+  padding: 10px 12px;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--ochre);
+  background: var(--ochre-soft);
+  border-radius: var(--radius-sm);
+}
+
+/* The filled form, as it will be sent: a window to scroll through. */
+.shot {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper-dark);
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.reviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 4px;
+}
+
+/* ── The form open in a window they finish ─────────────────────────── */
+
+.windowLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  color: var(--ink);
+}
+
+.leftList {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+}
+
+.cvLine {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.cvLine .cv {
+  margin-top: 0;
+}
+
+.cvLine .cvName,
+.cvLine .cv > .note {
+  display: none;
+}

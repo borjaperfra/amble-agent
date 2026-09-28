@@ -237,6 +237,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
                       preparing: Boolean(preparing[item.opportunityIds[0]]),
                       error: prepareErrors[item.opportunityIds[0]] || null,
                       onPrepare: () => void prepare(item),
+                      applicant: view.applicant,
                     }}
                   />
                 )}
@@ -488,6 +489,7 @@ interface CardApplication {
   preparing: boolean
   error: string | null
   onPrepare: () => void
+  applicant: OpportunitiesView['applicant']
 }
 
 function WantedCard({
@@ -610,7 +612,15 @@ function WantedCard({
           </button>
         </div>
 
-        {application && item.progress !== 'applied' && !item.closed && <ApplicationPanel {...application} />}
+        {application && item.progress !== 'applied' && !item.closed && (
+          <ApplicationPanel
+            {...application}
+            opportunityId={item.opportunityIds[0]}
+            company={item.company}
+            url={item.url}
+            onSent={() => void mark('applied')}
+          />
+        )}
         {error && (
           <p className={styles.error} role="alert">
             {error}

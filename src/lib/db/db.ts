@@ -393,6 +393,26 @@ function createDb(): DatabaseSync {
       PRIMARY KEY (candidate_id, opportunity_id)
     );
 
+    -- What the candidate answered themselves in application forms, kept for
+    -- the next form that asks the same; and the CV they send, as a file.
+    CREATE TABLE IF NOT EXISTS candidate_answers (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      question_key TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (candidate_id, question_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS application_files (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      kind TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      stored_path TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     -- What the Rep prepared to apply to an offer: advice, a message and the
     -- form's answers. Kept, so opening it again costs nothing.
     CREATE TABLE IF NOT EXISTS application_drafts (
