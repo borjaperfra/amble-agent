@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getOrCreateCandidate, listUnprocessedSources, listClaims } from '@/lib/db/repo'
+import { forCandidate } from '@/lib/auth/request'
+import { listUnprocessedSources, listClaims, type CandidateRow } from '@/lib/db/repo'
 import { processSource, SourceRejectedError } from '@/lib/pipeline/sources'
 import { claimsToEvidence, assessCapabilities, buildDistinctiveProfile, buildDescriptor } from '@/lib/pipeline/graph'
 import { ModelNotConfiguredError } from '@/lib/features'
@@ -10,7 +11,10 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
-  const candidate = getOrCreateCandidate()
+  return forCandidate(request, (candidate) => processStage(request, candidate))
+}
+
+async function processStage(request: Request, candidate: CandidateRow) {
   const body = (await request.json().catch(() => ({}))) as { stage?: string; sourceId?: string }
   const stage = body.stage
 

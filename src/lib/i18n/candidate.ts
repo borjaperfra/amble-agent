@@ -1,14 +1,14 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { getDb } from '../db/db'
-import { getOrCreateCandidate, setCandidateLocale } from '../db/repo'
+import { candidateById, setCandidateLocale, type CandidateRow } from '../db/repo'
 import { dictionaries, type Dictionary } from './dictionaries'
 import { DEFAULT_LOCALE, detectLocale, isLocale, localeFromAcceptLanguage, type Locale } from './locale'
 
 // The candidate's language decides the interface and everything the Rep writes.
 // Order: what they chose > what their own words show > their browser > English.
 
-export function candidateLocale(acceptLanguage?: string | null): Locale {
-  const candidate = getOrCreateCandidate()
-  if (isLocale(candidate.locale)) return candidate.locale
+export function candidateLocale(candidate: CandidateRow | null, acceptLanguage?: string | null): Locale {
+  if (candidate && isLocale(candidate.locale)) return candidate.locale
   return localeFromAcceptLanguage(acceptLanguage ?? null) ?? DEFAULT_LOCALE
 }
 
@@ -34,19 +34,27 @@ function candidateText(candidateId: string): string[] {
 
 // Re-read after the candidate writes something. Never overrides a choice.
 export function refreshDetectedLocale(candidateId: string): Locale | null {
-  const candidate = getOrCreateCandidate()
+  const candidate = candidateById(candidateId)
   if (candidate.locale_source === 'chosen') return isLocale(candidate.locale) ? candidate.locale : null
   const detected = detectLocale(candidateText(candidateId))
   if (detected && detected !== candidate.locale) setCandidateLocale(candidateId, detected, 'detected')
   return detected
 }
 
-export function chooseLocale(locale: Locale): void {
-  const candidate = getOrCreateCandidate()
-  setCandidateLocale(candidate.id, locale, 'chosen')
+export function chooseLocale(candidateId: string, locale: Locale): void {
+  setCandidateLocale(candidateId, locale, 'chosen')
+}
+
+// The language of the request being served. Messages the server writes are
+// raised deep inside the pipeline, far from knowing who asked; each request
+// sets it once instead of every function carrying it.
+const requestLocale = new AsyncLocalStorage<Locale>()
+
+export function withLocale<T>(locale: Locale, fn: () => T): T {
+  return requestLocale.run(locale, fn)
 }
 
 // Text the server writes for the candidate without the model, in their language.
 export function serverText(): Dictionary['server'] {
-  return dictionaries[candidateLocale()].server
+  return dictionaries[requestLocale.getStore() ?? DEFAULT_LOCALE].server
 }

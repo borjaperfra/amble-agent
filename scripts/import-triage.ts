@@ -8,6 +8,7 @@
 import fs from 'node:fs'
 import { z } from 'zod'
 import { answerProbe, createTriage, createTriageInputSchema, getTriageView, VERDICTS } from '../src/lib/pipeline/triage'
+import { getOrCreateCandidate } from '../src/lib/db/repo'
 
 const answerSchema = z.object({
   verdict: z.enum(VERDICTS),
@@ -25,13 +26,14 @@ const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { probes?: { answer?: u
 const input = createTriageInputSchema.parse(raw)
 const answers = (raw.probes ?? []).map((probe) => (probe.answer === undefined ? null : answerSchema.parse(probe.answer)))
 
-const triage = createTriage(input)
-const view = getTriageView(triage.id)
+const candidateId = getOrCreateCandidate().id
+const triage = createTriage(candidateId, input)
+const view = getTriageView(candidateId, triage.id)
 if (!view) throw new Error('The triage was created but cannot be read back.')
 
 view.probes.forEach((probe, idx) => {
   const answer = answers[idx]
-  if (answer) answerProbe({ probeId: probe.id, ...answer })
+  if (answer) answerProbe(candidateId, { probeId: probe.id, ...answer })
 })
 
 const answered = answers.filter(Boolean).length

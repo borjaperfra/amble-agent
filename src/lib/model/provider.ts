@@ -1,6 +1,6 @@
 import type { ZodType } from 'zod'
 import { getModelConfig, ModelNotConfiguredError } from '../features'
-import { insertModelRun, newId } from '../db/repo'
+import { getCandidate, insertModelRun, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { LANGUAGE_NAME, type Locale } from '../i18n/locale'
 
@@ -125,7 +125,8 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
   if (!config) throw new ModelNotConfiguredError()
 
   const { candidateId, task, schema, user } = options
-  const language = options.language === undefined ? (candidateId ? candidateLocale() : null) : options.language
+  const language =
+    options.language === undefined ? (candidateId ? candidateLocale(getCandidate(candidateId) ?? null) : null) : options.language
   const system = language ? options.system + languageInstruction(language) : options.system
   const version = language ? `${options.version}@${language}` : options.version
   const temperature = options.temperature ?? 0.2

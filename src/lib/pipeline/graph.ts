@@ -14,7 +14,7 @@ import {
   linkCapabilityEvidence,
   listCapabilityEvidenceIds,
   updateUncertaintyStatus,
-  getOrCreateCandidate,
+  candidateById,
   getDistinctiveProfile,
   type ClaimRow,
   type EvidenceRow,
@@ -246,7 +246,7 @@ export async function buildDistinctiveProfile(candidateId: string): Promise<stri
 }
 
 export async function buildDescriptor(candidateId: string): Promise<string | null> {
-  const candidate = getOrCreateCandidate()
+  const candidate = candidateById(candidateId)
   const capabilities = listCapabilities(candidateId)
   const substantive = capabilities.filter((c) => {
     const level = c.assessment

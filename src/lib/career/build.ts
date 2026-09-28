@@ -1,6 +1,6 @@
 import {
   getCareerDocument,
-  getOrCreateCandidate,
+  candidateById,
   insertCareerDocument,
   listCapabilities,
   listCareerDocumentVersions,
@@ -43,8 +43,8 @@ export interface CareerBuildResult extends RenderedCareer {
   createdAt: string
 }
 
-export async function buildCareerMarkdown(): Promise<CareerBuildResult> {
-  const candidate = getOrCreateCandidate()
+export async function buildCareerMarkdown(candidateId: string): Promise<CareerBuildResult> {
+  const candidate = candidateById(candidateId)
   const evidence = listEvidence(candidate.id)
   if (evidence.length === 0) throw new NoEvidenceError()
 
@@ -73,7 +73,7 @@ export async function buildCareerMarkdown(): Promise<CareerBuildResult> {
     sources: listSources(candidate.id),
     uncertainties: listUncertainties(candidate.id),
     retractions: listRetractions(candidate.id),
-    locale: candidateLocale(),
+    locale: candidateLocale(candidate),
   })
 
   const document = insertCareerDocument({
@@ -94,9 +94,8 @@ export interface StoredCareer {
   createdAt: string
 }
 
-export function getStoredCareer(version?: number): StoredCareer | null {
-  const candidate = getOrCreateCandidate()
-  const row = getCareerDocument(candidate.id, version)
+export function getStoredCareer(candidateId: string, version?: number): StoredCareer | null {
+  const row = getCareerDocument(candidateId, version)
   if (!row) return null
   return {
     version: row.version,
@@ -107,9 +106,8 @@ export function getStoredCareer(version?: number): StoredCareer | null {
   }
 }
 
-export function listStoredCareerVersions() {
-  const candidate = getOrCreateCandidate()
-  return listCareerDocumentVersions(candidate.id).map((row) => ({
+export function listStoredCareerVersions(candidateId: string) {
+  return listCareerDocumentVersions(candidateId).map((row) => ({
     version: row.version,
     stats: JSON.parse(row.stats) as RenderStats,
     modelRunId: row.model_run_id,

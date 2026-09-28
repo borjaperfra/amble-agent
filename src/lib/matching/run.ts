@@ -1,4 +1,4 @@
-import { getOrCreateCandidate } from '../db/repo'
+import { candidateById, getOrCreateCandidate } from '../db/repo'
 import { assessedOpportunityIds, insertMatch, type MatchVerdict } from '../db/matching'
 import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
 import { runSourcing, type SourcingStats } from '../sourcing/run'
@@ -32,8 +32,8 @@ export function currentMatchKey(candidateId: string): string {
   return `${buildMatchingProfile(candidateId).hash}:${ASSESS_VERSION}`
 }
 
-export async function runMatching(options: { limit?: number } = {}): Promise<MatchingStats> {
-  const candidate = getOrCreateCandidate()
+export async function runMatching(options: { candidateId: string; limit?: number }): Promise<MatchingStats> {
+  const candidate = candidateById(options.candidateId)
   const profile = buildMatchingProfile(candidate.id)
   const query = await roleQueryFor(candidate.id, profile)
   const matchKey = `${profile.hash}:${ASSESS_VERSION}`
@@ -204,6 +204,6 @@ export async function runListening(options: { limit?: number } = {}): Promise<{ 
   const last = lastTheirStackSearchAt()
   const aggregatorDue = !last || Date.now() - Date.parse(last) >= THEIRSTACK_EVERY_HOURS * 60 * 60 * 1000
   const sourcing = await runSourcing({ theirstack: aggregatorDue ? theirStackQueryFrom(query) : null })
-  const matching = await runMatching(options)
+  const matching = await runMatching({ candidateId: candidate.id, limit: options.limit })
   return { sourcing, matching }
 }

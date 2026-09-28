@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getMatch, respondToMatch, type MatchResponse } from '@/lib/db/matching'
-import { getOrCreateCandidate } from '@/lib/db/repo'
+import { forCandidate } from '@/lib/auth/request'
 import { getOpportunitiesView } from '@/lib/matching/view'
 
 export const runtime = 'nodejs'
@@ -12,14 +12,18 @@ const RESPONSES: MatchResponse[] = ['interested', 'not_for_me', 'wanted_anyway']
 //   response: 'interested' | 'not_for_me'  (on something shown)
 //             'wanted_anyway'              (overruling a discard)
 
-export async function GET() {
-  return NextResponse.json(getOpportunitiesView())
+export async function GET(request: Request) {
+  return forCandidate(request, (candidate) => NextResponse.json(getOpportunitiesView(candidate.id)))
 }
 
 export async function POST(request: Request) {
+  return forCandidate(request, (candidate) => respond(request, candidate.id))
+}
+
+async function respond(request: Request, candidateId: string) {
   const body = (await request.json().catch(() => ({}))) as { matchId?: unknown; response?: unknown; reason?: unknown }
   const match = typeof body.matchId === 'string' ? getMatch(body.matchId) : undefined
-  if (!match || match.candidate_id !== getOrCreateCandidate().id) {
+  if (!match || match.candidate_id !== candidateId) {
     return NextResponse.json({ error: 'Match not found.' }, { status: 404 })
   }
   if (!RESPONSES.includes(body.response as MatchResponse)) {

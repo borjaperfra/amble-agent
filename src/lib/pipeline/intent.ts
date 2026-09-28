@@ -1,7 +1,7 @@
 import {
   confirmIntent,
   getLatestIntent,
-  getOrCreateCandidate,
+  candidateById,
   insertIntent,
   newId,
   type IntentRow,
@@ -21,8 +21,8 @@ export interface IntentResult {
   structured: boolean
 }
 
-export async function interpretIntent(answerText: string): Promise<IntentResult> {
-  const candidate = getOrCreateCandidate()
+export async function interpretIntent(candidateId: string, answerText: string): Promise<IntentResult> {
+  const candidate = candidateById(candidateId)
   try {
     const { data } = await runInterpretIntentTask({ candidateId: candidate.id, answer: answerText })
     const row = insertIntent({
@@ -61,6 +61,7 @@ export function readLatestIntent(candidateId: string): IntentRow | undefined {
   return getLatestIntent(candidateId)
 }
 
-export function confirmLatestIntent(intentId: string): void {
-  confirmIntent(intentId)
+// False when the intent is not this candidate's.
+export function confirmLatestIntent(candidateId: string, intentId: string): boolean {
+  return confirmIntent(candidateId, intentId)
 }

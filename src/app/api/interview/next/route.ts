@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
-import { getOrCreateCandidate } from '@/lib/db/repo'
+import { forCandidate } from '@/lib/auth/request'
 import { planNextQuestion } from '@/lib/pipeline/interview'
 import { ModelError } from '@/lib/model/provider'
 import { serverText } from '@/lib/i18n/candidate'
@@ -8,11 +8,13 @@ import { serverText } from '@/lib/i18n/candidate'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-export async function POST() {
-  const candidate = getOrCreateCandidate()
+export async function POST(request: Request) {
+  return forCandidate(request, (candidate) => plan(candidate.id))
+}
+
+async function plan(candidateId: string) {
   try {
-    const plan = await planNextQuestion(candidate.id)
-    return NextResponse.json(plan)
+    return NextResponse.json(await planNextQuestion(candidateId))
   } catch (error) {
     if (error instanceof ModelNotConfiguredError) {
       return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })

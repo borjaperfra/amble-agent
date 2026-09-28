@@ -1,4 +1,4 @@
-import { getOrCreateCandidate, listCapabilities, listConfirmedPreferences } from '../db/repo'
+import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { listMatchesForKey, type MatchListing, type MatchResponse, type MatchRow } from '../db/matching'
 import { LANGUAGE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey } from './run'
@@ -78,8 +78,8 @@ function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchL
   })
 }
 
-export function getOpportunitiesView(): OpportunitiesView {
-  const candidate = getOrCreateCandidate()
+export function getOpportunitiesView(candidateId: string): OpportunitiesView {
+  const candidate = candidateById(candidateId)
   const matches = collapseRoles(listMatchesForKey(candidate.id, currentMatchKey(candidate.id)))
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map(listConfirmedPreferences(candidate.id).map((row) => [row.id, row.label ?? row.statement]))

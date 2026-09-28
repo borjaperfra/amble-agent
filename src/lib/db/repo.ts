@@ -192,6 +192,20 @@ function parseJsonArray(value: string | null | undefined): string[] {
   }
 }
 
+export function getCandidate(id: string): CandidateRow | undefined {
+  return getDb().prepare('SELECT * FROM candidates WHERE id = ?').get(id) as unknown as CandidateRow | undefined
+}
+
+// Every request acts for one candidate; one that does not exist is a bug, not
+// an empty profile.
+export function candidateById(id: string): CandidateRow {
+  const candidate = getCandidate(id)
+  if (!candidate) throw new Error(`Unknown candidate ${id}`)
+  return candidate
+}
+
+// The owner's account: scripts and the scheduled pass act for it until
+// listening runs for every candidate.
 export function getOrCreateCandidate(): CandidateRow {
   const db = getDb()
   const existing = db
@@ -652,6 +666,18 @@ export function getTurn(id: string): InterviewTurnRow | undefined {
   return getDb().prepare('SELECT * FROM interview_turns WHERE id = ?').get(id) as unknown as InterviewTurnRow | undefined
 }
 
+export function ownsTurn(candidateId: string, turnId: string): boolean {
+  return (
+    getDb()
+      .prepare('SELECT 1 FROM interview_turns t JOIN interviews i ON i.id = t.interview_id WHERE t.id = ? AND i.candidate_id = ?')
+      .get(turnId, candidateId) !== undefined
+  )
+}
+
+export function ownsCapability(candidateId: string, capabilityId: string): boolean {
+  return getDb().prepare('SELECT 1 FROM capabilities WHERE id = ? AND candidate_id = ?').get(capabilityId, candidateId) !== undefined
+}
+
 export function answerTurn(id: string, answer: string): void {
   getDb()
     .prepare('UPDATE interview_turns SET answer = ?, answered_at = ? WHERE id = ?')
@@ -737,11 +763,12 @@ export function getLatestIntent(candidateId: string): IntentRow | undefined {
     .get(candidateId) as unknown as IntentRow | undefined
 }
 
-export function confirmIntent(id: string): void {
+export function confirmIntent(candidateId: string, id: string): boolean {
   const validUntil = new Date(Date.now() + 1000 * 60 * 60 * 24 * 90).toISOString()
-  getDb()
-    .prepare('UPDATE intent_profiles SET confirmed_at = ?, valid_until = ? WHERE id = ?')
-    .run(now(), validUntil, id)
+  const result = getDb()
+    .prepare('UPDATE intent_profiles SET confirmed_at = ?, valid_until = ? WHERE id = ? AND candidate_id = ?')
+    .run(now(), validUntil, id, candidateId)
+  return Number(result.changes) > 0
 }
 
 export interface OfferTriageRow {

@@ -80,7 +80,7 @@ async function main() {
 
   if (command === 'match' || command === 'listen') {
     const limit = args[0] ? Number.parseInt(args[0], 10) : undefined
-    const result = command === 'match' ? await runMatching({ limit }) : await runListening({ limit })
+    const result = command === 'match' ? await runMatching({ candidateId: getOrCreateCandidate().id, limit }) : await runListening({ limit })
     console.log(JSON.stringify(result, null, 2))
     return
   }

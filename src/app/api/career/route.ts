@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { forCandidate } from '@/lib/auth/request'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
 import { serverText } from '@/lib/i18n/candidate'
@@ -31,10 +32,14 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET(request: Request) {
+  return forCandidate(request, (candidate) => readCareer(request, candidate.id))
+}
+
+function readCareer(request: Request, candidateId: string) {
   const params = new URL(request.url).searchParams
 
   if (params.has('versions')) {
-    return NextResponse.json({ versions: listStoredCareerVersions() })
+    return NextResponse.json({ versions: listStoredCareerVersions(candidateId) })
   }
 
   const rawVersion = params.get('version')
@@ -43,7 +48,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'version must be a positive integer.' }, { status: 400 })
   }
 
-  const stored = getStoredCareer(version)
+  const stored = getStoredCareer(candidateId, version)
   if (!stored) {
     return NextResponse.json(
       {
@@ -70,9 +75,13 @@ export async function GET(request: Request) {
   })
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  return forCandidate(request, (candidate) => writeCareer(candidate.id))
+}
+
+async function writeCareer(candidateId: string) {
   try {
-    const result = await buildCareerMarkdown()
+    const result = await buildCareerMarkdown(candidateId)
     return NextResponse.json({
       ok: true,
       version: result.version,

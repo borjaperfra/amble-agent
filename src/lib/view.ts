@@ -1,7 +1,7 @@
 import {
   getDistinctiveProfile,
   getLatestIntent,
-  getOrCreateCandidate,
+  candidateById,
   getOrCreateInterview,
   listCapabilities,
   listCapabilityEvidenceIds,
@@ -94,9 +94,9 @@ function evidenceToViewItem(item: EvidenceRow, sourceNames: Map<string, string>,
   }
 }
 
-export function getMapViewModel(locale: Locale): MapViewModel {
+export function getMapViewModel(candidateId: string, locale: Locale): MapViewModel {
   const t = dictionaries[locale]
-  const candidate = getOrCreateCandidate()
+  const candidate = candidateById(candidateId)
   const capabilities = listCapabilities(candidate.id)
   const capabilityEvidence = listCapabilityEvidenceIds(candidate.id)
   const evidence = listEvidence(candidate.id)
@@ -158,7 +158,7 @@ export function getMapViewModel(locale: Locale): MapViewModel {
   }
 }
 
-export function getListeningViewModel(): {
+export function getListeningViewModel(candidateId: string): {
   evidenceCount: number
   capabilitiesCount: number
   listeningFor: string[]
@@ -168,7 +168,7 @@ export function getListeningViewModel(): {
   pendingReview: number
   unseenOpportunities: number
 } {
-  const candidate = getOrCreateCandidate()
+  const candidate = candidateById(candidateId)
   const intent = getLatestIntent(candidate.id)
   const profile = getListeningProfile(candidate.id)
   return {
@@ -179,7 +179,7 @@ export function getListeningViewModel(): {
     intentConfirmed: profile.declared.confirmed,
     revealed: profile.revealed,
     pendingReview: profile.pendingReview,
-    unseenOpportunities: getOpportunitiesView().unseen,
+    unseenOpportunities: getOpportunitiesView(candidate.id).unseen,
   }
 }
 
@@ -222,8 +222,8 @@ export interface DevTrace {
   distinctive: string[]
 }
 
-export function getDevTrace(): DevTrace {
-  const candidate = getOrCreateCandidate()
+export function getDevTrace(candidateId: string): DevTrace {
+  const candidate = candidateById(candidateId)
   const capabilities = listCapabilities(candidate.id)
   const capabilityEvidence = listCapabilityEvidenceIds(candidate.id)
   const evidence = listEvidence(candidate.id)

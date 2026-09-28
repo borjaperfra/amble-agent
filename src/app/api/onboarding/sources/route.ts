@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getOrCreateCandidate, listSources } from '@/lib/db/repo'
+import { forCandidate } from '@/lib/auth/request'
+import { listSources, type CandidateRow } from '@/lib/db/repo'
 import {
   createFileSource,
   createGitHubSource,
@@ -10,8 +11,11 @@ import {
 
 export const runtime = 'nodejs'
 
-export async function GET() {
-  const candidate = getOrCreateCandidate()
+export async function GET(request: Request) {
+  return forCandidate(request, (candidate) => sourcesOf(candidate))
+}
+
+function sourcesOf(candidate: CandidateRow) {
   const sources = listSources(candidate.id).map((source) => ({
     id: source.id,
     name: source.name,
@@ -23,7 +27,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const candidate = getOrCreateCandidate()
+  return forCandidate(request, (candidate) => addSource(request, candidate))
+}
+
+async function addSource(request: Request, candidate: CandidateRow) {
   const contentType = request.headers.get('content-type') ?? ''
 
   try {

@@ -7,7 +7,7 @@ import {
   getLatestOfferTriage,
   getOfferProbe,
   getOfferTriage,
-  getOrCreateCandidate,
+  candidateById,
   getRevealedPreference,
   insertCandidatePreference,
   insertOfferTriage,
@@ -86,8 +86,8 @@ function declaredSnapshot(candidateId: string): string | null {
   return `En sus palabras: ${intent.raw_answer}\nInterpretado: ${intent.groups}`
 }
 
-export function createTriage(input: CreateTriageInput): OfferTriageRow {
-  const candidate = getOrCreateCandidate()
+export function createTriage(candidateId: string, input: CreateTriageInput): OfferTriageRow {
+  const candidate = candidateById(candidateId)
   return insertOfferTriage({
     candidateId: candidate.id,
     method: input.method,
@@ -137,8 +137,8 @@ const generatedProbesSchema = z.preprocess(
   z.object({ probes: z.array(probeInputSchema) }),
 )
 
-export async function generateTriage(): Promise<OfferTriageRow> {
-  const candidate = getOrCreateCandidate()
+export async function generateTriage(candidateId: string): Promise<OfferTriageRow> {
+  const candidate = candidateById(candidateId)
   const latest = getLatestOfferTriage(candidate.id)
   if (latest && latest.status === 'open') {
     // Two open triages would split the answers and the baseline between them.
@@ -179,7 +179,7 @@ export async function generateTriage(): Promise<OfferTriageRow> {
       declared,
       probes: data.probes,
     })
-    if (parsed.success) return createTriage(parsed.data)
+    if (parsed.success) return createTriage(candidate.id, parsed.data)
     feedback = `\n\nYOUR PREVIOUS DESIGN WAS INVALID. Fix exactly these problems:\n${parsed.error.issues
       .map((issue) => `- ${issue.path.join('.')}: ${issue.message}`)
       .join('\n')}`
@@ -269,8 +269,8 @@ function preferenceView(row: RevealedPreferenceRow, numberById: Map<string, numb
   }
 }
 
-export function getTriageView(triageId?: string): TriageView | null {
-  const candidate = getOrCreateCandidate()
+export function getTriageView(candidateId: string, triageId?: string): TriageView | null {
+  const candidate = candidateById(candidateId)
   const triage = triageId ? getOfferTriage(triageId) : getLatestOfferTriage(candidate.id)
   if (!triage || triage.candidate_id !== candidate.id) return null
   const probes = listOfferProbes(triage.id)
@@ -290,16 +290,19 @@ export function getTriageView(triageId?: string): TriageView | null {
 
 // ── Answering ────────────────────────────────────────────────────────────
 
-export function answerProbe(params: {
-  probeId: string
-  verdict: string
-  conditions?: string | null
-  reason?: string | null
-}): void {
+export function answerProbe(
+  candidateId: string,
+  params: {
+    probeId: string
+    verdict: string
+    conditions?: string | null
+    reason?: string | null
+  },
+): void {
   const probe = getOfferProbe(params.probeId)
-  if (!probe) throw new TriageError(serverText().offerNotFound, 404)
-  const triage = getOfferTriage(probe.triage_id)
-  if (!triage || triage.status === 'analysed') {
+  const triage = probe ? getOfferTriage(probe.triage_id) : undefined
+  if (!probe || !triage || triage.candidate_id !== candidateId) throw new TriageError(serverText().offerNotFound, 404)
+  if (triage.status === 'analysed') {
     throw new TriageError(serverText().triageFrozen, 409)
   }
   if (!VERDICTS.includes(params.verdict as Verdict)) {
@@ -414,8 +417,8 @@ export interface AnalysisResult {
   quotesRemoved: number
 }
 
-export async function analyseTriage(triageId?: string): Promise<AnalysisResult> {
-  const candidate = getOrCreateCandidate()
+export async function analyseTriage(candidateId: string, triageId?: string): Promise<AnalysisResult> {
+  const candidate = candidateById(candidateId)
   const triage = triageId ? getOfferTriage(triageId) : getLatestOfferTriage(candidate.id)
   if (!triage || triage.candidate_id !== candidate.id) throw new TriageError(serverText().noTriage, 404)
 
@@ -533,8 +536,8 @@ export async function analyseTriage(triageId?: string): Promise<AnalysisResult> 
   return { kept: rows.length, dropped, quotesRemoved }
 }
 
-function ownPreference(preferenceId: string): RevealedPreferenceRow {
-  const candidate = getOrCreateCandidate()
+function ownPreference(candidateId: string, preferenceId: string): RevealedPreferenceRow {
+  const candidate = candidateById(candidateId)
   const preference = getRevealedPreference(preferenceId)
   if (!preference || preference.candidate_id !== candidate.id) throw new TriageError(serverText().preferenceNotFound, 404)
   return preference
@@ -542,8 +545,8 @@ function ownPreference(preferenceId: string): RevealedPreferenceRow {
 
 // The candidate's own correction (PRODUCT_SPEC §18). It confirms the preference:
 // correcting something means accepting the corrected version.
-export function revisePreference(preferenceId: string, statement: string, label: string | null): void {
-  const preference = ownPreference(preferenceId)
+export function revisePreference(candidateId: string, preferenceId: string, statement: string, label: string | null): void {
+  const preference = ownPreference(candidateId, preferenceId)
   const text = statement.trim()
   if (text.length < 10) throw new TriageError(serverText().tooShort)
   reviseRevealedPreference(preference.id, text.slice(0, 500), label?.trim().slice(0, 60) || null)
@@ -553,14 +556,17 @@ export function revisePreference(preferenceId: string, statement: string, label:
 // Something the analysis missed, added by the candidate. It is tied to the
 // latest analysed triage and held to the same rules as a proposed preference:
 // offers must exist and a quote must be verbatim.
-export function addPreference(params: {
-  kind: string
-  statement: string
-  label?: string | null
-  offerNumbers?: number[]
-  quote?: string | null
-}): RevealedPreferenceRow {
-  const candidate = getOrCreateCandidate()
+export function addPreference(
+  candidateId: string,
+  params: {
+    kind: string
+    statement: string
+    label?: string | null
+    offerNumbers?: number[]
+    quote?: string | null
+  },
+): RevealedPreferenceRow {
+  const candidate = candidateById(candidateId)
   const triage = getLatestOfferTriage(candidate.id)
   if (!triage || triage.status !== 'analysed') throw new TriageError(serverText().noAnalysedTriage, 409)
   if (!PREFERENCE_KINDS.includes(params.kind as PreferenceKind)) {
@@ -594,8 +600,8 @@ export function addPreference(params: {
   })
 }
 
-export function decidePreference(preferenceId: string, decision: string): void {
-  const candidate = getOrCreateCandidate()
+export function decidePreference(candidateId: string, preferenceId: string, decision: string): void {
+  const candidate = candidateById(candidateId)
   const preference = getRevealedPreference(preferenceId)
   if (!preference || preference.candidate_id !== candidate.id) throw new TriageError(serverText().preferenceNotFound, 404)
   if (decision !== 'confirmed' && decision !== 'rejected') {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
-import { getOrCreateCandidate } from '@/lib/db/repo'
+import { forCandidate } from '@/lib/auth/request'
 import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
 import {
   analyseTriage,
@@ -44,13 +44,19 @@ function errorResponse(error: unknown) {
   )
 }
 
-export async function GET() {
-  const triage = getTriageView()
-  if (!triage) return NextResponse.json({ error: 'There is no triage yet.' }, { status: 404 })
-  return NextResponse.json(triage)
+export async function GET(request: Request) {
+  return forCandidate(request, (candidate) => {
+    const triage = getTriageView(candidate.id)
+    if (!triage) return NextResponse.json({ error: 'There is no triage yet.' }, { status: 404 })
+    return NextResponse.json(triage)
+  })
 }
 
 export async function POST(request: Request) {
+  return forCandidate(request, (candidate) => act(request, candidate.id))
+}
+
+async function act(request: Request, candidateId: string) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
 
   try {
@@ -60,33 +66,34 @@ export async function POST(request: Request) {
         if (!parsed.success) {
           return NextResponse.json({ error: 'Invalid triage.', issues: parsed.error.issues }, { status: 400 })
         }
-        const triage = createTriage(parsed.data)
-        return NextResponse.json(getTriageView(triage.id), { status: 201 })
+        const triage = createTriage(candidateId, parsed.data)
+        return NextResponse.json(getTriageView(candidateId, triage.id), { status: 201 })
       }
       case 'generate': {
-        const triage = await generateTriage()
-        return NextResponse.json(getTriageView(triage.id), { status: 201 })
+        const triage = await generateTriage(candidateId)
+        return NextResponse.json(getTriageView(candidateId, triage.id), { status: 201 })
       }
       case 'answer': {
-        answerProbe({
+        answerProbe(candidateId, {
           probeId: String(body.probeId ?? ''),
           verdict: String(body.verdict ?? ''),
           conditions: typeof body.conditions === 'string' ? body.conditions : null,
           reason: typeof body.reason === 'string' ? body.reason : null,
         })
-        refreshDetectedLocale(getOrCreateCandidate().id)
+        refreshDetectedLocale(candidateId)
         return NextResponse.json({ ok: true })
       }
       case 'analyse': {
-        const result = await analyseTriage()
-        return NextResponse.json({ ...result, triage: getTriageView() })
+        const result = await analyseTriage(candidateId)
+        return NextResponse.json({ ...result, triage: getTriageView(candidateId) })
       }
       case 'decide': {
-        decidePreference(String(body.preferenceId ?? ''), String(body.decision ?? ''))
+        decidePreference(candidateId, String(body.preferenceId ?? ''), String(body.decision ?? ''))
         return NextResponse.json({ ok: true })
       }
       case 'revise': {
         revisePreference(
+          candidateId,
           String(body.preferenceId ?? ''),
           String(body.statement ?? ''),
           typeof body.label === 'string' ? body.label : null,
@@ -94,7 +101,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true })
       }
       case 'add': {
-        const preference = addPreference({
+        const preference = addPreference(candidateId, {
           kind: String(body.kind ?? ''),
           statement: String(body.statement ?? ''),
           label: typeof body.label === 'string' ? body.label : null,
