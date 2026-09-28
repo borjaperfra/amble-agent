@@ -20,7 +20,16 @@ export interface CandidateRow {
   locale_source: string | null
   email: string | null
   role: 'owner' | 'member'
+  setup_at: string | null
   created_at: string
+}
+
+// The name and language the candidate gave, the first time in. Their own
+// name is never replaced by one read from a source.
+export function completeSetup(id: string, name: string, locale: string): void {
+  getDb()
+    .prepare("UPDATE candidates SET name = ?, locale = ?, locale_source = 'chosen', setup_at = ? WHERE id = ?")
+    .run(name, locale, now(), id)
 }
 
 export function getCandidateByEmail(email: string): CandidateRow | undefined {

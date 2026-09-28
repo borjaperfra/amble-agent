@@ -83,3 +83,47 @@
 .beta a {
   color: var(--moss-dark);
 }
+
+.choices {
+  margin: 24px 0 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choices legend {
+  margin-bottom: 8px;
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 18px;
+  font-size: var(--text-body);
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.choice:hover {
+  color: var(--ink);
+}
+
+.choice[data-selected='true'] {
+  color: var(--ink);
+  border-color: var(--moss);
+  background: var(--moss-wash);
+}
+
+.choice:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px var(--moss-soft);
+}

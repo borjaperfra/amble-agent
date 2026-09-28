@@ -12,12 +12,12 @@ export const dynamic = 'force-dynamic'
 // An invitation link. Whoever already has an account is simply at home.
 export default async function JoinPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  if (await currentCandidate()) redirect('/listening')
+  if (await currentCandidate()) redirect('/start')
   const t = (await serverDictionary()).login
 
   const invitation = openInvitation(token)
   const full = invitation !== null && betaIsFull()
-  if (invitation && !full) return <LoginFlow next="/onboarding" invitation={token} />
+  if (invitation && !full) return <LoginFlow next="/start" invitation={token} />
 
   return (
     <>

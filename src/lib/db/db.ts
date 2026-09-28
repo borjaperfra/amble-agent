@@ -458,6 +458,9 @@ function migrate(db: DatabaseSync): void {
 
   // A code asked for from an invitation creates the account when it is used.
   addColumn(db, 'login_codes', 'invitation_id', 'TEXT')
+
+  // When the candidate told the Rep their name and language, the first time in.
+  addColumn(db, 'candidates', 'setup_at', 'TEXT')
 }
 
 export function getDb(): DatabaseSync {

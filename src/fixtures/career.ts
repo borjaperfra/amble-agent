@@ -26,6 +26,7 @@ export const exampleCandidate: CandidateRow = {
   locale_source: 'chosen',
   email: null,
   role: 'member',
+  setup_at: T,
   created_at: T,
 }
 

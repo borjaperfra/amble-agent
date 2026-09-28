@@ -248,6 +248,15 @@ export const en = {
         `Your code to sign in to Amble is ${code}.\n\nIt lasts 10 minutes. If you didn’t ask for it, you can ignore this email.`,
     },
   },
+  welcome: {
+    title: 'Hi. I’m your Rep.',
+    lead: 'Two things before we start.',
+    nameLabel: 'What should I call you?',
+    languageLabel: 'Which language shall we use?',
+    continue: 'Continue',
+    saving: 'Saving…',
+    failed: 'That didn’t save. Try again.',
+  },
   invites: {
     nav: 'Invite',
     title: 'Invite whoever you like',

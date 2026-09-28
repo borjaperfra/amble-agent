@@ -18,7 +18,7 @@ export default async function Landing() {
           </h1>
           <p className={`${styles.heroSub} ${styles.rise} ${styles.delay1}`}>{t.landing.heroSub}</p>
           <div className={`${styles.heroCta} ${styles.rise} ${styles.delay2}`}>
-            <Link href="/onboarding" className="btn">
+            <Link href="/start" className="btn">
               {t.landing.cta}
             </Link>
           </div>
@@ -39,7 +39,7 @@ export default async function Landing() {
           <Reveal>
             <h2 className={styles.finaleTitle}>{t.landing.finale}</h2>
             <div className={styles.finaleCta}>
-              <Link href="/onboarding" className="text-btn">
+              <Link href="/start" className="text-btn">
                 {t.landing.cta}
               </Link>
             </div>

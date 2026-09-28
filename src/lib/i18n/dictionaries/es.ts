@@ -247,6 +247,15 @@ export const es: Dictionary = {
         `Tu código para entrar en Amble es ${code}.\n\nCaduca en 10 minutos. Si no lo has pedido tú, ignora este email.`,
     },
   },
+  welcome: {
+    title: 'Hola. Soy tu Rep.',
+    lead: 'Dos cosas antes de empezar.',
+    nameLabel: '¿Cómo te llamo?',
+    languageLabel: '¿En qué idioma hablamos?',
+    continue: 'Seguir',
+    saving: 'Guardando…',
+    failed: 'No se ha guardado. Vuelve a probar.',
+  },
   invites: {
     nav: 'Invitar',
     title: 'Invita a quien quieras',
