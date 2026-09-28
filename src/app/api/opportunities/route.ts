@@ -1,27 +1,32 @@
 import { NextResponse } from 'next/server'
-import { getMatch, respondToMatch, type MatchResponse } from '@/lib/db/matching'
+import { getMatch, respondToMatch, setProgress, type MatchProgress, type MatchResponse } from '@/lib/db/matching'
 import { forCandidate } from '@/lib/auth/request'
 import { getOpportunitiesView } from '@/lib/matching/view'
 
 export const runtime = 'nodejs'
 
 const RESPONSES: MatchResponse[] = ['interested', 'not_for_me', 'wanted_anyway']
+const PROGRESS: (MatchProgress | null)[] = ['applied', 'dropped', null]
 
 // GET                                               -> what the Rep found and what it set aside
 // POST { matchId, response, reason? }               -> the candidate's answer
 //   response: 'interested' | 'not_for_me'  (on something shown)
 //             'wanted_anyway'              (overruling a discard)
+// POST { opportunityIds, progress }                 -> how far they took an offer they wanted
+//   progress: 'applied' | 'dropped' | null (taken back)
 
 export async function GET(request: Request) {
   return forCandidate(request, (candidate) => NextResponse.json(getOpportunitiesView(candidate.id)))
 }
 
 export async function POST(request: Request) {
-  return forCandidate(request, (candidate) => respond(request, candidate.id))
+  return forCandidate(request, async (candidate) => {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    return 'progress' in body ? progress(body, candidate.id) : respond(body, candidate.id)
+  })
 }
 
-async function respond(request: Request, candidateId: string) {
-  const body = (await request.json().catch(() => ({}))) as { matchId?: unknown; response?: unknown; reason?: unknown }
+function respond(body: Record<string, unknown>, candidateId: string) {
   const match = typeof body.matchId === 'string' ? getMatch(body.matchId) : undefined
   if (!match || match.candidate_id !== candidateId) {
     return NextResponse.json({ error: 'Match not found.' }, { status: 404 })
@@ -35,6 +40,18 @@ async function respond(request: Request, candidateId: string) {
     return NextResponse.json({ error: 'That response does not apply to this offer.' }, { status: 409 })
   }
   const reason = typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim().slice(0, 1000) : null
-  respondToMatch(match.id, response, reason)
+  respondToMatch(match.id, candidateId, response, reason)
+  return NextResponse.json({ ok: true })
+}
+
+function progress(body: Record<string, unknown>, candidateId: string) {
+  const ids = Array.isArray(body.opportunityIds) ? body.opportunityIds.filter((id): id is string => typeof id === 'string').slice(0, 50) : []
+  if (ids.length === 0 || !PROGRESS.includes(body.progress as MatchProgress | null)) {
+    return NextResponse.json({ error: 'opportunityIds and progress (applied, dropped or null) are required.' }, { status: 400 })
+  }
+  // Only offers this candidate said they wanted change; anything else is not theirs to mark.
+  if (setProgress(candidateId, ids, body.progress as MatchProgress | null) === 0) {
+    return NextResponse.json({ error: 'Offer not found.' }, { status: 404 })
+  }
   return NextResponse.json({ ok: true })
 }

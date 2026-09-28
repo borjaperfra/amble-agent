@@ -78,6 +78,34 @@ export function remoteOutsideEurope(segment: string): boolean {
   return REMOTE_WORD.test(normaliseTitle(segment)) && OUTSIDE_EUROPE_CITIES.some((term) => names(place, term))
 }
 
+// Countries as offers name them (normalised), for telling a list of countries
+// where a remote role is hired from its office cities.
+const COUNTRY_NAMES: Record<string, string> = {
+  spain: 'ES', espana: 'ES', portugal: 'PT', france: 'FR', germany: 'DE', deutschland: 'DE', italy: 'IT', italia: 'IT',
+  netherlands: 'NL', 'the netherlands': 'NL', holland: 'NL', belgium: 'BE', ireland: 'IE', 'united kingdom': 'GB', uk: 'GB',
+  england: 'GB', scotland: 'GB', switzerland: 'CH', austria: 'AT', poland: 'PL', sweden: 'SE', denmark: 'DK', norway: 'NO',
+  finland: 'FI', 'czech republic': 'CZ', czechia: 'CZ', romania: 'RO', bulgaria: 'BG', greece: 'GR', hungary: 'HU',
+  croatia: 'HR', estonia: 'EE', latvia: 'LV', lithuania: 'LT', luxembourg: 'LU', slovakia: 'SK', slovenia: 'SI', cyprus: 'CY',
+  malta: 'MT', iceland: 'IS', serbia: 'RS', ukraine: 'UA', turkey: 'TR', 'united states': 'US', usa: 'US', us: 'US',
+  'united states of america': 'US', canada: 'CA', mexico: 'MX', brazil: 'BR', brasil: 'BR', argentina: 'AR', colombia: 'CO',
+  chile: 'CL', peru: 'PE', uruguay: 'UY', india: 'IN', japan: 'JP', china: 'CN', singapore: 'SG', australia: 'AU',
+  'new zealand': 'NZ', israel: 'IL', 'united arab emirates': 'AE', uae: 'AE', 'south africa': 'ZA', nigeria: 'NG', kenya: 'KE',
+  egypt: 'EG', philippines: 'PH', indonesia: 'ID', vietnam: 'VN', thailand: 'TH', 'south korea': 'KR', korea: 'KR',
+}
+
+// The country a location segment names, when it is a country and nothing else
+// ("Germany", "The Netherlands"; not "Berlin", not "EMEA").
+export function countryOf(place: string): string | null {
+  return COUNTRY_NAMES[place.trim()] ?? null
+}
+
+// Regions and words that open a list to someone anywhere in Europe.
+const OPEN_REGIONS = ['europe', 'european', 'emea', 'eu', 'eea', 'anywhere', 'worldwide', 'global', 'international', 'remote']
+
+export function placeIsOpenRegion(place: string): boolean {
+  return OPEN_REGIONS.some((term) => names(place, term))
+}
+
 // A place outside Europe, named on its own: a country, a region or a city
 // ("Toronto", "North America"). Unlike remoteOutsideEurope, no "Remote" is
 // needed in it: it is used where the offer is already known to be remote.

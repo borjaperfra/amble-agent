@@ -3,7 +3,7 @@ import type { MatchVerdict } from '../db/matching'
 import type { OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import type { MatchingProfile } from './profile'
-import { EUROPE, placeOf, placeOutsideEurope } from './places'
+import { countryOf, EUROPE, placeIsOpenRegion, placeOf, placeOutsideEurope } from './places'
 import type { RoleQuery } from './role-query'
 
 // Judging one offer (PRODUCT_SPEC §17, §24): hard filters first, then the
@@ -23,7 +23,7 @@ const MAX_DESCRIPTION_CHARS = 9_000
 
 // Part of every stored assessment's key (with the profile fingerprint): a new
 // version of this prompt means every offer is judged again.
-export const ASSESS_VERSION = 'v8'
+export const ASSESS_VERSION = 'v9'
 
 export type RoleFit = 'fits' | 'stretch' | 'wrong_role' | 'below_level'
 
@@ -36,6 +36,7 @@ export const SALARY_FLOOR_GATE = 'amble:salary_floor'
 export const LANGUAGE_GATE = 'amble:language'
 export const REMOTE_UNCONFIRMED_GATE = 'amble:remote_unconfirmed'
 export const REMOTE_ELSEWHERE_GATE = 'amble:remote_elsewhere'
+export const REMOTE_COUNTRIES_GATE = 'amble:remote_countries'
 
 // A published maximum within this share of the floor is still worth a look:
 // the floor is what the candidate said, not a precise number.
@@ -369,6 +370,28 @@ export async function assessOpportunity(params: {
   if (remoteElsewhere) {
     gates.push({ ruleId: REMOTE_ELSEWHERE_GATE, result: 'unknown', quote: opportunity.location, note: 'remote, but every place it names is outside Europe' })
   }
+
+  // Remote, and it names the countries it hires in, none of them the
+  // candidate's ("San Francisco · Germany · New York · The Netherlands" for
+  // someone in Spain), with nothing opening it to Europe or to anywhere. A
+  // list of countries for a remote role is where it can be done from. Set
+  // aside like the others: the posting does not forbid it, but it does not
+  // include them either.
+  const countries = listedPlaces.map(countryOf).filter((code): code is string => code !== null)
+  const remoteCountries =
+    !failed &&
+    !remoteUnconfirmed &&
+    !remoteElsewhere &&
+    query.requireRemote &&
+    query.homeCountry !== null &&
+    opportunity.workplace === 'remote' &&
+    countries.length > 0 &&
+    !countries.includes(query.homeCountry) &&
+    !listedPlaces.some(placeIsOpenRegion) &&
+    !openToEurope(haystack)
+  if (remoteCountries) {
+    gates.push({ ruleId: REMOTE_COUNTRIES_GATE, result: 'unknown', quote: opportunity.location, note: 'remote from a list of countries that does not include theirs' })
+  }
   // Another profession or a role below the candidate's level is never shown.
   const wrongRole = data.roleFit.fit === 'wrong_role' || data.roleFit.fit === 'below_level'
 
@@ -395,7 +418,13 @@ export async function assessOpportunity(params: {
   // Domain verdict: another profession or a broken hard filter is never shown,
   // whatever reasons the model found.
   const verdict: MatchVerdict =
-    failed || wrongRole ? 'discarded' : remoteUnconfirmed || remoteElsewhere ? 'hold' : why.length > 0 ? 'show' : 'hold'
+    failed || wrongRole
+      ? 'discarded'
+      : remoteUnconfirmed || remoteElsewhere || remoteCountries
+        ? 'hold'
+        : why.length > 0
+          ? 'show'
+          : 'hold'
 
   return {
     verdict,

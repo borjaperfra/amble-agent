@@ -1,6 +1,6 @@
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
-import { listMatchesForKey, type MatchListing, type MatchResponse, type MatchRow } from '../db/matching'
-import { LANGUAGE_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
+import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
+import { LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey } from './run'
 
 // What the opportunities screen shows. Only assessments made against the
@@ -33,6 +33,7 @@ export type DiscardReason =
   | { kind: 'language'; quote: string | null }
   | { kind: 'remote_unconfirmed'; places: string | null }
   | { kind: 'remote_elsewhere'; places: string | null }
+  | { kind: 'remote_countries'; places: string | null }
   | { kind: 'no_reason' }
 
 export interface DiscardedOpportunity {
@@ -65,6 +66,26 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const WEEK_ENTRIES = 6
 const WEEK_FOUND_FIRST = 3
 
+// An offer the candidate said they want: what is still unknown about it and
+// how far they have taken it. One role posted in several cities is one entry.
+export interface WantedOpportunity {
+  key: string
+  opportunityIds: string[]
+  company: string
+  title: string
+  location: string | null
+  workplace: string | null
+  salary: string | null
+  url: string | null
+  closed: boolean
+  summary: string | null
+  considerAlso: { text: string; quote: string | null } | null
+  unknowns: string[]
+  progress: MatchProgress | null
+  // When they applied or stopped following; otherwise when they said they wanted it.
+  since: string
+}
+
 export interface OpportunitiesView {
   // Roles that fit: the only ones that interrupt the candidate.
   found: FoundOpportunity[]
@@ -75,9 +96,52 @@ export interface OpportunitiesView {
   // Shown, open and not yet answered: what makes Listening say "I found something".
   unseen: number
   week: WeekLedger
+  // What they said they want: still to send, sent, and no longer followed.
+  wanted: WantedOpportunity[]
+  sent: WantedOpportunity[]
+  dropped: WantedOpportunity[]
 }
 
-function salaryText(match: MatchListing): string | null {
+const wants = (decision: MatchResponse | undefined) => decision === 'interested' || decision === 'wanted_anyway'
+
+// Offers they want, one entry per role. Their decisions outlive any
+// assessment, so what is shown about each comes from its latest one.
+function wantedOpportunities(candidateId: string): WantedOpportunity[] {
+  const byRole = new Map<string, WantedOpportunity>()
+  for (const row of listWanted(candidateId)) {
+    const key = row.model_run_id ? `${row.model_run_id}|${row.title}` : `${row.company_name}|${row.title}|${row.workplace ?? ''}`
+    const known = byRole.get(key)
+    if (known) {
+      known.opportunityIds.push(row.opportunity_id)
+      if (row.location && !known.location?.includes(row.location)) known.location = [known.location, row.location].filter(Boolean).join(' · ')
+      if (!row.closed_at) {
+        known.closed = false
+        known.url = row.url ?? known.url
+      }
+      continue
+    }
+    const explanation = row.explanation ? (JSON.parse(row.explanation) as Explanation) : null
+    byRole.set(key, {
+      key,
+      opportunityIds: [row.opportunity_id],
+      company: row.company_name,
+      title: row.title,
+      location: row.location,
+      workplace: row.workplace,
+      salary: salaryText(row),
+      url: row.url,
+      closed: row.closed_at !== null,
+      summary: explanation?.summary || null,
+      considerAlso: explanation?.considerAlso ?? null,
+      unknowns: explanation?.unknowns ?? [],
+      progress: row.progress,
+      since: row.progress_at ?? row.decided_at,
+    })
+  }
+  return [...byRole.values()]
+}
+
+function salaryText(match: Pick<MatchListing, 'salary_raw' | 'salary_min' | 'salary_max' | 'salary_currency'>): string | null {
   if (match.salary_raw) return match.salary_raw
   if (!match.salary_min && !match.salary_max) return null
   const range = [match.salary_min, match.salary_max].filter(Boolean).map((n) => Math.round((n as number) / 1000) + 'K').join('–')
@@ -106,6 +170,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const matches = collapseRoles(listMatchesForKey(candidate.id, currentMatchKey(candidate.id)))
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map(listConfirmedPreferences(candidate.id).map((row) => [row.id, row.label ?? row.statement]))
+  const decisions = listDecisions(candidate.id)
 
   const found: FoundOpportunity[] = []
   const discarded: DiscardedOpportunity[] = []
@@ -115,12 +180,16 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
 
   for (const match of matches) {
     const explanation = JSON.parse(match.explanation) as Explanation
-    const response = match.response as MatchResponse | null
+    // What they decided is kept on the offer, not on this assessment of it.
+    const decision = decisions.get(match.opportunity_id)
+    const response = decision?.decision ?? null
+    // An offer they want has its own place: it is no longer something to answer.
+    const wanted = wants(decision?.decision)
     const thisWeek = Date.parse(match.created_at) >= since
     if (thisWeek) read++
 
     if (match.verdict === 'show') {
-      found.push({
+      if (!wanted) found.push({
         id: match.id,
         company: match.company_name,
         title: match.title,
@@ -156,13 +225,14 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     for (const gate of gates) {
       if (gate.ruleId === REMOTE_UNCONFIRMED_GATE) reasons.push({ kind: 'remote_unconfirmed', places: gate.quote })
       else if (gate.ruleId === REMOTE_ELSEWHERE_GATE) reasons.push({ kind: 'remote_elsewhere', places: gate.quote })
+      else if (gate.ruleId === REMOTE_COUNTRIES_GATE) reasons.push({ kind: 'remote_countries', places: gate.quote })
       else if (gate.result !== 'fail') continue
       else if (gate.ruleId === SALARY_FLOOR_GATE) reasons.push({ kind: 'salary_floor', quote: gate.quote })
       else if (gate.ruleId === LANGUAGE_GATE) reasons.push({ kind: 'language', quote: gate.quote })
       else reasons.push({ kind: 'filter', rule: ruleLabels.get(gate.ruleId) ?? gate.ruleId, quote: gate.quote })
     }
     if (reasons.length === 0) reasons.push({ kind: 'no_reason' })
-    discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response })
+    if (!wanted) discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response })
     if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason: reasons[0], at: match.created_at })
   }
 
@@ -172,6 +242,8 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const entries = [...passed, ...rest]
     .slice(0, WEEK_ENTRIES)
     .map((entry) => ({ id: entry.id, company: entry.company, title: entry.title, status: entry.status, reason: entry.reason }))
+
+  const wantedAll = wantedOpportunities(candidate.id)
 
   // Unanswered first; within that, offers that publish a salary (the candidate
   // asked for them first); then newest, as the query already orders.
@@ -186,5 +258,8 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     discarded,
     unseen: fits.filter((item) => !item.closed && item.response === null).length,
     week: { read, worth: week.filter((entry) => entry.status === 'found').length, entries },
+    wanted: wantedAll.filter((item) => item.progress === null),
+    sent: wantedAll.filter((item) => item.progress === 'applied'),
+    dropped: wantedAll.filter((item) => item.progress === 'dropped'),
   }
 }

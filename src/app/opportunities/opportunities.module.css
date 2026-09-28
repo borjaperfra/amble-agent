@@ -298,3 +298,369 @@
     transform: none;
   }
 }
+
+/* ── What they want ─────────────────────────────────────────────────── */
+
+/* The offers they said they want, above what is new: the next step is theirs. */
+.wanted {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wantedTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-md);
+  font-weight: 400;
+}
+
+.wantedLead {
+  margin-top: -8px;
+  color: var(--ink-secondary);
+}
+
+.wantedCard {
+  padding: 24px 24px 20px;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: enter var(--motion-slow) var(--ease-standard) both;
+}
+
+/* Just moved up: a moss edge that fades, so the eye finds it. */
+.arrived {
+  animation:
+    enter var(--motion-slow) var(--ease-standard) both,
+    arrive-edge 2.4s ease-out both;
+}
+
+@keyframes arrive-edge {
+  from {
+    border-color: var(--moss);
+    box-shadow: 0 0 0 4px var(--moss-wash);
+  }
+}
+
+.state {
+  align-self: flex-start;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  background: var(--paper-dark);
+  border-radius: 999px;
+}
+
+.stateApplied {
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+}
+
+.wantedSummary {
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.blockLead {
+  margin-top: -4px;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--ink-secondary);
+}
+
+/* What is still unknown, as the questions to ask. */
+.wantedCard .unknowns {
+  gap: 8px;
+}
+
+.wantedCard .unknowns li {
+  position: relative;
+  padding-left: 22px;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.wantedCard .unknowns li::before {
+  content: '?';
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+  border-radius: 50%;
+}
+
+.wantedActions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.appliedBtn {
+  height: 48px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
+}
+
+.appliedBtn:hover:not(:disabled) {
+  border-color: var(--moss);
+  background: var(--moss-wash);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wantedCard,
+  .arrived {
+    animation: none;
+  }
+}
+
+/* ── Tabs: what is new, what they want, what was set aside ─────────── */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 4px;
+  align-self: flex-start;
+  background: var(--paper-dark);
+  border-radius: 12px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  background: none;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tabActive {
+  color: var(--ink);
+  background: var(--paper-light);
+  box-shadow: 0 1px 2px rgb(37 37 31 / 0.06);
+}
+
+.tabCount {
+  min-width: 20px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--ink-secondary);
+  background: var(--paper);
+  border-radius: 999px;
+  animation: bump var(--motion-slow) var(--ease-standard);
+}
+
+.tabActive .tabCount {
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: enter var(--motion-default) var(--ease-standard) both;
+}
+
+.panelEmpty {
+  margin-top: 32px;
+  color: var(--ink-secondary);
+}
+
+/* New to answer: a moss circle with its number, the one count that asks. */
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper-light);
+  background: var(--moss-dark);
+  border-radius: 999px;
+  animation: bump var(--motion-slow) var(--ease-standard);
+}
+
+.sectionTitle {
+  margin-top: 8px;
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+  font-weight: 400;
+}
+
+.droppedSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A number that changed gives a little. */
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ── Sent: a stamp ─────────────────────────────────────────────────── */
+
+.wantedCard {
+  position: relative;
+}
+
+.stamp {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  padding: 6px 12px 5px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--moss);
+  border: 2px solid var(--moss);
+  border-radius: 6px;
+  transform: rotate(-9deg);
+  opacity: 0.78;
+  /* Ink that did not take everywhere: a stamp, not a badge. */
+  mask-image: radial-gradient(circle at 30% 40%, #000 60%, rgb(0 0 0 / 0.55) 100%);
+  pointer-events: none;
+}
+
+.pressing {
+  animation: press var(--motion-arrive) cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.pressing ~ * {
+  animation: thud 260ms ease-out 180ms;
+}
+
+@keyframes press {
+  0% {
+    opacity: 0;
+    transform: rotate(-16deg) scale(1.9);
+  }
+  45% {
+    opacity: 0.95;
+    transform: rotate(-9deg) scale(0.94);
+  }
+  70% {
+    transform: rotate(-9deg) scale(1.03);
+  }
+  100% {
+    opacity: 0.78;
+    transform: rotate(-9deg) scale(1);
+  }
+}
+
+@keyframes thud {
+  40% {
+    transform: translateY(1px);
+  }
+}
+
+/* ── Dropped: crossed out by hand, then folded away ─────────────────── */
+
+.strikeable {
+  background-image: linear-gradient(var(--ink-secondary), var(--ink-secondary));
+  background-repeat: no-repeat;
+  background-position: 0 58%;
+  background-size: 0 1.5px;
+}
+
+.striking .strikeable {
+  color: var(--ink-tertiary);
+  background-size: 100% 1.5px;
+  transition:
+    background-size 520ms cubic-bezier(0.6, 0, 0.3, 1),
+    color 520ms ease;
+}
+
+/* Folding away: it first steps back (fades a little and shrinks), then its
+   height closes with a soft curve, and so does the gap it leaves in the list,
+   so nothing below jumps at the end. */
+.fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-bottom: 0;
+  transition:
+    grid-template-rows 720ms cubic-bezier(0.65, 0, 0.35, 1) 120ms,
+    margin-bottom 720ms cubic-bezier(0.65, 0, 0.35, 1) 120ms,
+    opacity 480ms ease,
+    transform 480ms var(--ease-standard);
+}
+
+.fold > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.folding {
+  grid-template-rows: 0fr;
+  margin-bottom: -16px;
+  opacity: 0;
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabCount,
+  .badge,
+  .panel,
+  .pressing,
+  .pressing ~ * {
+    animation: none;
+  }
+
+  .fold,
+  .striking .strikeable {
+    transition: none;
+  }
+}

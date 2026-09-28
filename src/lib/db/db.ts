@@ -378,6 +378,21 @@ function createDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS invitations_inviter ON invitations (inviter_id);
 
+    -- What the candidate decided about an offer, and how far they took it. It
+    -- belongs to the offer, not to an assessment: judging offers again (a new
+    -- profile, a new matcher) must never lose that they applied, nor bring back
+    -- one they said no to.
+    CREATE TABLE IF NOT EXISTS opportunity_decisions (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      opportunity_id TEXT NOT NULL REFERENCES opportunities(id),
+      decision TEXT NOT NULL,
+      reason TEXT,
+      decided_at TEXT NOT NULL,
+      progress TEXT,
+      progress_at TEXT,
+      PRIMARY KEY (candidate_id, opportunity_id)
+    );
+
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 
@@ -467,6 +482,15 @@ function migrate(db: DatabaseSync): void {
 
   // When the candidate told the Rep their name and language, the first time in.
   addColumn(db, 'candidates', 'setup_at', 'TEXT')
+
+  // Answers given before decisions had their own table lived on assessments.
+  // Carried over once, the latest per offer; a later decision is never replaced.
+  db.exec(`
+    INSERT OR IGNORE INTO opportunity_decisions (candidate_id, opportunity_id, decision, reason, decided_at)
+    SELECT candidate_id, opportunity_id, response, response_reason, COALESCE(responded_at, created_at)
+    FROM opportunity_matches WHERE response IS NOT NULL
+    ORDER BY COALESCE(responded_at, created_at) DESC
+  `)
 }
 
 export function getDb(): DatabaseSync {

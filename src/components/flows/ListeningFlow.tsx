@@ -93,6 +93,8 @@ function asideReason(reason: DiscardReason | null, t: Dictionary['listening']): 
       return t.weekReasons.remoteUnconfirmed
     case 'remote_elsewhere':
       return t.weekReasons.remoteElsewhere
+    case 'remote_countries':
+      return t.weekReasons.remoteCountries
     default:
       return t.weekReasons.noReason
   }

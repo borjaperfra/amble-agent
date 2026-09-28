@@ -131,11 +131,45 @@ export function listMatches(candidateId: string, verdict?: MatchVerdict): (Match
 // filter or a role-fit judgment was wrong.
 export type MatchResponse = 'interested' | 'not_for_me' | 'wanted_anyway'
 
-// An answer is about the role, so it reaches every city's posting judged with
-// it (same model run, same profile).
-export function respondToMatch(id: string, response: MatchResponse, reason: string | null): void {
-  getDb()
+export type MatchProgress = 'applied' | 'dropped'
+
+export interface DecisionRow {
+  candidate_id: string
+  opportunity_id: string
+  decision: MatchResponse
+  reason: string | null
+  decided_at: string
+  progress: MatchProgress | null
+  progress_at: string | null
+}
+
+// The offers an answer reaches: the one answered and every city's posting of
+// the same role, judged in the same model run.
+function roleOpportunityIds(matchId: string): string[] {
+  const rows = getDb()
     .prepare(
+      `SELECT DISTINCT sibling.opportunity_id FROM opportunity_matches m
+       JOIN opportunity_matches sibling
+         ON sibling.id = m.id OR (m.model_run_id IS NOT NULL AND sibling.model_run_id = m.model_run_id
+           AND sibling.profile_hash = m.profile_hash AND sibling.candidate_id = m.candidate_id)
+       WHERE m.id = ?`,
+    )
+    .all(matchId) as { opportunity_id: string }[]
+  return rows.map((row) => row.opportunity_id)
+}
+
+// An answer is about the role, so it reaches every city's posting judged with
+// it. It is kept on the offer, where it outlives any assessment; how far the
+// candidate took it (applied, dropped) is kept as it was.
+export function respondToMatch(id: string, candidateId: string, response: MatchResponse, reason: string | null): void {
+  const db = getDb()
+  const upsert = db.prepare(
+    `INSERT INTO opportunity_decisions (candidate_id, opportunity_id, decision, reason, decided_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (candidate_id, opportunity_id) DO UPDATE SET decision = excluded.decision, reason = excluded.reason, decided_at = excluded.decided_at`,
+  )
+  for (const opportunityId of roleOpportunityIds(id)) upsert.run(candidateId, opportunityId, response, reason, now())
+  // Also on the assessment, which still records what was answered to it.
+  db.prepare(
       `UPDATE opportunity_matches SET response = ?, response_reason = ?, responded_at = ?
        WHERE id = ? OR id IN (
          SELECT sibling.id FROM opportunity_matches m
@@ -145,4 +179,61 @@ export function respondToMatch(id: string, response: MatchResponse, reason: stri
        )`,
     )
     .run(response, reason, now(), id, id)
+}
+
+export function listDecisions(candidateId: string): Map<string, DecisionRow> {
+  const rows = getDb().prepare('SELECT * FROM opportunity_decisions WHERE candidate_id = ?').all(candidateId) as unknown as DecisionRow[]
+  return new Map(rows.map((row) => [row.opportunity_id, row]))
+}
+
+// How far the candidate took offers they wanted: applied, or no longer
+// following. Null takes it back. Only on offers they said they wanted.
+export function setProgress(candidateId: string, opportunityIds: string[], progress: MatchProgress | null): number {
+  const update = getDb().prepare(
+    `UPDATE opportunity_decisions SET progress = ?, progress_at = ?
+     WHERE candidate_id = ? AND opportunity_id = ? AND decision IN ('interested', 'wanted_anyway')`,
+  )
+  let changed = 0
+  for (const opportunityId of opportunityIds) changed += Number(update.run(progress, progress ? now() : null, candidateId, opportunityId).changes)
+  return changed
+}
+
+export interface WantedListing {
+  opportunity_id: string
+  decision: MatchResponse
+  decided_at: string
+  progress: MatchProgress | null
+  progress_at: string | null
+  title: string
+  company_name: string
+  url: string | null
+  closed_at: string | null
+  location: string | null
+  workplace: string | null
+  salary_raw: string | null
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string | null
+  // The latest assessment of the offer, whichever profile it was made against.
+  explanation: string | null
+  model_run_id: string | null
+}
+
+export function listWanted(candidateId: string): WantedListing[] {
+  return getDb()
+    .prepare(
+      `SELECT d.opportunity_id, d.decision, d.decided_at, d.progress, d.progress_at,
+              o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency,
+              c.name AS company_name,
+              (SELECT m.explanation FROM opportunity_matches m WHERE m.candidate_id = d.candidate_id AND m.opportunity_id = d.opportunity_id
+               ORDER BY m.created_at DESC LIMIT 1) AS explanation,
+              (SELECT m.model_run_id FROM opportunity_matches m WHERE m.candidate_id = d.candidate_id AND m.opportunity_id = d.opportunity_id
+               ORDER BY m.created_at DESC LIMIT 1) AS model_run_id
+       FROM opportunity_decisions d
+       JOIN opportunities o ON o.id = d.opportunity_id
+       JOIN companies c ON c.id = o.company_id
+       WHERE d.candidate_id = ? AND d.decision IN ('interested', 'wanted_anyway')
+       ORDER BY COALESCE(d.progress_at, d.decided_at) DESC`,
+    )
+    .all(candidateId) as unknown as WantedListing[]
 }
