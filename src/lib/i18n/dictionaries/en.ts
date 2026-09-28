@@ -283,6 +283,12 @@ export const en = {
     linkExpiredLead: 'It has been used or has expired. Ask for a new code from the sign-in page.',
     linkBack: 'Go to sign in',
   },
+  deck: {
+    roledescription: 'deck of offers',
+    position: (n: number, total: number) => `${n} of ${total}`,
+    previous: 'Previous',
+    next: 'Next',
+  },
   welcome: {
     title: 'Hi. I’m your Rep.',
     lead: 'Two things before we start.',
@@ -415,6 +421,7 @@ export const en = {
     remoteElsewhere: 'It’s remote, but every office it lists is outside Europe and it never says it can be done from here',
     remoteCountries: 'It’s remote, but it names the countries it can be done from and yours isn’t one of them',
     wantedAnyway: 'I’d want this one',
+    movedToWanted: 'Moved to You want these.',
     tabs: { new: 'New', wanted: 'You want these', sent: 'Sent', aside: 'Set aside' },
     apply: {
       prepare: 'Prepare my application',
@@ -422,7 +429,11 @@ export const en = {
       working: 'Reading the form and what you’ve done…',
       failed: 'I couldn’t prepare it. Nothing has been lost: try again.',
       title: 'Your application',
-      summaryMeta: (fields: number, yours: number) => `${fields} fields · ${yours} up to you`,
+      summaryMeta: (yours: number) => (yours === 0 ? 'Nothing is up to you' : `${yours} ${yours === 1 ? 'thing is' : 'things are'} up to you`),
+      ready: (title: string) => `Your application for ${title} is ready.`,
+      see: 'See it',
+      preparingFor: 'Preparing application',
+      readyFor: 'Ready to review',
       howTitle: 'How to apply',
       channel: 'Which way',
       channels: { form: 'Through the form', referral: 'Find someone inside first', direct: 'The form, and write to the hiring manager too' },

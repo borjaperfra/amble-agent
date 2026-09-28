@@ -664,3 +664,159 @@
     transition: none;
   }
 }
+
+/* A quiet note at the foot of the screen. */
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 12px 16px 12px 20px;
+  font-size: var(--text-body-sm);
+  color: var(--paper-light);
+  background: var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 1px 2px rgb(37 37 31 / 0.08),
+    0 8px 24px rgb(37 37 31 / 0.16);
+  transform: translateX(-50%);
+  animation: notice-in var(--motion-slow) var(--ease-standard) both;
+}
+
+.noticeAction {
+  padding: 6px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice {
+    animation: none;
+  }
+}
+
+/* In a deck, a card leaves to the side: nothing below it moves. */
+.deckCard {
+  display: block;
+}
+
+.slidingOut {
+  transform: translateX(-48px);
+  opacity: 0;
+  transition:
+    transform 420ms cubic-bezier(0.4, 0, 0.6, 1),
+    opacity 380ms ease;
+}
+
+/* ── What the Rep is preparing, under the tabs ─────────────────────── */
+
+.progress {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.progressItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: var(--paper-light);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  animation: enter var(--motion-default) var(--ease-standard) both;
+}
+
+.progressItem:not(.progressReady) {
+  padding-right: 14px;
+}
+
+.progressTitle {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.progressPulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--moss);
+  animation: pulse-dot var(--motion-breath) ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.progressReady {
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+  border-color: var(--moss-soft);
+}
+
+.progressCheck {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  color: var(--paper-light);
+  background: var(--moss-dark);
+  border-radius: 50%;
+}
+
+.progressSee {
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper-light);
+  background: var(--moss-dark);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.progressSee:hover {
+  background: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slidingOut {
+    transition: none;
+  }
+
+  .progressItem,
+  .progressPulse {
+    animation: none;
+  }
+}

@@ -6,8 +6,12 @@ import { useT } from '@/components/I18nProvider'
 import type { PreparedAnswer, PreparedApplication } from '@/lib/apply/prepare'
 import styles from '@/app/opportunities/application.module.css'
 
-// "Prepare my application": how to apply, a message, and the form field by
-// field: what the Rep filled in, what it wrote, and what is theirs to decide.
+// "Prepare my application": how to apply, a message, and what of the form
+// needs the candidate: what the Rep wrote for them to read, and what is
+// theirs to decide. What the Rep fills in on its own is not shown.
+//
+// Preparing is held by the page, not by the card: it goes on while they move
+// to another offer.
 
 function CopyButton({ text }: { text: string }) {
   const t = useT().opportunities.apply
@@ -55,33 +59,17 @@ function Field({ answer }: { answer: PreparedAnswer }) {
   )
 }
 
-export default function ApplicationPanel({ opportunityId, initial }: { opportunityId: string; initial: PreparedApplication | null }) {
-  const t = useT()
-  const a = t.opportunities.apply
-  const [prepared, setPrepared] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+interface ApplicationPanelProps {
+  prepared: PreparedApplication | null
+  preparing: boolean
+  error: string | null
+  onPrepare: () => void
+}
 
-  async function prepare() {
-    setBusy(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opportunityId }),
-      })
-      const data = (await response.json().catch(() => ({}))) as PreparedApplication & { error?: string }
-      if (!response.ok) throw new Error(data.error)
-      setPrepared(data)
-    } catch (caught) {
-      setError(caught instanceof Error && caught.message ? caught.message : a.failed)
-    } finally {
-      setBusy(false)
-    }
-  }
+export default function ApplicationPanel({ prepared, preparing, error, onPrepare }: ApplicationPanelProps) {
+  const a = useT().opportunities.apply
 
-  if (busy) {
+  if (preparing) {
     return (
       <div className={styles.working} role="status">
         <Symbol size={28} watch breathe />
@@ -93,7 +81,7 @@ export default function ApplicationPanel({ opportunityId, initial }: { opportuni
   if (!prepared) {
     return (
       <div className={styles.start}>
-        <button type="button" className="btn" onClick={() => void prepare()}>
+        <button type="button" className={styles.prepare} onClick={onPrepare}>
           {a.prepare}
         </button>
         <p className={styles.startLead}>{a.prepareLead}</p>
@@ -107,34 +95,32 @@ export default function ApplicationPanel({ opportunityId, initial }: { opportuni
   }
 
   const { advice } = prepared
-  const yours = prepared.answers.filter((answer) => answer.source === 'you').length
+  // What the Rep fills in on its own needs nothing from them.
+  const shown = prepared.answers.filter((answer) => answer.source !== 'fact')
+  const yours = shown.filter((answer) => answer.source === 'you').length
 
   return (
     <details className={styles.panel} open>
       <summary className={styles.summary}>
         <span className={styles.summaryTitle}>{a.title}</span>
-        <span className={styles.summaryMeta}>{a.summaryMeta(prepared.answers.length, yours)}</span>
+        <span className={styles.summaryMeta}>{a.summaryMeta(yours)}</span>
       </summary>
 
       <section className={styles.section}>
         <h4 className={styles.sectionTitle}>{a.howTitle}</h4>
         <dl className={styles.advice}>
           <div>
-            <dt>{a.channel}</dt>
-            <dd>
-              <strong>{a.channels[advice.channel]}.</strong> {advice.channelWhy}
-            </dd>
-          </div>
-          <div>
             <dt>{a.cv}</dt>
             <dd>{advice.cv}</dd>
           </div>
-          <div>
-            <dt>{a.coverLetter}</dt>
-            <dd>
-              <strong>{a.letters[advice.coverLetter]}.</strong> {advice.coverLetterWhy}
-            </dd>
-          </div>
+          {advice.coverLetter !== 'skip' && (
+            <div>
+              <dt>{a.coverLetter}</dt>
+              <dd>
+                <strong>{a.letters[advice.coverLetter]}.</strong> {advice.coverLetterWhy}
+              </dd>
+            </div>
+          )}
         </dl>
         {advice.emphasise.length > 0 && (
           <>
@@ -148,7 +134,7 @@ export default function ApplicationPanel({ opportunityId, initial }: { opportuni
         )}
       </section>
 
-      {prepared.message && (
+      {prepared.message && advice.coverLetter !== 'skip' && (
         <section className={styles.section}>
           <h4 className={styles.sectionTitle}>{a.messageTitle}</h4>
           <div className={styles.letter}>
@@ -158,22 +144,23 @@ export default function ApplicationPanel({ opportunityId, initial }: { opportuni
         </section>
       )}
 
-      <section className={styles.section}>
-        <h4 className={styles.sectionTitle}>{a.formTitle}</h4>
-        <p className={styles.legend}>
-          <span className={`${styles.dot} ${styles.dotFact}`} /> {a.legendFact}
-          <span className={`${styles.dot} ${styles.dotRep}`} /> {a.legendRep}
-          <span className={`${styles.dot} ${styles.dotYou}`} /> {a.legendYou}
-        </p>
-        <ul className={styles.fields}>
-          {prepared.answers.map((answer) => (
-            <Field key={answer.fieldId} answer={answer} />
-          ))}
-        </ul>
-      </section>
+      {shown.length > 0 && (
+        <section className={styles.section}>
+          <h4 className={styles.sectionTitle}>{a.formTitle}</h4>
+          <p className={styles.legend}>
+            <span className={`${styles.dot} ${styles.dotRep}`} /> {a.legendRep}
+            <span className={`${styles.dot} ${styles.dotYou}`} /> {a.legendYou}
+          </p>
+          <ul className={styles.fields}>
+            {shown.map((answer) => (
+              <Field key={answer.fieldId} answer={answer} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className={styles.footer}>
-        <button type="button" className="text-btn" onClick={() => void prepare()}>
+        <button type="button" className="text-btn" onClick={onPrepare}>
           {a.again}
         </button>
         {error && (

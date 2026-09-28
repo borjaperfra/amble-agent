@@ -1,0 +1,127 @@
+.deck {
+  scroll-margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.position {
+  font-size: var(--text-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary);
+}
+
+.arrow {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  font-size: 18px;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+.arrow:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+.arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The next card comes from the side it is on. */
+.card {
+  animation-duration: var(--motion-slow);
+  animation-timing-function: var(--ease-standard);
+  animation-fill-mode: both;
+}
+
+.forward {
+  animation-name: from-right;
+}
+
+.back {
+  animation-name: from-left;
+}
+
+@keyframes from-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+@keyframes from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  background: var(--border);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.dot:hover {
+  background: var(--ink-tertiary);
+}
+
+.dotCurrent {
+  background: var(--ink);
+  transform: scale(1.25);
+}
+
+/* Something is being prepared for it: the dot breathes, like the Rep. */
+.dotBusy {
+  background: var(--moss);
+  animation: breathe var(--motion-breath) ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .dotBusy {
+    animation: none;
+  }
+}

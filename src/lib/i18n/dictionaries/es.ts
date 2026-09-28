@@ -283,6 +283,12 @@ export const es: Dictionary = {
     linkExpiredLead: 'Ya se ha usado o ha caducado. Pide un código nuevo desde la entrada.',
     linkBack: 'Ir a la entrada',
   },
+  deck: {
+    roledescription: 'mazo de ofertas',
+    position: (n: number, total: number) => `${n} de ${total}`,
+    previous: 'Anterior',
+    next: 'Siguiente',
+  },
   welcome: {
     title: 'Hola. Soy tu Rep.',
     lead: 'Dos cosas antes de empezar.',
@@ -414,6 +420,7 @@ export const es: Dictionary = {
     remoteElsewhere: 'Es remoto, pero todas sus sedes están fuera de Europa y no dice que se pueda hacer desde aquí',
     remoteCountries: 'Es remoto, pero nombra los países desde los que se puede trabajar y el tuyo no está',
     wantedAnyway: 'Esta sí me interesa',
+    movedToWanted: 'La he pasado a Te interesan.',
     tabs: { new: 'Nuevas', wanted: 'Te interesan', sent: 'Enviadas', aside: 'Apartadas' },
     apply: {
       prepare: 'Prepárame la candidatura',
@@ -421,7 +428,11 @@ export const es: Dictionary = {
       working: 'Leyendo el formulario y lo que has hecho…',
       failed: 'No he podido prepararla. No se ha perdido nada: vuelve a probar.',
       title: 'Tu candidatura',
-      summaryMeta: (fields: number, yours: number) => `${fields} campos · ${yours} ${yours === 1 ? 'depende' : 'dependen'} de ti`,
+      summaryMeta: (yours: number) => (yours === 0 ? 'Nada depende de ti' : `${yours} ${yours === 1 ? 'cosa depende' : 'cosas dependen'} de ti`),
+      ready: (title: string) => `Tu candidatura para ${title} está lista.`,
+      see: 'Verla',
+      preparingFor: 'Preparando candidatura',
+      readyFor: 'Lista para revisar',
       howTitle: 'Cómo aplicar',
       channel: 'Por dónde',
       channels: { form: 'Por el formulario', referral: 'Busca antes a alguien dentro', direct: 'Formulario y, además, escribe a quien contrata' },

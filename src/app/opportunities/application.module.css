@@ -8,6 +8,28 @@
   margin-top: 8px;
 }
 
+/* Secondary to going to the offer: an outline in moss, not the dark button. */
+.prepare {
+  height: 44px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--moss-dark);
+  background: var(--moss-wash);
+  border: 1px solid var(--moss-soft);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.prepare:hover {
+  background: var(--moss-soft);
+  border-color: var(--moss);
+}
+
 .startLead {
   flex: 1 1 220px;
   font-size: var(--text-body-sm);

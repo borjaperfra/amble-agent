@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
+import Deck from '@/components/Deck'
 import ApplicationPanel from '@/components/flows/ApplicationPanel'
 import Symbol from '@/components/Symbol'
 import { useI18n, useT } from '@/components/I18nProvider'
+import type { PreparedApplication } from '@/lib/apply/prepare'
 import type { DiscardedOpportunity, FoundOpportunity, OpportunitiesView, WantedOpportunity } from '@/lib/matching/view'
 import styles from '@/app/opportunities/opportunities.module.css'
 
@@ -44,42 +46,62 @@ async function markProgress(opportunityIds: string[], progress: Progress): Promi
 
 export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { view: OpportunitiesView; tab: Tab | null }) {
   const t = useT()
+  const [view, setView] = useState(initial)
+  const pending = (items: FoundOpportunity[]) => items.filter((item) => item.response === null)
   // Without a tab asked for: what is new to answer first, else what they want.
   const [tab, setTab] = useState<Tab>(
-    initialTab ?? (initial.found.some((item) => item.response === null) || initial.wanted.length === 0 ? 'new' : 'wanted'),
+    initialTab ?? (pending(initial.found).length > 0 || initial.wanted.length === 0 ? 'new' : 'wanted'),
   )
-  const [view, setView] = useState(initial)
-  const [found, setFound] = useState(initial.found)
-  const [maybe, setMaybe] = useState(initial.maybe)
-  const [discarded, setDiscarded] = useState(initial.discarded)
-  // The one that just moved up to "you want these", to mark its arrival.
-  const [arrived, setArrived] = useState<string | null>(null)
+  // Applications being prepared, by the page: they go on while the candidate
+  // moves to another offer, and a note says when one is ready.
+  const [preparing, setPreparing] = useState<Record<string, boolean>>({})
+  const [drafts, setDrafts] = useState<Record<string, PreparedApplication>>({})
+  const [prepareErrors, setPrepareErrors] = useState<Record<string, string>>({})
+  const [notice, setNotice] = useState<{ text: string; key: string } | null>(null)
+  // Ready to read, until they open it: offer key to its title.
+  const [ready, setReady] = useState<Record<string, string>>({})
+  const [focus, setFocus] = useState<string | null>(null)
 
-  // Wanting an offer moves it up: the whole screen is read again, so it
-  // arrives there with everything known about it.
-  async function reload(movedTitle?: string) {
+  const newDeck = [...pending(view.found), ...pending(view.maybe)]
+
+  async function reload() {
     try {
       const response = await fetch('/api/opportunities')
       if (!response.ok) return
-      const next = (await response.json()) as OpportunitiesView
-      setView(next)
-      setFound(next.found)
-      setMaybe(next.maybe)
-      setDiscarded(next.discarded)
-      if (movedTitle) setArrived(next.wanted.find((item) => item.title === movedTitle)?.key ?? null)
+      setView((await response.json()) as OpportunitiesView)
     } catch {
       // The answer is saved; the screen catches up on the next visit.
     }
   }
 
-  const open = found.filter((item) => item.response === null)
-  const answered = found.filter((item) => item.response !== null)
+  async function prepare(item: WantedOpportunity) {
+    const id = item.opportunityIds[0]
+    setPreparing((current) => ({ ...current, [id]: true }))
+    setPrepareErrors((current) => ({ ...current, [id]: '' }))
+    try {
+      const response = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opportunityId: id }),
+      })
+      const data = (await response.json().catch(() => ({}))) as PreparedApplication & { error?: string }
+      if (!response.ok) throw new Error(data.error)
+      setDrafts((current) => ({ ...current, [id]: data }))
+      setReady((current) => ({ ...current, [item.key]: item.title }))
+    } catch (caught) {
+      setPrepareErrors((current) => ({ ...current, [id]: caught instanceof Error && caught.message ? caught.message : t.opportunities.apply.failed }))
+    } finally {
+      setPreparing((current) => ({ ...current, [id]: false }))
+    }
+  }
+
+  const preparingItems = view.wanted.filter((item) => preparing[item.opportunityIds[0]])
 
   const counts = {
-    new: open.length + maybe.filter((item) => item.response === null).length,
+    new: newDeck.length,
     wanted: view.wanted.length,
     sent: view.sent.length,
-    aside: discarded.length + view.dropped.length,
+    aside: view.discarded.length + view.dropped.length,
   }
 
   function choose(next: Tab) {
@@ -132,69 +154,94 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
           ))}
         </div>
 
-        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.panel} key={tab}>
-          {tab === 'new' && (
-            <>
-              {found.length === 0 && maybe.length === 0 && (
-                <div className={styles.empty}>
-                  <Symbol size={96} watch breathe label={t.listening.label} />
-                  <p className={styles.emptyLine}>{t.opportunities.empty}</p>
-                  <p className={styles.emptyLead}>{t.opportunities.emptyLead}</p>
-                </div>
-              )}
-
-              {[...open, ...answered].map((item) => (
-                <FoundCard
-                  key={item.id}
-                  item={item}
-                  onAnswered={(response) => {
-                    setFound((current) => current.map((entry) => (entry.id === item.id ? { ...entry, response } : entry)))
-                    if (response === 'interested') void reload(item.title)
+        {/* What the Rep is doing for them, and what is ready to read. */}
+        {(preparingItems.length > 0 || Object.keys(ready).length > 0) && (
+          <ul className={styles.progress} aria-live="polite">
+            {preparingItems.map((item) => (
+              <li key={item.key} className={styles.progressItem}>
+                <span className={styles.progressPulse} aria-hidden="true" />
+                {t.opportunities.apply.preparingFor}
+                <span className={styles.progressTitle}>{item.company}</span>
+              </li>
+            ))}
+            {Object.entries(ready).map(([key, title]) => (
+              <li key={key} className={`${styles.progressItem} ${styles.progressReady}`}>
+                <span className={styles.progressCheck} aria-hidden="true">
+                  ✓
+                </span>
+                {t.opportunities.apply.readyFor}
+                <span className={styles.progressTitle}>{title}</span>
+                <button
+                  type="button"
+                  className={styles.progressSee}
+                  onClick={() => {
+                    choose('wanted')
+                    setFocus(key)
+                    setReady((current) => {
+                      const next = { ...current }
+                      delete next[key]
+                      return next
+                    })
                   }}
-                />
-              ))}
+                >
+                  {t.opportunities.apply.see}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
-              {maybe.length > 0 && (
-                <details className={styles.discarded} open={found.length === 0}>
-                  <summary className={styles.discardedSummary}>
-                    {t.opportunities.maybeTitle} ({maybe.length})
-                  </summary>
-                  <p className={styles.discardedLead}>{t.opportunities.maybeLead}</p>
-                  {maybe.map((item) => (
-                    <FoundCard
-                      key={item.id}
-                      item={item}
-                      onAnswered={(response) => {
-                        setMaybe((current) => current.map((entry) => (entry.id === item.id ? { ...entry, response } : entry)))
-                        if (response === 'interested') void reload(item.title)
-                      }}
-                    />
-                  ))}
-                </details>
-              )}
-            </>
-          )}
+        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.panel} key={tab}>
+          {tab === 'new' &&
+            (newDeck.length === 0 ? (
+              <div className={styles.empty}>
+                <Symbol size={96} watch breathe label={t.listening.label} />
+                <p className={styles.emptyLine}>{t.opportunities.empty}</p>
+                <p className={styles.emptyLead}>{t.opportunities.emptyLead}</p>
+              </div>
+            ) : (
+              <Deck
+                items={newDeck}
+                itemKey={(item) => item.id}
+                label={t.opportunities.tabs.new}
+                render={(item) => (
+                  <FoundCard
+                    item={item}
+                    onAnswered={(response) => {
+                      setNotice({ text: response === 'interested' ? t.opportunities.movedToWanted : t.opportunities.savedNotForMe, key: '' })
+                      void reload()
+                    }}
+                  />
+                )}
+              />
+            ))}
 
-          {tab === 'wanted' && (
-            <>
-              {view.wanted.length === 0 ? (
-                <p className={styles.panelEmpty}>{t.opportunities.wanted.empty}</p>
-              ) : (
-                <>
-                  <p className={styles.wantedLead}>{t.opportunities.wanted.lead}</p>
-                  {view.wanted.map((item) => (
-                    <WantedCard
-                      key={item.key}
-                      item={item}
-                      arrived={arrived === item.key}
-                      onChanged={() => void reload()}
-                    />
-                  ))}
-                </>
-              )}
-
-            </>
-          )}
+          {tab === 'wanted' &&
+            (view.wanted.length === 0 ? (
+              <p className={styles.panelEmpty}>{t.opportunities.wanted.empty}</p>
+            ) : (
+              <Deck
+                items={view.wanted}
+                itemKey={(item) => item.key}
+                label={t.opportunities.tabs.wanted}
+                focus={focus}
+                busy={(item) => Boolean(preparing[item.opportunityIds[0]])}
+                render={(item) => (
+                  <WantedCard
+                    item={item}
+                    arrived={false}
+                    inDeck
+                    onChanged={() => void reload()}
+                    application={{
+                      prepared: drafts[item.opportunityIds[0]] ?? item.prepared,
+                      preparing: Boolean(preparing[item.opportunityIds[0]]),
+                      error: prepareErrors[item.opportunityIds[0]] || null,
+                      onPrepare: () => void prepare(item),
+                    }}
+                  />
+                )}
+              />
+            ))}
 
           {tab === 'sent' &&
             (view.sent.length === 0 ? (
@@ -203,7 +250,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
               <>
                 <p className={styles.wantedLead}>{t.opportunities.wanted.sentLead}</p>
                 {view.sent.map((item) => (
-                  <WantedCard key={item.key} item={item} arrived={false} onChanged={() => void reload()} />
+                  <WantedCard key={item.key} item={item} arrived={false} onChanged={() => void reload()} application={null} />
                 ))}
               </>
             ))}
@@ -220,22 +267,20 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
                   </ul>
                 </section>
               )}
-              {discarded.length === 0 ? (
+              {view.discarded.length === 0 ? (
                 view.dropped.length === 0 && <p className={styles.panelEmpty}>{t.opportunities.asideEmpty}</p>
               ) : (
                 <>
                   {view.dropped.length > 0 && <h2 className={styles.sectionTitle}>{t.opportunities.bySetAside}</h2>}
                   <p className={styles.discardedLead}>{t.opportunities.discardedLead}</p>
                   <ul className={styles.discardedList}>
-                    {discarded.map((item) => (
+                    {view.discarded.map((item) => (
                       <DiscardedItem
                         key={item.id}
                         item={item}
                         onWanted={() => {
-                          setDiscarded((current) =>
-                            current.map((entry) => (entry.id === item.id ? { ...entry, response: 'wanted_anyway' } : entry)),
-                          )
-                          void reload(item.title)
+                          setNotice({ text: t.opportunities.movedToWanted, key: '' })
+                          void reload()
                         }}
                       />
                     ))}
@@ -252,11 +297,56 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
           </Link>
         </div>
       </main>
+
+      {notice && (
+        <Notice
+          key={notice.text}
+          text={notice.text}
+          action={
+            notice.key
+              ? {
+                  label: t.opportunities.apply.see,
+                  run: () => {
+                    choose('wanted')
+                    setFocus(notice.key)
+                  },
+                }
+              : null
+          }
+          onDone={() => setNotice(null)}
+        />
+      )}
     </>
   )
 }
 
+// A quiet note at the foot of the screen that leaves on its own.
+function Notice({ text, action, onDone }: { text: string; action: { label: string; run: () => void } | null; onDone: () => void }) {
+  useEffect(() => {
+    const id = window.setTimeout(onDone, action ? 7000 : 3500)
+    return () => window.clearTimeout(id)
+  }, [action, onDone])
+  return (
+    <div className={styles.notice} role="status">
+      <span>{text}</span>
+      {action && (
+        <button
+          type="button"
+          className={styles.noticeAction}
+          onClick={() => {
+            action.run()
+            onDone()
+          }}
+        >
+          {action.label}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
+  const [leaving, setLeaving] = useState(false)
   const t = useT()
   const [asking, setAsking] = useState(false)
   const [reason, setReason] = useState('')
@@ -267,6 +357,10 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
     setError(null)
     if (await respond(item.id, response, withReason)) {
       setAsking(false)
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setLeaving(true)
+        await wait(SLIDE_MS)
+      }
       onAnswered(response)
     } else {
       setError(t.opportunities.responseFailed)
@@ -274,7 +368,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
   }
 
   return (
-    <article className={styles.card} data-answered={item.response !== null}>
+    <article className={leaving ? `${styles.card} ${styles.slidingOut}` : styles.card} data-answered={item.response !== null}>
       <p className={styles.cardKicker}>
         <Symbol size={20} /> {t.opportunities.worthHearing}
       </p>
@@ -385,8 +479,31 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
 const STAMP_MS = 1100
 const STRIKE_MS = 560
 const FOLD_MS = 720
+// In a deck the card slides out to the side instead: closing its height would
+// shift the page under the next one.
+const SLIDE_MS = 420
 
-function WantedCard({ item, arrived, onChanged }: { item: WantedOpportunity; arrived: boolean; onChanged: () => void }) {
+interface CardApplication {
+  prepared: PreparedApplication | null
+  preparing: boolean
+  error: string | null
+  onPrepare: () => void
+}
+
+function WantedCard({
+  item,
+  arrived,
+  onChanged,
+  application,
+  inDeck = false,
+}: {
+  item: WantedOpportunity
+  arrived: boolean
+  onChanged: () => void
+  application: CardApplication | null
+  inDeck?: boolean
+}) {
+  const leave = inDeck ? SLIDE_MS : FOLD_MS
   const { t, locale } = useI18n()
   const w = t.opportunities.wanted
   const [busy, setBusy] = useState(false)
@@ -410,12 +527,12 @@ function WantedCard({ item, arrived, onChanged }: { item: WantedOpportunity; arr
       setMoment('stamped')
       await wait(STAMP_MS)
       setMoment('folding')
-      await wait(FOLD_MS)
+      await wait(leave)
     } else if (progress === 'dropped' && !calm()) {
       setMoment('striking')
       await wait(STRIKE_MS)
       setMoment('folding')
-      await wait(FOLD_MS)
+      await wait(leave)
     } else {
       setMoment(null)
     }
@@ -432,7 +549,11 @@ function WantedCard({ item, arrived, onChanged }: { item: WantedOpportunity; arr
     .join(' ')
 
   return (
-    <div className={moment === 'folding' ? `${styles.fold} ${styles.folding}` : styles.fold}>
+    <div
+      className={
+        moment === 'folding' ? `${styles.fold} ${inDeck ? styles.slidingOut : styles.folding}` : inDeck ? styles.deckCard : styles.fold
+      }
+    >
       <article className={cardClass}>
         {applied && (
           <span className={moment === 'stamped' ? `${styles.stamp} ${styles.pressing}` : styles.stamp} aria-hidden="true">
@@ -469,8 +590,6 @@ function WantedCard({ item, arrived, onChanged }: { item: WantedOpportunity; arr
           </section>
         )}
 
-        {item.progress !== 'applied' && !item.closed && <ApplicationPanel opportunityId={item.opportunityIds[0]} initial={item.prepared} />}
-
         <div className={styles.wantedActions}>
           {item.url && !item.closed && (
             <a className="btn" href={item.url} target="_blank" rel="noreferrer">
@@ -490,6 +609,8 @@ function WantedCard({ item, arrived, onChanged }: { item: WantedOpportunity; arr
             {w.drop}
           </button>
         </div>
+
+        {application && item.progress !== 'applied' && !item.closed && <ApplicationPanel {...application} />}
         {error && (
           <p className={styles.error} role="alert">
             {error}
