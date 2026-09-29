@@ -26,6 +26,8 @@ function log(day: string, line: string) {
   const directory = path.join(DATA_DIRECTORY, 'logs')
   fs.mkdirSync(directory, { recursive: true })
   fs.appendFileSync(path.join(directory, `listen-${day}.log`), `${line}\n`)
+  // Also to the host's own logs, where the volume's files cannot be read.
+  console.log(`[listen] ${line}`)
 }
 
 async function pass(day: string) {
