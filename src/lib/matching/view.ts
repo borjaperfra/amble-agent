@@ -1,5 +1,5 @@
 import { applicationCv, savedAnswers } from '../apply/answers'
-import { canFillForms } from '../apply/browser'
+import { canFillForms } from '../apply/chrome'
 import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
 import { linkOf } from '../whatsapp/link'
 import { zernioConfig } from '../whatsapp/zernio'

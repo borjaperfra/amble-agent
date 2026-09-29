@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { chromium, type Browser, type Page } from 'playwright-core'
+import type { Browser, Page } from 'playwright-core'
+import { CHROME } from './chrome'
 import { DATA_DIRECTORY, getDb } from '../db/db'
 import { setProgress } from '../db/matching'
 import { applicationCv, questionKey, saveAnswer, savedAnswers } from './answers'
@@ -12,13 +13,6 @@ import { getPreparedApplication, type PreparedAnswer } from './prepare'
 //
 // It fills what it knows (facts, what the Rep wrote, what they answered) and
 // leaves the rest; it never guesses a field it cannot place.
-
-const CHROME = process.env.AMBLE_CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-// Whether this server has a browser to fill forms with. The host has none yet:
-// there, what the Rep prepared is copied into the offer's own form by hand.
-export function canFillForms(): boolean {
-  return fs.existsSync(CHROME)
-}
 
 // Where the candidate is at their computer (development, for now), the form
 // opens in a window they see: amble fills what it knows and they finish it
@@ -233,6 +227,8 @@ export async function fillApplication(candidateId: string, opportunityId: string
 
   const key = sessionKey(candidateId, opportunityId)
   await closeSession(key)
+  // Loaded only when a form is filled: where there is no browser, never.
+  const { chromium } = await import('playwright-core')
   const browser = await chromium.launch({ executablePath: CHROME, headless: !HEADED })
   try {
     const page = await browser.newPage({ viewport: HEADED ? null : { width: 1180, height: 900 }, locale: 'en-US' })
