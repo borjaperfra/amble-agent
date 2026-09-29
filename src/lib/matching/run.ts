@@ -1,10 +1,14 @@
-import { candidateById, getOrCreateCandidate, listCapabilities, listListeningCandidateIds } from '../db/repo'
+import { getDb } from '../db/db'
+import { candidateById, listCapabilities, listListeningCandidateIds, now } from '../db/repo'
 import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } from '../db/matching'
-import { descriptionsOf, lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
+import { descriptionsOf, listCompanies, listOpenOpportunities } from '../db/opportunities'
 import { BACKGROUND_SLOTS } from '../model/provider'
 import { describeWhenMissing } from '../sourcing/describe'
-import { runSourcing, type SourcingStats } from '../sourcing/run'
-import type { TheirStackQuery } from '../sourcing/theirstack'
+import { runSourcing, syncDirectory, type SourcingStats } from '../sourcing/run'
+import { DIRECTORY } from '../sourcing/directory'
+import { normaliseName } from '../sourcing/text'
+import { infoJobsConfigured, type InfoJobsQuery } from '../sourcing/infojobs'
+import { theirStackConfigured, type TheirStackQuery } from '../sourcing/theirstack'
 import { ASSESS_VERSION, assessOpportunity } from './assess'
 import { buildMatchingProfile } from './profile'
 import { EUROPE } from './places'
@@ -234,9 +238,65 @@ const COUNTRY_CODES: Record<string, string> = {
   france: 'FR',
 }
 
-// Boards are free and read on every pass; the aggregator costs a credit per
-// offer and its search already spans two weeks, so it runs once a day.
-const THEIRSTACK_EVERY_HOURS = 20
+// Each person's role query, for those whose profile is weighed.
+async function listeningQueries(): Promise<Map<string, RoleQuery>> {
+  const queries = new Map<string, RoleQuery>()
+  for (const candidateId of listListeningCandidateIds()) {
+    if (listCapabilities(candidateId).length === 0) continue
+    queries.set(candidateId, await roleQueryFor(candidateId, buildMatchingProfile(candidateId)))
+  }
+  return queries
+}
+
+// Boards are free and read on every pass. The aggregator costs a credit per
+// offer returned, so it runs on a daily budget, shared out in turns: each
+// person's own query at most every few days, those searched longest ago
+// first. What it brings in is read for everyone.
+const THEIRSTACK_DAILY_CREDITS = Math.max(0, Number(process.env.AMBLE_THEIRSTACK_DAILY_CREDITS) || 100)
+const THEIRSTACK_EVERY_DAYS = Math.max(1, Number(process.env.AMBLE_THEIRSTACK_EVERY_DAYS) || 3)
+const THEIRSTACK_PER_SEARCH = 40
+
+// InfoJobs costs nothing: each person's query once a day, words from their titles.
+const INFOJOBS_EVERY_HOURS = 20
+
+function dueInfoJobsSearches(queries: Map<string, RoleQuery>): { candidateId: string; query: InfoJobsQuery }[] {
+  const since = new Date(Date.now() - INFOJOBS_EVERY_HOURS * 60 * 60 * 1000).toISOString()
+  const recent = new Set(
+    (getDb().prepare("SELECT DISTINCT candidate_id FROM source_searches WHERE source = 'infojobs' AND searched_at >= ?").all(since) as unknown as { candidate_id: string }[]).map(
+      (row) => row.candidate_id,
+    ),
+  )
+  return [...queries.entries()]
+    .filter(([candidateId, query]) => !recent.has(candidateId) && query.titleInclude.length > 0)
+    .map(([candidateId, query]) => ({ candidateId, query: { terms: query.titleInclude.filter((term) => term.includes(' ') || term.length > 6).slice(0, 5) } }))
+    .filter((search) => search.query.terms.length > 0)
+}
+
+async function dueTheirStackSearches(): Promise<{ candidateId: string; query: TheirStackQuery }[]> {
+  const db = getDb()
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const spent = (db.prepare("SELECT COALESCE(SUM(credits), 0) AS n FROM source_searches WHERE source = 'theirstack' AND searched_at >= ?").get(since) as { n: number }).n
+  let budget = THEIRSTACK_DAILY_CREDITS - spent
+  const last = new Map(
+    (db.prepare("SELECT candidate_id, MAX(searched_at) AS at FROM source_searches WHERE source = 'theirstack' GROUP BY candidate_id").all() as unknown as { candidate_id: string; at: string }[]).map(
+      (row) => [row.candidate_id, Date.parse(row.at)],
+    ),
+  )
+  const due = listListeningCandidateIds()
+    .filter((id) => Date.now() - (last.get(id) ?? 0) >= THEIRSTACK_EVERY_DAYS * 24 * 60 * 60 * 1000)
+    .sort((a, b) => (last.get(a) ?? 0) - (last.get(b) ?? 0))
+  const searches: { candidateId: string; query: TheirStackQuery }[] = []
+  for (const candidateId of due) {
+    if (budget < 10) break
+    // Not before what they shared is weighed: the query comes from it.
+    if (listCapabilities(candidateId).length === 0) continue
+    const limit = Math.min(THEIRSTACK_PER_SEARCH, budget)
+    const query = theirStackQueryFrom(await roleQueryFor(candidateId, buildMatchingProfile(candidateId)))
+    searches.push({ candidateId, query: { ...query, limit } })
+    budget -= limit
+  }
+  return searches
+}
 
 export type CandidatePass = { candidateId: string } & ({ stats: MatchingStats } | { error: string })
 
@@ -245,14 +305,19 @@ export type CandidatePass = { candidateId: string } & ({ stats: MatchingStats } 
 // the same time, taking turns at the model's shared limit, so no one waits for
 // the people before them. One person's failure does not stop the others.
 //
-// The aggregator is searched with the owner's query only, for now: it costs
-// credits for every offer it returns, and the boards cost nothing.
 export async function runListening(options: { limit?: number } = {}): Promise<{ sourcing: SourcingStats; matching: CandidatePass[] }> {
-  const owner = getOrCreateCandidate()
-  const query = await roleQueryFor(owner.id, buildMatchingProfile(owner.id))
-  const last = lastTheirStackSearchAt()
-  const aggregatorDue = !last || Date.now() - Date.parse(last) >= THEIRSTACK_EVERY_HOURS * 60 * 60 * 1000
-  const sourcing = await runSourcing({ theirstack: aggregatorDue ? theirStackQueryFrom(query) : null })
+  // Boards pinned in the directory since the last pass start being read now.
+  const known = new Map(listCompanies().map((company) => [company.name_norm, company.status]))
+  const pinnedNew = DIRECTORY.filter((entry) => entry.board && known.get(normaliseName(entry.name)) !== 'watching')
+  if (pinnedNew.length > 0) await syncDirectory({ entries: pinnedNew, refresh: true }).catch(() => undefined)
+
+  const searches = theirStackConfigured() ? await dueTheirStackSearches().catch(() => []) : []
+  const infojobs = infoJobsConfigured() ? dueInfoJobsSearches(await listeningQueries().catch(() => new Map())) : []
+  const sourcing = await runSourcing({ theirstack: searches.map((search) => search.query), infojobs: infojobs.map((search) => search.query) })
+  // Spent as asked: what each search could return.
+  const record = getDb().prepare('INSERT INTO source_searches (source, candidate_id, searched_at, credits) VALUES (?, ?, ?, ?)')
+  for (const search of searches) record.run('theirstack', search.candidateId, now(), search.query.limit)
+  for (const search of infojobs) record.run('infojobs', search.candidateId, now(), 0)
 
   const open = listOpenOpportunities()
   const deadline = Date.now() + PASS_BUDGET_MS

@@ -12,7 +12,9 @@ export type AtsKind =
   | 'bamboohr'
   | 'workday'
   | 'smartrecruiters'
-export type SourceKind = AtsKind | 'theirstack'
+  | 'factorial'
+// 'shared': an offer someone brought to the Rep themselves (whatsapp/shared.ts).
+export type SourceKind = AtsKind | 'theirstack' | 'infojobs' | 'shared'
 export type Workplace = 'remote' | 'hybrid' | 'onsite'
 
 export interface RawOpportunity {

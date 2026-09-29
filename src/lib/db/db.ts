@@ -459,6 +459,22 @@ function createDb(): DatabaseSync {
       sent_at TEXT
     );
 
+    -- Searches in aggregators (TheirStack, InfoJobs), each for one person's
+    -- query, taken in turns (matching/run.ts).
+    CREATE TABLE IF NOT EXISTS source_searches (
+      source TEXT NOT NULL,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      searched_at TEXT NOT NULL,
+      credits INTEGER NOT NULL
+    );
+
+    -- Interview questions asked on WhatsApp (whatsapp/interview.ts).
+    CREATE TABLE IF NOT EXISTS whatsapp_questions (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      turn_id TEXT NOT NULL,
+      asked_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS whatsapp_link_codes (
       code TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

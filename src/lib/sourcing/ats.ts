@@ -283,6 +283,50 @@ async function readTeamtailor(host: string, companyName: string): Promise<RawOpp
   })
 }
 
+// ── Factorial ────────────────────────────────────────────────────────────
+// Factorial's careers site (<company>.factorialhr.com, or .factorial.es) is
+// drawn on the server: each offer is a list item carrying its link, whether
+// it is remote, and under the heading of its office. Many Spanish companies
+// hire through it. The offer's text is on its own page, read when judged.
+
+const FACTORIAL_HOST = /^[a-z0-9-]+\.factorial(?:hr)?\.(?:com|es)$/i
+
+async function readFactorial(host: string, companyName: string): Promise<RawOpportunity[] | null> {
+  if (!FACTORIAL_HOST.test(host)) return null
+  const html = await getText(`https://${host}/`, 'factorial')
+  if (!html || !/job-offer-item|job_posting/i.test(html)) return html && /factorial/i.test(html) ? [] : null
+  const offers: RawOpportunity[] = []
+  // Offices are headings; the offers under each belong to it.
+  const sections = html.split(/<h3[^>]*>/i)
+  for (const section of sections.slice(1)) {
+    const office = decodeEntities(section.slice(0, section.indexOf('</h3>')).replace(/<[^>]+>/g, '').trim())
+    for (const item of section.match(/<li class='job-offer-item[\s\S]*?<\/li>/gi) ?? []) {
+      const url = item.match(/data-job-postings-url='([^']+)'/i)?.[1]
+      const title = item.match(/font-bold[^>]*>([^<]+)</i)?.[1]
+      if (!url || !title) continue
+      const remote = item.match(/data-is-remote='(true|false)'/i)?.[1] === 'true'
+      const texts = [...item.matchAll(/text-gray-350[^>]*>([^<]+)</gi)].map((match) => decodeEntities(match[1].trim()))
+      const mode = texts.find((text) => /hybrid|híbrido|remote|remoto|on-?site|presencial/i.test(text)) ?? null
+      offers.push({
+        source: 'factorial',
+        externalId: url.split('/').pop() ?? url,
+        companyName,
+        title: decodeEntities(title.trim()),
+        location: office && !/^remote|^remoto/i.test(office) ? office : null,
+        workplace: remote ? 'remote' : inferWorkplace(mode),
+        url,
+        description: null,
+        salaryMin: null,
+        salaryMax: null,
+        salaryCurrency: null,
+        salaryRaw: null,
+        postedAt: null,
+      })
+    }
+  }
+  return offers
+}
+
 // ── Recruitee ────────────────────────────────────────────────────────────
 
 interface RecruiteeOffer {
@@ -592,6 +636,11 @@ function smartRecruitersOpportunity(posting: SmartRecruitersPosting, token: stri
 // The description of an offer whose board lists none, read when it is about
 // to be judged. Null when the source gives none.
 export async function describeOpportunity(source: string, token: string, externalId: string): Promise<string | null> {
+  if (source === 'factorial') {
+    const html = await getText(`https://${token}/job_posting/${encodeURIComponent(externalId)}`, 'factorial')
+    const body = html?.match(/<body[\s\S]*<\/body>/i)?.[0] ?? null
+    return clampText(htmlToText(body?.replace(/<(script|style|nav|header|footer)[\s\S]*?<\/\1>/gi, '') ?? null))
+  }
   if (source === 'workday') {
     const parts = workdayParts(token)
     if (!parts) return null
@@ -633,6 +682,7 @@ export const ATS_KINDS: AtsKind[] = [
   'bamboohr',
   'workday',
   'smartrecruiters',
+  'factorial',
 ]
 
 // null: the board does not exist. []: it exists and has no open offers.
@@ -658,12 +708,14 @@ export function readAtsBoard(ats: AtsKind, token: string, companyName: string): 
       return readWorkday(token, companyName)
     case 'smartrecruiters':
       return readSmartRecruiters(token, companyName)
+    case 'factorial':
+      return readFactorial(token, companyName)
   }
 }
 
 // The name a board gives its owner, where the ATS publishes one. Used to check
 // that a board found by guessing the company's name really is that company's.
-async function boardOwner(ats: AtsKind, token: string): Promise<string | null> {
+export async function boardOwner(ats: AtsKind, token: string): Promise<string | null> {
   switch (ats) {
     case 'greenhouse': {
       const data = (await getJson(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(token)}`, ats)) as { name?: string } | null
@@ -719,7 +771,7 @@ export function sameCompany(owner: string, name: string, domain?: string | null)
   })
 }
 
-const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp }[] = [
+export const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp }[] = [
   { ats: 'greenhouse', pattern: /(?:boards(?:-api)?|job-boards(?:\.eu)?)\.greenhouse\.io\/(?:v1\/boards\/)?(?:embed\/job_board\?for=)?([a-z0-9_-]+)/i },
   { ats: 'lever', pattern: /jobs\.(?:eu\.)?lever\.co\/([a-z0-9_-]+)/i },
   { ats: 'ashby', pattern: /jobs\.ashbyhq\.com\/([a-z0-9_.-]+)/i },
@@ -731,9 +783,10 @@ const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp }[] = [
   // tenant.wdN/site: the site is the path's first segment after an optional locale.
   { ats: 'workday', pattern: /\b([a-z0-9-]+\.wd\d+)\.myworkdayjobs\.com\/(?:[a-z]{2}-[A-Z]{2}\/)?([A-Za-z0-9_-]+)/ },
   { ats: 'smartrecruiters', pattern: /(?:jobs|careers)\.smartrecruiters\.com\/([A-Za-z0-9_-]+)/i },
+  { ats: 'factorial', pattern: /\b([a-z0-9-]+\.factorial(?:hr)?\.(?:com|es))\b/i },
 ]
 
-const NOT_TOKENS = new Set(['api', 'app', 'assets', 'careers-analytics', 'cdn', 'embed', 'j', 'jobs', 'static', 'v1', 'widget', 'www'])
+export const NOT_TOKENS = new Set(['api', 'app', 'assets', 'careers-analytics', 'cdn', 'embed', 'j', 'jobs', 'static', 'v1', 'widget', 'www'])
 
 // ATSs whose boards live on a per-company subdomain: a guessed token with a
 // dot in it (the company's domain) cannot name one.

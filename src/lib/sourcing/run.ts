@@ -17,6 +17,7 @@ import {
 } from '../db/opportunities'
 import { detectBoard, readAtsBoard, type DetectedBoard } from './ats'
 import { DIRECTORY, type DirectoryEntry } from './directory'
+import { infoJobsConfigured, searchInfoJobs, type InfoJobsQuery } from './infojobs'
 import { searchTheirStack, theirStackConfigured, type TheirStackQuery } from './theirstack'
 import { normaliseName } from './text'
 import { SourceError, type AtsKind, type RawOpportunity } from './types'
@@ -31,6 +32,7 @@ export interface SourcingStats {
   created: number
   closed: number
   theirstack: { ran: boolean; returned: number; newCompanies: number } | null
+  infojobs?: { ran: boolean; returned: number; newCompanies: number } | null
   retention: RetentionStats | null
   totals: { open: number; closed: number; companies: number }
   errors: { company?: string; source: string; message: string }[]
@@ -53,7 +55,8 @@ async function store(raws: RawOpportunity[], companyId: string, seenAt: string):
   return { seen: raws.length, created }
 }
 
-export async function runSourcing(options: { theirstack?: TheirStackQuery | null } = {}): Promise<SourcingStats> {
+// `theirstack`: the aggregator searches for this pass, one per person due one.
+export async function runSourcing(options: { theirstack?: TheirStackQuery[]; infojobs?: InfoJobsQuery[] } = {}): Promise<SourcingStats> {
   const runId = startSourcingRun()
   const stats: SourcingStats = {
     companiesRead: 0,
@@ -93,10 +96,10 @@ export async function runSourcing(options: { theirstack?: TheirStackQuery | null
     }
   })
 
-  if (options.theirstack && theirStackConfigured()) {
+  if (options.theirstack?.length && theirStackConfigured()) {
     stats.theirstack = { ran: true, returned: 0, newCompanies: 0 }
     try {
-      const raws = await searchTheirStack(options.theirstack)
+      const raws = (await Promise.all(options.theirstack.map((query) => searchTheirStack(query)))).flat()
       stats.theirstack.returned = raws.length
       const seenAt = now()
       const before = new Set(listCompanies().map((company) => company.id))
@@ -115,6 +118,27 @@ export async function runSourcing(options: { theirstack?: TheirStackQuery | null
       }
     } catch (error) {
       errors.push({ source: 'theirstack', message: error instanceof Error ? error.message : 'unknown error' })
+    }
+  }
+
+  // InfoJobs: free, one search per person due one. A search is not a full
+  // listing either: nothing is closed from its absence.
+  if (options.infojobs?.length && infoJobsConfigured()) {
+    stats.infojobs = { ran: true, returned: 0, newCompanies: 0 }
+    try {
+      const raws = (await Promise.all(options.infojobs.map((query) => searchInfoJobs(query)))).flat()
+      stats.infojobs.returned = raws.length
+      const seenAt = now()
+      const before = new Set(listCompanies().map((company) => company.id))
+      for (const raw of raws) {
+        const company = upsertCompany({ name: raw.companyName, domain: null, status: 'unresolved', discoveredVia: 'infojobs' })
+        if (!before.has(company.id)) stats.infojobs.newCompanies++
+        const result = await store([raw], company.id, seenAt)
+        stats.seen += result.seen
+        stats.created += result.created
+      }
+    } catch (error) {
+      errors.push({ source: 'infojobs', message: error instanceof Error ? error.message : 'unknown error' })
     }
   }
 

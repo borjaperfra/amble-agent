@@ -11,7 +11,9 @@
     "career:example:check": "tsx scripts/career-example.ts --check",
     "sourcing": "tsx --env-file-if-exists=.env.local scripts/sourcing.ts",
     "listen": "tsx --env-file-if-exists=.env.local scripts/sourcing.ts listen",
-    "auth": "tsx --env-file-if-exists=.env.local scripts/auth.ts"
+    "auth": "tsx --env-file-if-exists=.env.local scripts/auth.ts",
+    "resolve-boards": "tsx --env-file-if-exists=.env.local scripts/resolve-boards.ts",
+    "verify-board": "tsx scripts/verify-board.ts"
   },
   "dependencies": {
     "next": "16.3.5",
