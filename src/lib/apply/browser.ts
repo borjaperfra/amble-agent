@@ -14,6 +14,12 @@ import { getPreparedApplication, type PreparedAnswer } from './prepare'
 // leaves the rest; it never guesses a field it cannot place.
 
 const CHROME = process.env.AMBLE_CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+// Whether this server has a browser to fill forms with. The host has none yet:
+// there, what the Rep prepared is copied into the offer's own form by hand.
+export function canFillForms(): boolean {
+  return fs.existsSync(CHROME)
+}
+
 // Where the candidate is at their computer (development, for now), the form
 // opens in a window they see: amble fills what it knows and they finish it
 // and send it there. On a server, it is filled out of sight and they approve

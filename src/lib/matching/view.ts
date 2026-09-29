@@ -1,4 +1,5 @@
 import { applicationCv, savedAnswers } from '../apply/answers'
+import { canFillForms } from '../apply/browser'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
@@ -104,8 +105,9 @@ export interface OpportunitiesView {
   wanted: WantedOpportunity[]
   sent: WantedOpportunity[]
   dropped: WantedOpportunity[]
-  // What they send with applications: their CV, and what they answered before.
-  applicant: { cv: string | null; answers: Record<string, string> }
+  // What they send with applications: their CV, what they answered before,
+  // and whether the Rep can fill the offer's form here.
+  applicant: { cv: string | null; answers: Record<string, string>; canFill: boolean }
 }
 
 const wants = (decision: MatchResponse | undefined) => decision === 'interested' || decision === 'wanted_anyway'
@@ -268,6 +270,6 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     wanted: wantedAll.filter((item) => item.progress === null),
     sent: wantedAll.filter((item) => item.progress === 'applied'),
     dropped: wantedAll.filter((item) => item.progress === 'dropped'),
-    applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id) },
+    applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id), canFill: canFillForms() },
   }
 }

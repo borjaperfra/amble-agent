@@ -473,6 +473,7 @@ export const en = {
       reopen: 'Open it again',
       fill: 'Fill in the form',
       fillLead: 'I open the offer’s form and fill it with your details, your CV and these answers. What is yours you finish there.',
+      finishThere: 'Copy these answers into the offer’s form, attach your CV and send it there. Then mark it as sent here.',
       fillNeeds: (fields: string) => `First I need: ${fields}.`,
       stillMissing: (fields: string) => `Still missing: ${fields}.`,
       cannotFill: 'I can’t fill this form yet. Here is the link to do it yourself.',

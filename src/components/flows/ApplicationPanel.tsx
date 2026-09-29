@@ -134,7 +134,7 @@ interface ApplicationPanelProps {
   preparing: boolean
   error: string | null
   onPrepare: () => void
-  applicant: { cv: string | null; answers: Record<string, string> }
+  applicant: { cv: string | null; answers: Record<string, string>; canFill: boolean }
   onSent: () => void
 }
 
@@ -392,12 +392,17 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
         <CvField cv={cv} onUploaded={setCv} />
       </div>
 
-      <div className={styles.fillBar}>
-        <button type="button" className="btn" onClick={() => void fill()}>
-          {a.fill}
-        </button>
-        <p className={styles.fillLead}>{a.fillLead}</p>
-      </div>
+      {/* Without a browser here, they copy it into the offer's form themselves. */}
+      {applicant.canFill ? (
+        <div className={styles.fillBar}>
+          <button type="button" className="btn" onClick={() => void fill()}>
+            {a.fill}
+          </button>
+          <p className={styles.fillLead}>{a.fillLead}</p>
+        </div>
+      ) : (
+        <p className={styles.fillLead}>{a.finishThere}</p>
+      )}
       {problem && (
         <p className={styles.error} role="alert">
           {problem}

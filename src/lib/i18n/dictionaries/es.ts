@@ -472,6 +472,7 @@ export const es: Dictionary = {
       reopen: 'Abrirlo otra vez',
       fill: 'Rellenar el formulario',
       fillLead: 'Abro el formulario de la oferta y lo relleno con tus datos, tu CV y estas respuestas. Lo que es tuyo lo terminas tú allí.',
+      finishThere: 'Copia estas respuestas en el formulario de la oferta, adjunta tu CV y envíala allí. Luego márcala como enviada aquí.',
       fillNeeds: (fields: string) => `Antes necesito: ${fields}.`,
       stillMissing: (fields: string) => `Aún falta: ${fields}.`,
       cannotFill: 'No sé rellenar este formulario todavía. Te dejo el enlace para hacerlo tú.',
