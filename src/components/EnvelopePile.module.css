@@ -1,5 +1,5 @@
 /* The pile rests on the horizon's line, in the middle, where the tumbleweed
-   would roll, and is drawn like it: a loose line in soft moss, small. */
+   would roll, and is drawn like it: a loose line in soft moss, each envelope as big as the tumbleweed. */
 
 .pile {
   position: absolute;
@@ -7,14 +7,14 @@
   bottom: 0;
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 6px;
   transform: translateX(-50%);
 }
 
 .envelope {
   position: relative;
   display: block;
-  padding: 14px 3px 1px;
+  padding: 20px 3px 1px;
   color: var(--moss-soft);
   opacity: 0.85;
   text-decoration: none;
@@ -32,7 +32,7 @@
 .envelope:focus-visible {
   z-index: 2;
   opacity: 1;
-  transform: translateY(-5px) rotate(0deg);
+  transform: translateY(-7px) rotate(0deg);
 }
 
 .drawing {
@@ -92,7 +92,7 @@
 .new:focus-visible .letter,
 .wanted:hover .letter,
 .wanted:focus-visible .letter {
-  transform: translateY(-2px);
+  transform: translateY(-2.5px);
 }
 
 .envelope:focus-visible .drawing {
@@ -104,10 +104,10 @@
 /* Its shadow on the line, as the tumbleweed's. */
 .shadow {
   position: absolute;
-  left: 6px;
-  right: 6px;
+  left: 9px;
+  right: 9px;
   bottom: -2px;
-  height: 3px;
+  height: 4px;
   border-radius: 50%;
   background: rgb(0 0 0 / 0.3);
   filter: blur(2px);
@@ -161,8 +161,8 @@
 
 .more {
   align-self: center;
-  margin: 0 0 4px 6px;
-  font-size: 12px;
+  margin: 0 0 8px 6px;
+  font-size: 13px;
   color: var(--moss-soft);
   opacity: 0.75;
   text-decoration: none;

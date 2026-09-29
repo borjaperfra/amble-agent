@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
@@ -144,6 +145,8 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   const [arriving, setArriving] = useState(true)
   const [headline, setHeadline] = useState(0)
   const [rolls, setRolls] = useState(0)
+  const searchParams = useSearchParams()
+  const forcedPile = process.env.NODE_ENV !== 'production' && searchParams.has('envelopes')
   const { wontConsider, weighs } = vm.revealed.rules
   // The minimum salary leads what is said about money: it is the one that decides.
   const money = [...vm.revealed.rules.money].sort((a, b) => Number(isFloor(b.label)) - Number(isFloor(a.label)))
@@ -151,9 +154,11 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   // Learned and declared side by side: only then do learned ones need a mark.
   const mixed = learned > 0 && vm.listeningFor.length > 0
   const found = vm.unseenOpportunities > 0
-  // Any offer still in their hands: new, wanted or sent. Then the horizon holds
-  // those, not a tumbleweed.
-  const holding = vm.pile.length > 0
+  // Something new has come in: then the horizon holds the offers in their
+  // hands (new, wanted and sent), not a tumbleweed. With nothing new, the ones
+  // they already know about stay in their tabs and the tumbleweed rolls. In
+  // development, ?envelopes brings the pile out whatever there is.
+  const holding = (vm.pile.some((item) => item.kind === 'new') || forcedPile) && vm.pile.length > 0
   const quietLines = t.listening.quiet
 
   useEffect(() => {
@@ -175,7 +180,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     return () => window.clearTimeout(id)
   }, [quietLines.length])
 
-  // Now and then, while they have no offer at all, a tumbleweed rolls across.
+  // Now and then, while nothing new has come in, a tumbleweed rolls across.
   // In development, ?tumbleweed brings it out whatever there is, to play with.
   useEffect(() => {
     const forced = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('tumbleweed')
