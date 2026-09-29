@@ -6,6 +6,7 @@ import { runListening } from './matching/run'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
+import { sendDueInterviewQuestions } from './whatsapp/interview'
 import { sendDueReminders } from './whatsapp/reminders'
 
 // Scheduled listening inside the server, for hosting where there is no task
@@ -67,12 +68,20 @@ export function startListeningSchedule(): void {
     const { day, hour, minute } = madrid(new Date())
     if (hour === FOLLOWUP_HOUR && lastFollowupDay !== day) {
       lastFollowupDay = day
-      void sendDueFollowups()
-        .then((stats) => log(day, `followups: ${JSON.stringify(stats)}`))
-        .catch((error) => log(day, `followups failed: ${error instanceof Error ? error.message : String(error)}`))
-      void sendDueReminders()
-        .then((stats) => log(day, `reminders: ${JSON.stringify(stats)}`))
-        .catch((error) => log(day, `reminders failed: ${error instanceof Error ? error.message : String(error)}`))
+      // In this order, one after another: an interview question only goes to
+      // someone nothing else was sent to that day.
+      void (async () => {
+        const rounds: [string, () => Promise<unknown>][] = [
+          ['followups', sendDueFollowups],
+          ['reminders', sendDueReminders],
+          ['interview', sendDueInterviewQuestions],
+        ]
+        for (const [name, round] of rounds) {
+          await round()
+            .then((stats) => log(day, `${name}: ${JSON.stringify(stats)}`))
+            .catch((error) => log(day, `${name} failed: ${error instanceof Error ? error.message : String(error)}`))
+        }
+      })()
     }
     const slot = `${day}T${hour}`
     // Within the first minutes of a slot, once: a restart at 08:02 still runs it.

@@ -5,7 +5,9 @@ import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { transcribe } from '../model/transcribe'
 import { runAction } from './actions'
+import { answerInterviewQuestion, pendingInterviewQuestion } from './interview'
 import { leaveReminder } from './reminders'
+import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
 import { answerMessage } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
@@ -132,18 +134,46 @@ const TYPING_EVERY_MS = 20_000
 
 async function answerWords(
   candidate: CandidateRow,
-  text: string,
+  message: string,
   reply: Reply,
   w: (typeof dictionaries)['es']['whatsapp'],
   chat: { config: ZernioConfig; conversationId: string; messageId: string | null },
 ): Promise<void> {
+  let text = message
   if (await handleAwaitedText(candidate.id, text, reply)) {
     logMessage(candidate.id, 'in', text)
     return
   }
 
+  // A person writes a message now and then; a flood is not a conversation.
+  if (overLimit(candidate.id)) {
+    logMessage(candidate.id, 'in', text)
+    await reply(w.tooMany)
+    return
+  }
+
   const typing = () => void showTyping(chat.config, chat.conversationId).catch(() => undefined)
   typing()
+
+  // A link to an offer: read and judged like any offer amble finds.
+  const link = text.match(/https?:\/\/[^\s<>"]+/)?.[0]
+  if (link) {
+    const raw = await readSharedLink(link).catch(() => null)
+    if (raw) {
+      logMessage(candidate.id, 'in', text)
+      await reply(w.sharedReading)
+      const verdict = await judgeShared(candidate.id, raw).catch(() => null)
+      if (!verdict) {
+        await reply(w.agentFailed)
+        return
+      }
+      const shown = presentVerdict(verdict, w)
+      await reply(shown.text, shown.buttons)
+      return
+    }
+    // Not readable (a page behind a sign-in, for one): the agent asks for the text.
+    text = `${text}\n\n(amble could not read that link.)`
+  }
   const typingTimer = setInterval(typing, TYPING_EVERY_MS)
   // The line saying it is on its way goes only if the answer is slow, and
   // always before the answer, never after it.
@@ -163,6 +193,14 @@ async function answerWords(
     return
   }
   let buttons = answer.intent === 'preferences' && answer.preference ? proposePreference(candidate.id, answer.preference) : undefined
+  // A pasted offer: judged after the agent's line that it is reading it.
+  if (answer.action?.type === 'evaluate_posting') {
+    await reply(answer.reply)
+    const verdict = await judgeShared(candidate.id, pastedOffer(text, answer.action.company, answer.action.title)).catch(() => null)
+    const shown = verdict ? presentVerdict(verdict, w) : { text: w.agentFailed, buttons: undefined }
+    await reply(shown.text, shown.buttons)
+    return
+  }
   // What it decided to do: prepare an application (offered with buttons),
   // or keep the news they gave about one.
   if (answer.action) {
@@ -170,9 +208,13 @@ async function answerWords(
     if (done.buttons) buttons = done.buttons
   }
   await reply(answer.reply, buttons)
-  if (answer.remind) leaveReminder(candidate.id, answer.remind.date, answer.remind.message)
-  // Only what the agent marks for the team: a problem or a suggestion.
-  if (answer.forward) {
+  for (const reminder of answer.reminders) leaveReminder(candidate.id, reminder.date, reminder.message)
+  // Their answer to the interview question waiting on WhatsApp.
+  const question = answer.answersInterview ? pendingInterviewQuestion(candidate.id) : null
+  if (question) answerInterviewQuestion(candidate.id, question.turnId, text)
+  // Only what the agent marks for the team (a problem, a suggestion, a sign
+  // of distress), and not more than a few a day from one person.
+  if (answer.forward && forwardsToday(candidate.id) < MAX_FORWARDS_A_DAY) {
     const row = recordFeedback(candidate, { message: text, page: null, channel: 'whatsapp' })
     await emailOwnerAbout(candidate, row)
   }
@@ -187,4 +229,59 @@ async function hear(apiKey: string, url: string, mimeType: string, language: str
   if (!response.ok) return ''
   const audio = new Blob([await response.arrayBuffer()], { type: mimeType })
   return transcribe(audio, mimeType.includes('mp4') ? 'note.m4a' : 'note.ogg', language)
+}
+
+// What one person may ask the agent: enough for any conversation, not for
+// a script. Counted from what they wrote, as kept in the conversation.
+const PER_HOUR = 20
+const PER_DAY = 100
+const MAX_FORWARDS_A_DAY = 5
+
+function overLimit(candidateId: string): boolean {
+  const count = (since: number) =>
+    (
+      getDb()
+        .prepare("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE candidate_id = ? AND direction = 'in' AND created_at >= ?")
+        .get(candidateId, new Date(Date.now() - since).toISOString()) as { n: number }
+    ).n
+  return count(60 * 60 * 1000) >= PER_HOUR || count(24 * 60 * 60 * 1000) >= PER_DAY
+}
+
+function forwardsToday(candidateId: string): number {
+  return (
+    getDb()
+      .prepare("SELECT COUNT(*) AS n FROM feedback WHERE candidate_id = ? AND channel = 'whatsapp' AND created_at >= ?")
+      .get(candidateId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) as { n: number }
+  ).n
+}
+
+// The verdict on an offer they brought, as a message: what it is for them
+// and why, or why not; with the buttons when it is worth their time.
+function presentVerdict(verdict: SharedVerdict, w: (typeof dictionaries)['es']['whatsapp']): { text: string; buttons?: { title: string; payload: string }[] } {
+  const { match, explanation, gates, title, company } = verdict
+  const head = `*${title}* · ${company}`
+  if (match.verdict === 'discarded') {
+    const failed = gates.find((gate) => gate.result === 'fail')
+    const why =
+      explanation.roleFit.fit === 'wrong_role' || explanation.roleFit.fit === 'below_level'
+        ? explanation.roleFit.reason
+        : (failed?.note || failed?.quote || explanation.roleFit.reason)
+    return { text: [head, '', w.sharedNo, why].filter(Boolean).join('\n') }
+  }
+  const lines = [
+    head,
+    '',
+    match.verdict === 'show' ? w.sharedFits : w.sharedDoubt,
+    explanation.summary,
+    ...explanation.why.slice(0, 3).map((reason) => `• ${reason.text}`),
+    explanation.considerAlso ? `\n${w.considerAlso}: ${explanation.considerAlso.text}` : null,
+  ].filter((line): line is string => line !== null && line !== undefined)
+  return {
+    text: lines.join('\n'),
+    buttons: [
+      { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
+      { title: w.offerButtons.notFit, payload: `of:${match.id}:not_fit` },
+      { title: w.offerButtons.more, payload: `of:${match.id}:more` },
+    ],
+  }
 }

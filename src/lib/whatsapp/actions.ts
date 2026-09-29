@@ -66,6 +66,8 @@ export function runAction(
   action: AgentAction,
   labels: { yes: string; no: string },
 ): ActionResult {
+  // A pasted offer is judged in the inbound path, not here.
+  if (action.type === 'evaluate_posting') return { done: false }
   const offer = findOffer(candidateId, action.company)
   if (!offer) return { done: false }
   const matchId = latestMatchId(candidateId, offer.opportunityId)
