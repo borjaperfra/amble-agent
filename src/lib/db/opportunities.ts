@@ -247,13 +247,30 @@ export function countOpportunities(): { open: number; closed: number; companies:
   return { open, closed, companies }
 }
 
-export function listOpenOpportunities(): (OpportunityRow & { company_name: string })[] {
+// Every open offer without its text: the text of thousands of offers is
+// tens of megabytes, and a pass only reads it for the few it judges
+// (descriptionsOf). Several passes and first reads can then run at once.
+export function listOpenOpportunities(): (Omit<OpportunityRow, 'description'> & { company_name: string })[] {
+  const columns = (getDb().prepare('PRAGMA table_info(opportunities)').all() as unknown as { name: string }[])
+    .map((column) => column.name)
+    .filter((name) => name !== 'description')
   return getDb()
     .prepare(
-      `SELECT o.*, c.name AS company_name FROM opportunities o JOIN companies c ON c.id = o.company_id
+      `SELECT ${columns.map((name) => `o.${name}`).join(', ')}, c.name AS company_name FROM opportunities o
+       JOIN companies c ON c.id = o.company_id
        WHERE o.closed_at IS NULL AND c.status != 'ignored' ORDER BY o.first_seen_at DESC`,
     )
-    .all() as unknown as (OpportunityRow & { company_name: string })[]
+    .all() as unknown as (Omit<OpportunityRow, 'description'> & { company_name: string })[]
+}
+
+export function descriptionsOf(opportunityIds: string[]): Map<string, string> {
+  if (opportunityIds.length === 0) return new Map()
+  const rows = getDb()
+    .prepare(
+      `SELECT id, description FROM opportunities WHERE description IS NOT NULL AND id IN (${opportunityIds.map(() => '?').join(', ')})`,
+    )
+    .all(...opportunityIds) as unknown as { id: string; description: string }[]
+  return new Map(rows.map((row) => [row.id, row.description]))
 }
 
 // ── Runs ─────────────────────────────────────────────────────────────────

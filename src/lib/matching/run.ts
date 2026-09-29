@@ -1,6 +1,6 @@
 import { candidateById, getOrCreateCandidate, listListeningCandidateIds } from '../db/repo'
 import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } from '../db/matching'
-import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
+import { descriptionsOf, lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
 import { BACKGROUND_SLOTS } from '../model/provider'
 import { describeWhenMissing } from '../sourcing/describe'
 import { runSourcing, type SourcingStats } from '../sourcing/run'
@@ -49,8 +49,14 @@ export function currentMatchKey(candidateId: string): string {
 
 type OpenOpportunity = ReturnType<typeof listOpenOpportunities>[number]
 
-// `open` is shared by a whole pass: the offers and their text are read once,
-// not once per person. Past `deadline`, no new read starts.
+// The first posting's text, or any other city's of the same role.
+function descriptionOf(postings: OpenOpportunity[]): string | null {
+  const texts = descriptionsOf(postings.map((posting) => posting.id))
+  return texts.get(postings[0].id) ?? postings.map((posting) => texts.get(posting.id)).find(Boolean) ?? null
+}
+
+// `open` is shared by a whole pass: the offers are read once, not once per
+// person, and without their text, which is read only for what is judged. Past `deadline`, no new read starts.
 export async function runMatching(options: {
   candidateId: string
   limit?: number
@@ -127,7 +133,7 @@ export async function runMatching(options: {
         const opportunity = {
           ...first,
           location: [...new Set(postings.map((posting) => posting.location).filter(Boolean))].join(' · ') || null,
-          description: first.description ?? postings.find((posting) => posting.description)?.description ?? null,
+          description: descriptionOf(postings),
         }
         try {
           // Some boards list offers without their text: read it now, before judging.
