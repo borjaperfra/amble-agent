@@ -49,6 +49,10 @@ export function assessedOpportunityIds(candidateId: string, profileHash: string)
   return new Set(rows.map((row) => row.opportunity_id))
 }
 
+export function hasAnyMatch(candidateId: string): boolean {
+  return Boolean(getDb().prepare('SELECT 1 FROM opportunity_matches WHERE candidate_id = ? LIMIT 1').get(candidateId))
+}
+
 export function insertMatch(row: {
   candidateId: string
   opportunityId: string

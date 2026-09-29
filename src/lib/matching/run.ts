@@ -1,5 +1,5 @@
 import { candidateById, getOrCreateCandidate, listListeningCandidateIds } from '../db/repo'
-import { assessedOpportunityIds, insertMatch, type MatchVerdict } from '../db/matching'
+import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } from '../db/matching'
 import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
 import { BACKGROUND_SLOTS } from '../model/provider'
 import { describeWhenMissing } from '../sourcing/describe'
@@ -17,6 +17,11 @@ const DEFAULT_LIMIT = 25
 // As many at once as background work may have in flight; with several people
 // the shared limit takes turns between them.
 const CONCURRENCY = BACKGROUND_SLOTS
+// A person's first read starts the moment they are listened for, not at the
+// next scheduled pass: a larger batch, and only offers of the last two weeks,
+// so what they see first is fresh. Older ones come in the regular passes.
+const FIRST_READ_LIMIT = 60
+const FIRST_READ_DAYS = 14
 // A pass stops starting new reads before the next one is due (every 4 h);
 // what is left waits for it.
 const PASS_BUDGET_MS = 3.5 * 60 * 60 * 1000
@@ -51,6 +56,8 @@ export async function runMatching(options: {
   limit?: number
   open?: OpenOpportunity[]
   deadline?: number
+  // Only offers posted (or first seen) since this ISO date.
+  since?: string
 }): Promise<MatchingStats> {
   const candidate = candidateById(options.candidateId)
   const profile = buildMatchingProfile(candidate.id)
@@ -76,6 +83,7 @@ export async function runMatching(options: {
   stats.open = open.length
   const pending: typeof open = []
   for (const opportunity of open) {
+    if (options.since && (opportunity.posted_at ?? opportunity.first_seen_at) < options.since) continue
     const result = prefilter(opportunity, query)
     if (!result.pass) {
       const key = result.reason.split(':')[0]
@@ -242,8 +250,9 @@ export async function runListening(options: { limit?: number } = {}): Promise<{ 
 
   const open = listOpenOpportunities()
   const deadline = Date.now() + PASS_BUDGET_MS
+  // Someone whose first read is still running is left to it.
   const matching = await Promise.all(
-    listListeningCandidateIds().map(async (candidateId): Promise<CandidatePass> => {
+    listListeningCandidateIds().filter((candidateId) => !firstReads.running.has(candidateId)).map(async (candidateId): Promise<CandidatePass> => {
       try {
         return { candidateId, stats: await runMatching({ candidateId, limit: options.limit, open, deadline }) }
       } catch (error) {
@@ -252,4 +261,39 @@ export async function runListening(options: { limit?: number } = {}): Promise<{ 
     }),
   )
   return { sourcing, matching }
+}
+
+declare global {
+  var __ambleFirstReads: { running: Set<string>; done: Set<string> } | undefined
+}
+
+// On globalThis: the pages and the scheduled pass are separate bundles in one
+// process. `done` saves reloading every offer on each visit of someone whose
+// first read found nothing; after a restart it is checked once more.
+const firstReads = (globalThis.__ambleFirstReads ??= { running: new Set(), done: new Set() })
+
+export function isFirstReading(candidateId: string): boolean {
+  return firstReads.running.has(candidateId)
+}
+
+// Starts a person's first read in the background, when they are listened for
+// and nothing has ever been judged for them. True while it is running.
+export function startFirstRead(candidateId: string): boolean {
+  if (firstReads.running.has(candidateId)) return true
+  if (firstReads.done.has(candidateId)) return false
+  if (hasAnyMatch(candidateId)) {
+    firstReads.done.add(candidateId)
+    return false
+  }
+  if (!listListeningCandidateIds().includes(candidateId)) return false
+  firstReads.running.add(candidateId)
+  const since = new Date(Date.now() - FIRST_READ_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  void runMatching({ candidateId, limit: FIRST_READ_LIMIT, since })
+    .then((stats) => console.log(`[listen] first read for ${candidateId}: ${JSON.stringify({ ...stats, prefilterOut: undefined })}`))
+    .catch((error) => console.error(`[listen] first read for ${candidateId} failed:`, error))
+    .finally(() => {
+      firstReads.running.delete(candidateId)
+      firstReads.done.add(candidateId)
+    })
+  return true
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
@@ -33,6 +33,8 @@ interface ListeningVm {
   unseenOpportunities: number
   pile: PileEnvelope[]
   week: WeekLedger
+  // Their first read is running: what it finds appears as it comes.
+  firstReading: boolean
 }
 
 const activationMs = 2600
@@ -40,6 +42,7 @@ const activationMs = 2600
 const SEEN_KEY = 'amble-listening-seen'
 // A tumbleweed crosses the horizon now and then while nothing comes in.
 const FIRST_ROLL_MS = 6000
+const FIRST_READ_REFRESH_MS = 15_000
 // About how long one crossing takes, so the next never starts before it ends.
 const ROLL_MS = 9000
 const ROLL_EVERY_MS = [40_000, 90_000] as const
@@ -145,6 +148,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   const [arriving, setArriving] = useState(true)
   const [headline, setHeadline] = useState(0)
   const [rolls, setRolls] = useState(0)
+  const router = useRouter()
   const searchParams = useSearchParams()
   const forcedPile = process.env.NODE_ENV !== 'production' && searchParams.has('envelopes')
   const { wontConsider, weighs } = vm.revealed.rules
@@ -179,6 +183,13 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     )
     return () => window.clearTimeout(id)
   }, [quietLines.length])
+
+  // While the first read runs, the page looks again now and then.
+  useEffect(() => {
+    if (!vm.firstReading) return
+    const id = window.setInterval(() => router.refresh(), FIRST_READ_REFRESH_MS)
+    return () => window.clearInterval(id)
+  }, [vm.firstReading, router])
 
   // Now and then, while nothing new has come in, a tumbleweed rolls across.
   // In development, ?tumbleweed brings it out whatever there is, to play with.
@@ -217,7 +228,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
               <h1 className={styles.title} id="listening-title">
                 {found ? t.opportunities.foundTitle : quietLines[headline]}
               </h1>
-              <p className={styles.line}>{found ? t.opportunities.foundLead : t.listening.stillListening}</p>
+              <p className={styles.line}>{found ? t.opportunities.foundLead : vm.firstReading ? t.listening.firstReading : t.listening.stillListening}</p>
               {found && (
                 <Link href="/opportunities" className={`btn ${styles.seeIt}`}>
                   {t.opportunities.seeIt}

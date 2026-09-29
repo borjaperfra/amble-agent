@@ -133,6 +133,7 @@ export const en = {
       'Nothing new up to what you ask for.',
     ],
     stillListening: 'Still listening.',
+    firstReading: 'Reading your first offers…',
     pile: {
       label: (count: number) => (count === 1 ? 'One offer in your hands' : `${count} offers in your hands`),
       kinds: { new: 'New', wanted: 'You want it', sent: 'Sent' },
