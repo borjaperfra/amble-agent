@@ -441,7 +441,11 @@ function createDb(): DatabaseSync {
     CREATE TRIGGER IF NOT EXISTS retractions_no_update BEFORE UPDATE ON retractions
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
 
-    CREATE TRIGGER IF NOT EXISTS retractions_no_delete BEFORE DELETE ON retractions
+    -- Append-only while the account exists; when the person deletes their
+    -- account (account.ts), the record of what they withdrew goes with it.
+    DROP TRIGGER IF EXISTS retractions_no_delete;
+    CREATE TRIGGER retractions_no_delete BEFORE DELETE ON retractions
+    WHEN EXISTS (SELECT 1 FROM candidates WHERE id = OLD.candidate_id)
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
   `)
   migrate(db)

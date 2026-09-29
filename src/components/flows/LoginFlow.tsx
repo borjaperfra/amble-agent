@@ -3,7 +3,8 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
-import { useT } from '@/components/I18nProvider'
+import { useI18n } from '@/components/I18nProvider'
+import { privacyUrl } from '@/lib/legal'
 import styles from '@/app/login/login.module.css'
 
 type Phase = 'email' | 'code'
@@ -72,7 +73,7 @@ function withEmail(sentence: string, email: string) {
 // what you write, blinks when the code is on its way, listens while it waits,
 // narrows at a wrong code, and closes when you are in, to wake on the next page.
 export default function LoginFlow({ next, invitation = null }: { next: string; invitation?: string | null }) {
-  const t = useT()
+  const { locale, t } = useI18n()
   const [phase, setPhase] = useState<Phase>('email')
   // Only the browser knows it: empty while rendering on the server.
   const remembered = useSyncExternalStore(noSubscription, rememberedEmail, () => '')
@@ -339,7 +340,16 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
           )}
         </div>
 
-        {!invitation && (
+        {/* Joining creates an account: they read how their data is handled first. */}
+        {invitation ? (
+          <p className={styles.note}>
+            {t.login.joinPrivacy}{' '}
+            <a href={privacyUrl(locale)} target="_blank" rel="noreferrer">
+              {t.welcome.privacyLink}
+            </a>
+            .
+          </p>
+        ) : (
           <p className={styles.note}>
             {t.login.noAccount} <a href="https://amble.fyi">{t.login.waitlist}</a>
           </p>

@@ -1,0 +1,71 @@
+.page {
+  max-width: var(--conversation-max);
+  margin: 0 auto;
+  padding: 40px var(--page-pad) 96px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--heading-xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 48px;
+}
+
+.lead {
+  margin-top: 20px;
+  font-size: var(--text-body-lg);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 44ch;
+}
+
+.privacy {
+  display: inline-block;
+  margin-top: 16px;
+  color: var(--ink-secondary);
+}
+
+.section {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-md);
+  font-weight: 400;
+}
+
+.body {
+  margin-top: 12px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 52ch;
+}
+
+.actions {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.input {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--danger, #9b3b2f);
+}

@@ -7,7 +7,7 @@ import { useI18n } from './I18nProvider'
 import Symbol from './Symbol'
 import styles from './Header.module.css'
 
-const navRoutes = ['/me', '/me/intent', '/listening', '/opportunities', '/invites']
+const navRoutes = ['/me', '/me/intent', '/me/data', '/listening', '/opportunities', '/invites']
 
 interface HeaderProps {
   right?: React.ReactNode
@@ -76,6 +76,11 @@ export default function Header({ right }: HeaderProps) {
         )}
         <div className={styles.right}>
           {right}
+          {showNav && (
+            <Link href="/me/data" className={styles.language}>
+              {t.header.data}
+            </Link>
+          )}
           {showNav && (
             <button type="button" className={styles.language} onClick={() => void signOut()}>
               {t.login.signOut}

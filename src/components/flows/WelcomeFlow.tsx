@@ -5,6 +5,7 @@ import { useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
 import { useT } from '@/components/I18nProvider'
+import { privacyUrl } from '@/lib/legal'
 import type { Locale } from '@/lib/i18n/locale'
 import styles from '@/app/login/login.module.css'
 
@@ -89,6 +90,13 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
             <button type="submit" className={`btn ${styles.submit}`} disabled={busy || !name.trim()}>
               {busy ? t.welcome.saving : t.welcome.continue}
             </button>
+            <p className={styles.note}>
+              {t.welcome.privacy}{' '}
+              <a href={privacyUrl(locale)} target="_blank" rel="noreferrer">
+                {t.welcome.privacyLink}
+              </a>
+              .
+            </p>
           </form>
         </div>
       </main>
