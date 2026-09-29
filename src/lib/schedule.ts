@@ -5,6 +5,7 @@ import { DATA_DIRECTORY } from './db/db'
 import { runListening } from './matching/run'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
+import { sendDueOffers } from './whatsapp/offers'
 
 // Scheduled listening inside the server, for hosting where there is no task
 // scheduler: the same four passes a day as the Windows task (08, 12, 16 and
@@ -44,6 +45,8 @@ async function pass(day: string) {
     const copy = backupToday()
     if (copy) log(day, `backup: ${copy}`)
     log(day, JSON.stringify(await runListening(), null, 2))
+    // What this pass found that deserves a message, at the pace allowed.
+    log(day, `offers: ${JSON.stringify(await sendDueOffers())}`)
   } catch (error) {
     log(day, `pass failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)
   } finally {

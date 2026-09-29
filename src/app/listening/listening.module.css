@@ -445,3 +445,13 @@
     animation: none;
   }
 }
+
+/* The last step of setting up: WhatsApp, on paper over the moss. */
+.whatsapp {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 36px;
+  border-radius: 12px;
+  background: var(--paper-light);
+  color: var(--ink);
+}

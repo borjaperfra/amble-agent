@@ -8,6 +8,7 @@ import Symbol from '@/components/Symbol'
 import EnvelopePile from '@/components/EnvelopePile'
 import type { PileEnvelope } from '@/lib/view'
 import Tumbleweed from '@/components/Tumbleweed'
+import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
 import { useT } from '@/components/I18nProvider'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import type { DiscardReason, WeekEntry, WeekLedger } from '@/lib/matching/view'
@@ -35,6 +36,7 @@ interface ListeningVm {
   week: WeekLedger
   // Their first read is running: what it finds appears as it comes.
   firstReading: boolean
+  whatsapp: { available: boolean; linked: boolean }
 }
 
 const activationMs = 2600
@@ -240,6 +242,12 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 {holding && <EnvelopePile items={vm.pile} />}
                 {rolls > 0 && <Tumbleweed key={rolls} />}
               </div>
+
+              {vm.whatsapp.available && !vm.whatsapp.linked && (
+                <div className={styles.whatsapp}>
+                  <WhatsAppConnect linked={false} />
+                </div>
+              )}
 
               <div className={styles.for}>
                 <h2 className={styles.forTitle}>{t.listening.attentiveTo}</h2>

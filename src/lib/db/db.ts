@@ -442,6 +442,22 @@ function createDb(): DatabaseSync {
       received_at TEXT NOT NULL
     );
 
+    -- Offers sent on WhatsApp: each one read a second time before it goes,
+    -- whether it went, and what they answered.
+    CREATE TABLE IF NOT EXISTS offer_sends (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      match_id TEXT NOT NULL,
+      opportunity_id TEXT NOT NULL,
+      reviewed_at TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      reason TEXT,
+      model_run_id TEXT,
+      sent_at TEXT,
+      answer TEXT,
+      answered_at TEXT,
+      PRIMARY KEY (candidate_id, match_id)
+    );
+
     CREATE TABLE IF NOT EXISTS application_followups (
       candidate_id TEXT NOT NULL REFERENCES candidates(id),
       opportunity_id TEXT NOT NULL,
@@ -499,6 +515,12 @@ function addColumn(db: DatabaseSync, table: string, column: string, definition: 
 }
 
 function migrate(db: DatabaseSync): void {
+  // What the agent waits for on WhatsApp next (why an offer does not fit, a
+  // yes to a change): one thing at a time, as JSON.
+  addColumn(db, 'whatsapp_links', 'awaiting', 'TEXT')
+  // The offer's message as the second reading wrote it for them.
+  addColumn(db, 'offer_sends', 'pitch', 'TEXT')
+
   // Attribution (PRODUCT_SPEC §11.1, §12).
   const attributionAdded = addColumn(db, 'evidence', 'attribution', "TEXT NOT NULL DEFAULT 'sole'")
   addColumn(db, 'evidence', 'attribution_tool', 'TEXT')

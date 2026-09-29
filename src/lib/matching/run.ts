@@ -300,6 +300,8 @@ export function startFirstRead(candidateId: string): boolean {
     .finally(() => {
       firstReads.running.delete(candidateId)
       firstReads.done.add(candidateId)
+      // If their WhatsApp is linked, the best of it goes there.
+      void import('../whatsapp/offers').then(({ sendDueOffers }) => sendDueOffers(candidateId)).catch(() => undefined)
     })
   return true
 }
