@@ -1,6 +1,7 @@
 import { candidateById, getOrCreateCandidate, listListeningCandidateIds } from '../db/repo'
 import { assessedOpportunityIds, insertMatch, type MatchVerdict } from '../db/matching'
 import { lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
+import { BACKGROUND_SLOTS } from '../model/provider'
 import { describeWhenMissing } from '../sourcing/describe'
 import { runSourcing, type SourcingStats } from '../sourcing/run'
 import type { TheirStackQuery } from '../sourcing/theirstack'
@@ -13,7 +14,12 @@ import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
 // per candidate; the rest wait for the next run. It is a reading pace, not
 // how many are shown: most of what is read is set aside.
 const DEFAULT_LIMIT = 25
-const CONCURRENCY = 3
+// As many at once as background work may have in flight; with several people
+// the shared limit takes turns between them.
+const CONCURRENCY = BACKGROUND_SLOTS
+// A pass stops starting new reads before the next one is due (every 4 h);
+// what is left waits for it.
+const PASS_BUDGET_MS = 3.5 * 60 * 60 * 1000
 
 export interface MatchingStats {
   profileHash: string
@@ -26,6 +32,8 @@ export interface MatchingStats {
   sharedAssessments: number
   verdicts: Record<MatchVerdict, number>
   waiting: number
+  // Roles left for the next pass because this one ran out of time.
+  outOfTime: number
   errors: { opportunity: string; message: string }[]
 }
 
@@ -34,7 +42,16 @@ export function currentMatchKey(candidateId: string): string {
   return `${buildMatchingProfile(candidateId).hash}:${ASSESS_VERSION}`
 }
 
-export async function runMatching(options: { candidateId: string; limit?: number }): Promise<MatchingStats> {
+type OpenOpportunity = ReturnType<typeof listOpenOpportunities>[number]
+
+// `open` is shared by a whole pass: the offers and their text are read once,
+// not once per person. Past `deadline`, no new read starts.
+export async function runMatching(options: {
+  candidateId: string
+  limit?: number
+  open?: OpenOpportunity[]
+  deadline?: number
+}): Promise<MatchingStats> {
   const candidate = candidateById(options.candidateId)
   const profile = buildMatchingProfile(candidate.id)
   const query = await roleQueryFor(candidate.id, profile)
@@ -51,10 +68,11 @@ export async function runMatching(options: { candidateId: string; limit?: number
     sharedAssessments: 0,
     verdicts: { show: 0, hold: 0, discarded: 0 },
     waiting: 0,
+    outOfTime: 0,
     errors: [],
   }
 
-  const open = listOpenOpportunities()
+  const open = options.open ?? listOpenOpportunities()
   stats.open = open.length
   const pending: typeof open = []
   for (const opportunity of open) {
@@ -92,6 +110,11 @@ export async function runMatching(options: { candidateId: string; limit?: number
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
       for (let postings = queue.shift(); postings; postings = queue.shift()) {
+        if (options.deadline !== undefined && Date.now() > options.deadline) {
+          stats.outOfTime += 1 + queue.length
+          queue.length = 0
+          break
+        }
         const [first] = postings
         const opportunity = {
           ...first,
@@ -204,8 +227,9 @@ const THEIRSTACK_EVERY_HOURS = 20
 export type CandidatePass = { candidateId: string } & ({ stats: MatchingStats } | { error: string })
 
 // One listening pass: read the sources once, then judge what is new for each
-// person the Rep listens for, against their own profile. One person's failure
-// does not stop the others.
+// person the Rep listens for, against their own profile. Everyone is judged at
+// the same time, taking turns at the model's shared limit, so no one waits for
+// the people before them. One person's failure does not stop the others.
 //
 // The aggregator is searched with the owner's query only, for now: it costs
 // credits for every offer it returns, and the boards cost nothing.
@@ -216,13 +240,16 @@ export async function runListening(options: { limit?: number } = {}): Promise<{ 
   const aggregatorDue = !last || Date.now() - Date.parse(last) >= THEIRSTACK_EVERY_HOURS * 60 * 60 * 1000
   const sourcing = await runSourcing({ theirstack: aggregatorDue ? theirStackQueryFrom(query) : null })
 
-  const matching: CandidatePass[] = []
-  for (const candidateId of listListeningCandidateIds()) {
-    try {
-      matching.push({ candidateId, stats: await runMatching({ candidateId, limit: options.limit }) })
-    } catch (error) {
-      matching.push({ candidateId, error: error instanceof Error ? error.message : 'matching failed' })
-    }
-  }
+  const open = listOpenOpportunities()
+  const deadline = Date.now() + PASS_BUDGET_MS
+  const matching = await Promise.all(
+    listListeningCandidateIds().map(async (candidateId): Promise<CandidatePass> => {
+      try {
+        return { candidateId, stats: await runMatching({ candidateId, limit: options.limit, open, deadline }) }
+      } catch (error) {
+        return { candidateId, error: error instanceof Error ? error.message : 'matching failed' }
+      }
+    }),
+  )
   return { sourcing, matching }
 }

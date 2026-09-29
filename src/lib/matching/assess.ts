@@ -273,6 +273,7 @@ export async function assessOpportunity(params: {
     user: `HARD FILTERS:\n${JSON.stringify(hardFilters.map((r) => ({ id: r.id, rule: r.statement })), null, 1)}\n\nCONTEXT:\n${JSON.stringify(context.map((r) => ({ kind: r.kind, insight: r.statement })), null, 1)}\n\nNEVER FILTER ON:\n${JSON.stringify(profile.notFilteringOn.map((item) => item.statement), null, 1)}\n\nCAPABILITIES:\n${JSON.stringify(profile.capabilities, null, 1)}\n\nEXPERIENCE:\n${profile.experience.map((line) => `- ${line}`).join('\n') || '(none)'}\n\nPOSTING:\n${JSON.stringify(posting, null, 1)}`,
     schema: assessmentSchema,
     temperature: 0.2,
+    background: true,
   })
 
   const dropped: Assessment['dropped'] = []

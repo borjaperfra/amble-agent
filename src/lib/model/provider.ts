@@ -7,12 +7,14 @@ import { LANGUAGE_NAME, type Locale } from '../i18n/locale'
 export class ModelError extends Error {
   status?: number
   detail?: string
+  retryAfterMs?: number
 
-  constructor(message: string, options?: { status?: number; detail?: string }) {
+  constructor(message: string, options?: { status?: number; detail?: string; retryAfterMs?: number }) {
     super(message)
     this.name = 'ModelError'
     this.status = options?.status
     this.detail = options?.detail
+    this.retryAfterMs = options?.retryAfterMs
   }
 }
 
@@ -33,6 +35,82 @@ export interface StructuredTaskOptions<T> {
   // Language for every human-readable value the model writes. Defaults to the
   // candidate's; null means the task writes nothing a person reads.
   language?: Locale | null
+  // Work nobody is waiting on (listening). It queues behind anything a person
+  // is waiting for on the screen.
+  background?: boolean
+}
+
+// Every model call in the process shares the provider's limit on requests in
+// flight (Helmcode allows 10 per key on deepseek-v4-flash). Background work
+// never takes the last few, so a person on the screen is not queued behind a
+// listening pass.
+const MODEL_CONCURRENCY = Math.max(1, Number(process.env.AMBLE_MODEL_CONCURRENCY) || 10)
+const INTERACTIVE_RESERVE = Math.min(3, MODEL_CONCURRENCY - 1)
+export const BACKGROUND_SLOTS = MODEL_CONCURRENCY - INTERACTIVE_RESERVE
+
+interface Slots {
+  active: number
+  interactive: (() => void)[]
+  background: (() => void)[]
+}
+
+declare global {
+  var __ambleModelSlots: Slots | undefined
+}
+
+// On globalThis: the scheduled pass and the pages are separate bundles in one
+// process, and they must count against the same limit.
+const slots = (globalThis.__ambleModelSlots ??= { active: 0, interactive: [], background: [] })
+
+function dispatch() {
+  while (slots.active < MODEL_CONCURRENCY && slots.interactive.length > 0) {
+    slots.active++
+    slots.interactive.shift()!()
+  }
+  while (slots.active < MODEL_CONCURRENCY - INTERACTIVE_RESERVE && slots.background.length > 0) {
+    slots.active++
+    slots.background.shift()!()
+  }
+}
+
+function acquireSlot(background: boolean): Promise<void> {
+  return new Promise((resolve) => {
+    slots[background ? 'background' : 'interactive'].push(resolve)
+    dispatch()
+  })
+}
+
+function releaseSlot() {
+  slots.active--
+  dispatch()
+}
+
+// Busy or rate-limited: wait as long as the provider asks (or a growing
+// while), with the slot given back, and try again a few times.
+const BUSY_STATUSES = new Set([429, 502, 503])
+const BUSY_RETRIES = 4
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function callWhenFree(
+  background: boolean,
+  ...args: Parameters<typeof callChatCompletion>
+): Promise<{ content: string; latencyMs: number }> {
+  for (let retry = 0; ; retry++) {
+    await acquireSlot(background)
+    let waitMs = 0
+    try {
+      return await callChatCompletion(...args)
+    } catch (error) {
+      if (!(error instanceof ModelError) || !BUSY_STATUSES.has(error.status ?? 0) || retry >= BUSY_RETRIES) throw error
+      waitMs = Math.min(60_000, error.retryAfterMs ?? 2_000 * 2 ** retry)
+    } finally {
+      releaseSlot()
+    }
+    await sleep(waitMs)
+  }
 }
 
 // One instruction for every task, instead of each prompt naming a language.
@@ -97,9 +175,11 @@ async function callChatCompletion(
     const latencyMs = Date.now() - startedAt
     const body = (await response.json().catch(() => null)) as ChatCompletionResponse | null
     if (!response.ok) {
+      const retryAfter = Number(response.headers.get('retry-after'))
       throw new ModelError(`The model returned an error (HTTP ${response.status}).`, {
         status: response.status,
         detail: body?.error?.message ?? undefined,
+        retryAfterMs: retryAfter > 0 ? retryAfter * 1000 : undefined,
       })
     }
     const content = body?.choices?.[0]?.message?.content
@@ -140,7 +220,8 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
         ? user
         : `${user}\n\nIMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unknown issue'}. Respond again with JSON that strictly satisfies the schema.`
     try {
-      const { content, latencyMs } = await callChatCompletion(
+      const { content, latencyMs } = await callWhenFree(
+        options.background ?? false,
         config.baseUrl,
         config.apiKey,
         config.modelId,
