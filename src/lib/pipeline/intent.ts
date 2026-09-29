@@ -7,6 +7,7 @@ import {
   type IntentRow,
 } from '../db/repo'
 import { runInterpretIntentTask } from '../model/tasks'
+import { serverText } from '../i18n/candidate'
 
 export interface IntentGroups {
   label: string
@@ -44,13 +45,13 @@ export async function interpretIntent(candidateId: string, answerText: string): 
       id: newId('intn'),
       candidate_id: candidate.id,
       raw_answer: answerText,
-      groups: JSON.stringify([{ label: 'Other', values: [answerText.slice(0, 120)] }]),
+      groups: JSON.stringify([{ label: serverText().inYourWords, values: [answerText.slice(0, 120)] }]),
       listening_for: JSON.stringify([]),
     })
     return {
       id: row.id,
       rawAnswer: answerText,
-      groups: [{ label: 'In your words', values: [answerText] }],
+      groups: [{ label: serverText().inYourWords, values: [answerText] }],
       listeningFor: [],
       structured: false,
     }
@@ -62,6 +63,6 @@ export function readLatestIntent(candidateId: string): IntentRow | undefined {
 }
 
 // False when the intent is not this candidate's.
-export function confirmLatestIntent(candidateId: string, intentId: string): boolean {
-  return confirmIntent(candidateId, intentId)
+export function confirmLatestIntent(candidateId: string, intentId: string, groups?: IntentGroups[]): boolean {
+  return confirmIntent(candidateId, intentId, groups)
 }

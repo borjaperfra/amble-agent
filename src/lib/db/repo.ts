@@ -801,11 +801,23 @@ export function getLatestIntent(candidateId: string): IntentRow | undefined {
     .get(candidateId) as unknown as IntentRow | undefined
 }
 
-export function confirmIntent(candidateId: string, id: string): boolean {
+// Confirmed as they left it: what they edited is what the Rep listens for.
+export function confirmIntent(candidateId: string, id: string, groups?: { label: string; values: string[] }[]): boolean {
   const validUntil = new Date(Date.now() + 1000 * 60 * 60 * 24 * 90).toISOString()
-  const result = getDb()
-    .prepare('UPDATE intent_profiles SET confirmed_at = ?, valid_until = ? WHERE id = ? AND candidate_id = ?')
-    .run(now(), validUntil, id, candidateId)
+  const db = getDb()
+  if (groups) {
+    const kept = groups
+      .map((group) => ({ label: group.label, values: group.values.map((value) => value.trim()).filter(Boolean) }))
+      .filter((group) => group.values.length > 0)
+    db.prepare('UPDATE intent_profiles SET groups = ?, listening_for = ? WHERE id = ? AND candidate_id = ?').run(
+      JSON.stringify(kept),
+      // What they are not interested in is not something to listen for.
+      JSON.stringify(kept.filter((group) => group.label !== 'Not interested in').flatMap((group) => group.values).slice(0, 8)),
+      id,
+      candidateId,
+    )
+  }
+  const result = db.prepare('UPDATE intent_profiles SET confirmed_at = ?, valid_until = ? WHERE id = ? AND candidate_id = ?').run(now(), validUntil, id, candidateId)
   return Number(result.changes) > 0
 }
 

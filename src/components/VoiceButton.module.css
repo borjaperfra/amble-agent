@@ -1,0 +1,88 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.button {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-soft);
+  background: var(--paper-light);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--moss-soft);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.recording {
+  background: var(--moss);
+  border-color: var(--moss);
+  color: var(--paper-light);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.stopIcon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-soft);
+  border-top-color: var(--moss);
+  animation: spin 0.8s linear infinite;
+}
+
+.clock {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  font-size: var(--text-body-sm);
+  color: var(--danger, #9b3b2f);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(79 99 71 / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(79 99 71 / 0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording,
+  .spinner {
+    animation: none;
+  }
+}

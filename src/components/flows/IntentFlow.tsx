@@ -3,10 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Header from '@/components/Header'
-import Symbol from '@/components/Symbol'
 import InlineEdit from '@/components/InlineEdit'
 import StatusDot from '@/components/StatusDot'
-import VoiceRecorder from '@/components/VoiceRecorder'
+import VoiceButton from '@/components/VoiceButton'
 import { useT } from '@/components/I18nProvider'
 import styles from '@/app/me/intent/intent.module.css'
 
@@ -26,7 +25,7 @@ interface IntentResponse {
 
 type Phase = 'ask' | 'sending' | 'reveal'
 
-export default function IntentFlow() {
+export default function IntentFlow({ setupStep }: { setupStep: { current: number; total: number } | null }) {
   const router = useRouter()
   const t = useT()
   const [phase, setPhase] = useState<Phase>('ask')
@@ -35,6 +34,8 @@ export default function IntentFlow() {
   const [editedGroups, setEditedGroups] = useState<IntentGroup[]>([])
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState(false)
+  // The groups come with fixed English labels; they are shown in their language.
+  const labelOf = (label: string) => (t.intent.labels as Record<string, string>)[label] ?? label
 
   async function submit() {
     if (!answer.trim()) return
@@ -69,16 +70,19 @@ export default function IntentFlow() {
     }
     if (result?.id) {
       try {
-        await fetch('/api/intent', {
+        const response = await fetch('/api/intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'confirm', intentId: result.id }),
+          body: JSON.stringify({ action: 'confirm', intentId: result.id, groups: editedGroups }),
         })
+        if (!response.ok) throw new Error()
       } catch {
-        // Confirmation persistence is best-effort in this build.
+        // Not confirmed: they stay here, with what they wrote, to try again.
+        setError(t.intent.confirmFailed)
+        return
       }
     }
-    router.push('/listening')
+    router.push('/start')
   }
 
   function updateValue(groupIndex: number, valueIndex: number, value: string) {
@@ -97,10 +101,8 @@ export default function IntentFlow() {
         <Header />
         <main className={styles.page}>
           <div className={styles.ask}>
-            <p className="kicker rep-kicker">
-              <Symbol size={20} /> {t.common.yourRep}
-            </p>
-            <p className={styles.lead}>{t.intent.lead}</p>
+            {setupStep && <p className={styles.step}>{t.interview.step(setupStep.current, setupStep.total)}</p>}
+            <p className={styles.lead}>{setupStep ? t.intent.leadSetup : t.intent.lead}</p>
             <h1 className={styles.question}>{t.intent.question}</h1>
 
             {phase === 'sending' && (
@@ -110,25 +112,13 @@ export default function IntentFlow() {
               </div>
             )}
 
-            {phase !== 'sending' && (
-              <div className={styles.recorderArea}>
-                <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
-              </div>
-            )}
-
-            <p className={styles.hint} role="status">
-              {t.intent.voiceNotice}
-            </p>
-
             <div className={styles.typingAreaIntent}>
-              <label className={styles.groupLabel} htmlFor="intent-answer">
-                {t.common.orType}
-              </label>
               <textarea
                 id="intent-answer"
                 className={styles.answerTextarea}
                 value={answer}
-                rows={5}
+                rows={4}
+                aria-label={t.intent.question}
                 placeholder={t.intent.placeholder}
                 disabled={phase === 'sending'}
                 onChange={(event) => setAnswer(event.target.value)}
@@ -136,14 +126,18 @@ export default function IntentFlow() {
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit()
                 }}
               />
-              <div className={styles.confirmActions}>
+              <div className={styles.answerActions}>
+                <VoiceButton
+                  disabled={phase === 'sending'}
+                  onText={(text) => setAnswer((value) => (value.trim() ? `${value.trim()} ${text}` : text))}
+                />
                 <button
                   type="button"
-                  className="btn"
+                  className={`btn ${styles.send}`}
                   disabled={!answer.trim() || phase === 'sending'}
                   onClick={() => void submit()}
                 >
-                  {phase === 'sending' ? t.intent.reading : t.common.send}
+                  {phase === 'sending' ? t.interview.sending : t.common.send}
                 </button>
               </div>
             </div>
@@ -164,9 +158,6 @@ export default function IntentFlow() {
       <Header />
       <main className={styles.page}>
         <div className={styles.reveal}>
-          <p className="kicker rep-kicker">
-              <Symbol size={20} /> {t.common.yourRep}
-            </p>
           <h1 className={styles.revealLead}>{t.intent.revealLead}</h1>
           {result && !result.structured && (
             <p className={styles.hint}>
@@ -181,15 +172,15 @@ export default function IntentFlow() {
               key={`${group.label}-${groupIndex}`}
               className={styles.group}
               style={{ animationDelay: `${120 + groupIndex * 90}ms` }}
-              aria-label={group.label}
+              aria-label={labelOf(group.label)}
             >
-              <h2 className={styles.groupLabel}>{group.label}</h2>
+              <h2 className={styles.groupLabel}>{labelOf(group.label)}</h2>
               <div className={styles.values}>
                 {group.values.map((value, valueIndex) => (
                   <div key={`${groupIndex}-${valueIndex}`} className={styles.value}>
                     <InlineEdit
                       value={value}
-                      label={t.intent.valueLabel(group.label)}
+                      label={t.intent.valueLabel(labelOf(group.label))}
                       onChange={(next) => updateValue(groupIndex, valueIndex, next)}
                     />
                   </div>

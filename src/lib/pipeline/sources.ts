@@ -396,11 +396,8 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
   const discoveries = data.claims
     .filter((claim) => claim.claimType === 'experience' || claim.claimType === 'project')
     .slice(0, 6)
-    .map((claim) => {
-      const parts = claim.statement.split(/\s+(?:at|for|on)\s+/i)
-      const title = parts.length > 1 ? parts[parts.length - 1].slice(0, 48) : claim.statement.slice(0, 48)
-      return { title, meta: claim.statement.length > 64 ? `${claim.statement.slice(0, 64)}…` : claim.statement }
-    })
+    // The statement itself, once: a title cut from it only repeated it.
+    .map((claim) => ({ title: claim.statement.length > 160 ? `${claim.statement.slice(0, 157)}…` : claim.statement, meta: '' }))
 
   return {
     sourceId: source.id,

@@ -61,7 +61,6 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
               autoComplete="given-name"
               maxLength={80}
               required
-              autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
             />

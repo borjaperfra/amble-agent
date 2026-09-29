@@ -13,13 +13,25 @@ export async function POST(request: Request) {
 }
 
 async function intent(request: Request, candidateId: string) {
-  const body = (await request.json().catch(() => ({}))) as { action?: string; answer?: string; intentId?: string }
+  const body = (await request.json().catch(() => ({}))) as {
+    action?: string
+    answer?: string
+    intentId?: string
+    groups?: { label?: unknown; values?: unknown }[]
+  }
 
   if (body.action === 'confirm') {
     if (!body.intentId) {
       return NextResponse.json({ error: 'An intent id is required.' }, { status: 400 })
     }
-    if (!confirmLatestIntent(candidateId, body.intentId)) {
+    // What they left on the screen, edits included.
+    const groups = Array.isArray(body.groups)
+      ? body.groups.slice(0, 12).map((group) => ({
+          label: typeof group.label === 'string' ? group.label.slice(0, 80) : '',
+          values: (Array.isArray(group.values) ? group.values : []).filter((value): value is string => typeof value === 'string').map((value) => value.slice(0, 200)).slice(0, 12),
+        }))
+      : undefined
+    if (!confirmLatestIntent(candidateId, body.intentId, groups)) {
       return NextResponse.json({ error: 'Intent not found.' }, { status: 404 })
     }
     return NextResponse.json({ ok: true })

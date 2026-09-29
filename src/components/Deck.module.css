@@ -1,5 +1,7 @@
 .deck {
   scroll-margin-top: 24px;
+  /* A card sliding in or out never widens the page. */
+  overflow-x: clip;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -92,6 +94,17 @@
   transition:
     background var(--motion-fast) ease,
     transform var(--motion-fast) ease;
+}
+
+.dot {
+  position: relative;
+}
+
+/* The dot stays small; what a finger can hit is larger. */
+.dot::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .dot:hover {

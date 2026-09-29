@@ -19,7 +19,6 @@ export default function OnboardingFlow() {
   const t = useT()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sources, setSources] = useState<SourceItem[]>([])
-  const [linkedinUrl, setLinkedinUrl] = useState('')
   const [githubHandle, setGithubHandle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [busy, setBusy] = useState(false)
@@ -160,24 +159,8 @@ export default function OnboardingFlow() {
 
           <div className={`${styles.row} ${styles.enter}`}>
             <span className={styles.rowLabel}>LinkedIn</span>
-            <span className={styles.rowRight}>
-              <input
-                type="url"
-                className={styles.urlInput}
-                placeholder={t.onboarding.linkedinPlaceholder}
-                aria-label={t.onboarding.linkedinLabel}
-                value={linkedinUrl}
-                onChange={(event) => setLinkedinUrl(event.target.value)}
-              />
-              <button
-                type="button"
-                className="text-btn"
-                disabled={busy || !linkedinUrl.trim()}
-                onClick={() => addUrl('linkedin', linkedinUrl, () => setLinkedinUrl(''))}
-              >
-                {t.common.add}
-              </button>
-            </span>
+            {/* A profile URL cannot be read; the profile's own PDF can. */}
+            <span className={styles.rowHint}>{t.onboarding.linkedinHint}</span>
           </div>
 
           <div className={`${styles.row} ${styles.enter}`}>
@@ -218,7 +201,15 @@ export default function OnboardingFlow() {
             type="button"
             className="btn"
             disabled={readableCount === 0 || busy}
-            onClick={() => router.push('/onboarding/processing')}
+            onClick={async () => {
+              // Reading starts now, in the background; meanwhile, what they are looking for.
+              await fetch('/api/onboarding/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stage: 'start' }),
+              }).catch(() => undefined)
+              router.push('/me/intent')
+            }}
           >
             {t.common.continue}
           </button>

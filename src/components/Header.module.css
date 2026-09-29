@@ -69,8 +69,8 @@
 }
 
 .language {
-  min-height: 36px;
-  padding: 6px 2px;
+  min-height: 44px;
+  padding: 6px 4px;
   font: inherit;
   font-size: var(--text-body-sm);
   color: var(--ink-tertiary);
@@ -89,14 +89,134 @@
   margin-left: 24px;
 }
 
-@media (max-width: 640px) {
+.menuButton,
+.menu {
+  display: none;
+}
+
+/* Below this the row of sections no longer fits: it goes behind a button. */
+@media (max-width: 860px) {
   .inner {
-    gap: 16px;
-    padding-top: 16px;
-    padding-bottom: 16px;
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 
-  .nav {
-    gap: 16px;
+  .nav,
+  .wideOnly {
+    display: none;
+  }
+
+  /* The hidden row of sections must not hold the button away from the edge. */
+  .inner nav + .right {
+    margin-left: auto;
+  }
+
+  .menuButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .burger,
+  .burger::before,
+  .burger::after {
+    display: block;
+    width: 20px;
+    height: 1.5px;
+    background: currentColor;
+    border-radius: 2px;
+    transition:
+      transform var(--motion-fast) ease,
+      opacity var(--motion-fast) ease;
+  }
+
+  .burger {
+    position: relative;
+  }
+
+  .burger::before,
+  .burger::after {
+    content: '';
+    position: absolute;
+    left: 0;
+  }
+
+  .burger::before {
+    top: -6px;
+  }
+
+  .burger::after {
+    top: 6px;
+  }
+
+  .burgerOpen {
+    background: transparent;
+  }
+
+  .burgerOpen::before {
+    transform: translateY(6px) rotate(45deg);
+  }
+
+  .burgerOpen::after {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  .menu {
+    display: block;
+    border-top: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--paper);
+    padding: 8px var(--page-pad) 16px;
+  }
+
+  .menu nav {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .menuLink {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 4px;
+    font: inherit;
+    font-size: 17px;
+    color: var(--ink);
+    text-decoration: none;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+  }
+
+  .menuLinkActive {
+    color: var(--moss-dark);
+    font-weight: 600;
+  }
+
+  .menuFoot {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .menuFoot .menuLink {
+    color: var(--ink-secondary);
+    font-size: var(--text-body);
+  }
+
+  .menuFoot .menuLink:last-child {
+    border-bottom: none;
   }
 }

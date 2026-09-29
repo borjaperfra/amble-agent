@@ -4,15 +4,19 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
-import Symbol from '@/components/Symbol'
+import SetupProgressView from '@/components/SetupProgressView'
 import StatusDot from '@/components/StatusDot'
-import VoiceRecorder from '@/components/VoiceRecorder'
+import VoiceButton from '@/components/VoiceButton'
 import { useT } from '@/components/I18nProvider'
 import { EvaluationControl } from './EvaluationControl'
+import type { SetupProgress } from '@/lib/pipeline/setup'
 import styles from '@/app/onboarding/interview/interview.module.css'
 
-interface NextResponse {
-  action?: 'ASK' | 'STOP'
+interface NextQuestion {
+  // WAIT: what they shared is still being read; the questions come from it.
+  // UNREADABLE: nothing they shared could be used; they add something else.
+  action?: 'ASK' | 'STOP' | 'WAIT' | 'UNREADABLE'
+  progress?: SetupProgress
   kind?: 'gap' | 'defence'
   turnId?: string
   question?: string
@@ -20,120 +24,112 @@ interface NextResponse {
   error?: string
 }
 
-interface AnswerResponse {
-  ok?: boolean
-  error?: string
-}
+type Phase = 'loading' | 'waiting' | 'unreadable' | 'ask' | 'sending' | 'complete'
 
-type Phase = 'loading' | 'ask' | 'answering' | 'gotit' | 'complete'
+const LOOK_AGAIN_MS = 2500
 
-export default function InterviewFlow() {
+// Two questions, ready before they are needed: an answer is sent, kept at
+// once, and the next question comes back with it. Taking the answer in
+// happens afterwards, out of sight. Then what they are looking for.
+export default function InterviewFlow({ owner, step: firstStep, steps }: { owner: boolean; step: number; steps: number }) {
   const router = useRouter()
   const t = useT()
   const [phase, setPhase] = useState<Phase>('loading')
-  const [turnId, setTurnId] = useState<string | null>(null)
-  const [question, setQuestion] = useState<string | null>(null)
-  const [reason, setReason] = useState<string | null>(null)
-  const [isDefence, setIsDefence] = useState(false)
+  const [current, setCurrent] = useState<NextQuestion | null>(null)
+  const [step, setStep] = useState(firstStep)
+  const [progress, setProgress] = useState<SetupProgress | null>(null)
   const [answer, setAnswer] = useState('')
   const [showWhy, setShowWhy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const applyPlan = useCallback(
-    (data: NextResponse | null, failed?: string) => {
-      if (failed || !data) {
-        setError(failed ?? t.common.unreachable)
-        setPhase('ask')
-        return
-      }
-      if (data.action === 'STOP') {
+  const show = useCallback(
+    (next: NextQuestion) => {
+      if (next.action === 'STOP') {
         setPhase('complete')
-        window.setTimeout(() => router.push('/me'), 2100)
+        window.setTimeout(() => router.push('/start'), 1600)
         return
       }
-      setTurnId(data.turnId ?? null)
-      setQuestion(data.question ?? null)
-      setReason(data.reason ?? null)
-      setIsDefence(data.kind === 'defence')
+      if (next.action === 'UNREADABLE') {
+        setProgress(next.progress ?? null)
+        setPhase('unreadable')
+        return
+      }
+      if (next.action === 'WAIT') {
+        setProgress(next.progress ?? null)
+        setPhase('waiting')
+        return
+      }
+      setCurrent(next)
       setAnswer('')
       setShowWhy(false)
       setError(null)
       setPhase('ask')
     },
-    [router, t],
+    [router],
   )
 
-  const loadNext = useCallback(async () => {
+  const load = useCallback(async () => {
     setPhase('loading')
     setError(null)
     try {
       const response = await fetch('/api/interview/next', { method: 'POST' })
-      const data = (await response.json()) as NextResponse
-      if (!response.ok) {
-        setError(data.error ?? t.interview.planFailed)
-        return
-      }
-      applyPlan(data)
+      const data = (await response.json()) as NextQuestion
+      if (!response.ok) throw new Error(data.error)
+      show(data)
     } catch {
-      setError(t.common.unreachable)
-      setPhase('ask')
-      setQuestion((current) => current)
+      setError(t.interview.planFailed)
     }
-  }, [applyPlan, t])
+  }, [show, t])
 
   useEffect(() => {
-    const id = window.setTimeout(() => void loadNext(), 0)
+    const id = window.setTimeout(() => void load(), 0)
     return () => window.clearTimeout(id)
-  }, [loadNext])
+  }, [load])
 
+  // While it reads, it looks again every few seconds.
   useEffect(() => {
-    if (phase === 'ask') textareaRef.current?.focus()
+    if (phase !== 'waiting') return
+    const id = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/interview/next', { method: 'POST' })
+        const data = (await response.json()) as NextQuestion
+        if (response.ok) show(data)
+        else setProgress((value) => (value ? { ...value } : value))
+      } catch {
+        setProgress((value) => (value ? { ...value } : value))
+      }
+    }, LOOK_AGAIN_MS)
+    return () => window.clearTimeout(id)
+  }, [phase, progress, show])
+
+  // On a computer, straight into the box; on a phone the keyboard would
+  // cover the question, so they tap when ready.
+  useEffect(() => {
+    if (phase === 'ask' && window.matchMedia('(pointer: fine)').matches) textareaRef.current?.focus({ preventScroll: true })
   }, [phase])
 
-  async function loadNextAfterAnswer() {
-    setPhase('gotit')
-    const startedAt = Date.now()
-    let data: NextResponse | null = null
-    let failure: string | undefined
-    try {
-      const response = await fetch('/api/interview/next', { method: 'POST' })
-      data = (await response.json()) as NextResponse
-      if (!response.ok) {
-        failure = data.error ?? t.interview.planFailed
-        data = null
-      }
-    } catch {
-      failure = t.common.unreachable
-    }
-    const wait = Math.max(0, 800 - (Date.now() - startedAt))
-    window.setTimeout(() => {
-      if (failure) {
-        setError(failure)
-        setPhase('ask')
-      } else {
-        applyPlan(data)
-      }
-    }, wait)
-  }
-
-  async function submitAnswer() {
-    if (!turnId || !answer.trim()) return
-    setPhase('answering')
+  async function submit() {
+    if (!current?.turnId || !answer.trim()) return
+    setPhase('sending')
     setError(null)
     try {
       const response = await fetch('/api/interview/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ turnId, answer }),
+        body: JSON.stringify({ turnId: current.turnId, answer }),
       })
-      const data = (await response.json()) as AnswerResponse
-      if (!response.ok) {
+      const data = (await response.json()) as { ok?: boolean; next?: NextQuestion; error?: string }
+      if (!data.ok) {
+        // Not kept: it is still in the box, to send again.
         setError(data.error ?? t.interview.answerFailed)
         setPhase('ask')
         return
       }
-      void loadNextAfterAnswer()
+      setStep((value) => Math.min(value + 1, steps))
+      // Kept. If the next question did not come with it, it is asked for.
+      if (data.next) show(data.next)
+      else void load()
     } catch {
       setError(t.interview.answerUnsent)
       setPhase('ask')
@@ -150,25 +146,33 @@ export default function InterviewFlow() {
         }
       />
       <main className={styles.page}>
-        {phase === 'loading' && (
+        <p className={styles.counter}>{t.interview.step(Math.min(step, steps), steps)}</p>
+
+        {phase === 'loading' && !error && (
           <div className={styles.stage} role="status">
-            <div className={styles.kickerCenter}>
-              <p className="kicker rep-kicker">
-              <Symbol size={20} /> {t.common.yourRep}
-            </p>
-            </div>
             <StatusDot />
             <p className={styles.context}>{t.interview.deciding}</p>
           </div>
         )}
 
-        {phase === 'gotit' && (
-          <div className={styles.stage} role="status">
-            <p className={styles.gotit}>{t.interview.gotIt}</p>
-            <div className={styles.workingArea}>
-              <StatusDot />
-              <span>{t.interview.thinking}</span>
-            </div>
+        {phase === 'waiting' && progress && (
+          <div className={styles.stage}>
+            <SetupProgressView progress={progress} />
+          </div>
+        )}
+
+        {phase === 'unreadable' && (
+          <div className={styles.stage}>
+            <p className={styles.complete}>{t.interview.unreadableTitle}</p>
+            {(progress?.rejected ?? []).map((item) => (
+              <p key={item.name} className={styles.context}>
+                {t.setup.rejected(item.name, item.reason)}
+              </p>
+            ))}
+            {(progress?.rejected.length ?? 0) === 0 && <p className={styles.context}>{t.interview.unreadableLead}</p>}
+            <Link href="/onboarding" className="btn">
+              {t.interview.addAnother}
+            </Link>
           </div>
         )}
 
@@ -178,87 +182,67 @@ export default function InterviewFlow() {
           </div>
         )}
 
-        {(phase === 'ask' || phase === 'answering') && question && (
-          <div className={`${styles.stage} ${styles.entrance}`}>
-            <div className={styles.kickerCenter}>
-              <p className="kicker rep-kicker">
-              <Symbol size={20} /> {t.common.yourRep}
-            </p>
-            </div>
-            <h1 className={styles.question}>{question}</h1>
-            {isDefence && <p className={styles.context}>{t.interview.defenceContext}</p>}
-
-            {phase === 'answering' ? (
-              <div className={styles.workingArea} role="status">
-                <StatusDot />
-                <span>{t.interview.updating}</span>
-              </div>
-            ) : (
-              <>
-                <div className={styles.recorderArea}>
-                  <VoiceRecorder fixtureTranscript="" onCapture={() => undefined} />
-                </div>
-
-                <p className={styles.voiceNotice}>{t.interview.voiceNotice}</p>
-              </>
-            )}
+        {(phase === 'ask' || phase === 'sending') && current?.question && (
+          <div key={current.turnId} className={`${styles.stage} ${styles.entrance}`}>
+            <h1 className={styles.question}>{current.question}</h1>
+            {current.kind === 'defence' && <p className={styles.context}>{t.interview.defenceContext}</p>}
 
             <div className={styles.typingArea}>
-              <label className={styles.typeLabel} htmlFor="interview-answer">
-                {t.common.orType}
-              </label>
               <textarea
                 id="interview-answer"
                 ref={textareaRef}
                 className={styles.answerTextarea}
                 value={answer}
-                rows={4}
+                rows={3}
+                aria-label={t.interview.answerLabel}
                 placeholder={t.common.typePlaceholder}
-                disabled={phase === 'answering'}
+                disabled={phase === 'sending'}
                 onChange={(event) => setAnswer(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submitAnswer()
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit()
                 }}
               />
               <div className={styles.answerActions}>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!answer.trim() || phase === 'answering'}
-                  onClick={() => void submitAnswer()}
-                >
-                  {phase === 'answering' ? t.interview.sending : t.common.send}
+                <VoiceButton
+                  disabled={phase === 'sending'}
+                  onText={(text) => setAnswer((value) => (value.trim() ? `${value.trim()} ${text}` : text))}
+                />
+                <button type="button" className={`btn ${styles.send}`} disabled={!answer.trim() || phase === 'sending'} onClick={() => void submit()}>
+                  {phase === 'sending' ? t.interview.sending : t.common.send}
                 </button>
               </div>
+              {error && (
+                <p className={styles.errorText} role="alert">
+                  {error}
+                </p>
+              )}
             </div>
 
             <div className={styles.whyArea}>
-              <button
-                type="button"
-                className={`text-btn ${styles.whyToggle}`}
-                aria-expanded={showWhy}
-                onClick={() => setShowWhy((value) => !value)}
-              >
+              <button type="button" className={`text-btn ${styles.whyToggle}`} aria-expanded={showWhy} onClick={() => setShowWhy((value) => !value)}>
                 {t.interview.whyThisQuestion}
               </button>
-              {showWhy && reason && <p className={styles.whyText}>{reason}</p>}
-              <EvaluationControl
-                targetType="interview_question"
-                targetId={turnId ?? ''}
-                label={t.interview.evaluateQuestion}
-                verdicts={['USEFUL', 'REDUNDANT', 'IRRELEVANT']}
-              />
+              {showWhy && current.reason && <p className={styles.whyText}>{current.reason}</p>}
+              {/* How good the question was: for the owner, not for the candidate. */}
+              {owner && (
+                <EvaluationControl
+                  targetType="interview_question"
+                  targetId={current.turnId ?? ''}
+                  label={t.interview.evaluateQuestion}
+                  verdicts={['USEFUL', 'REDUNDANT', 'IRRELEVANT']}
+                />
+              )}
             </div>
           </div>
         )}
 
-        {error && (
-          <div className={styles.errorArea}>
+        {phase === 'loading' && error && (
+          <div className={styles.stage}>
             <p className={styles.errorText} role="alert">
               {error}
             </p>
-            <button type="button" className="text-btn" onClick={() => void loadNext()}>
-              {t.common.continue}
+            <button type="button" className="btn" onClick={() => void load()}>
+              {t.common.tryAgain}
             </button>
           </div>
         )}

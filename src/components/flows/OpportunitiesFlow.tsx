@@ -121,9 +121,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
     <>
       <Header />
       <main className={styles.page}>
-        <p className="kicker rep-kicker">
-          <Symbol size={20} /> {t.opportunities.kicker}
-        </p>
+        <p className="kicker">{t.opportunities.kicker}</p>
         <h1 className={styles.title}>{t.opportunities.title}</h1>
 
         <div className={styles.tabs} role="tablist" aria-label={t.opportunities.title}>

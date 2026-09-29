@@ -440,6 +440,25 @@ function createDb(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS whatsapp_messages_by_candidate ON whatsapp_messages (candidate_id, created_at);
 
+    -- Links sent on WhatsApp that open the person's own account (applinks.ts).
+    CREATE TABLE IF NOT EXISTS app_links (
+      token_hash TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      route TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
+    -- Messages the agent left itself for a later day (reminders.ts).
+    CREATE TABLE IF NOT EXISTS whatsapp_reminders (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      due_on TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      sent_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS whatsapp_link_codes (
       code TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

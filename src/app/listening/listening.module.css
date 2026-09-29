@@ -267,13 +267,17 @@
 .rows {
   margin: 24px 0 0;
   padding: 0;
+  width: 100%;
+  min-width: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* Long titles are cut, never pushing the page sideways on a phone. */
 .row {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -287,9 +291,13 @@
 }
 
 .rowMain {
+  /* Zero width, then grow: only this makes a long title shrink here. */
+  flex: 1 1 0;
+  width: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }
 
 .rowTitle {
@@ -303,6 +311,9 @@
 .rowCompany {
   font-size: 13px;
   color: var(--ink-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rowReason {

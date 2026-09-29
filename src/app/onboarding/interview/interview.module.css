@@ -14,8 +14,8 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 28px;
-  padding: 48px 0;
+  gap: 18px;
+  padding: 24px 0;
   transition:
     opacity var(--motion-slow) ease,
     transform var(--motion-slow) var(--ease-standard);
@@ -44,8 +44,8 @@
   font-size: var(--heading-xl);
   font-weight: 400;
   letter-spacing: -0.02em;
-  line-height: 1.15;
-  max-width: 24ch;
+  line-height: 1.2;
+  max-width: 26ch;
 }
 
 .entrance {
@@ -133,7 +133,8 @@
 .answerTextarea {
   width: 100%;
   font: inherit;
-  font-size: var(--text-body-lg);
+  /* 16px at least: smaller and iOS zooms in on focus. */
+  font-size: max(16px, var(--text-body));
   line-height: 1.55;
   color: var(--ink);
   background: var(--paper-light);
@@ -141,12 +142,20 @@
   border-radius: var(--radius-lg);
   padding: 16px 20px;
   resize: vertical;
-  min-height: 110px;
+  min-height: 96px;
 }
 
+/* The microphone and Send, centred under the box. */
 .answerActions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.send {
+  min-width: 140px;
+  min-height: 48px;
 }
 
 .errorText {
@@ -190,14 +199,21 @@
   }
 }
 
+/* On a phone: the question, the box and Send on one screen. */
 @media (max-width: 640px) {
+  .page {
+    padding-top: 12px;
+    min-height: auto;
+  }
+
   .question {
-    font-size: var(--heading-lg);
-    max-width: 18ch;
+    font-size: 22px;
+    max-width: none;
   }
 
   .stage {
     justify-content: flex-start;
-    padding-top: 8svh;
+    padding-top: 8px;
+    gap: 14px;
   }
 }

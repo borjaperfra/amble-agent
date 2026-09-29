@@ -10,7 +10,7 @@
 }
 
 .trigger {
-  height: 36px;
+  height: 44px;
   padding: 0 14px;
   font: inherit;
   font-size: var(--text-body-sm);
@@ -111,5 +111,14 @@
 @media (prefers-reduced-motion: reduce) {
   .panel {
     animation: none;
+  }
+}
+
+/* On a phone it keeps to the corner and the page leaves room for it
+   (globals.css), so it never covers a button. */
+@media (max-width: 640px) {
+  .wrap {
+    right: 12px;
+    bottom: 12px;
   }
 }

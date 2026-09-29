@@ -1,4 +1,4 @@
-import { candidateById, getOrCreateCandidate, listListeningCandidateIds } from '../db/repo'
+import { candidateById, getOrCreateCandidate, listCapabilities, listListeningCandidateIds } from '../db/repo'
 import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } from '../db/matching'
 import { descriptionsOf, lastTheirStackSearchAt, listOpenOpportunities } from '../db/opportunities'
 import { BACKGROUND_SLOTS } from '../model/provider'
@@ -292,6 +292,8 @@ export function startFirstRead(candidateId: string): boolean {
     return false
   }
   if (!listListeningCandidateIds().includes(candidateId)) return false
+  // Not before what they shared is weighed: offers are judged against it.
+  if (listCapabilities(candidateId).length === 0) return false
   firstReads.running.add(candidateId)
   const since = new Date(Date.now() - FIRST_READ_DAYS * 24 * 60 * 60 * 1000).toISOString()
   void runMatching({ candidateId, limit: FIRST_READ_LIMIT, since })

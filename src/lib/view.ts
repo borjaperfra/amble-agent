@@ -129,8 +129,10 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
     }
   })
 
+  const weight: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
   const gaps: GapViewItem[] = uncertainties
     .filter((uncertainty) => uncertainty.status === 'OPEN' && uncertainty.materiality !== 'LOW')
+    .sort((a, b) => (weight[a.materiality] ?? 3) - (weight[b.materiality] ?? 3))
     .map((uncertainty) => ({
       id: uncertainty.id,
       name: uncertainty.capability_id

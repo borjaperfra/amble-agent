@@ -35,6 +35,11 @@ const MAX_QUESTIONS = 12
 // Defence goes first (it must happen before any company sees the profile), but
 // it must not swallow the whole interview. Each question covers several claims.
 const MAX_DEFENCE_QUESTIONS = 4
+// In the web setup: two questions, both ready before they are needed; the
+// third step is what they are looking for (/me/intent). The rest of the
+// interview continues later, on WhatsApp.
+export const SETUP_QUESTIONS = 2
+const SETUP_DEFENCE_QUESTIONS = 1
 
 export interface NextQuestion {
   action: 'ASK' | 'STOP'
@@ -48,21 +53,61 @@ function turnKind(turn: InterviewTurnRow): 'gap' | 'defence' {
   return turn.kind === 'defence' ? 'defence' : 'gap'
 }
 
-export async function planNextQuestion(candidateId: string): Promise<NextQuestion> {
+// Work for one person runs one piece at a time, on two lines: planning
+// questions, and taking answers in. On globalThis: pages and background work
+// are separate bundles in one process.
+declare global {
+  var __ambleInterviewQueues: Map<string, Promise<unknown>> | undefined
+}
+const queues = (globalThis.__ambleInterviewQueues ??= new Map())
+
+function inLine<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const previous = queues.get(key) ?? Promise.resolve()
+  const next = previous.catch(() => undefined).then(work)
+  queues.set(
+    key,
+    next.catch(() => undefined),
+  )
+  return next
+}
+
+function asTurn(turn: InterviewTurnRow): NextQuestion {
+  return { action: 'ASK', kind: turnKind(turn), turnId: turn.id, question: turn.question ?? undefined, reason: turn.question_reason ?? undefined }
+}
+
+// The next question to show: the first one asked and not answered, in order;
+// in the setup, a new one only while fewer than SETUP_QUESTIONS exist.
+export function planNextQuestion(candidateId: string, options: { setup?: boolean } = {}): Promise<NextQuestion> {
+  const setup = options.setup ?? true
+  return inLine(`plan:${candidateId}`, async () => {
+    const interview = getOrCreateInterview(candidateId)
+    const turns = listTurns(interview.id)
+    const pending = turns.find((turn) => turn.answer === null && turn.question !== null)
+    if (pending) return asTurn(pending)
+    if (setup && turns.length >= SETUP_QUESTIONS) {
+      completeInterview(interview.id)
+      return { action: 'STOP', reason: serverText().interviewLongEnough }
+    }
+    return planOne(candidateId, setup)
+  })
+}
+
+// Right after their sources are read: both setup questions planned, the
+// second aware of the first, so neither waits when its moment comes.
+export function prepareSetupQuestions(candidateId: string): Promise<void> {
+  return inLine(`plan:${candidateId}`, async () => {
+    const interview = getOrCreateInterview(candidateId)
+    while (listTurns(interview.id).length < SETUP_QUESTIONS) {
+      const planned = await planOne(candidateId, true)
+      if (planned.action === 'STOP') break
+    }
+  })
+}
+
+async function planOne(candidateId: string, setup: boolean): Promise<NextQuestion> {
   const interview = getOrCreateInterview(candidateId)
   const turns = listTurns(interview.id)
   const answered = turns.filter((turn) => turn.answer !== null)
-
-  const pendingTurn = [...turns].reverse().find((turn) => turn.answer === null && turn.question !== null)
-  if (pendingTurn) {
-    return {
-      action: 'ASK',
-      kind: turnKind(pendingTurn),
-      turnId: pendingTurn.id,
-      question: pendingTurn.question ?? undefined,
-      reason: pendingTurn.question_reason ?? undefined,
-    }
-  }
 
   if (answered.length >= MAX_QUESTIONS) {
     completeInterview(interview.id)
@@ -70,7 +115,7 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
   }
 
   const defenceAsked = turns.filter((turn) => turn.kind === 'defence').length
-  if (defenceAsked < MAX_DEFENCE_QUESTIONS) {
+  if (defenceAsked < (setup ? SETUP_DEFENCE_QUESTIONS : MAX_DEFENCE_QUESTIONS)) {
     const defence = await planDefenceQuestion(candidateId)
     if (defence) {
       const turn = insertTurn({
@@ -84,14 +129,22 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
         kind: 'defence',
         target_evidence_ids: JSON.stringify(defence.evidenceIds),
       })
-      return { action: 'ASK', kind: 'defence', turnId: turn.id, question: defence.question, reason: defence.reason }
+      return asTurn(turn)
     }
   }
 
-  const capabilities = listCapabilities(candidateId)
+  // A question planned before the answer to the one still waiting can only
+  // avoid overlapping it by being about something else: the capabilities
+  // those waiting questions ask about are left out.
+  const taken = new Set(turns.filter((turn) => turn.answer === null).flatMap((turn) => parseJsonArray(turn.target_capability_ids)))
+  const all = listCapabilities(candidateId)
+  const everyTaken = all.every((capability) => taken.has(capability.id))
+  const capabilities = everyTaken ? all : all.filter((capability) => !taken.has(capability.id))
   // Attribution uncertainty is settled by defence, never by a gap question: a
   // second account of the same work may have the same co-author.
-  const open = listUncertainties(candidateId, 'OPEN').filter((uncertainty) => uncertainty.kind !== 'ATTRIBUTION')
+  const open = listUncertainties(candidateId, 'OPEN').filter(
+    (uncertainty) => uncertainty.kind !== 'ATTRIBUTION' && (uncertainty.capability_id === null || !taken.has(uncertainty.capability_id) || everyTaken),
+  )
   const resolved = listUncertainties(candidateId, 'RESOLVED')
 
   const capabilityInput = capabilities.map((capability) => ({
@@ -99,9 +152,7 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
     name: capability.name,
     assessment: capability.assessment,
     reason: capability.reason.slice(0, 200),
-    uncertaintyIds: open
-      .filter((uncertainty) => uncertainty.capability_id === capability.id)
-      .map((uncertainty) => uncertainty.id),
+    uncertaintyIds: open.filter((uncertainty) => uncertainty.capability_id === capability.id).map((uncertainty) => uncertainty.id),
   }))
 
   const uncertaintyInput = open.map((uncertainty) => ({
@@ -111,36 +162,26 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
     materiality: uncertainty.materiality,
   }))
 
-  const recentTurns = answered.slice(-5).map((turn) => ({
+  // Every question already asked, answered or not: one still waiting for its
+  // answer is a topic taken, never to be asked again.
+  const recentTurns = turns.slice(-6).map((turn) => ({
     question: turn.question ?? '',
-    answer: (turn.answer ?? '').slice(0, 2000),
+    answer: turn.answer === null ? '(asked, not answered yet: do not ask about this again)' : turn.answer.slice(0, 2000),
   }))
-
-  let result = await runPlanNextQuestionTask({
-    candidateId,
-    capabilities: capabilityInput,
-    uncertainties: uncertaintyInput,
-    resolvedUncertaintyIds: resolved.map((uncertainty) => uncertainty.id),
-    recentTurns,
-    questionsAsked: answered.length,
-    minimumTarget: MIN_QUESTIONS_TARGET,
-  })
-
-  if (
-    result.data.action === 'STOP' &&
-    answered.length < MIN_QUESTIONS_TARGET &&
-    open.length > 0
-  ) {
-    result = await runPlanNextQuestionTask({
+  const target = setup ? SETUP_QUESTIONS : MIN_QUESTIONS_TARGET
+  const plan = () =>
+    runPlanNextQuestionTask({
       candidateId,
       capabilities: capabilityInput,
       uncertainties: uncertaintyInput,
       resolvedUncertaintyIds: resolved.map((uncertainty) => uncertainty.id),
       recentTurns,
-      questionsAsked: answered.length,
-      minimumTarget: MIN_QUESTIONS_TARGET,
+      questionsAsked: turns.length,
+      minimumTarget: target,
     })
-  }
+
+  let result = await plan()
+  if (result.data.action === 'STOP' && turns.length < target && open.length > 0) result = await plan()
 
   if (result.data.action === 'STOP') {
     completeInterview(interview.id)
@@ -156,14 +197,44 @@ export async function planNextQuestion(candidateId: string): Promise<NextQuestio
     target_capability_ids: JSON.stringify(result.data.targetCapabilityIds),
     target_uncertainty_ids: JSON.stringify(result.data.targetUncertaintyIds),
   })
+  return asTurn(turn)
+}
 
-  return {
-    action: 'ASK',
-    kind: 'gap',
-    turnId: turn.id,
-    question: result.data.question ?? undefined,
-    reason: result.data.reason,
-  }
+// The first question waiting for its answer, if one is already planned: shown
+// at once, even while the next one is still being planned.
+export function pendingQuestion(candidateId: string): NextQuestion | null {
+  const pending = listTurns(getOrCreateInterview(candidateId).id).find((turn) => turn.answer === null && turn.question !== null)
+  return pending ? asTurn(pending) : null
+}
+
+// An answer is theirs the moment they send it: kept at once, and taken into
+// the profile afterwards, in line, once more if the model fails the first
+// time. It is never handed back to them to send again.
+export function takeAnswer(
+  candidateId: string,
+  turnId: string,
+  answerText: string,
+  then?: (result: IncorporatedAnswer) => Promise<void>,
+): void {
+  const turn = getTurn(turnId)
+  if (!turn) throw new Error(serverText().turnNotFound)
+  if (turn.answer !== null) return
+  answerTurn(turnId, answerText)
+  void inLine(`answers:${candidateId}`, async () => {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const result = await incorporateAnswerInner(candidateId, turn, answerText)
+        // After, and outside the line: the next answer need not wait for it.
+        if (then) void then(result).catch(() => undefined)
+        return
+      } catch (error) {
+        // What the failed attempt wrote goes, the answer stays.
+        undoTurnAnswer(turnId)
+        answerTurn(turnId, answerText)
+        if (attempt === 2) console.error('[interview] answer kept but not taken in:', turnId, error instanceof Error ? error.message : error)
+      }
+    }
+  })
 }
 
 export interface IncorporatedAnswer {
@@ -175,26 +246,6 @@ export interface IncorporatedAnswer {
   // A capability level moved: the distinctive profile and descriptor are stale.
   // The caller refreshes them (refreshDerivedProfile) after answering.
   profileNeedsRefresh: boolean
-}
-
-export async function incorporateAnswer(
-  candidateId: string,
-  turnId: string,
-  answerText: string,
-): Promise<IncorporatedAnswer> {
-  const turn = getTurn(turnId)
-  if (!turn) throw new Error(serverText().turnNotFound)
-  if (turn.answer !== null) throw new Error(serverText().alreadyAnswered)
-
-  // Marked answered first, so the same answer sent twice is taken in once.
-  // If taking it in fails, it is undone whole and can be given again.
-  answerTurn(turnId, answerText)
-  try {
-    return await incorporateAnswerInner(candidateId, turn, answerText)
-  } catch (error) {
-    undoTurnAnswer(turnId)
-    throw error
-  }
 }
 
 async function incorporateAnswerInner(
@@ -342,7 +393,11 @@ async function reassessScope(
 
   // Attribution uncertainty is domain state (syncAttributionUncertainties), not a
   // judgment the reassessment model may close.
-  const openUncertainties = listUncertainties(candidateId, 'OPEN').filter((uncertainty) => uncertainty.kind !== 'ATTRIBUTION')
+  // Only those about the capabilities in scope (and general ones): the model
+  // is asked for a status for each, and dozens of them overflow its answer.
+  const openUncertainties = listUncertainties(candidateId, 'OPEN').filter(
+    (uncertainty) => uncertainty.kind !== 'ATTRIBUTION' && (uncertainty.capability_id === null || scope.includes(uncertainty.capability_id)),
+  )
 
   const resolvedUncertaintyIds: string[] = []
   const reassessedCapabilityIds: string[] = []

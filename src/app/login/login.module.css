@@ -81,11 +81,19 @@
   gap: 8px;
 }
 
+.row .input {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* Never flex-basis 0: in a column it would squeeze the field to its text. */
 .input {
-  flex: 1;
+  flex: none;
+  width: 100%;
   min-width: 0;
   font: inherit;
-  font-size: var(--text-body);
+  /* 16px at least: smaller and iOS zooms in on focus. */
+  font-size: max(16px, var(--text-body));
   color: var(--ink);
   background: var(--paper-light);
   border: 1px solid var(--border);
@@ -386,6 +394,11 @@
 
   .row {
     flex-direction: column;
+  }
+
+  .row .input {
+    flex: none;
+    width: 100%;
   }
 
   .row :global(.btn) {

@@ -9,13 +9,28 @@ import { useT } from '@/components/I18nProvider'
 import type { Capability } from '@/domains/candidate/types'
 import type { MapViewModel } from '@/lib/view'
 import { EvaluationControl } from './EvaluationControl'
+import WhatsAppConnect from './WhatsAppConnect'
 import styles from '@/app/me/me.module.css'
+
+export type MapNextStep = { kind: 'sources' | 'intent' | 'questions' | 'whatsapp' | 'done' }
 
 interface MapViewProps {
   vm: MapViewModel
+  next: MapNextStep
+  // How good each reading is: for the owner, not for the candidate.
+  owner: boolean
 }
 
-export default function MapView({ vm }: MapViewProps) {
+const NEXT_HREF: Record<'sources' | 'intent' | 'questions', string> = {
+  sources: '/onboarding',
+  intent: '/me/intent',
+  questions: '/onboarding/interview',
+}
+
+// The gaps worth their time, not every one of them.
+const GAPS_SHOWN = 3
+
+export default function MapView({ vm, next, owner }: MapViewProps) {
   const t = useT()
   const [openCapability, setOpenCapability] = useState<Capability | null>(null)
 
@@ -25,6 +40,25 @@ export default function MapView({ vm }: MapViewProps) {
     <>
       <Header />
       <main className={styles.page}>
+        {next.kind !== 'done' && (
+          <section className={next.kind === 'whatsapp' ? styles.nextPlain : styles.next} aria-labelledby="next-step">
+            <p id="next-step" className="kicker">
+              {t.map.nextStep}
+            </p>
+            {next.kind === 'whatsapp' ? (
+              <WhatsAppConnect linked={false} />
+            ) : (
+              <>
+                <h2 className={styles.nextTitle}>{t.map.next[next.kind].title}</h2>
+                <p className={styles.nextLead}>{t.map.next[next.kind].lead}</p>
+                <Link href={NEXT_HREF[next.kind]} className="btn">
+                  {t.map.next[next.kind].action}
+                </Link>
+              </>
+            )}
+          </section>
+        )}
+
         <section className={styles.intro} aria-labelledby="map-name">
           <div className={styles.introKicker}>
             <p className="kicker">{t.map.kicker}</p>
@@ -60,12 +94,14 @@ export default function MapView({ vm }: MapViewProps) {
                       })
                     }
                   />
-                  <EvaluationControl
-                    targetType="capability"
-                    targetId={capability.id}
-                    label={t.map.evaluate}
-                    verdicts={['ACCURATE', 'PARTIALLY_ACCURATE', 'WRONG', 'UNSUPPORTED']}
-                  />
+                  {owner && (
+                    <EvaluationControl
+                      targetType="capability"
+                      targetId={capability.id}
+                      label={t.map.evaluate}
+                      verdicts={['ACCURATE', 'PARTIALLY_ACCURATE', 'WRONG', 'UNSUPPORTED']}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -116,16 +152,14 @@ export default function MapView({ vm }: MapViewProps) {
               {t.map.gaps}
             </p>
             <div className={styles.gaps}>
-              {vm.gaps.map((gap) => (
+              {vm.gaps.slice(0, GAPS_SHOWN).map((gap) => (
                 <article key={gap.id} className={styles.gap}>
                   <h3 className={styles.gapName}>{gap.name}</h3>
                   <p className={styles.gapExplanation}>{gap.explanation}</p>
-                  <Link href="/onboarding/interview" className={`text-btn ${styles.gapAction}`}>
-                    {t.map.talkItThrough}
-                  </Link>
                 </article>
               ))}
             </div>
+            <p className={styles.gapsNote}>{t.map.gapsLater}</p>
           </section>
         )}
 

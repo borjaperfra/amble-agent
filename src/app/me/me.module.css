@@ -197,3 +197,43 @@
     margin-top: 80px;
   }
 }
+
+/* What is missing, at the top of the map. */
+.next {
+  margin: 24px 0 8px;
+  padding: 20px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--paper-light);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.nextTitle {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.nextLead {
+  color: var(--ink-secondary);
+  line-height: 1.55;
+}
+
+.gapsNote {
+  margin-top: 16px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+/* WhatsApp brings its own card. */
+.nextPlain {
+  margin: 24px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

@@ -172,3 +172,21 @@
     font-size: var(--heading-lg);
   }
 }
+
+.step {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+/* The microphone and Send, centred under the box. */
+.answerActions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.send {
+  min-width: 140px;
+  min-height: 48px;
+}

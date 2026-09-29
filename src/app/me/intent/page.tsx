@@ -1,9 +1,13 @@
 import { requireCandidate } from '@/lib/auth/session'
 import IntentFlow from '@/components/flows/IntentFlow'
+import { getLatestIntent, listConfirmedPreferences } from '@/lib/db/repo'
+import { SETUP_QUESTIONS } from '@/lib/pipeline/interview'
 
 export const dynamic = 'force-dynamic'
 
 export default async function IntentPage() {
-  await requireCandidate()
-  return <IntentFlow />
+  const candidate = await requireCandidate()
+  // During the setup, what they are looking for is step one of three.
+  const setup = !getLatestIntent(candidate.id)?.confirmed_at && listConfirmedPreferences(candidate.id).length === 0
+  return <IntentFlow setupStep={setup ? { current: 1, total: SETUP_QUESTIONS + 1 } : null} />
 }

@@ -187,3 +187,23 @@
     animation: none;
   }
 }
+
+/* On a phone: fields a finger can use (16px, or iOS zooms in), and the
+   "Add" action on one line. */
+.urlInput {
+  font-size: max(16px, var(--text-body));
+  min-height: 44px;
+}
+
+.rowAction,
+.rowRight :global(.text-btn) {
+  white-space: nowrap;
+}
+
+.rowHint {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+  text-align: right;
+  max-width: 60%;
+  line-height: 1.45;
+}

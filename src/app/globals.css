@@ -228,3 +228,11 @@ button {
 .rep-kicker svg {
   color: var(--ink);
 }
+
+/* Room at the bottom of every page on a phone for the feedback button, so
+   the last button on a page is never under it. */
+@media (max-width: 640px) {
+  body {
+    padding-bottom: 68px;
+  }
+}

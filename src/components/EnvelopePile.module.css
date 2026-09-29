@@ -161,7 +161,11 @@
 
 .more {
   align-self: center;
-  margin: 0 0 8px 6px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 32px;
+  margin: 0 0 0 6px;
   font-size: 13px;
   color: var(--moss-soft);
   opacity: 0.75;
