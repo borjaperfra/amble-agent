@@ -387,6 +387,13 @@ export const en = {
     applyReady: 'Ready.',
     applyFinish: (url: string) => `The answers and your CV are at ${url}. Check them, send it on the offer and mark it as sent.`,
     applyFailed: (url: string) => `I couldn’t prepare it now. You can ask me at ${url}.`,
+    textOnly: 'For now I only read text. Write it to me and I’ll answer.',
+    agentFailed: 'I can’t answer right now. Write to me again in a while.',
+    preferenceButtons: { yes: 'Yes, change it', no: 'No' },
+    preferenceSaved: (label: string) => `Done. From now on I listen with this in mind: ${label}.`,
+    preferenceKept: 'OK, I’ll leave it as it was.',
+    preferenceExpired: 'I no longer have that pending. If you want to change something, tell me again.',
+    preferenceInApp: (url: string) => `You can change this better in the app, at ${url}.`,
   },
   server: {
     onlyPdfOrText: 'I can only read PDF or plain text files in this build.',

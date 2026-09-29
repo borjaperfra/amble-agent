@@ -429,6 +429,17 @@ function createDb(): DatabaseSync {
       last_inbound_at TEXT
     );
 
+    -- The conversation itself, both ways: what the agent reads before it
+    -- answers, and part of what a person takes with their data.
+    CREATE TABLE IF NOT EXISTS whatsapp_messages (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      direction TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS whatsapp_messages_by_candidate ON whatsapp_messages (candidate_id, created_at);
+
     CREATE TABLE IF NOT EXISTS whatsapp_link_codes (
       code TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

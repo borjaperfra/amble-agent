@@ -387,6 +387,13 @@ export const es: Dictionary = {
     applyReady: 'Lista.',
     applyFinish: (url: string) => `Las respuestas y tu CV están en ${url}. Revísalas, envíala en la oferta y márcala como enviada.`,
     applyFailed: (url: string) => `No he podido prepararla ahora. Puedes pedírmelo en ${url}.`,
+    textOnly: 'Por ahora solo leo texto. Escríbemelo y te respondo.',
+    agentFailed: 'Ahora mismo no puedo responderte. Vuelve a escribirme en un rato.',
+    preferenceButtons: { yes: 'Sí, cámbialo', no: 'No' },
+    preferenceSaved: (label: string) => `Hecho. Desde ahora escucho con esto en cuenta: ${label}.`,
+    preferenceKept: 'Vale, lo dejo como estaba.',
+    preferenceExpired: 'Eso ya no lo tengo pendiente. Si quieres cambiar algo, dímelo otra vez.',
+    preferenceInApp: (url: string) => `Esto lo cambias mejor en la app, en ${url}.`,
   },
   server: {
     onlyPdfOrText: 'En esta versión solo puedo leer archivos PDF o de texto plano.',

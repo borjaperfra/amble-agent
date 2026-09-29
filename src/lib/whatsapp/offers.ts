@@ -7,6 +7,7 @@ import { dictionaries } from '../i18n/dictionaries'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
 import { currentMatchKey } from '../matching/run'
+import { logMessage } from './conversation'
 import { linkOf, windowOpen, type WhatsAppLink } from './link'
 import { reviewForSending, type Pitch } from './review'
 import { sendMessage, zernioConfig, type ZernioConfig } from './zernio'
@@ -31,7 +32,7 @@ function madridHour(date = new Date()): number {
   return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(date))
 }
 
-function appUrl(route: string): string {
+export function appUrl(route: string): string {
   return `${(process.env.AMBLE_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')}${route}`
 }
 
@@ -95,9 +96,10 @@ function offerText(match: Listed, pitch: Pitch | null, w: (typeof dictionaries)[
 
 async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, pitch: Pitch | null): Promise<void> {
   const w = dictionaries[candidateLocale(candidateById(link.candidate_id))].whatsapp
+  const body = offerText(match, pitch, w)
   await sendMessage(config, {
     conversationId: link.conversation_id as string,
-    text: offerText(match, pitch, w),
+    text: body,
     buttons: [
       { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
       { title: w.offerButtons.notFit, payload: `of:${match.id}:not_fit` },
@@ -106,6 +108,7 @@ async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, 
     idempotencyKey: `of:${match.id}`,
   })
   getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), link.candidate_id, match.id)
+  logMessage(link.candidate_id, 'out', body)
 }
 
 export interface OfferStats {
@@ -185,11 +188,10 @@ export function parseOfferPayload(value: string | null): OfferTap | null {
   return null
 }
 
-export interface Awaiting {
-  kind: 'offer_reason'
-  matchId: string
-  until: string
-}
+export type Awaiting =
+  | { kind: 'offer_reason'; matchId: string; until: string }
+  // A change to what it listens for, proposed by the agent, waiting for a yes.
+  | { kind: 'preference'; preference: { kind: 'hard_filter' | 'compensation' | 'strong'; label: string; statement: string }; until: string }
 
 export function awaitingOf(candidateId: string): Awaiting | null {
   const row = getDb().prepare('SELECT awaiting FROM whatsapp_links WHERE candidate_id = ?').get(candidateId) as { awaiting: string | null } | undefined
@@ -198,7 +200,7 @@ export function awaitingOf(candidateId: string): Awaiting | null {
   return Date.parse(awaiting.until) > Date.now() ? awaiting : null
 }
 
-function setAwaiting(candidateId: string, awaiting: Awaiting | null): void {
+export function setAwaiting(candidateId: string, awaiting: Awaiting | null): void {
   getDb().prepare('UPDATE whatsapp_links SET awaiting = ? WHERE candidate_id = ?').run(awaiting ? JSON.stringify(awaiting) : null, candidateId)
 }
 
@@ -267,12 +269,9 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
 // Free words right after a "doesn't fit": why, kept on their answer.
 export async function handleAwaitedText(candidateId: string, text: string, reply: Reply): Promise<boolean> {
   const awaiting = awaitingOf(candidateId)
-  if (!awaiting) return false
+  if (awaiting?.kind !== 'offer_reason') return false
   setAwaiting(candidateId, null)
-  if (awaiting.kind === 'offer_reason') {
-    respondToMatch(awaiting.matchId, candidateId, 'not_for_me', text.slice(0, 1000))
-    await reply(dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.offerReasonThanks)
-    return true
-  }
-  return false
+  respondToMatch(awaiting.matchId, candidateId, 'not_for_me', text.slice(0, 1000))
+  await reply(dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.offerReasonThanks)
+  return true
 }

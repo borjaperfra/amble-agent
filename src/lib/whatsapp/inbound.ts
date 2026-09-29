@@ -3,17 +3,20 @@ import { getCandidate, now } from '../db/repo'
 import { emailOwnerAbout, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
+import { answerMessage } from './agent'
+import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
-import { handleAwaitedText, handleOfferTap, parseOfferPayload, sendDueOffers } from './offers'
+import { appUrl, handleAwaitedText, handleOfferTap, parseOfferPayload, sendDueOffers } from './offers'
+import { answerPreference, isPreferencePayload, proposePreference } from './preferences'
 import { sendMessage, zernioConfig } from './zernio'
 
 // One event from the provider's webhook. Each is handled once (they retry
-// until answered, with the same id). What someone writes is one of three
-// things: the code that links their number, a tap on a follow-up button, or
-// words, which reach the owner as feedback: in the beta, a person is behind
-// every message. Taps on an offer's buttons, and the reason after a "doesn't
-// fit", are answers about that offer.
+// until answered, with the same id). What someone writes is, in order: the
+// code that links their number; a tap on a button (an offer, a question
+// about an application, a proposed change); the reason after a "doesn't
+// fit"; or words, which the agent answers. What is about amble itself also
+// reaches the owner. Everything said, both ways, is kept.
 
 interface InboundEvent {
   id: string
@@ -23,6 +26,7 @@ interface InboundEvent {
     platform: string
     direction: string
     text: string | null
+    attachments?: unknown[]
     sender: { id: string; phoneNumber?: string | null; businessScopedUserId?: string }
   }
   metadata?: { interactiveId?: string } | null
@@ -42,14 +46,20 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   const phone = (message.sender.phoneNumber ?? `+${message.sender.id}`).replace(/[^\d+]/g, '')
   const userId = message.sender.businessScopedUserId ?? null
   const text = (message.text ?? '').trim()
+  const interactiveId = event.metadata?.interactiveId ?? null
+
   // Each reply its own key: one event can be answered in several messages.
   let replies = 0
-  const reply = (body: string, buttons?: { title: string; payload: string }[]) =>
-    sendMessage(config, { conversationId: message.conversationId, text: body, buttons, idempotencyKey: `reply:${event.id}:${replies++}` })
+  let replyTo: string | null = null
+  const reply = async (body: string, buttons?: { title: string; payload: string }[]) => {
+    await sendMessage(config, { conversationId: message.conversationId, text: body, buttons, idempotencyKey: `reply:${event.id}:${replies++}` })
+    if (replyTo) logMessage(replyTo, 'out', body)
+  }
 
   const linkingCandidate = text ? takeLinkCode(text) : null
   if (linkingCandidate) {
     saveLink(linkingCandidate, { phone, userId, conversationId: message.conversationId })
+    replyTo = linkingCandidate
     const candidate = getCandidate(linkingCandidate)
     await reply(dictionaries[candidateLocale(candidate ?? null)].whatsapp.linked(candidate?.name ?? null))
     // What it has already found, now that it can say so.
@@ -66,25 +76,50 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   touchLink(link.candidate_id, message.conversationId)
   const candidate = getCandidate(link.candidate_id)
   if (!candidate) return
+  replyTo = candidate.id
   const w = dictionaries[candidateLocale(candidate)].whatsapp
 
-  const offerTap = parseOfferPayload(event.metadata?.interactiveId ?? null)
+  const offerTap = parseOfferPayload(interactiveId)
   if (offerTap) {
+    logMessage(candidate.id, 'in', text)
     await handleOfferTap(candidate.id, offerTap, reply)
     return
   }
-
-  const tapped = parseFollowupPayload(event.metadata?.interactiveId ?? null)
-  if (tapped) {
-    const thanks = answerFollowup(candidate.id, tapped)
+  const followupTap = parseFollowupPayload(interactiveId)
+  if (followupTap) {
+    logMessage(candidate.id, 'in', text)
+    const thanks = answerFollowup(candidate.id, followupTap)
     if (thanks) await reply(thanks)
     return
   }
+  if (isPreferencePayload(interactiveId)) {
+    logMessage(candidate.id, 'in', text)
+    await answerPreference(candidate.id, interactiveId, reply, appUrl)
+    return
+  }
 
-  if (text && (await handleAwaitedText(candidate.id, text, reply))) return
+  if (!text) {
+    // A voice note, a picture: not read yet.
+    if ((message.attachments?.length ?? 0) > 0) await reply(w.textOnly)
+    return
+  }
 
-  if (text) {
+  if (await handleAwaitedText(candidate.id, text, reply)) {
+    logMessage(candidate.id, 'in', text)
+    return
+  }
+
+  // The agent reads the conversation so far, then this message joins it.
+  const answer = await answerMessage(candidate.id, text).catch(() => null)
+  logMessage(candidate.id, 'in', text)
+  if (!answer) {
+    await reply(w.agentFailed)
+    return
+  }
+  const buttons = answer.intent === 'preferences' && answer.preference ? proposePreference(candidate.id, answer.preference) : undefined
+  await reply(answer.reply, buttons)
+  if (answer.forward || answer.intent === 'amble') {
     const row = recordFeedback(candidate, { message: text, page: null, channel: 'whatsapp' })
-    await Promise.all([emailOwnerAbout(candidate, row), reply(w.noted)])
+    await emailOwnerAbout(candidate, row)
   }
 }

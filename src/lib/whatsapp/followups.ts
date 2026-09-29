@@ -2,6 +2,7 @@ import { getDb } from '../db/db'
 import { candidateById, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
+import { logMessage } from './conversation'
 import { linkOf, windowOpen } from './link'
 import { sendMessage, zernioConfig, ZernioError } from './zernio'
 
@@ -145,6 +146,7 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
       getDb()
         .prepare('INSERT INTO application_followups (candidate_id, opportunity_id, round, asked_at) VALUES (?, ?, ?, ?)')
         .run(candidateId, due.opportunity_id, due.round, now())
+      logMessage(candidateId, 'out', w.ask(due.title, due.company))
       stats.asked++
     } catch (error) {
       stats.skipped.push({ candidateId, reason: error instanceof ZernioError ? `${error.status} ${error.code ?? ''} ${error.message}` : String(error) })
