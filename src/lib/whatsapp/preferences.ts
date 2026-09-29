@@ -28,7 +28,7 @@ export function isPreferencePayload(value: string | null): value is 'pr:yes' | '
   return value === 'pr:yes' || value === 'pr:no'
 }
 
-export async function answerPreference(candidateId: string, answer: 'pr:yes' | 'pr:no', reply: Reply, appUrl: (route: string) => string): Promise<void> {
+export async function answerPreference(candidateId: string, answer: 'pr:yes' | 'pr:no', reply: Reply, appUrl: (candidateId: string, route: string) => string): Promise<void> {
   const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
   const awaiting = awaitingOf(candidateId)
   if (awaiting?.kind !== 'preference') {
@@ -42,7 +42,7 @@ export async function answerPreference(candidateId: string, answer: 'pr:yes' | '
   }
   const triage = getLatestOfferTriage(candidateId)
   if (!triage) {
-    await reply(w.preferenceInApp(appUrl('/me/intent')))
+    await reply(w.preferenceInApp(appUrl(candidateId, '/me/intent')))
     return
   }
   insertCandidatePreference({

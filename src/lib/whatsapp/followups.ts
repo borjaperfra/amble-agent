@@ -12,8 +12,9 @@ import { sendMessage, zernioConfig, ZernioError } from './zernio'
 // then it is left alone. At most one question a day for each person, the
 // oldest first, so a burst of applications never becomes a burst of messages.
 
-export type FollowupAnswer = 'called' | 'rejected' | 'nothing'
-const ANSWERS: FollowupAnswer[] = ['called', 'rejected', 'nothing']
+// 'offer' comes only from what they tell the agent, never from a button.
+export type FollowupAnswer = 'called' | 'rejected' | 'nothing' | 'offer'
+const ANSWERS: ('called' | 'rejected' | 'nothing')[] = ['called', 'rejected', 'nothing']
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const FIRST_AFTER_DAYS = 7

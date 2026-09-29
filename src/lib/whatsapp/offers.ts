@@ -1,4 +1,5 @@
 import { prepareApplication } from '../apply/prepare'
+import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
 import { getMatch, listMatchesForKey, respondToMatch, type MatchListing, type MatchRow } from '../db/matching'
 import { candidateById, now } from '../db/repo'
@@ -32,8 +33,9 @@ function madridHour(date = new Date()): number {
   return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(date))
 }
 
-export function appUrl(route: string): string {
-  return `${(process.env.AMBLE_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')}${route}`
+// Into their own account, signed in, at that page.
+export function appUrl(candidateId: string, route: string): string {
+  return issueAppLink(candidateId, route)
 }
 
 function paceAllows(candidateId: string): boolean {
@@ -89,6 +91,8 @@ function offerText(match: Listed, pitch: Pitch | null, w: (typeof dictionaries)[
     '',
     pitch?.summary ?? explanation.summary,
     ...(pitch?.reasons ?? explanation.why.slice(0, 3).map((reason) => reason.text)).map((reason) => `• ${reason}`),
+    // The offer itself, to read in full.
+    match.url ? `\n${w.offerLink}: ${match.url}` : null,
   ]
     .filter((line): line is string => line !== null && line !== undefined)
     .join('\n')
@@ -242,7 +246,7 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     const lines = [
       caveat ? `${w.considerAlso}: ${caveat}` : null,
       explanation.unknowns.length > 0 ? `\n${w.unknowns}:\n${explanation.unknowns.slice(0, 3).map((unknown) => `• ${unknown}`).join('\n')}` : null,
-      `\n${appUrl('/opportunities?tab=new')}`,
+      `\n${appUrl(candidateId, '/opportunities?tab=new')}`,
     ].filter(Boolean)
     await reply(lines.join('\n'), [
       { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
@@ -251,7 +255,7 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     return
   }
   if (tap.kind === 'apply' && tap.answer === 'no') {
-    await reply(w.applyLater(appUrl('/opportunities?tab=wanted')))
+    await reply(w.applyLater(appUrl(candidateId, '/opportunities?tab=wanted')))
     return
   }
   if (tap.kind === 'apply' && tap.answer === 'yes') {
@@ -259,9 +263,9 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     try {
       const prepared = await prepareApplication(candidateId, match.opportunity_id)
       const emphasise = prepared.advice.emphasise.slice(0, 3).map((point) => `• ${point}`)
-      await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.applyFinish(appUrl('/opportunities?tab=wanted'))].filter(Boolean).join('\n'))
+      await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.applyFinish(appUrl(candidateId, '/opportunities?tab=wanted'))].filter(Boolean).join('\n'))
     } catch {
-      await reply(w.applyFailed(appUrl('/opportunities?tab=wanted')))
+      await reply(w.applyFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
     }
   }
 }

@@ -85,12 +85,33 @@ export async function sendMessage(
     {
       accountId: config.accountId,
       message: params.text,
+      linkPreview: false,
       ...(params.buttons?.length ? { buttons: params.buttons.slice(0, 3).map((button) => ({ type: 'postback', ...button })) } : {}),
       ...(params.utility ? { category: 'utility' } : {}),
     },
     params.idempotencyKey,
   )
   return { messageId: result.data?.messageId ?? null }
+}
+
+// Seen: the blue ticks on what they sent.
+export async function markRead(config: ZernioConfig, conversationId: string): Promise<void> {
+  await call(config, 'POST', `/inbox/conversations/${encodeURIComponent(conversationId)}/read`, { accountId: config.accountId })
+}
+
+// "typing…" on their screen, for up to 25 seconds.
+export async function showTyping(config: ZernioConfig, conversationId: string): Promise<void> {
+  await call(config, 'POST', `/inbox/conversations/${encodeURIComponent(conversationId)}/typing`, { accountId: config.accountId })
+}
+
+// An emoji on one of their messages.
+export async function react(config: ZernioConfig, conversationId: string, messageId: string, emoji: string): Promise<void> {
+  await call(
+    config,
+    'POST',
+    `/inbox/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    { accountId: config.accountId, emoji },
+  )
 }
 
 // The provider signs each delivery: lowercase hex HMAC-SHA256 of the raw body.

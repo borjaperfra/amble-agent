@@ -6,6 +6,7 @@ import { runListening } from './matching/run'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
+import { sendDueReminders } from './whatsapp/reminders'
 
 // Scheduled listening inside the server, for hosting where there is no task
 // scheduler: the same four passes a day as the Windows task (08, 12, 16 and
@@ -69,6 +70,9 @@ export function startListeningSchedule(): void {
       void sendDueFollowups()
         .then((stats) => log(day, `followups: ${JSON.stringify(stats)}`))
         .catch((error) => log(day, `followups failed: ${error instanceof Error ? error.message : String(error)}`))
+      void sendDueReminders()
+        .then((stats) => log(day, `reminders: ${JSON.stringify(stats)}`))
+        .catch((error) => log(day, `reminders failed: ${error instanceof Error ? error.message : String(error)}`))
     }
     const slot = `${day}T${hour}`
     // Within the first minutes of a slot, once: a restart at 08:02 still runs it.
