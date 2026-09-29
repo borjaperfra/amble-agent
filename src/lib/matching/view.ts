@@ -1,5 +1,8 @@
 import { applicationCv, savedAnswers } from '../apply/answers'
 import { canFillForms } from '../apply/browser'
+import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
+import { linkOf } from '../whatsapp/link'
+import { zernioConfig } from '../whatsapp/zernio'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
@@ -89,6 +92,8 @@ export interface WantedOpportunity {
   since: string
   // What the Rep prepared to apply, if they asked for it.
   prepared: PreparedApplication | null
+  // What they answered on WhatsApp about an application they sent.
+  outcome: FollowupAnswer | null
 }
 
 export interface OpportunitiesView {
@@ -108,6 +113,8 @@ export interface OpportunitiesView {
   // What they send with applications: their CV, what they answered before,
   // and whether the Rep can fill the offer's form here.
   applicant: { cv: string | null; answers: Record<string, string>; canFill: boolean }
+  // Whether amble can ask them on WhatsApp how applications are going.
+  whatsapp: { available: boolean; linked: boolean }
 }
 
 const wants = (decision: MatchResponse | undefined) => decision === 'interested' || decision === 'wanted_anyway'
@@ -116,11 +123,13 @@ const wants = (decision: MatchResponse | undefined) => decision === 'interested'
 // assessment, so what is shown about each comes from its latest one.
 function wantedOpportunities(candidateId: string): WantedOpportunity[] {
   const byRole = new Map<string, WantedOpportunity>()
+  const outcomes = followupOutcomes(candidateId)
   for (const row of listWanted(candidateId)) {
     const key = row.model_run_id ? `${row.model_run_id}|${row.title}` : `${row.company_name}|${row.title}|${row.workplace ?? ''}`
     const known = byRole.get(key)
     if (known) {
       known.opportunityIds.push(row.opportunity_id)
+      known.outcome = known.outcome ?? outcomes.get(row.opportunity_id) ?? null
       if (row.location && !known.location?.includes(row.location)) known.location = [known.location, row.location].filter(Boolean).join(' · ')
       if (!row.closed_at) {
         known.closed = false
@@ -145,6 +154,7 @@ function wantedOpportunities(candidateId: string): WantedOpportunity[] {
       progress: row.progress,
       since: row.progress_at ?? row.decided_at,
       prepared: getPreparedApplication(candidateId, row.opportunity_id),
+      outcome: outcomes.get(row.opportunity_id) ?? null,
     })
   }
   return [...byRole.values()]
@@ -271,5 +281,6 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     sent: wantedAll.filter((item) => item.progress === 'applied'),
     dropped: wantedAll.filter((item) => item.progress === 'dropped'),
     applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id), canFill: canFillForms() },
+    whatsapp: { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null },
   }
 }

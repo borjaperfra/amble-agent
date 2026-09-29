@@ -1,3 +1,4 @@
+import { sendEmail } from './auth/email'
 import { getDb } from './db/db'
 import { newId, now, type CandidateRow } from './db/repo'
 
@@ -51,6 +52,24 @@ export function listFeedback(): FeedbackListing[] {
 
 export function markFeedbackSeen(id: string, seen: boolean): void {
   getDb().prepare('UPDATE feedback SET seen_at = ? WHERE id = ?').run(seen ? now() : null, id)
+}
+
+// The owner hears about it at once; a failed email never loses the feedback.
+export async function emailOwnerAbout(candidate: CandidateRow, row: FeedbackRow): Promise<void> {
+  const to = ownerEmail()
+  if (!to) return
+  await sendEmail({
+    to,
+    subject: `Feedback de ${candidate.name ?? candidate.email ?? candidate.id}`,
+    text: `${row.message}
+
+— ${candidate.name ?? ''} <${candidate.email ?? 'sin email'}>
+Pantalla: ${row.page ?? '—'}
+Vía: ${row.channel}
+
+Todo el feedback: ${(process.env.AMBLE_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')}/feedback`,
+    idempotencyKey: row.id,
+  }).catch((error) => console.error('[amble] feedback email not sent:', error instanceof Error ? error.message : error))
 }
 
 export function ownerEmail(): string | null {

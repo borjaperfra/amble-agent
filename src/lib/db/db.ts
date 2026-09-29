@@ -417,6 +417,41 @@ function createDb(): DatabaseSync {
       PRIMARY KEY (candidate_id, question_key)
     );
 
+    -- WhatsApp (whatsapp/): the number a person linked by writing to amble
+    -- first, the codes that link it, the provider's events already handled,
+    -- and the questions asked about applications they sent.
+    CREATE TABLE IF NOT EXISTS whatsapp_links (
+      candidate_id TEXT PRIMARY KEY REFERENCES candidates(id),
+      phone TEXT NOT NULL,
+      user_id TEXT,
+      conversation_id TEXT,
+      linked_at TEXT NOT NULL,
+      last_inbound_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS whatsapp_link_codes (
+      code TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS whatsapp_events (
+      id TEXT PRIMARY KEY,
+      event TEXT NOT NULL,
+      received_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS application_followups (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      opportunity_id TEXT NOT NULL,
+      round INTEGER NOT NULL,
+      asked_at TEXT NOT NULL,
+      answer TEXT,
+      answered_at TEXT,
+      PRIMARY KEY (candidate_id, opportunity_id, round)
+    );
+
     CREATE TABLE IF NOT EXISTS application_files (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),

@@ -352,6 +352,29 @@ export const es: Dictionary = {
     deletedTitle: 'Tu cuenta se ha borrado.',
     deletedLead: 'Todo lo que tenía de ti ya no está. Gracias por probar amble.',
   },
+  whatsapp: {
+    // What they send to link it. The code is what matters; the rest is theirs.
+    linkMessage: (code: string) => `Hola, amble. Soy yo: ${code}`,
+    linked: (name: string | null) =>
+      `Hecho${name ? `, ${name}` : ''}. Por aquí solo te escribiré para preguntarte cómo van las candidaturas que envíes. Nada más.`,
+    unknown: 'Hola. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
+    noted: 'Lo he apuntado. Gracias.',
+    ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
+    // Buttons: WhatsApp allows 20 characters each.
+    answers: { called: 'Me han llamado', rejected: 'Me han dicho que no', nothing: 'Nada todavía' },
+    thanksCalled: (company: string) => `¡Qué bien! Suerte con ${company}.`,
+    thanksRejected: 'Vaya. Gracias por contármelo.',
+    thanksNothing: 'Vale. Te vuelvo a preguntar en una semana.',
+    thanksNothingLast: 'Vale. No te pregunto más por esta.',
+    connectTitle: 'Cómo van tus candidaturas',
+    connectLead: 'Una semana después de enviar una candidatura, te pregunto por WhatsApp si sabes algo. Solo eso: nada de avisos ni ofertas por ahí.',
+    connect: 'Conectar WhatsApp',
+    connectWaiting: 'Envía el mensaje que se ha abierto en WhatsApp. Cuando llegue, esto cambia solo.',
+    connected: 'WhatsApp conectado. Te preguntaré por aquí cómo van tus candidaturas.',
+    disconnect: 'Desconectar',
+    unavailable: 'WhatsApp aún no está disponible.',
+    outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias' },
+  },
   server: {
     onlyPdfOrText: 'En esta versión solo puedo leer archivos PDF o de texto plano.',
     noTextInFile: 'No he podido leer texto de este archivo. Puede que sea un documento escaneado.',

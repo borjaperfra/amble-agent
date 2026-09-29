@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Deck from '@/components/Deck'
 import ApplicationPanel from '@/components/flows/ApplicationPanel'
+import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
 import Symbol from '@/components/Symbol'
 import { useI18n, useT } from '@/components/I18nProvider'
 import type { PreparedApplication } from '@/lib/apply/prepare'
@@ -244,6 +245,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
               />
             ))}
 
+          {tab === 'sent' && view.whatsapp.available && <WhatsAppConnect linked={view.whatsapp.linked} />}
           {tab === 'sent' &&
             (view.sent.length === 0 ? (
               <p className={styles.panelEmpty}>{t.opportunities.wanted.sentEmpty}</p>
@@ -570,6 +572,7 @@ function WantedCard({
         </h3>
         <p className={styles.meta}>{meta}</p>
         {item.salary && <p className={styles.salary}>{item.salary}</p>}
+        {applied && item.outcome && <p className={styles.outcome}>{t.whatsapp.outcome[item.outcome]}</p>}
         {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
         {item.summary && <p className={styles.wantedSummary}>{item.summary}</p>}
 

@@ -352,6 +352,29 @@ export const en = {
     deletedTitle: 'Your account has been deleted.',
     deletedLead: 'Everything I had about you is gone. Thank you for trying amble.',
   },
+  whatsapp: {
+    // What they send to link it. The code is what matters; the rest is theirs.
+    linkMessage: (code: string) => `Hi amble, it’s me: ${code}`,
+    linked: (name: string | null) =>
+      `Done${name ? `, ${name}` : ''}. I’ll only write to you here to ask how the applications you send are going. Nothing else.`,
+    unknown: 'Hi. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
+    noted: 'Noted. Thank you.',
+    ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
+    // Buttons: WhatsApp allows 20 characters each.
+    answers: { called: 'They called me', rejected: 'They said no', nothing: 'Nothing yet' },
+    thanksCalled: (company: string) => `Great! Good luck with ${company}.`,
+    thanksRejected: 'Sorry to hear. Thanks for telling me.',
+    thanksNothing: 'OK. I’ll ask again in a week.',
+    thanksNothingLast: 'OK. I won’t ask about this one again.',
+    connectTitle: 'How your applications are going',
+    connectLead: 'A week after you send an application, I ask you on WhatsApp whether you’ve heard anything. Only that: no alerts or offers there.',
+    connect: 'Connect WhatsApp',
+    connectWaiting: 'Send the message that opened in WhatsApp. When it arrives, this changes on its own.',
+    connected: 'WhatsApp connected. I’ll ask you there how your applications are going.',
+    disconnect: 'Disconnect',
+    unavailable: 'WhatsApp isn’t available yet.',
+    outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news' },
+  },
   server: {
     onlyPdfOrText: 'I can only read PDF or plain text files in this build.',
     noTextInFile: "I couldn't read any text from this file. It may be a scanned document.",

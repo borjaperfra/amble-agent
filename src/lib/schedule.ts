@@ -4,12 +4,15 @@ import { backupToday } from './db/backup'
 import { DATA_DIRECTORY } from './db/db'
 import { runListening } from './matching/run'
 import { releaseLock, takeLock } from './sourcing/lock'
+import { sendDueFollowups } from './whatsapp/followups'
 
 // Scheduled listening inside the server, for hosting where there is no task
 // scheduler: the same four passes a day as the Windows task (08, 12, 16 and
 // 20 h, Spain), each under the shared lock and logged to the same place.
 
 const HOURS = [8, 12, 16, 20]
+// The WhatsApp questions about sent applications: once a day, mid-morning.
+const FOLLOWUP_HOUR = 11
 const TIME_ZONE = 'Europe/Madrid'
 const TICK_MS = 60_000
 
@@ -55,8 +58,15 @@ declare global {
 export function startListeningSchedule(): void {
   if (globalThis.__ambleSchedule) return
   let lastSlot: string | null = null
+  let lastFollowupDay: string | null = null
   globalThis.__ambleSchedule = setInterval(() => {
     const { day, hour, minute } = madrid(new Date())
+    if (hour === FOLLOWUP_HOUR && lastFollowupDay !== day) {
+      lastFollowupDay = day
+      void sendDueFollowups()
+        .then((stats) => log(day, `followups: ${JSON.stringify(stats)}`))
+        .catch((error) => log(day, `followups failed: ${error instanceof Error ? error.message : String(error)}`))
+    }
     const slot = `${day}T${hour}`
     // Within the first minutes of a slot, once: a restart at 08:02 still runs it.
     if (!HOURS.includes(hour) || minute > 5 || slot === lastSlot) return

@@ -1,8 +1,7 @@
 import { after, NextResponse } from 'next/server'
 import { forCandidate } from '@/lib/auth/request'
 import { isOwner } from '@/lib/auth/session'
-import { sendEmail } from '@/lib/auth/email'
-import { listFeedback, markFeedbackSeen, ownerEmail, recordFeedback } from '@/lib/feedback'
+import { emailOwnerAbout, listFeedback, markFeedbackSeen, recordFeedback } from '@/lib/feedback'
 
 export const runtime = 'nodejs'
 
@@ -30,18 +29,7 @@ export async function POST(request: Request) {
     const page = typeof body.page === 'string' ? body.page : null
     const row = recordFeedback(candidate, { message, page, channel: 'app' })
 
-    // The owner hears about it at once; a failed email never loses the feedback.
-    const to = ownerEmail()
-    if (to) {
-      after(() =>
-        sendEmail({
-          to,
-          subject: `Feedback de ${candidate.name ?? candidate.email ?? candidate.id}`,
-          text: `${message}\n\n— ${candidate.name ?? ''} <${candidate.email ?? 'sin email'}>\nPantalla: ${page ?? '—'}\nVía: app\n\nTodo el feedback: ${(process.env.AMBLE_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')}/feedback`,
-          idempotencyKey: row.id,
-        }).catch((error) => console.error('[amble] feedback email not sent:', error instanceof Error ? error.message : error)),
-      )
-    }
+    after(() => emailOwnerAbout(candidate, row))
     return NextResponse.json({ ok: true })
   })
 }
