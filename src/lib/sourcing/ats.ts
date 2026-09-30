@@ -515,6 +515,13 @@ interface WorkdayPosting {
   postedOn?: string
 }
 
+// A board can list a posting with nothing but its requisition number (ING
+// lists one as { bulletFields: ['REQ-…'] }): with no title or path there is no
+// offer to read, so it is left out and the rest of the board still is read.
+function isWorkdayPosting(posting: Partial<WorkdayPosting> | null | undefined): posting is WorkdayPosting {
+  return typeof posting?.title === 'string' && posting.title.trim() !== '' && typeof posting.externalPath === 'string' && posting.externalPath !== ''
+}
+
 // "Posted Today", "Posted Yesterday", "Posted 3 Days Ago", "Posted 30+ Days Ago".
 function workdayPostedAt(text: string | undefined): string | null {
   if (!text) return null
@@ -540,6 +547,7 @@ async function readWorkday(token: string, companyName: string): Promise<RawOppor
   const postings: WorkdayPosting[] = []
   // Workday gives the total on the first page only; later pages say 0.
   let total = 0
+  let listed = 0
   for (let offset = 0; offset < BOARD_MAX; offset += WORKDAY_PAGE) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
@@ -561,9 +569,10 @@ async function readWorkday(token: string, companyName: string): Promise<RawOppor
       clearTimeout(timeout)
     }
     const batch = page?.jobPostings ?? []
-    postings.push(...batch)
+    listed += batch.length
+    postings.push(...batch.filter(isWorkdayPosting))
     if (offset === 0) total = page?.total ?? 0
-    if (batch.length < WORKDAY_PAGE || postings.length >= total) break
+    if (batch.length < WORKDAY_PAGE || listed >= total) break
   }
   return postings.map((posting) => workdayOpportunity(posting, parts, companyName))
 }
