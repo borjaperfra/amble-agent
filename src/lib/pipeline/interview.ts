@@ -28,7 +28,9 @@ import {
 } from '../model/tasks'
 import { newEvidenceFromClaim, reconcileCapabilities, syncAttributionUncertainties } from './graph'
 import { judgeDefenceAnswer, planDefenceQuestion, type DefenceResult } from './defence'
+import { lookingFor } from './intent'
 import { serverText } from '../i18n/candidate'
+import { getDb } from '../db/db'
 
 const MIN_QUESTIONS_TARGET = 3
 const MAX_QUESTIONS = 12
@@ -178,6 +180,7 @@ async function planOne(candidateId: string, setup: boolean): Promise<NextQuestio
       recentTurns,
       questionsAsked: turns.length,
       minimumTarget: target,
+      lookingFor: lookingFor(candidateId),
     })
 
   let result = await plan()
@@ -207,6 +210,35 @@ export function pendingQuestion(candidateId: string): NextQuestion | null {
   return pending ? asTurn(pending) : null
 }
 
+// The first read judges offers against the profile as it is when it runs.
+// An answer that moves a capability changes the profile's fingerprint, and
+// every verdict made before it is no longer shown: started while the setup
+// questions wait, the first read would be spent on offers they never see.
+// So it starts once the answers are in; after this long without them, it
+// starts anyway.
+export const FIRST_READ_WAITS_MS = 10 * 60 * 1000
+
+export function hasUnansweredQuestion(candidateId: string): boolean {
+  return Boolean(
+    getDb()
+      .prepare(
+        `SELECT 1 FROM interview_turns t JOIN interviews i ON i.id = t.interview_id
+         WHERE i.candidate_id = ? AND t.question IS NOT NULL AND t.answer IS NULL LIMIT 1`,
+      )
+      .get(candidateId),
+  )
+}
+
+export function startFirstReadSoon(candidateId: string): void {
+  void import('../matching/run').then(({ startFirstRead }) => startFirstRead(candidateId)).catch(() => undefined)
+}
+
+declare global {
+  var __ambleAnswersInLine: Map<string, number> | undefined
+}
+// Answers kept but not yet taken into the profile, per person.
+const answersInLine = (globalThis.__ambleAnswersInLine ??= new Map())
+
 // An answer is theirs the moment they send it: kept at once, and taken into
 // the profile afterwards, in line, once more if the model fails the first
 // time. It is never handed back to them to send again.
@@ -220,21 +252,40 @@ export function takeAnswer(
   if (!turn) throw new Error(serverText().turnNotFound)
   if (turn.answer !== null) return
   answerTurn(turnId, answerText)
+  answersInLine.set(candidateId, (answersInLine.get(candidateId) ?? 0) + 1)
   void inLine(`answers:${candidateId}`, async () => {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const result = await incorporateAnswerInner(candidateId, turn, answerText)
-        // After, and outside the line: the next answer need not wait for it.
-        if (then) void then(result).catch(() => undefined)
-        return
-      } catch (error) {
-        // What the failed attempt wrote goes, the answer stays.
-        undoTurnAnswer(turnId)
-        answerTurn(turnId, answerText)
-        if (attempt === 2) console.error('[interview] answer kept but not taken in:', turnId, error instanceof Error ? error.message : error)
-      }
+    try {
+      await incorporateInLine(candidateId, turn, turnId, answerText, then)
+    } finally {
+      const left = (answersInLine.get(candidateId) ?? 1) - 1
+      if (left > 0) answersInLine.set(candidateId, left)
+      else answersInLine.delete(candidateId)
+      // Every question answered and taken in: the first read, if it has not run.
+      if (left <= 0 && !hasUnansweredQuestion(candidateId)) startFirstReadSoon(candidateId)
     }
   })
+}
+
+async function incorporateInLine(
+  candidateId: string,
+  turn: InterviewTurnRow,
+  turnId: string,
+  answerText: string,
+  then?: (result: IncorporatedAnswer) => Promise<void>,
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const result = await incorporateAnswerInner(candidateId, turn, answerText)
+      // After, and outside the line: the next answer need not wait for it.
+      if (then) void then(result).catch(() => undefined)
+      return
+    } catch (error) {
+      // What the failed attempt wrote goes, the answer stays.
+      undoTurnAnswer(turnId)
+      answerTurn(turnId, answerText)
+      if (attempt === 2) console.error('[interview] answer kept but not taken in:', turnId, error instanceof Error ? error.message : error)
+    }
+  }
 }
 
 export interface IncorporatedAnswer {

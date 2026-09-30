@@ -5,17 +5,21 @@ import { linkOf } from '../whatsapp/link'
 import { zernioConfig } from '../whatsapp/zernio'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
+import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
-import { LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
-import { currentMatchKey } from './run'
+import { ASSESS_VERSION, LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
+import { currentMatchKey, lastReadStats } from './run'
 import { buildMatchingProfile } from './profile'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { intentRules } from './profile'
 
-// What the opportunities screen shows. Only assessments made against the
-// current profile and assessor version: after a preference changes, older
-// verdicts are stale and are not shown as if they still held.
+// What the opportunities screen shows: assessments made against the current
+// profile and assessor version. After a preference changes, an offer not yet
+// judged again keeps its earlier verdict, marked as such (`stale`): hidden,
+// the screen emptied at every correction until the re-read reached it, and
+// stayed empty while the search was paused. A stale one never interrupts:
+// it is not counted as new, nor in the week, nor in the pile.
 
 export interface FoundOpportunity {
   id: string
@@ -36,6 +40,8 @@ export interface FoundOpportunity {
   considerAlso: { text: string; quote: string | null } | null
   unknowns: string[]
   response: MatchResponse | null
+  // Judged before their latest change of rules, and not yet again.
+  stale: boolean
 }
 
 export type DiscardReason =
@@ -47,6 +53,10 @@ export type DiscardReason =
   | { kind: 'remote_unconfirmed'; places: string | null }
   | { kind: 'remote_elsewhere'; places: string | null }
   | { kind: 'remote_countries'; places: string | null }
+  // The posting's text could not be read: judged on its title, never shown.
+  | { kind: 'unread' }
+  // None of their rules failed, but one could not be checked: why, in the assessor's words.
+  | { kind: 'unverified'; rule: string; note: string }
   | { kind: 'no_reason' }
 
 export interface DiscardedOpportunity {
@@ -56,6 +66,7 @@ export interface DiscardedOpportunity {
   url: string | null
   reasons: DiscardReason[]
   response: MatchResponse | null
+  stale: boolean
 }
 
 // What the Rep read in the last week, for the listening screen: a few of
@@ -123,6 +134,46 @@ export interface OpportunitiesView {
   applicant: { cv: string | null; answers: Record<string, string>; canFill: boolean }
   // Whether amble can ask them on WhatsApp how applications are going.
   whatsapp: { available: boolean; linked: boolean }
+  // Nothing of theirs to show: why, in numbers, from what was read.
+  drought: Drought | null
+}
+
+// Why nothing reaches them yet: of the offers open, how many are of their
+// role, how many were read, and what set those aside, most common first.
+export interface Drought {
+  open: number
+  ofTheirRole: number
+  read: number
+  waiting: number
+  reasons: { kind: 'role' | 'place' | 'pay' | 'language' | 'unread' | 'rule'; rule: string | null; count: number }[]
+}
+
+function droughtOf(candidateId: string, discarded: DiscardedOpportunity[]): Drought | null {
+  const stats = lastReadStats(candidateId)
+  if (!stats && discarded.length === 0) return null
+  const counts = new Map<string, { kind: Drought['reasons'][number]['kind']; rule: string | null; count: number }>()
+  const add = (kind: Drought['reasons'][number]['kind'], rule: string | null = null) => {
+    const key = `${kind}|${rule ?? ''}`
+    counts.set(key, { kind, rule, count: (counts.get(key)?.count ?? 0) + 1 })
+  }
+  for (const offer of discarded) {
+    // What set it aside first: one reason per offer.
+    const reason = offer.reasons[0]
+    if (!reason) continue
+    if (reason.kind === 'wrong_role' || reason.kind === 'below_level') add('role')
+    else if (reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries') add('place')
+    else if (reason.kind === 'salary_floor') add('pay')
+    else if (reason.kind === 'language') add('language')
+    else if (reason.kind === 'unread') add('unread')
+    else if (reason.kind === 'filter' || reason.kind === 'unverified') add('rule', reason.rule)
+  }
+  return {
+    open: stats?.open ?? 0,
+    ofTheirRole: stats?.prefilterPassed ?? 0,
+    read: discarded.length,
+    waiting: stats?.waiting ?? 0,
+    reasons: [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 4),
+  }
 }
 
 const wants = (decision: MatchResponse | undefined) => decision === 'interested' || decision === 'wanted_anyway'
@@ -199,9 +250,34 @@ function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchL
   })
 }
 
+// The latest verdict on each offer made with an earlier profile (same
+// assessor version), for offers the current one has not judged yet.
+function earlierMatches(candidateId: string, matchKey: string, judged: Set<string>): (MatchRow & MatchListing)[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency, c.name AS company_name
+       FROM opportunity_matches m
+       JOIN opportunities o ON o.id = m.opportunity_id
+       JOIN companies c ON c.id = o.company_id
+       WHERE m.candidate_id = ? AND m.profile_hash != ? AND m.profile_hash LIKE ?
+       ORDER BY m.created_at DESC, m.rowid`,
+    )
+    .all(candidateId, matchKey, `%:${ASSESS_VERSION}`) as unknown as (MatchRow & MatchListing)[]
+  const latest: (MatchRow & MatchListing)[] = []
+  const seen = new Set(judged)
+  for (const row of rows) {
+    if (seen.has(row.opportunity_id)) continue
+    seen.add(row.opportunity_id)
+    latest.push(row)
+  }
+  return latest
+}
+
 export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const candidate = candidateById(candidateId)
-  const matches = collapseRoles(listMatchesForKey(candidate.id, currentMatchKey(candidate.id)))
+  const matchKey = currentMatchKey(candidate.id)
+  const current = listMatchesForKey(candidate.id, matchKey)
+  const matches = collapseRoles([...current, ...earlierMatches(candidate.id, matchKey, new Set(current.map((match) => match.opportunity_id)))])
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map([
     ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.wording ?? row.statement]),
@@ -226,7 +302,9 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     const response = decision?.decision ?? null
     // An offer they want has its own place: it is no longer something to answer.
     const wanted = wants(decision?.decision)
-    const thisWeek = Date.parse(match.created_at) >= since
+    const stale = match.profile_hash !== matchKey
+    // What was read this week is what the current rules judged.
+    const thisWeek = !stale && Date.parse(match.created_at) >= since
     if (thisWeek) read++
 
     if (match.verdict === 'show') {
@@ -250,6 +328,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
         considerAlso: explanation.considerAlso,
         unknowns: explanation.unknowns,
         response,
+        stale,
       })
       if (thisWeek && !match.closed_at) {
         const status = explanation.roleFit.fit === 'fits' ? 'found' : 'maybe'
@@ -273,8 +352,18 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
       else if (gate.ruleId === LANGUAGE_GATE) reasons.push({ kind: 'language', quote: gate.quote })
       else reasons.push({ kind: 'filter', rule: ruleLabels.get(gate.ruleId) ?? gate.ruleId, quote: gate.quote })
     }
-    if (reasons.length === 0) reasons.push({ kind: 'no_reason' })
-    if (!wanted) discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response })
+    if (reasons.length === 0) {
+      // Held with reasons to show it and nothing against it: the only such
+      // case is a posting whose text could not be read (judged on its title).
+      if (match.verdict === 'hold' && explanation.why.length > 0) reasons.push({ kind: 'unread' })
+      else {
+        // Nothing failed, but a rule of theirs could not be checked and the
+        // assessor said why: that is what held it, and it is what they read.
+        const unclear = gates.find((gate) => gate.result === 'unknown' && gate.note && ruleLabels.has(gate.ruleId))
+        reasons.push(unclear ? { kind: 'unverified', rule: ruleLabels.get(unclear.ruleId) as string, note: unclear.note } : { kind: 'no_reason' })
+      }
+    }
+    if (!wanted) discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response, stale })
     if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason: reasons[0], at: match.created_at })
   }
 
@@ -292,7 +381,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   // then those with nothing known, then those estimated below it; then
   // newest, as the query already orders.
   const byAnswered = (a: FoundOpportunity, b: FoundOpportunity) =>
-    Number(a.response !== null) - Number(b.response !== null) || payRank(b) - payRank(a)
+    Number(a.response !== null) - Number(b.response !== null) || Number(a.stale) - Number(b.stale) || payRank(b) - payRank(a)
   const fits = found.filter((item) => item.fit === 'fits').sort(byAnswered)
   const maybe = found.filter((item) => item.fit !== 'fits').sort(byAnswered)
 
@@ -300,12 +389,13 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     found: fits,
     maybe,
     discarded,
-    unseen: fits.filter((item) => !item.closed && item.response === null).length,
+    unseen: fits.filter((item) => !item.closed && !item.stale && item.response === null).length,
     week: { read, worth: week.filter((entry) => entry.status === 'found').length, entries },
     wanted: wantedAll.filter((item) => item.progress === null),
     sent: wantedAll.filter((item) => item.progress === 'applied'),
     dropped: wantedAll.filter((item) => item.progress === 'dropped'),
     applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id), canFill: canFillForms() },
     whatsapp: { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null },
+    drought: fits.length + maybe.length === 0 ? droughtOf(candidate.id, discarded) : null,
   }
 }

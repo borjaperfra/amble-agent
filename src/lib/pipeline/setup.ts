@@ -1,7 +1,7 @@
 import { candidateById, listCapabilities, listClaims, listEvidence, listUnprocessedSources } from '../db/repo'
 import { candidateLocale, withLocale } from '../i18n/candidate'
 import { assessCapabilities, claimsToEvidence, refreshDerivedProfile } from './graph'
-import { prepareSetupQuestions } from './interview'
+import { FIRST_READ_WAITS_MS, hasUnansweredQuestion, prepareSetupQuestions, startFirstReadSoon } from './interview'
 import { processSource, SourceRejectedError } from './sources'
 
 // Reading what someone shared, in the background, while they tell the Rep
@@ -80,8 +80,12 @@ async function run(candidateId: string, progress: SetupProgress): Promise<void> 
     progress.stage = 'done'
 
     // Now that it knows what they can do, the first read for offers can start
-    // (it waits for this), if they already said what they are looking for.
-    void import('../matching/run').then(({ startFirstRead }) => startFirstRead(candidateId)).catch(() => undefined)
+    // (it waits for this), if they already said what they are looking for;
+    // with questions waiting, once their answers are in (interview.ts), or
+    // judged before them, its verdicts are left behind by the profile they
+    // change. If they leave the questions for later, it starts anyway.
+    if (!hasUnansweredQuestion(candidateId)) startFirstReadSoon(candidateId)
+    else setTimeout(() => startFirstReadSoon(candidateId), FIRST_READ_WAITS_MS).unref?.()
 
     // The map's summary: after, with nobody waiting for it.
     await refreshDerivedProfile(candidateId).catch(() => undefined)
@@ -121,6 +125,10 @@ async function readAndWeigh(candidateId: string, progress: SetupProgress): Promi
   // fields missing, and each is then dropped), from evidence there is: asked
   // once more, or the questions and the first read would have nothing to go on.
   if (listCapabilities(candidateId).length === 0 && listEvidence(candidateId).length > 0) await assessCapabilities(candidateId)
+  // Still nothing: a passing failure, not a finished setup. Marked done, the
+  // questions would be planned from nothing, the interview closed, and the
+  // first read never started. Failed, the next visit weighs it again.
+  if (listCapabilities(candidateId).length === 0 && listEvidence(candidateId).length > 0) throw new Error('nothing_weighed')
   progress.capabilities = listCapabilities(candidateId).map((capability) => ({ name: capability.name, assessment: capability.assessment }))
   progress.weighed = true
 }

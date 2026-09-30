@@ -15,7 +15,7 @@ import type { MatchingProfile } from './profile'
 // passes to the model, which can read the description.
 
 // Part of the stored query's key: a new version of the prompt means a new query.
-const ROLE_QUERY_VERSION = 'v4'
+const ROLE_QUERY_VERSION = 'v5'
 
 export const SENIORITY_LEVELS = ['junior', 'mid_level', 'senior', 'staff', 'c_level'] as const
 export type Seniority = (typeof SENIORITY_LEVELS)[number]
@@ -89,13 +89,13 @@ function salaryFloorOf(value: unknown): RoleQuery['salaryFloor'] {
   return { amount: Math.round(amount), currency, ruleId }
 }
 
-const SYSTEM_PROMPT = `You are Amble's role-query designer, version 3. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
+const SYSTEM_PROMPT = `You are Amble's role-query designer, version 5. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
 
 Output:
-- titleInclude: 8 to 30 short lowercase words or phrases; a posting passes only if its title contains one. Cover every role family this person could credibly do, in English and in the candidate's own language (e.g. "marketing", "community", "developer relations", "devrel", "developer advocate", "growth", "content", "brand"). Recall matters more than precision here: a later stage reads each survivor carefully.
+- titleInclude: 8 to 30 short lowercase words or phrases; a posting passes only if its title contains one, and they are read in the order you list them, so list first the titles of the roles a confirmed rule says they want. When a confirmed rule names the roles they want, cover those roles and their close variants, not every family their past makes credible (someone who moved from engineering to developer relations and asks for developer relations does not want "software engineer" or "backend" titles). Otherwise cover every role family this person could credibly do, in English and in the candidate's own language (e.g. "marketing", "community", "developer relations", "devrel", "developer advocate", "growth", "content", "brand"). Recall matters more than precision here: a later stage reads each survivor carefully.
 - titleExclude: lowercase words or phrases that make a title clearly wrong for this person even if it matched (e.g. "engineer", "intern", "account executive", "recruiter"). Never exclude a family the person could do.
 - locationExclude: places where this person cannot take the job AT ALL, even remotely, because a confirmed hard filter rules the place out (e.g. a filter against US-based roles gives "united states", "usa", "us only", "new york", "san francisco"...). Never list a place only because working there would mean office days: that is what requireRemote and officeAllowed are for, and a remote job listed under that place must still pass. Empty if no hard filter is about location. locationRuleIds: the ids of the hard filters that justify it.
-- requireRemote: true only if a confirmed hard filter demands remote work. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.
+- requireRemote: true only if a confirmed hard filter demands remote work, including a filter that accepts office days only in some places ("Madrid, or remote from Spain", "on-site in Barcelona or fully remote"): that is requireRemote true with those places in officeAllowed. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.
 - homeCountry: the ISO 3166-1 alpha-2 code of the country the candidate lives in, only if the experience states it (a city or country). Null if unclear.
 - seniority: the levels from ["junior", "mid_level", "senior", "staff", "c_level"] this person's experience makes credible to apply for. Usually one to three adjacent levels.
 - salaryFloor: the gross yearly salary below which this person says no, only if a confirmed rule states it as a figure: {"amount": the full number (75000, not 75), "currency": ISO 4217 code, "ruleId": the id of the rule that states it}. When the rules give several figures, the one they call the real floor. Rules are listed newest first: when two rules state different floors, the newer one (listed first) is the floor, whatever the older one calls itself; the person changed their mind. Null if no rule states a floor.
@@ -326,6 +326,16 @@ function belowLevel(rawTitle: string, title: string): string | null {
   if (term) return term
   if (INTERNSHIP_STAGE.test(title) && !COMPANY_STAGE.test(title)) return 'stage'
   return null
+}
+
+// How central a title is to what they asked for: the position, in the query's
+// own order (the roles they asked for first), of the first term it names.
+// Lower is closer; a title naming none comes last.
+export function titleRank(title: string, query: RoleQuery): number {
+  const roleWords = normaliseTitle(title).replace(NOT_ROLE_WORDS, ' ').replace(/\s+/g, ' ').trim()
+  const [first] = termsNamed(titleTermsOf(query).include, roleWords)
+  const index = first === undefined ? -1 : titleTermsOf(query).include.terms.indexOf(first)
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index
 }
 
 export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location' | 'workplace'>, query: RoleQuery): PrefilterResult {

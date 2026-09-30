@@ -8,6 +8,7 @@ import {
 } from '../db/repo'
 import { runInterpretIntentTask } from '../model/tasks'
 import { serverText } from '../i18n/candidate'
+import { getListeningProfile } from './listening'
 
 export interface IntentGroups {
   label: string
@@ -61,6 +62,29 @@ export async function interpretIntent(candidateId: string, answerText: string): 
 
 export function readLatestIntent(candidateId: string): IntentRow | undefined {
   return getLatestIntent(candidateId)
+}
+
+// What they look for, for the model that plans their questions: the roles,
+// fields and companies they said (not where or for how much: those do not
+// change which of their work matters), and the rules they confirmed. Empty
+// until there is any.
+export function lookingFor(candidateId: string): string {
+  const lines: string[] = []
+  const intent = getLatestIntent(candidateId)
+  if (intent) {
+    try {
+      const groups = JSON.parse(intent.groups) as IntentGroups[]
+      for (const group of groups) {
+        if (['Role', 'Space', 'Company', 'Ownership', 'Other'].includes(group.label) && group.values?.length) lines.push(`${group.label}: ${group.values.join('; ')}`)
+      }
+    } catch {
+      // An unreadable intent says nothing.
+    }
+  }
+  // The rules they confirmed: what they will not do, and what weighs most.
+  const { wontConsider, weighs } = getListeningProfile(candidateId).revealed.rules
+  for (const rule of [...wontConsider, ...weighs]) lines.push(`Rule: ${rule.statement}`)
+  return lines.join('\n')
 }
 
 // False when the intent is not this candidate's.

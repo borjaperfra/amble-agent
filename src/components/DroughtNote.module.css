@@ -1,0 +1,39 @@
+.note {
+  width: 100%;
+  max-width: 34rem;
+  margin: 24px auto 0;
+  padding: 20px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  margin: 0 0 4px;
+}
+
+.reasons {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.waiting {
+  color: var(--ink-secondary);
+}
+
+.change {
+  align-self: flex-start;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}

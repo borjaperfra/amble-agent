@@ -15,7 +15,9 @@ export class ModelNotConfiguredError extends Error {
 }
 
 export function getModelConfig(): ModelConfig | null {
-  const apiKey = process.env.AMBLE_MODEL_API_KEY?.trim()
+  // One key, or the first of several (the calls themselves are spread over all
+  // of them: src/lib/model/provider.ts).
+  const apiKey = process.env.AMBLE_MODEL_API_KEY?.trim() || process.env.AMBLE_MODEL_API_KEYS?.split(',')[0]?.trim()
   const modelId = process.env.AMBLE_MODEL_ID?.trim()
   if (!apiKey || !modelId) return null
   return {

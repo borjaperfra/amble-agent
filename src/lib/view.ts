@@ -17,7 +17,8 @@ import {
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
-import { getOpportunitiesView, type WeekLedger } from './matching/view'
+import { candidateLocale } from './i18n/candidate'
+import { getOpportunitiesView, type Drought, type WeekLedger } from './matching/view'
 
 // An offer still in their hands, as an envelope on the listening horizon.
 export interface PileEnvelope {
@@ -37,6 +38,8 @@ const ASSESSMENT_TO_STRENGTH: Record<string, EvidenceStrength> = {
   NO_EVIDENCE_YET: 'none',
   CONTRADICTORY_EVIDENCE: 'contradictory',
 }
+
+const STRENGTH_ORDER: EvidenceStrength[] = ['strong', 'good', 'some', 'limited', 'contradictory', 'none']
 
 export interface EvidenceViewItem {
   id: string
@@ -129,10 +132,40 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
     }
   })
 
+  // What their work shows best comes first: the level, then how much backs
+  // it. Stored, they are in the order they were last touched, which put
+  // whatever the latest answer reassessed at the top.
+  capabilityItems.sort((a, b) => STRENGTH_ORDER.indexOf(a.strength) - STRENGTH_ORDER.indexOf(b.strength) || b.count - a.count)
+
+  // Only a few are shown: the ones that matter most, what an answer can
+  // settle before what it cannot, and each about something different (three
+  // doubts about one capability read as a verdict on it).
   const weight: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
-  const gaps: GapViewItem[] = uncertainties
-    .filter((uncertainty) => uncertainty.status === 'OPEN' && uncertainty.materiality !== 'LOW')
-    .sort((a, b) => (weight[a.materiality] ?? 3) - (weight[b.materiality] ?? 3))
+  const rank = new Map(capabilityItems.map((item, index) => [item.id, index]))
+  // A doubt no answer can settle ("no outside source or certificate") is not
+  // shown: it asks something of them they cannot give. Attribution doubts are
+  // settled by defending the work, so they stay.
+  const open = uncertainties
+    .filter(
+      (uncertainty) =>
+        uncertainty.status === 'OPEN' &&
+        uncertainty.materiality !== 'LOW' &&
+        (uncertainty.resolvable_by_interview === 1 || uncertainty.kind === 'ATTRIBUTION'),
+    )
+    .sort(
+      (a, b) =>
+        (weight[a.materiality] ?? 3) - (weight[b.materiality] ?? 3) ||
+        b.resolvable_by_interview - a.resolvable_by_interview ||
+        (rank.get(a.capability_id ?? '') ?? capabilityItems.length) - (rank.get(b.capability_id ?? '') ?? capabilityItems.length),
+    )
+  const seen = new Set<string>()
+  const first = open.filter((uncertainty) => {
+    const about = uncertainty.capability_id ?? uncertainty.id
+    if (seen.has(about)) return false
+    seen.add(about)
+    return true
+  })
+  const gaps: GapViewItem[] = [...first, ...open.filter((uncertainty) => !first.includes(uncertainty))]
     .map((uncertainty) => ({
       id: uncertainty.id,
       name: uncertainty.capability_id
@@ -168,6 +201,26 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
   }
 }
 
+// What they said they look for, as the Rep listens for it: everything in
+// what they confirmed, since every part of it is applied (where they want to
+// work and what they will not consider rule offers out, the salary is the
+// floor). The stored list stops at eight and leaves out what they will not
+// consider, which dropped their floor or their remote wish from the screen
+// while offers were still judged by them.
+function declaredItems(intent: ReturnType<typeof getLatestIntent>, profile: ListeningProfile, t: Dictionary['listening']): string[] {
+  if (!intent?.confirmed_at) return profile.declared.items
+  let groups: { label: string; values: string[] }[]
+  try {
+    groups = JSON.parse(intent.groups) as typeof groups
+  } catch {
+    return profile.declared.items
+  }
+  const values = (keep: (label: string) => boolean) =>
+    groups.filter((group) => keep(group.label)).flatMap((group) => (group.values ?? []).map((value) => value.trim()).filter(Boolean))
+  const items = [...values((label) => label !== 'Not interested in'), ...values((label) => label === 'Not interested in').map(t.notInterested)]
+  return items.length > 0 ? [...new Set(items)] : profile.declared.items
+}
+
 export function getListeningViewModel(candidateId: string): {
   evidenceCount: number
   capabilitiesCount: number
@@ -179,6 +232,7 @@ export function getListeningViewModel(candidateId: string): {
   unseenOpportunities: number
   pile: PileEnvelope[]
   week: WeekLedger
+  drought: Drought | null
 } {
   const candidate = candidateById(candidateId)
   const intent = getLatestIntent(candidate.id)
@@ -187,7 +241,7 @@ export function getListeningViewModel(candidateId: string): {
   return {
     evidenceCount: listEvidence(candidate.id).length,
     capabilitiesCount: listCapabilities(candidate.id).length,
-    listeningFor: profile.declared.items,
+    listeningFor: declaredItems(intent, profile, dictionaries[candidateLocale(candidate)].listening),
     hasIntent: Boolean(intent),
     intentConfirmed: profile.declared.confirmed,
     revealed: profile.revealed,
@@ -196,7 +250,7 @@ export function getListeningViewModel(candidateId: string): {
     // New to answer first, then what they want to send, then what went out.
     pile: [
       ...opportunities.found
-        .filter((item) => !item.closed && item.response === null)
+        .filter((item) => !item.closed && !item.stale && item.response === null)
         .map((item) => ({ id: item.id, company: item.company, title: item.title, kind: 'new' as const })),
       ...opportunities.wanted
         .filter((item) => !item.closed)
@@ -204,6 +258,7 @@ export function getListeningViewModel(candidateId: string): {
       ...opportunities.sent.map((item) => ({ id: item.key, company: item.company, title: item.title, kind: 'sent' as const })),
     ],
     week: opportunities.week,
+    drought: opportunities.drought,
   }
 }
 

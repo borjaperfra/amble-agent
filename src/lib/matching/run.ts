@@ -12,8 +12,8 @@ import { infoJobsConfigured, type InfoJobsQuery } from '../sourcing/infojobs'
 import { theirStackConfigured, type TheirStackQuery } from '../sourcing/theirstack'
 import { ASSESS_VERSION, assessOpportunity } from './assess'
 import { buildMatchingProfile } from './profile'
-import { EUROPE } from './places'
-import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
+import { EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeMatches, placeOf, placeOutsideEurope } from './places'
+import { prefilter, roleQueryFor, titleRank, type RoleQuery } from './role-query'
 import { estimatesFor } from '../salary/estimate'
 
 // Each assessment is a model call. A run reads at most this many new roles
@@ -72,6 +72,23 @@ function descriptionOf(postings: OpenOpportunity[]): string | null {
   return texts.get(postings[0].id) ?? postings.map((posting) => texts.get(posting.id)).find(Boolean) ?? null
 }
 
+// The name a place list uses for the candidate's country.
+const HOME_NAMES: Record<string, string> = { ES: 'spain', PT: 'portugal', FR: 'france', DE: 'germany', IT: 'italy', GB: 'united kingdom', NL: 'netherlands' }
+
+// How near an offer's places are to where the candidate can work, lower
+// nearer: 0 their office city or country, 1 open or not named, 2 elsewhere in
+// Europe, 3 only outside it.
+function placeFit(location: string | null, query: RoleQuery): number {
+  const places = (location ?? '')
+    .split(/[·;|/•]/)
+    .map(placeOf)
+    .filter((place): place is string => place !== null)
+  const home = query.homeCountry ? HOME_NAMES[query.homeCountry] : undefined
+  if (places.some((place) => query.officeAllowed.some((city) => placeMatches(place, city)) || (home !== undefined && placeMatches(place, home)))) return 0
+  if (places.length === 0 || hasUnlistedPlaces(location) || places.some(placeIsOpenRegion)) return 1
+  return places.every(placeOutsideEurope) ? 3 : 2
+}
+
 // `open` is shared by a whole pass: the offers are read once, not once per
 // person, and without their text, which is read only for what is judged. Past `deadline`, no new read starts.
 export async function runMatching(options: {
@@ -126,15 +143,33 @@ export async function runMatching(options: {
   // It never decides what is judged or shown: only a published salary can.
   estimatesFor(passed)
 
-  // What is fresh goes first: an offer of this week never waits behind an old
-  // backlog. Within fresh and within older, offers that publish a salary go
-  // first (the candidate asked for them, and they can be checked against the
-  // floor), then newest.
+  // The roles they asked for go first: a title that names one of them is read
+  // before one that only names a neighbouring family (a developer advocate's
+  // DevRel offers before the engineering ones their past lets through). Then
+  // what is fresh: an offer of this week never waits behind an old backlog.
+  // Then offers that publish a salary (the candidate asked for them, and they
+  // can be checked against the floor), then the closer title, then newest.
   const dated = (o: (typeof pending)[number]) => o.posted_at ?? o.first_seen_at
   const freshSince = new Date(Date.now() - FRESH_DAYS * 24 * 60 * 60 * 1000).toISOString()
   const isFresh = (o: (typeof pending)[number]) => Number(dated(o) >= freshSince)
   const hasSalary = (o: (typeof pending)[number]) => Number(Boolean(o.salary_raw || o.salary_min))
-  pending.sort((a, b) => isFresh(b) - isFresh(a) || hasSalary(b) - hasSalary(a) || dated(b).localeCompare(dated(a)))
+  const coreTerms = Math.max(3, Math.ceil(query.titleInclude.length / 3))
+  const rank = new Map(pending.map((o) => [o.id, titleRank(o.title, query)]))
+  const isCore = (o: (typeof pending)[number]) => Number((rank.get(o.id) ?? Number.MAX_SAFE_INTEGER) < coreTerms)
+  // Within those, where it is: their city or country first, then what may be
+  // open to them (remote to Europe, places not named), then elsewhere in
+  // Europe, and last what names only places outside it. An order, never a
+  // filter: the reading decides.
+  const fit = new Map(pending.map((o) => [o.id, placeFit(o.location, query)]))
+  pending.sort(
+    (a, b) =>
+      isCore(b) - isCore(a) ||
+      (fit.get(a.id) ?? 1) - (fit.get(b.id) ?? 1) ||
+      isFresh(b) - isFresh(a) ||
+      hasSalary(b) - hasSalary(a) ||
+      (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0) ||
+      dated(b).localeCompare(dated(a)),
+  )
   // One role posted in several cities is one judgment: the model reads it once,
   // with every city, and the verdict is kept on each posting. The shared model
   // run marks them as one role on the screen. Remote and on-site postings of a
@@ -197,7 +232,27 @@ export async function runMatching(options: {
     }),
   )
 
+  // Kept for the screens: what their last read was up against.
+  getDb()
+    .prepare(
+      `INSERT INTO matching_stats (candidate_id, at, stats) VALUES (?, ?, ?)
+       ON CONFLICT (candidate_id) DO UPDATE SET at = excluded.at, stats = excluded.stats`,
+    )
+    .run(candidate.id, new Date().toISOString(), JSON.stringify({ open: stats.open, prefilterPassed: stats.prefilterPassed, prefilterOut: stats.prefilterOut, waiting: stats.waiting }))
+
   return stats
+}
+
+export interface LastReadStats {
+  open: number
+  prefilterPassed: number
+  prefilterOut: Record<string, number>
+  waiting: number
+}
+
+export function lastReadStats(candidateId: string): LastReadStats | null {
+  const row = getDb().prepare('SELECT stats FROM matching_stats WHERE candidate_id = ?').get(candidateId) as { stats: string } | undefined
+  return row ? (JSON.parse(row.stats) as LastReadStats) : null
 }
 
 // The same query that filters the watched boards narrows the aggregator
@@ -393,7 +448,15 @@ export function startFirstRead(candidateId: string): boolean {
   firstReads.running.add(candidateId)
   const since = new Date(Date.now() - FIRST_READ_DAYS * 24 * 60 * 60 * 1000).toISOString()
   void runMatching({ candidateId, limit: FIRST_READ_LIMIT, since })
-    .then((stats) => console.log(`[listen] first read for ${candidateId}: ${JSON.stringify({ ...stats, prefilterOut: undefined })}`))
+    .then(async (stats) => {
+      console.log(`[listen] first read for ${candidateId}: ${JSON.stringify({ ...stats, prefilterOut: undefined })}`)
+      // Nothing worth their time in the first batch, and more of their kind
+      // waiting: one more batch now, rather than a first day with nothing.
+      if (stats.verdicts.show === 0 && stats.waiting > 0) {
+        const more = await runMatching({ candidateId, limit: FIRST_READ_LIMIT, since })
+        console.log(`[listen] first read, second batch for ${candidateId}: ${JSON.stringify({ ...more, prefilterOut: undefined })}`)
+      }
+    })
     .catch((error) => console.error(`[listen] first read for ${candidateId} failed:`, error))
     .finally(() => {
       firstReads.running.delete(candidateId)

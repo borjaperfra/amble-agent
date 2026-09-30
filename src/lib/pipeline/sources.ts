@@ -274,8 +274,25 @@ function flagMachineText(sourceId: string): void {
   getDb().prepare("UPDATE sources SET flag = 'machine_text' WHERE id = ?").run(sourceId)
 }
 
+// A web address as people type it ("tuweb.com", "https://…"): a host with a
+// dot and a real top-level name, over http or https. Anything else ("not a
+// url", "mi web") is not stored as a source: it could never be read, and it
+// would stay listed among what they shared.
+export function webAddress(raw: string): URL | null {
+  const text = raw.trim()
+  if (!text || /\s/.test(text)) return null
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+    return /^(?:[a-z0-9-]+\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$/i.test(url.hostname) ? url : null
+  } catch {
+    return null
+  }
+}
+
 export async function createWebsiteSource(candidateId: string, url: string): Promise<SourceCreated> {
   const id = newId('src')
+  if (!webAddress(url)) return { id, name: url.trim().slice(0, 80), type: 'website', status: 'failed', detail: serverText().notAnAddress }
   const hostname = (() => {
     try {
       return new URL(url).hostname
@@ -423,6 +440,10 @@ export async function createGitHubSource(candidateId: string, url: string): Prom
 
 export function createLinkedInSource(candidateId: string, url: string): SourceCreated {
   const id = newId('src')
+  const address = webAddress(url)
+  if (!address || !/(^|\.)linkedin\.com$/i.test(address.hostname)) {
+    return { id, name: url.trim().slice(0, 80), type: 'linkedin', status: 'failed', detail: serverText().notLinkedIn }
+  }
   const source = insertSource({
     id,
     candidate_id: candidateId,

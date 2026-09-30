@@ -44,21 +44,40 @@ export interface StructuredTaskOptions<T> {
   background?: boolean
 }
 
-// Every model call in the process shares the provider's limit on requests in
-// flight (Helmcode allows 10 per key on deepseek-v4-flash). Background work
-// never takes the last few, so a person on the screen is not queued behind a
-// listening pass.
+// The provider limits requests in flight per key (Helmcode allows 10 per key
+// on deepseek-v4-flash). With several keys (AMBLE_MODEL_API_KEYS, comma
+// separated; else AMBLE_MODEL_API_KEY) each call takes a slot on the key with
+// most room, and a 429 pauses only the key that got it: more keys, more calls
+// at once, the same model. On every key background work never takes the last
+// few slots, so a person on the screen is not queued behind a listening pass.
 const MODEL_CONCURRENCY = Math.max(1, Number(process.env.AMBLE_MODEL_CONCURRENCY) || 10)
 const INTERACTIVE_RESERVE = Math.min(3, MODEL_CONCURRENCY - 1)
-export const BACKGROUND_SLOTS = MODEL_CONCURRENCY - INTERACTIVE_RESERVE
+
+function modelKeys(): string[] {
+  const many = (process.env.AMBLE_MODEL_API_KEYS ?? '')
+    .split(',')
+    .map((key) => key.trim())
+    .filter(Boolean)
+  const one = process.env.AMBLE_MODEL_API_KEY?.trim()
+  return [...new Set(many.length > 0 ? many : one ? [one] : [])]
+}
+
+// Background calls that may run at once across all keys: how many reads a
+// listening pass keeps going.
+export const BACKGROUND_SLOTS = Math.max(1, modelKeys().length) * (MODEL_CONCURRENCY - INTERACTIVE_RESERVE)
+
+interface KeyPool {
+  key: string
+  active: number
+  // After a 429 no call starts on this key before this: the calls waiting
+  // would all be refused too, and each refusal pushes its limit further away.
+  pausedUntil: number
+}
 
 interface Slots {
-  active: number
-  interactive: (() => void)[]
-  background: (() => void)[]
-  // After a 429 no call starts before this: the calls waiting would all be
-  // refused too, and each refusal pushes the provider's limit further away.
-  pausedUntil?: number
+  pools: KeyPool[]
+  interactive: ((pool: KeyPool) => void)[]
+  background: ((pool: KeyPool) => void)[]
   wake?: NodeJS.Timeout
 }
 
@@ -67,37 +86,54 @@ declare global {
 }
 
 // On globalThis: the scheduled pass and the pages are separate bundles in one
-// process, and they must count against the same limit.
-const slots = (globalThis.__ambleModelSlots ??= { active: 0, interactive: [], background: [] })
+// process, and they must count against the same limits.
+const slots = (globalThis.__ambleModelSlots ??= {
+  pools: modelKeys().map((key) => ({ key, active: 0, pausedUntil: 0 })),
+  interactive: [],
+  background: [],
+})
+
+// The open key with the most room for this kind of call, if any.
+function freePool(background: boolean, now: number): KeyPool | null {
+  const limit = background ? MODEL_CONCURRENCY - INTERACTIVE_RESERVE : MODEL_CONCURRENCY
+  let best: KeyPool | null = null
+  for (const pool of slots.pools) {
+    if (pool.pausedUntil > now || pool.active >= limit) continue
+    if (!best || pool.active < best.active) best = pool
+  }
+  return best
+}
 
 function dispatch() {
-  const paused = (slots.pausedUntil ?? 0) - Date.now()
-  if (paused > 0) {
-    slots.wake ??= setTimeout(() => {
-      slots.wake = undefined
-      dispatch()
-    }, paused)
-    return
+  const now = Date.now()
+  for (const kind of ['interactive', 'background'] as const) {
+    const queue = slots[kind]
+    for (let pool = freePool(kind === 'background', now); pool && queue.length > 0; pool = freePool(kind === 'background', now)) {
+      pool.active++
+      queue.shift()!(pool)
+    }
   }
-  while (slots.active < MODEL_CONCURRENCY && slots.interactive.length > 0) {
-    slots.active++
-    slots.interactive.shift()!()
-  }
-  while (slots.active < MODEL_CONCURRENCY - INTERACTIVE_RESERVE && slots.background.length > 0) {
-    slots.active++
-    slots.background.shift()!()
+  // Calls waiting only on keys that are paused: look again when the first reopens.
+  if (slots.interactive.length + slots.background.length > 0 && !slots.wake) {
+    const reopen = Math.min(...slots.pools.map((pool) => pool.pausedUntil).filter((until) => until > now))
+    if (Number.isFinite(reopen)) {
+      slots.wake = setTimeout(() => {
+        slots.wake = undefined
+        dispatch()
+      }, reopen - now)
+    }
   }
 }
 
-function acquireSlot(background: boolean): Promise<void> {
+function acquireSlot(background: boolean): Promise<KeyPool> {
   return new Promise((resolve) => {
     slots[background ? 'background' : 'interactive'].push(resolve)
     dispatch()
   })
 }
 
-function releaseSlot() {
-  slots.active--
+function releaseSlot(pool: KeyPool) {
+  pool.active--
   dispatch()
 }
 
@@ -128,21 +164,30 @@ function busyWait(error: ModelError, retry: number): number {
 
 async function callWhenFree(
   background: boolean,
-  ...args: Parameters<typeof callChatCompletion>
+  baseUrl: string,
+  modelId: string,
+  system: string,
+  user: string,
+  temperature: number,
 ): Promise<{ content: string; latencyMs: number }> {
   const deadline = Date.now() + RETRY_BUDGET_MS[background ? 'background' : 'interactive']
   for (let retry = 0; ; retry++) {
-    await acquireSlot(background)
+    const pool = await acquireSlot(background)
     let waitMs = 0
     try {
-      return await callChatCompletion(...args)
+      return await callChatCompletion(baseUrl, pool.key, modelId, system, user, temperature)
     } catch (error) {
       if (!isBusy(error) || retry >= BUSY_RETRIES) throw error
       waitMs = busyWait(error, retry)
       if (Date.now() + waitMs > deadline) throw error
-      if (error.status === 429) slots.pausedUntil = Math.max(slots.pausedUntil ?? 0, Date.now() + waitMs)
+      // Rate-limited: that key waits; the call goes on at once on another key
+      // with room, or when one reopens.
+      if (error.status === 429) {
+        pool.pausedUntil = Math.max(pool.pausedUntil, Date.now() + waitMs)
+        waitMs = 0
+      }
     } finally {
-      releaseSlot()
+      releaseSlot(pool)
     }
     await sleep(waitMs)
   }
@@ -281,7 +326,7 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
       })
     let reply: { content: string; latencyMs: number }
     try {
-      reply = await callWhenFree(options.background ?? false, config.baseUrl, config.apiKey, config.modelId, system, attemptUser, temperature)
+      reply = await callWhenFree(options.background ?? false, config.baseUrl, config.modelId, system, attemptUser, temperature)
     } catch (error) {
       // HTTP, network or time: recorded, and the task ends.
       const modelError = error instanceof ModelError ? error : new ModelError(error instanceof Error ? error.message : 'Unknown model error')

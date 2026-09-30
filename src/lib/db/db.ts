@@ -692,6 +692,8 @@ function migrate(db: DatabaseSync): void {
   // The candidate paused the search until further notice: nothing is read for
   // them and nothing is written to them first, until they resume it.
   addColumn(db, 'candidates', 'search_paused_at', 'TEXT')
+  // A pause for a while: the day to ask them whether to start again.
+  addColumn(db, 'candidates', 'pause_check_on', 'TEXT')
 
   // A source that carried wording meant for a machine (hidden text, or
   // instructions for a screening system): read without it, never sent on.
@@ -706,6 +708,16 @@ function migrate(db: DatabaseSync): void {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS intake_events_by_candidate ON intake_events (candidate_id, kind, created_at);
+  `)
+
+  // The last read for each person, in numbers (offers open, those of their
+  // role, judged, waiting): what "why nothing yet" is explained from.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS matching_stats (
+      candidate_id TEXT PRIMARY KEY,
+      at TEXT NOT NULL,
+      stats TEXT NOT NULL
+    );
   `)
 
   // What filling forms has taught, for everyone: per ATS and kind of field,

@@ -22,8 +22,12 @@ interface StaleUncertainty {
   description: string
 }
 
-// Capabilities per model call, with what is unknown about them.
-const CHUNK = 12
+// Capabilities per model call, with what is unknown about them. Twelve, with
+// their unknowns, made an answer long enough to run past the model's time
+// on a full profile, and then nothing was rewritten.
+const CHUNK = 6
+// Uncertainties per call; those with no capability, or more than fit with theirs, go in calls of their own.
+const UNCERTAINTY_CHUNK = 12
 // After a failure, the next view waits this long before trying again.
 const RETRY_AFTER_MS = 10 * 60_000
 
@@ -56,18 +60,17 @@ export async function rewriteExplanations(candidateId: string, options: { force?
   const db = getDb()
   const done = { capabilities: 0, uncertainties: 0 }
 
-  // Each uncertainty travels with its capability; the rest with the last chunk.
+  // Each uncertainty travels with its capability; the rest in calls of their own.
   const chunks: { capabilities: StaleCapability[]; uncertainties: StaleUncertainty[] }[] = []
   for (let index = 0; index < capabilities.length; index += CHUNK) {
     const group = capabilities.slice(index, index + CHUNK)
     const ids = new Set(group.map((capability) => capability.id))
-    chunks.push({ capabilities: group, uncertainties: uncertainties.filter((u) => u.capability_id && ids.has(u.capability_id)) })
+    chunks.push({ capabilities: group, uncertainties: uncertainties.filter((u) => u.capability_id && ids.has(u.capability_id)).slice(0, UNCERTAINTY_CHUNK) })
   }
   const placed = new Set(chunks.flatMap((chunk) => chunk.uncertainties.map((u) => u.id)))
   const orphans = uncertainties.filter((u) => !placed.has(u.id))
-  if (orphans.length > 0) {
-    if (chunks.length === 0) chunks.push({ capabilities: [], uncertainties: [] })
-    chunks[chunks.length - 1].uncertainties.push(...orphans)
+  for (let index = 0; index < orphans.length; index += UNCERTAINTY_CHUNK) {
+    chunks.push({ capabilities: [], uncertainties: orphans.slice(index, index + UNCERTAINTY_CHUNK) })
   }
 
   // Only a row still holding the text that was sent is replaced: if the
@@ -79,12 +82,24 @@ export async function rewriteExplanations(candidateId: string, options: { force?
     'UPDATE uncertainties SET description = ?, written_for = ? WHERE candidate_id = ? AND id = ? AND description = ?',
   )
 
+  // One chunk failing (the model slow or busy) does not lose the others: each
+  // is tried twice, the rest go on, and the failure is raised at the end, so
+  // the next visit retries only what is still stale.
+  let failure: unknown = null
   for (const chunk of chunks) {
-    const { data } = await runRewriteExplanationsTask({
-      candidateId,
-      capabilities: chunk.capabilities,
-      uncertainties: chunk.uncertainties.map((u) => ({ id: u.id, capabilityId: u.capability_id, description: u.description })),
-    })
+    let data: Awaited<ReturnType<typeof runRewriteExplanationsTask>>['data'] | null = null
+    for (let attempt = 1; attempt <= 2 && !data; attempt++) {
+      try {
+        ;({ data } = await runRewriteExplanationsTask({
+          candidateId,
+          capabilities: chunk.capabilities,
+          uncertainties: chunk.uncertainties.map((u) => ({ id: u.id, capabilityId: u.capability_id, description: u.description })),
+        }))
+      } catch (error) {
+        if (attempt === 2) failure = error
+      }
+    }
+    if (!data) continue
     const sentCapabilities = new Map(chunk.capabilities.map((capability) => [capability.id, capability]))
     const sentUncertainties = new Map(chunk.uncertainties.map((u) => [u.id, u]))
     for (const rewritten of data.capabilities) {
@@ -100,6 +115,7 @@ export async function rewriteExplanations(candidateId: string, options: { force?
       done.uncertainties += Number(setUncertainty.run(rewritten.description, voice, candidateId, sent.id, sent.description).changes)
     }
   }
+  if (failure) throw failure
   return done
 }
 
