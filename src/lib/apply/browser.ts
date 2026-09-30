@@ -7,7 +7,7 @@ import { setProgress } from '../db/matching'
 import { applicationCv, questionKey, saveAnswer, savedAnswers } from './answers'
 import { getPreparedApplication, type PreparedAnswer } from './prepare'
 import { cloudBrowserConfigured, createCloudSession, liveViewOf, releaseCloudSession } from './cloud'
-import { applyStrategy, holds, learn, MAX_TRIES, strategiesFor, type Files } from './reflect'
+import { applyStrategy, holds, learn, MAX_TRIES, optionFor, strategiesFor, type Files } from './reflect'
 
 // Filling an application form from a browser amble opens, and sending it only
 // when the candidate says so. The page stays open between the two, for a
@@ -33,6 +33,7 @@ const DRY = process.env.AMBLE_FILL_DRY === '1'
 const SESSION_MINUTES = WINDOW ? 45 : 20
 const NAVIGATION_MS = 45_000
 const SUBMIT_WAIT_MS = 25_000
+const ACTION_MS = 8_000
 
 interface Session {
   browser: Browser
@@ -94,7 +95,11 @@ interface OfferRow {
 
 function applyUrl(offer: OfferRow): string | null {
   if (offer.source === 'ashby' && offer.ats_token) return `https://jobs.ashbyhq.com/${offer.ats_token}/${offer.external_id}/application`
-  if (offer.source === 'greenhouse' && offer.ats_token) return `https://job-boards.greenhouse.io/${offer.ats_token}/jobs/${offer.external_id}`
+  // The board's own form, embeddable: the job page of a company with its own
+  // careers site sends the browser there, where the form sits in a frame, or
+  // is theirs.
+  if (offer.source === 'greenhouse' && offer.ats_token)
+    return `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(offer.ats_token)}&token=${encodeURIComponent(offer.external_id)}`
   return null
 }
 
@@ -106,37 +111,77 @@ export function screenshotPath(candidateId: string, opportunityId: string, momen
 const indexOfField = new WeakMap<PreparedAnswer, number>()
 const fieldIndex = (answer: PreparedAnswer) => indexOfField.get(answer) ?? -1
 
-// The value each field gets, from what is known; null when nothing is.
+// The value each field gets, from what is known; null when nothing is. For a
+// question with options, the option that says what they answered.
 function valueFor(answer: PreparedAnswer, saved: Record<string, string>): string | null {
-  if (answer.source === 'fact' || answer.source === 'rep') return answer.answer
-  return saved[questionKey(answer.label)] ?? null
+  const value = answer.source === 'fact' || answer.source === 'rep' ? answer.answer : (saved[questionKey(answer.label)] ?? null)
+  return value !== null && answer.kind === 'choice' && answer.options.length > 0 ? optionFor(value, answer.options) : value
 }
 
-// Marks each field's container on the page, found by its label, so it can be
-// acted on. A container is the nearest block around the label that holds a
-// control of its own.
+// Marks each field's container on the page, and its control when it has one
+// of its own, so it can be acted on. Found by the id the ATS gives it (Ashby
+// marks the field's block with its path; Greenhouse names the control after
+// the field), else by its label: the nearest block around the label that
+// holds a control.
 // Sent to the page as text: a bundler's helpers must not travel with it.
 const MARK_FIELDS = String.raw`(wanted) => {
   const clean = (text) => (text || '').replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
   const controls = 'input:not([type=hidden]),textarea,select,button,[role=combobox],[role=radio],[role=checkbox]'
+  // A label's own words, without the options of a list it wraps.
+  const ownText = (el) => {
+    const copy = el.cloneNode(true)
+    copy.querySelectorAll('select, option, textarea, input, [role=listbox]').forEach((child) => child.remove())
+    return clean(copy.textContent)
+  }
+  const byId = (id) => {
+    if (!id) return null
+    const block = document.querySelector('[data-field-path="' + CSS.escape(id) + '"]')
+    if (block) return { container: block, control: null }
+    const plain = id.replace(/\[\]$/, '')
+    const control = document.getElementById(id) || document.getElementById(plain) || document.querySelector('[name="' + CSS.escape(id) + '"]')
+    if (!control) return null
+    // A group (a fieldset of checkboxes) is the field's block itself.
+    const isControl = control.matches('input, textarea, select, [role=combobox]')
+    if (!isControl) return control.querySelector(controls) ? { container: control, control: null } : null
+    // Up to the block that also holds its label.
+    let container = control.parentElement
+    for (let depth = 0; container && depth < 8; depth++) {
+      if (container.querySelector('label, legend')) break
+      container = container.parentElement
+    }
+    return container ? { container, control } : null
+  }
   const candidates = Array.from(document.querySelectorAll('label, legend, p, span, div, h3, h4'))
-  return wanted.map((label, index) => {
+  const byLabel = (label) => {
     const target = clean(label)
-    const labelEl = candidates.find((el) => clean(el.textContent) === target && el.children.length <= 3)
-    if (!labelEl) return false
+    if (!target) return null
+    // The label as written, else one that starts with it (a board may add a hint after it).
+    const labelEl =
+      candidates.find((el) => clean(el.textContent) === target && el.children.length <= 3) ||
+      candidates.find((el) => (el.tagName === 'LABEL' || el.tagName === 'LEGEND') && ownText(el) === target) ||
+      candidates.find((el) => (el.tagName === 'LABEL' || el.tagName === 'LEGEND') && target.length >= 4 && ownText(el).startsWith(target))
+    if (!labelEl) return null
     let container = labelEl
     for (let depth = 0; container && depth < 6; depth++) {
       if (container.querySelector(controls)) break
       container = container.parentElement
     }
-    if (!container || !container.querySelector(controls)) return false
-    container.setAttribute('data-amble-field', String(index))
+    if (!container || !container.querySelector(controls)) return null
+    const forId = labelEl.getAttribute('for')
+    const control = forId ? document.getElementById(forId) : null
+    return { container, control: control && container.contains(control) ? control : null }
+  }
+  return wanted.map(([label, id], index) => {
+    const found = byId(id) || byLabel(label)
+    if (!found || found.container.hasAttribute('data-amble-field')) return false
+    found.container.setAttribute('data-amble-field', String(index))
+    if (found.control) found.control.setAttribute('data-amble-control', String(index))
     return true
   })
 }`
 
-async function markFields(page: Page, labels: string[]): Promise<boolean[]> {
-  return page.evaluate(`(${MARK_FIELDS})(${JSON.stringify(labels)})`) as Promise<boolean[]>
+async function markFields(page: Page, fields: [string, string][]): Promise<boolean[]> {
+  return page.evaluate(`(${MARK_FIELDS})(${JSON.stringify(fields)})`) as Promise<boolean[]>
 }
 
 // The message as a one-page letter, for forms that take it as a file.
@@ -199,7 +244,23 @@ export async function fillApplication(candidateId: string, opportunityId: string
     await page.goto(url, { waitUntil: 'networkidle', timeout: NAVIGATION_MS })
     const letter = prepared.message && prepared.answers.some((answer) => answer.kind === 'cover_letter') ? await letterPdf(browser, prepared.message).catch(() => null) : null
 
-    const found = await markFields(page, prepared.answers.map((answer) => answer.label))
+    // A control that does not answer is given up on quickly, not after half a minute.
+    page.setDefaultTimeout(ACTION_MS)
+    const wanted = prepared.answers.map((answer): [string, string] => [answer.label, answer.fieldId])
+    let found = await markFields(page, wanted)
+    // No form on the page: a board that turns visitors away for a moment
+    // ("unavailable at this time, try again later") is asked once more; an
+    // offer that closed, or a form still missing, is not filled at all.
+    if (wanted.length > 0 && !found.some(Boolean)) {
+      await page.waitForTimeout(4000)
+      await page.reload({ waitUntil: 'networkidle', timeout: NAVIGATION_MS })
+      found = await markFields(page, wanted)
+      if (!found.some(Boolean)) {
+        await browser.close().catch(() => undefined)
+        if (cloudId) await releaseCloudSession(cloudId)
+        return { status: 'unavailable', reason: 'form_not_found' }
+      }
+    }
     prepared.answers.forEach((answer, index) => indexOfField.set(answer, index))
     const files: Files = { cv: cv?.path ?? null, cvName: cv?.filename ?? null, letter }
     const ats = offer?.source ?? 'unknown'
@@ -214,14 +275,18 @@ export async function fillApplication(candidateId: string, opportunityId: string
       const value = valueFor(answer, saved)
       // Try, look again, and try another way while it did not take.
       let held = false
-      for (const [attempt, strategy] of strategiesFor(ats, answer).slice(0, MAX_TRIES).entries()) {
+      // A way that does not apply to this control is not a try.
+      let attempts = 0
+      for (const strategy of strategiesFor(ats, answer)) {
+        if (attempts >= MAX_TRIES) break
         const applied = await applyStrategy(page, index, answer, value, files, strategy).catch(() => false)
         if (!applied) continue
         // Uploads and suggestion boxes settle before the field is read back.
         await page.waitForTimeout(answer.kind === 'resume' || answer.kind === 'cover_letter' ? 1500 : 250)
         held = await holds(page, index, answer, value, files)
         learn(ats, answer, strategy, held)
-        if (attempt > 0) retried++
+        if (attempts > 0) retried++
+        attempts++
         if (held) break
       }
       ;(held ? filled : left).push(answer.label)
@@ -275,7 +340,7 @@ function watchWindow(candidateId: string, opportunityId: string, session: Sessio
       }
       // What they typed where amble left the field to them.
       const values = (await page.evaluate(
-        `Array.from(document.querySelectorAll('[data-amble-field]')).map((el) => [el.getAttribute('data-amble-field'), (el.querySelector('textarea, input:not([type=file]):not([type=hidden]):not([type=radio]):not([type=checkbox])') || {}).value || ''])`,
+        `Array.from(document.querySelectorAll('[data-amble-field]')).map((el) => [el.getAttribute('data-amble-field'), (el.querySelector('[data-amble-control]:not([type=file])') || el.querySelector('textarea, input:not([type=file]):not([type=hidden]):not([type=radio]):not([type=checkbox])') || {}).value || ''])`,
       )) as [string, string][]
       const byIndex = new Map(values)
       for (const answer of left) {

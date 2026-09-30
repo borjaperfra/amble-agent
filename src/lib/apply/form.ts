@@ -21,17 +21,31 @@ export interface ApplicationForm {
 
 const TIMEOUT_MS = 15_000
 
-// What a label says the field is, whatever the ATS calls its type.
+// What a label says the field is, whatever the ATS calls its type. In the
+// languages forms are written in here, English and Spanish.
 function kindFromLabel(label: string, fallback: FieldKind): FieldKind {
-  const l = label.toLowerCase()
+  const l = label.toLowerCase().replace(/[*:?]/g, '').replace(/\s+/g, ' ').trim()
+  // A password for a portfolio is not a link to one.
+  if (/password|contraseña/.test(l)) return fallback
   if (/linkedin/.test(l)) return 'linkedin'
-  if (/github|website|portfolio|personal site/.test(l)) return 'website'
-  if (/cover letter/.test(l)) return 'cover_letter'
-  if (/^(resume|cv)\b|resume\/cv/.test(l)) return 'resume'
-  if (/phone/.test(l)) return 'phone'
-  if (/^e-?mail/.test(l)) return 'email'
-  if (/^(full |first |last )?name$/.test(l)) return 'name'
+  if (/github|website|portfolio|personal site|sitio web|página web/.test(l)) return 'website'
+  if (/cover letter|carta de presentaci[oó]n/.test(l)) return 'cover_letter'
+  if (/^(resume|cv|curr[ií]cul)|resume\/cv/.test(l)) return 'resume'
+  if (/phone|tel[eé]fono|m[oó]vil/.test(l)) return 'phone'
+  if (/^(e-?mail|correo)/.test(l)) return 'email'
+  if (/^((what is your )?(preferred |full |first |last |legal )*name|nombre( completo)?|apellidos?)$/.test(l)) return 'name'
   return fallback
+}
+
+// Greenhouse names its own fields the same on every board, whatever the label says.
+const GREENHOUSE_FIELDS: Record<string, FieldKind> = {
+  first_name: 'name',
+  last_name: 'name',
+  preferred_name: 'name',
+  email: 'email',
+  phone: 'phone',
+  resume: 'resume',
+  cover_letter: 'cover_letter',
 }
 
 interface GreenhouseQuestion {
@@ -46,7 +60,7 @@ async function greenhouseForm(token: string, jobId: string): Promise<Application
     { signal: AbortSignal.timeout(TIMEOUT_MS) },
   )
   if (!response.ok) return null
-  const data = (await response.json()) as { questions?: GreenhouseQuestion[] }
+  const data = (await response.json()) as { questions?: GreenhouseQuestion[]; location_questions?: GreenhouseQuestion[] | null }
   const fields = (data.questions ?? []).map((question, index): FormField => {
     const field = question.fields[0]
     const type = field?.type ?? 'input_text'
@@ -58,14 +72,22 @@ async function greenhouseForm(token: string, jobId: string): Promise<Application
           : type.startsWith('multi_value')
             ? 'choice'
             : 'text'
+    const own = field ? GREENHOUSE_FIELDS[field.name] : undefined
     return {
       id: field?.name ?? `q${index}`,
-      label: question.label,
-      kind: kindFromLabel(question.label, base),
+      label: question.label.trim(),
+      // A question with options stays one, whatever its label mentions.
+      kind: own ?? (base === 'choice' ? base : kindFromLabel(question.label, base)),
       required: question.required,
       options: (field?.values ?? []).map((value) => value.label),
     }
   })
+  // Where they live, when the board asks it: a search box of cities, below the phone.
+  const location = (data.location_questions ?? []).find((question) => question.fields.some((field) => field.name === 'location'))
+  if (location) {
+    const at = fields.findIndex((field) => field.kind === 'phone') + 1 || fields.length
+    fields.splice(at, 0, { id: 'candidate-location', label: 'Location (City)', kind: 'text', required: location.required, options: [] })
+  }
   return { source: 'greenhouse', fields }
 }
 
@@ -122,7 +144,7 @@ async function ashbyForm(board: string, postingId: string): Promise<ApplicationF
                         : 'text'
       return {
         id: path,
-        label: title,
+        label: title.trim(),
         kind: base === 'text' || base === 'file' ? kindFromLabel(title, base) : base,
         required: entry.isRequired,
         options: (entry.field.selectableValues ?? []).map((value) => value.label),
@@ -154,17 +176,16 @@ export async function readApplicationForm(opportunityId: string): Promise<Applic
        WHERE s.opportunity_id = ? AND s.closed_at IS NULL ORDER BY s.last_seen_at DESC LIMIT 1`,
     )
     .get(opportunityId) as SourceRow | undefined
-  try {
-    if (row?.ats_token && row.source === 'greenhouse') {
-      const form = await greenhouseForm(row.ats_token, row.external_id)
+  const read = row?.ats_token ? (row.source === 'greenhouse' ? greenhouseForm : row.source === 'ashby' ? ashbyForm : null) : null
+  // A board slow to answer once is asked again: its form is worth the wait,
+  // the usual fields would leave most of it to them.
+  for (let attempt = 0; read && row?.ats_token && attempt < 2; attempt++) {
+    try {
+      const form = await read(row.ats_token, row.external_id)
       if (form) return form
+    } catch {
+      // An unreadable form is not a failure: the usual fields still apply.
     }
-    if (row?.ats_token && row.source === 'ashby') {
-      const form = await ashbyForm(row.ats_token, row.external_id)
-      if (form) return form
-    }
-  } catch {
-    // An unreadable form is not a failure: the usual fields still apply.
   }
   return { source: 'generic', fields: GENERIC }
 }
