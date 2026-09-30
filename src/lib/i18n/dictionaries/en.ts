@@ -463,6 +463,10 @@ export const en = {
     inYourWords: 'In your words',
     onlyPdfOrText: 'I can only read PDF or plain text files in this build.',
     fileTooLarge: 'This file is too big for a CV. Try the PDF you export from Word or Google Docs.',
+    invoiceDocument: "This looks like an invoice, a quote or a statement, not a CV. I haven't kept it. If you meant to upload your CV, try again.",
+    personalDocument: "This looks like a personal document (an ID card, a passport, a medical report…). I haven't kept it: amble only needs your CV.",
+    machineText:
+      "Your CV carries hidden text or instructions for automated systems. I read it without them, but I won't send it to companies like this: their filters tend to spot it and set it aside. Upload a version without it and I'll use that.",
     noTextInFile: "I couldn't read any text from this file. It may be a scanned document.",
     notEnoughText: "I couldn't find enough readable text in this document. If it's scanned, try a text-based PDF or a plain text export.",
     websiteUnreadableDetail: (why: string) => `I couldn't read this website (${why}). Your Rep stored the URL only.`,

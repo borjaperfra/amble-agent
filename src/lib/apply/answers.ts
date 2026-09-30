@@ -3,6 +3,7 @@ import path from 'node:path'
 import { DATA_DIRECTORY, getDb } from '../db/db'
 import { newId, now } from '../db/repo'
 import { activeContent, documentKind } from '../files'
+import { carriesMachineText } from '../pipeline/sources'
 
 // What the candidate answers themselves in application forms, kept so the
 // next form that asks the same thing already has it: where they live, visas,
@@ -63,7 +64,7 @@ export function applicationCv(candidateId: string): ApplicationCv | null {
     .get(candidateId) as ApplicationCv | undefined
   if (row && fs.existsSync(row.path)) return row
   const sources = db
-    .prepare("SELECT id, name, created_at FROM sources WHERE candidate_id = ? AND type = 'cv' AND status = 'processed' ORDER BY created_at DESC")
+    .prepare("SELECT id, name, created_at FROM sources WHERE candidate_id = ? AND type = 'cv' AND status = 'processed' AND flag IS NULL ORDER BY created_at DESC")
     .all(candidateId) as { id: string; name: string; created_at: string }[]
   for (const source of sources) {
     const original = path.join(DATA_DIRECTORY, 'uploads', `${source.id}.original.pdf`)
@@ -85,6 +86,9 @@ export async function storeApplicationCv(candidateId: string, file: File): Promi
   if (!kind) throw new CvRejectedError('The CV must be a PDF or a Word (.docx) document.')
   const unsafe = activeContent(bytes, kind)
   if (unsafe) throw new CvRejectedError(`The CV carries ${unsafe}, which companies' systems block. Export it again as a plain PDF.`)
+  if (kind === 'pdf' && (await carriesMachineText(bytes))) {
+    throw new CvRejectedError("The CV carries hidden text or instructions for automated systems; companies' filters tend to set such CVs aside. Upload a version without them.")
+  }
   const id = newId('file')
   const extension = `.${kind}`
   const directory = path.join(DATA_DIRECTORY, 'files', candidateId)

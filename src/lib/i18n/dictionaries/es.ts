@@ -463,6 +463,10 @@ export const es: Dictionary = {
     inYourWords: 'En tus palabras',
     onlyPdfOrText: 'En esta versión solo puedo leer archivos PDF o de texto plano.',
     fileTooLarge: 'Este archivo es demasiado grande para ser un CV. Prueba con el PDF que exportas desde Word o Google Docs.',
+    invoiceDocument: 'Esto parece una factura, un presupuesto o un extracto, no un CV. No lo he guardado. Si querías subir tu CV, prueba de nuevo.',
+    personalDocument: 'Parece un documento personal (un DNI, un pasaporte, un informe médico…). No lo he guardado: amble solo necesita tu CV.',
+    machineText:
+      'Tu CV lleva texto oculto o instrucciones para sistemas automáticos. Lo he leído sin ese texto, pero así no lo enviaré a empresas: sus filtros suelen detectarlo y descartarlo. Si subes una versión sin él, la usaré.',
     noTextInFile: 'No he podido leer texto de este archivo. Puede que sea un documento escaneado.',
     notEnoughText: 'No he encontrado suficiente texto legible en este documento. Si está escaneado, prueba con un PDF con texto o una exportación en texto plano.',
     websiteUnreadableDetail: (why: string) => `No he podido leer esta web (${why}). Tu Rep solo ha guardado la URL.`,

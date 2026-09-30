@@ -1,9 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { extractText, getDocumentProxy } from 'unpdf'
+import { getDocumentProxy } from 'unpdf'
 import { DATA_DIRECTORY, getDb } from '../db/db'
 import { documentKind, isPlainText } from '../files'
 import { safeFetchText } from '../net/safe-fetch'
+import { cleanText, injectionSignals, withoutInjections } from '../untrusted'
 import {
   insertClaim,
   insertSource,
@@ -17,7 +18,7 @@ import {
 } from '../db/repo'
 import { runExtractClaimsTask } from '../model/tasks'
 import { serverText } from '../i18n/candidate'
-import { classifySourceContent, detectSourceSignature } from './classify'
+import { classifySourceContent, detectSourceSignature, personalDocument, SENSITIVE } from './classify'
 import { buildGitHubDigest, GitHubError, parseGitHubHandle, type GitHubDigest } from './github'
 
 const MAX_CONTENT_CHARS = 60_000
@@ -39,13 +40,43 @@ const PDF_READ_MS = 15_000
 
 class TooManyPagesError extends Error {}
 
-async function extractPdfText(buffer: Buffer): Promise<string[]> {
+// Text a reader cannot see: too small to read, or placed off the page. A CV
+// carries it only to be read by a machine (keywords or instructions for a
+// screening system), so it is kept out of what amble reads and counted.
+// Text coloured like the page is not seen here.
+const MIN_VISIBLE_SIZE = 3
+const PAGE_MARGIN = 5
+// A stray footnote mark is not a hidden paragraph.
+const MAX_HIDDEN_CHARS = 40
+
+interface PdfText {
+  pages: string[]
+  hidden: string
+}
+
+async function extractPdfText(buffer: Buffer): Promise<PdfText> {
   const read = (async () => {
     const pdf = await getDocumentProxy(new Uint8Array(buffer))
     if (pdf.numPages > MAX_PDF_PAGES) throw new TooManyPagesError()
-    const result = await extractText(pdf, { mergePages: false })
-    const pages = Array.isArray(result.text) ? result.text : [result.text]
-    return pages.map((page) => page.replace(/\s+/g, ' ').trim())
+    const pages: string[] = []
+    let hidden = ''
+    for (let number = 1; number <= pdf.numPages; number++) {
+      const page = await pdf.getPage(number)
+      const { width, height } = page.getViewport({ scale: 1 })
+      const content = await page.getTextContent()
+      let text = ''
+      for (const item of content.items) {
+        if (!('str' in item)) continue
+        const [a, b, c, d, x, y] = item.transform as number[]
+        const size = Math.max(Math.hypot(a, b), Math.hypot(c, d))
+        const off = x < -PAGE_MARGIN || x > width + PAGE_MARGIN || y < -PAGE_MARGIN || y > height + PAGE_MARGIN
+        const piece = item.str + (item.hasEOL ? '\n' : '')
+        if (item.str.trim() && (size < MIN_VISIBLE_SIZE || off)) hidden += `${piece} `
+        else text += piece
+      }
+      pages.push(cleanText(text).replace(/\s+/g, ' ').trim())
+    }
+    return { pages, hidden: hidden.replace(/\s+/g, ' ').trim() }
   })()
   let timer: NodeJS.Timeout | undefined
   const late = new Promise<never>((_, reject) => {
@@ -55,6 +86,17 @@ async function extractPdfText(buffer: Buffer): Promise<string[]> {
     return await Promise.race([read, late])
   } finally {
     clearTimeout(timer)
+  }
+}
+
+// Whether a PDF carries wording meant for a machine: hidden text, or
+// instructions for a screening system. A PDF that cannot be read says no.
+export async function carriesMachineText(buffer: Buffer): Promise<boolean> {
+  try {
+    const { pages, hidden } = await extractPdfText(buffer)
+    return hidden.length > MAX_HIDDEN_CHARS || injectionSignals(`${pages.join('\n')}\n${hidden}`).length > 0
+  } catch {
+    return false
   }
 }
 
@@ -87,10 +129,16 @@ export function sweepUploads(): { discarded: number; orphans: number } {
   return { discarded: setAside.length, orphans }
 }
 
+// Elements a visitor does not see: hidden by attribute or by inline style.
+const HIDDEN_ELEMENT =
+  /<([a-z][a-z0-9]*)\b[^>]*(?:\shidden\b|aria-hidden\s*=\s*["']?true|style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?\s*[;"']|opacity\s*:\s*0\s*[;"']))[^>]*>[\s\S]*?<\/\1>/gi
+
 function stripHtml(html: string): string {
-  return html
+  return cleanText(html)
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(HIDDEN_ELEMENT, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -136,12 +184,14 @@ export async function createFileSource(
   if (!isPdf && !isText) return failed(serverText().onlyPdfOrText)
 
   let content = ''
+  let hidden = ''
   try {
     if (isPdf) {
-      const pages = await extractPdfText(buffer)
-      content = pages.map((page, index) => `[page ${index + 1}] ${page}`).join('\n\n')
+      const read = await extractPdfText(buffer)
+      content = read.pages.map((page, index) => `[page ${index + 1}] ${page}`).join('\n\n')
+      hidden = read.hidden
     } else {
-      content = buffer.toString('utf8')
+      content = cleanText(buffer.toString('utf8'))
     }
   } catch (error) {
     if (error instanceof TooManyPagesError) return failed(serverText().fileTooLarge)
@@ -165,6 +215,16 @@ export async function createFileSource(
     }
   }
 
+  // An ID card, a medical report or an invoice: set aside before anything of
+  // it is kept or sent anywhere.
+  const personal = personalDocument(content)
+  if (personal) return failed(personal === 'invoice_financial' ? serverText().invoiceDocument : serverText().personalDocument)
+
+  // Wording meant for a machine, hidden or in plain sight, is taken out of
+  // what is read, and the file is marked so it is never sent on.
+  const machineText = hidden.length > MAX_HIDDEN_CHARS || injectionSignals(`${content}\n${hidden}`).length > 0
+  content = withoutInjections(content)
+
   // Only now, read and long enough, is anything of it kept.
   fs.mkdirSync(path.dirname(storedPath), { recursive: true })
   if (isPdf) fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.original.pdf`), buffer)
@@ -185,10 +245,17 @@ export async function createFileSource(
     stored_path: textName,
     char_count: content.length,
     status: 'extracted',
-    status_detail: signature?.describe() ?? null,
+    status_detail: machineText ? serverText().machineText : (signature?.describe() ?? null),
   })
+  if (machineText) flagMachineText(id)
 
-  return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
+  return { id: source.id, name: source.name, type: source.type, status: source.status, detail: machineText ? serverText().machineText : null }
+}
+
+// A source that carried wording meant for a machine: read for their map with
+// that wording taken out, and its file never sent to a company.
+function flagMachineText(sourceId: string): void {
+  getDb().prepare("UPDATE sources SET flag = 'machine_text' WHERE id = ?").run(sourceId)
 }
 
 export async function createWebsiteSource(candidateId: string, url: string): Promise<SourceCreated> {
@@ -201,10 +268,10 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     }
   })()
 
+  // Only https: a site given without it, or on http, is asked for (and kept) over https.
+  const secure = /^https?:\/\//i.test(url) ? url.replace(/^http:/i, 'https:') : `https://${url}`
   let content = ''
   try {
-    // Only https: a site given without it, or on http, is asked for over https.
-    const secure = /^https?:\/\//i.test(url) ? url.replace(/^http:/i, 'https:') : `https://${url}`
     const response = await safeFetchText(secure, { headers: { 'User-Agent': 'Amble/0.1 (source ingestion)' }, timeoutMs: 15_000 })
     if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`)
     content = stripHtml(response.body)
@@ -254,6 +321,9 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     }
   }
 
+  // Wording meant for a machine is taken out, as in a file.
+  const machineText = injectionSignals(content).length > 0
+  content = withoutInjections(content)
   const textName = `${id}.txt`
   fs.mkdirSync(path.join(DATA_DIRECTORY, 'uploads'), { recursive: true })
   fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', textName), content)
@@ -262,7 +332,7 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     candidate_id: candidateId,
     type: 'website',
     name: hostname,
-    uri: url,
+    uri: secure,
     original_filename: null,
     mime_type: 'text/html',
     stored_path: textName,
@@ -270,6 +340,7 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     status: 'extracted',
     status_detail: null,
   })
+  if (machineText) flagMachineText(id)
   return { id: source.id, name: source.name, type: source.type, status: source.status, detail: null }
 }
 
@@ -388,15 +459,25 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
 
   // Classify before extracting. A document that isn't about this person's career
   // must never reach claim extraction: it would produce fluent, sourced nonsense.
+  // A website too: a page is anything its owner wants it to be. Only the
+  // GitHub digest, which amble writes itself from GitHub's API, is not asked.
   let resolvedType = source.type
-  if (source.type !== 'website') {
-    const classification = await classifySourceContent({ candidateId, content })
+  if (source.type !== 'github') {
+    const classification = await classifySourceContent({ candidateId, content, addedAs: source.type })
     if (!classification.isProfessional) {
-      updateSourceStatus(source.id, 'rejected', classification.reason)
+      // Of a personal document, only what kind it was is kept: never a reason
+      // that could repeat what was in it.
+      const reason = SENSITIVE.includes(classification.category)
+        ? classification.category === 'invoice_financial'
+          ? serverText().invoiceDocument
+          : serverText().personalDocument
+        : classification.reason
+      updateSourceStatus(source.id, 'rejected', reason)
       discardSourceFiles(source.id)
-      throw new SourceRejectedError(source.name, classification.reason)
+      throw new SourceRejectedError(source.name, reason)
     }
-    if (classification.type !== 'other' && classification.type !== resolvedType) {
+    if (classification.injectionSuspected) flagMachineText(source.id)
+    if (classification.type !== 'other' && classification.type !== resolvedType && source.type !== 'website') {
       updateSourceType(source.id, classification.type)
       resolvedType = classification.type
     }
@@ -413,7 +494,11 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
     setCandidateNameIfEmpty(source.candidate_id, data.candidateName)
   }
 
-  for (const claim of data.claims) {
+  // A claim stands only on a quote that is really in the document: one the
+  // model wrote itself, or one that reads as an instruction, is dropped.
+  const inDocument = quoteFinder(content)
+  const claims = data.claims.filter((claim) => claim.sourceExcerpt && inDocument(claim.sourceExcerpt) && injectionSignals(claim.statement).length === 0)
+  for (const claim of claims) {
     insertClaim({
       id: newId('clm'),
       candidate_id: candidateId,
@@ -430,9 +515,10 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
     })
   }
 
-  updateSourceStatus(source.id, 'processed', null)
+  const flagged = (getDb().prepare('SELECT flag FROM sources WHERE id = ?').get(source.id) as { flag: string | null } | undefined)?.flag
+  updateSourceStatus(source.id, 'processed', flagged === 'machine_text' ? serverText().machineText : null)
 
-  const discoveries = data.claims
+  const discoveries = claims
     .filter((claim) => claim.claimType === 'experience' || claim.claimType === 'project')
     .slice(0, 6)
     // The statement itself, once: a title cut from it only repeated it.
@@ -441,10 +527,37 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
   return {
     sourceId: source.id,
     sourceName: source.name,
-    claimsCount: data.claims.length,
+    claimsCount: claims.length,
     discoveries,
   }
 }
+
+// Whether a quote is in a text, allowing for what extraction and the model do
+// to spacing, case, accents, quotes and dashes. A quote cut with "..." counts
+// when each of its parts is there.
+function quoteFinder(text: string): (quote: string) => boolean {
+  const norm = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[‘’´`]/g, "'")
+      .replace(/[“”«»]/g, '"')
+      .replace(/[–—−]/g, '-')
+      .replace(/\[page \d+\]/g, ' ')
+      .replace(/[^a-z0-9'"%€$+.-]+/g, ' ')
+      .trim()
+  const haystack = norm(text)
+  return (quote) => {
+    const parts = quote
+      .split(/\.{3}|…/)
+      .map(norm)
+      .filter((part) => part.length >= 3)
+    return parts.length > 0 && parts.every((part) => haystack.includes(part))
+  }
+}
+
+export const quoteIsIn = (text: string, quote: string) => quoteFinder(text)(quote)
 
 export function claimCapabilitySuggestions(possibleCapabilitiesJson: string): string[] {
   return parseJsonArray(possibleCapabilitiesJson)

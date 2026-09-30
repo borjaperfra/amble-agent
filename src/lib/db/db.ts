@@ -645,6 +645,10 @@ function migrate(db: DatabaseSync): void {
   // them and nothing is written to them first, until they resume it.
   addColumn(db, 'candidates', 'search_paused_at', 'TEXT')
 
+  // A source that carried wording meant for a machine (hidden text, or
+  // instructions for a screening system): read without it, never sent on.
+  addColumn(db, 'sources', 'flag', 'TEXT')
+
   // Answers given before decisions had their own table lived on assessments.
   // Carried over once, the latest per offer; a later decision is never replaced.
   db.exec(`
