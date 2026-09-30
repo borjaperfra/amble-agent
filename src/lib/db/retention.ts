@@ -1,4 +1,4 @@
-import { getDb } from './db'
+import { getDb, inTransaction } from './db'
 import { now } from './repo'
 
 // How long offers are kept. An offer is worth storing while it is open, and
@@ -18,6 +18,17 @@ import { now } from './repo'
 //                            title, company, link, salary and the assessment
 //                            stay.
 //
+// WhatsApp events already handled are kept 30 days, far longer than the
+// provider retries a delivery: one delivered again is still recognised and
+// never handled twice.
+//
+// The record of each model call (which task, prompt version, model, when,
+// how long, whether it worked) is kept a year: it is how a judgment amble
+// made can be explained and checked later, as the EU AI Act asks of those
+// who use AI systems to keep logs. What the model answered word for word
+// carries personal data and is not needed for that: it goes after six
+// months (the Act's minimum for logs), leaving the rest of the record.
+//
 // Rows deleted do not shrink the file on their own; the file is compacted when
 // a fifth of it is free.
 
@@ -25,12 +36,18 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export const STALE_AFTER_DAYS = 21
 export const DELETE_CLOSED_AFTER_DAYS = 14
 export const STRIP_DESCRIPTION_AFTER_DAYS = 30
+export const FORGET_WHATSAPP_EVENTS_AFTER_DAYS = 30
+export const STRIP_MODEL_OUTPUT_AFTER_DAYS = 183
+export const FORGET_MODEL_RUNS_AFTER_DAYS = 365
 const VACUUM_FREE_SHARE = 0.2
 
 export interface RetentionStats {
   closedStale: number
   deleted: number
   stripped: number
+  whatsappEvents: number
+  modelOutputsStripped: number
+  modelRunsDeleted: number
   vacuumed: boolean
 }
 
@@ -38,18 +55,23 @@ function daysAgo(days: number, from: string): string {
   return new Date(Date.parse(from) - days * DAY_MS).toISOString()
 }
 
-// An offer the candidate has a reason to see again.
-const HAS_TRACE = `EXISTS (
-  SELECT 1 FROM opportunity_matches m
-  WHERE m.opportunity_id = o.id AND (m.verdict IN ('show', 'hold') OR m.response IS NOT NULL)
+// An offer the candidate has a reason to see again. What they decided about
+// it (and what the Rep prepared for it) belongs to the offer and outlives its
+// assessments; those rows also point at the offer, so it could not go anyway.
+const HAS_TRACE = `(
+  EXISTS (
+    SELECT 1 FROM opportunity_matches m
+    WHERE m.opportunity_id = o.id AND (m.verdict IN ('show', 'hold') OR m.response IS NOT NULL)
+  )
+  OR EXISTS (SELECT 1 FROM opportunity_decisions d WHERE d.opportunity_id = o.id)
+  OR EXISTS (SELECT 1 FROM application_drafts a WHERE a.opportunity_id = o.id)
 )`
 
 export function applyRetention(at: string = now()): RetentionStats {
   const db = getDb()
-  const stats: RetentionStats = { closedStale: 0, deleted: 0, stripped: 0, vacuumed: false }
+  const stats: RetentionStats = { closedStale: 0, deleted: 0, stripped: 0, whatsappEvents: 0, modelOutputsStripped: 0, modelRunsDeleted: 0, vacuumed: false }
 
-  db.exec('BEGIN')
-  try {
+  inTransaction(() => {
     const staleBefore = daysAgo(STALE_AFTER_DAYS, at)
     db.prepare('UPDATE opportunity_sources SET closed_at = ? WHERE closed_at IS NULL AND last_seen_at < ?').run(at, staleBefore)
     stats.closedStale = Number(
@@ -67,11 +89,21 @@ export function applyRetention(at: string = now()): RetentionStats {
         .prepare('UPDATE opportunities SET description = NULL WHERE closed_at IS NOT NULL AND closed_at < ? AND description IS NOT NULL')
         .run(daysAgo(STRIP_DESCRIPTION_AFTER_DAYS, at)).changes,
     )
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+
+    stats.whatsappEvents = Number(
+      db.prepare('DELETE FROM whatsapp_events WHERE received_at < ?').run(daysAgo(FORGET_WHATSAPP_EVENTS_AFTER_DAYS, at)).changes,
+    )
+
+    stats.modelOutputsStripped = Number(
+      db
+        .prepare('UPDATE model_runs SET raw_output = NULL WHERE created_at < ? AND raw_output IS NOT NULL')
+        .run(daysAgo(STRIP_MODEL_OUTPUT_AFTER_DAYS, at)).changes,
+    )
+    stats.modelRunsDeleted = Number(db.prepare('DELETE FROM model_runs WHERE created_at < ?').run(daysAgo(FORGET_MODEL_RUNS_AFTER_DAYS, at)).changes)
+  })
+
+  // The planner's picture of each table, redone for those that changed a lot.
+  db.exec('PRAGMA optimize')
 
   const pages = (db.prepare('PRAGMA page_count').get() as { page_count: number }).page_count
   const free = (db.prepare('PRAGMA freelist_count').get() as { freelist_count: number }).freelist_count

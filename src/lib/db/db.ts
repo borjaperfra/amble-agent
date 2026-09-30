@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -11,10 +11,31 @@ declare global {
   var __ambleDb: DatabaseSync | undefined
 }
 
+// What a pass reads of each open offer (listOpenOpportunities), held by the
+// index opportunities_open, newest first.
+export const OPEN_OPPORTUNITY_COLUMNS = [
+  'first_seen_at',
+  'id',
+  'company_id',
+  'title',
+  'title_norm',
+  'location',
+  'workplace',
+  'salary_min',
+  'salary_max',
+  'salary_currency',
+  'salary_raw',
+  'posted_at',
+] as const
+
 function createDb(): DatabaseSync {
   fs.mkdirSync(DATA_DIR, { recursive: true })
   const db = new DatabaseSync(DB_PATH)
   db.exec('PRAGMA journal_mode = WAL;')
+  // With WAL, NORMAL never corrupts the file: a commit is on disk at the next
+  // checkpoint, so a power cut (not a crash of the process) can lose the last
+  // few. FULL syncs every commit, a millisecond or more each on a volume.
+  db.exec('PRAGMA synchronous = NORMAL;')
   db.exec('PRAGMA foreign_keys = ON;')
   // The other process may hold the write lock for a moment: wait for it
   // rather than fail.
@@ -546,6 +567,11 @@ function createDb(): DatabaseSync {
     BEGIN SELECT RAISE(ABORT, 'retractions are append-only'); END;
   `)
   migrate(db)
+  // What the query planner knows of each table, refreshed where missing or
+  // stale (SQLite's advice for a connection that stays open; retention.ts
+  // refreshes it every pass). Without it, closing a board's missing offers
+  // reads every sighting of that board's kind.
+  db.exec('PRAGMA optimize = 0x10002;')
   return db
 }
 
@@ -674,6 +700,46 @@ function migrate(db: DatabaseSync): void {
     );
   `)
 
+  // Lookups every pass and every screen makes, which otherwise read whole
+  // tables: an offer's sightings, a person's assessments for their current
+  // profile, the postings judged in one model run, a person's model runs.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS opportunity_sources_by_opportunity ON opportunity_sources (opportunity_id, source);
+    CREATE INDEX IF NOT EXISTS opportunity_matches_by_key ON opportunity_matches (candidate_id, profile_hash, created_at);
+    CREATE INDEX IF NOT EXISTS opportunity_matches_by_run ON opportunity_matches (model_run_id) WHERE model_run_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS model_runs_by_candidate ON model_runs (candidate_id, created_at);
+    CREATE INDEX IF NOT EXISTS model_runs_by_created ON model_runs (created_at);
+    CREATE INDEX IF NOT EXISTS whatsapp_events_by_time ON whatsapp_events (received_at);
+  `)
+
+  // A person's profile, read on every screen and every pass: by person, so
+  // what one reads never grows with how many people there are.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS sources_by_candidate ON sources (candidate_id, created_at);
+    CREATE INDEX IF NOT EXISTS claims_by_candidate ON claims (candidate_id, created_at);
+    CREATE INDEX IF NOT EXISTS evidence_by_candidate ON evidence (candidate_id, created_at);
+    CREATE INDEX IF NOT EXISTS capabilities_by_candidate ON capabilities (candidate_id);
+    CREATE INDEX IF NOT EXISTS capability_evidence_by_candidate ON capability_evidence (candidate_id, capability_id);
+    CREATE INDEX IF NOT EXISTS uncertainties_by_candidate ON uncertainties (candidate_id, status);
+    CREATE INDEX IF NOT EXISTS interviews_by_candidate ON interviews (candidate_id, status);
+    CREATE INDEX IF NOT EXISTS interview_turns_by_interview ON interview_turns (interview_id, idx);
+    CREATE INDEX IF NOT EXISTS intent_profiles_by_candidate ON intent_profiles (candidate_id, created_at);
+    CREATE INDEX IF NOT EXISTS offer_triages_by_candidate ON offer_triages (candidate_id, created_at);
+    CREATE INDEX IF NOT EXISTS revealed_preferences_by_candidate ON revealed_preferences (candidate_id, status);
+    CREATE INDEX IF NOT EXISTS revealed_preferences_by_triage ON revealed_preferences (triage_id);
+    CREATE INDEX IF NOT EXISTS role_queries_by_profile ON role_queries (candidate_id, profile_hash, created_at);
+  `)
+
+  // An offer's description is nearly all of the table and sits before the
+  // columns a pass reads, so reading those means reading every description.
+  // Open offers are listed from this index alone (listOpenOpportunities);
+  // closed ones are found by when they closed (retention.ts).
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS opportunities_open ON opportunities (${OPEN_OPPORTUNITY_COLUMNS.join(', ')}, closed_at) WHERE closed_at IS NULL;
+    CREATE INDEX IF NOT EXISTS opportunities_closed ON opportunities (closed_at) WHERE closed_at IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS opportunities_open_seen ON opportunities (last_seen_at) WHERE closed_at IS NULL;
+  `)
+
   // Answers given before decisions had their own table lived on assessments.
   // Carried over once, the latest per offer; a later decision is never replaced.
   db.exec(`
@@ -693,6 +759,23 @@ export function getDb(): DatabaseSync {
 
 export const DATA_DIRECTORY = DATA_DIR
 
+declare global {
+  var __ambleStatements: Map<string, StatementSync> | undefined
+}
+
+// A statement prepared once and reused, for what runs thousands of times a
+// pass (a sighting, an assessment). Preparing costs more than running most
+// of them.
+export function prepared(sql: string): StatementSync {
+  const statements = (globalThis.__ambleStatements ??= new Map())
+  let statement = statements.get(sql)
+  if (!statement) {
+    statement = getDb().prepare(sql)
+    statements.set(sql, statement)
+  }
+  return statement
+}
+
 // A transaction is synchronous: nothing is awaited inside it, so no other
 // request's writes can land in the middle, and the write lock is held for
 // milliseconds, never across a model call (the web server and the scheduled
@@ -706,7 +789,8 @@ export function inTransaction<T>(fn: () => T): T {
     db.exec('COMMIT')
     return result
   } catch (error) {
-    db.exec('ROLLBACK')
+    // Some errors (a full disk) have already rolled the transaction back.
+    if (db.isTransaction) db.exec('ROLLBACK')
     throw error
   }
 }

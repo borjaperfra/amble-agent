@@ -167,10 +167,6 @@ function termForms(term: string): string[] {
   return [...forms]
 }
 
-function includesTerm(title: string, term: string): boolean {
-  return termForms(term).some((form) => containsTerm(title, form))
-}
-
 // The same excluded word in the other languages of the region searched: an
 // excluded "engineer" is also an "Ingeniero/a".
 const SAME_WORD: Record<string, string[]> = {
@@ -181,6 +177,63 @@ const SAME_WORD: Record<string, string[]> = {
 
 function excludedForms(term: string): string[] {
   return [term, ...(SAME_WORD[term] ?? [])]
+}
+
+// A query's title terms, every form worked out once: a pass matches tens of
+// thousands of titles against one query. A text names a form of words when
+// it has those words in a row (containsTerm), so a form is only looked for
+// in texts that have its first word; one-word forms are just looked up.
+interface Phrase {
+  index: number
+  padded: string
+}
+
+interface TitleTerms {
+  terms: string[]
+  byWord: Map<string, number[]>
+  byFirstWord: Map<string, Phrase[]>
+  // Forms that are not plain words, looked for in every text.
+  other: Phrase[]
+}
+
+function titleTerms(terms: string[], formsOf: (term: string) => string[]): TitleTerms {
+  const compiled: TitleTerms = { terms, byWord: new Map(), byFirstWord: new Map(), other: [] }
+  terms.forEach((term, index) => {
+    for (const form of formsOf(term)) {
+      if (/^[a-z0-9]+$/.test(form)) {
+        compiled.byWord.set(form, [...(compiled.byWord.get(form) ?? []), index])
+      } else if (/^[a-z0-9]+( [a-z0-9]+)+$/.test(form)) {
+        const first = form.slice(0, form.indexOf(' '))
+        compiled.byFirstWord.set(first, [...(compiled.byFirstWord.get(first) ?? []), { index, padded: ` ${form} ` }])
+      } else {
+        compiled.other.push({ index, padded: ` ${form} ` })
+      }
+    }
+  })
+  return compiled
+}
+
+// The terms a normalised text (single spaces, trimmed) names, in the query's order.
+function termsNamed(compiled: TitleTerms, text: string): string[] {
+  const named = new Set<number>()
+  const padded = ` ${text} `
+  for (const word of text.split(' ')) {
+    for (const index of compiled.byWord.get(word) ?? []) named.add(index)
+    for (const phrase of compiled.byFirstWord.get(word) ?? []) if (padded.includes(phrase.padded)) named.add(phrase.index)
+  }
+  for (const phrase of compiled.other) if (padded.includes(phrase.padded)) named.add(phrase.index)
+  return named.size === 0 ? [] : compiled.terms.filter((_, index) => named.has(index))
+}
+
+const titleTermsByQuery = new WeakMap<RoleQuery, { include: TitleTerms; exclude: TitleTerms }>()
+
+function titleTermsOf(query: RoleQuery): { include: TitleTerms; exclude: TitleTerms } {
+  let terms = titleTermsByQuery.get(query)
+  if (!terms) {
+    terms = { include: titleTerms(query.titleInclude, termForms), exclude: titleTerms(query.titleExclude, excludedForms) }
+    titleTermsByQuery.set(query, terms)
+  }
+  return terms
 }
 
 // Words of a place or of a pool of applicants, not of the work: "Comunidad
@@ -269,15 +322,15 @@ function belowLevel(rawTitle: string, title: string): string | null {
 }
 
 export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location' | 'workplace'>, query: RoleQuery): PrefilterResult {
+  const terms = titleTermsOf(query)
   const title = normaliseTitle(opportunity.title)
   const roleWords = title.replace(NOT_ROLE_WORDS, ' ').replace(/\s+/g, ' ').trim()
-  const included = query.titleInclude.filter((term) => includesTerm(roleWords, term))
+  const included = termsNamed(terms.include, roleWords)
   if (included.length === 0) return { pass: false, reason: 'title' }
-  const excluded = query.titleExclude.find(
+  const excluded = termsNamed(terms.exclude, title).find(
     (term) =>
-      excludedForms(term).some((form) => containsTerm(title, form)) &&
       // A level is never a role's noun: "Community Intern" stays out.
-      (BELOW_LEVEL_TERMS.includes(term) || !included.some((include) => excludedWordIsRoleNoun(opportunity.title, include, term))),
+      BELOW_LEVEL_TERMS.includes(term) || !included.some((include) => excludedWordIsRoleNoun(opportunity.title, include, term)),
   )
   if (excluded) return { pass: false, reason: `title:${excluded}` }
 

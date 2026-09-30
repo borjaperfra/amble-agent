@@ -1,4 +1,4 @@
-import { getDb } from './db'
+import { getDb, inTransaction, prepared } from './db'
 import { newId, now } from './repo'
 
 export interface RoleQueryRow {
@@ -63,24 +63,22 @@ export function insertMatch(row: {
   dropped: unknown[]
   modelRunId: string | null
 }): void {
-  getDb()
-    .prepare(
-      `INSERT INTO opportunity_matches (id, candidate_id, opportunity_id, profile_hash, verdict, gates, explanation, dropped, model_run_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(opportunity_id, profile_hash) DO NOTHING`,
-    )
-    .run(
-      newId('mat'),
-      row.candidateId,
-      row.opportunityId,
-      row.profileHash,
-      row.verdict,
-      JSON.stringify(row.gates),
-      JSON.stringify(row.explanation),
-      JSON.stringify(row.dropped),
-      row.modelRunId,
-      now(),
-    )
+  prepared(
+    `INSERT INTO opportunity_matches (id, candidate_id, opportunity_id, profile_hash, verdict, gates, explanation, dropped, model_run_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(opportunity_id, profile_hash) DO NOTHING`,
+  ).run(
+    newId('mat'),
+    row.candidateId,
+    row.opportunityId,
+    row.profileHash,
+    row.verdict,
+    JSON.stringify(row.gates),
+    JSON.stringify(row.explanation),
+    JSON.stringify(row.dropped),
+    row.modelRunId,
+    now(),
+  )
 }
 
 export function getMatch(id: string): MatchRow | undefined {
@@ -100,6 +98,8 @@ export interface MatchListing {
   salary_currency: string | null
 }
 
+// Newest first; the postings of one role, judged at the same moment, in the
+// order they were stored.
 export function listMatchesForKey(
   candidateId: string,
   matchKey: string,
@@ -111,24 +111,9 @@ export function listMatchesForKey(
        JOIN opportunities o ON o.id = m.opportunity_id
        JOIN companies c ON c.id = o.company_id
        WHERE m.candidate_id = ? AND m.profile_hash = ?
-       ORDER BY m.created_at DESC`,
+       ORDER BY m.created_at DESC, m.rowid`,
     )
     .all(candidateId, matchKey) as unknown as (MatchRow & MatchListing)[]
-}
-
-export function listMatches(candidateId: string, verdict?: MatchVerdict): (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null })[] {
-  const where = verdict ? 'AND m.verdict = ?' : ''
-  const params = verdict ? [candidateId, verdict] : [candidateId]
-  return getDb()
-    .prepare(
-      `SELECT m.*, o.title, o.url, o.closed_at, c.name AS company_name
-       FROM opportunity_matches m
-       JOIN opportunities o ON o.id = m.opportunity_id
-       JOIN companies c ON c.id = o.company_id
-       WHERE m.candidate_id = ? ${where}
-       ORDER BY m.created_at DESC`,
-    )
-    .all(...params) as unknown as (MatchRow & { title: string; company_name: string; url: string | null; closed_at: string | null })[]
 }
 
 // 'wanted_anyway' is the candidate overruling a discard: the signal that a
@@ -147,19 +132,19 @@ export interface DecisionRow {
   progress_at: string | null
 }
 
-// The offers an answer reaches: the one answered and every city's posting of
-// the same role, judged in the same model run.
-function roleOpportunityIds(matchId: string): string[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT DISTINCT sibling.opportunity_id FROM opportunity_matches m
-       JOIN opportunity_matches sibling
-         ON sibling.id = m.id OR (m.model_run_id IS NOT NULL AND sibling.model_run_id = m.model_run_id
-           AND sibling.profile_hash = m.profile_hash AND sibling.candidate_id = m.candidate_id)
-       WHERE m.id = ?`,
-    )
-    .all(matchId) as { opportunity_id: string }[]
-  return rows.map((row) => row.opportunity_id)
+// The assessments an answer reaches: the one answered and every city's
+// posting of the same role, judged in the same model run. Only the
+// candidate's own: an id that is someone else's reaches nothing.
+function roleMatches(matchId: string, candidateId: string): { id: string; opportunity_id: string }[] {
+  const db = getDb()
+  const match = db
+    .prepare('SELECT id, opportunity_id, model_run_id, profile_hash FROM opportunity_matches WHERE id = ? AND candidate_id = ?')
+    .get(matchId, candidateId) as { id: string; opportunity_id: string; model_run_id: string | null; profile_hash: string } | undefined
+  if (!match) return []
+  if (!match.model_run_id) return [match]
+  return db
+    .prepare('SELECT id, opportunity_id FROM opportunity_matches WHERE model_run_id = ? AND profile_hash = ? AND candidate_id = ?')
+    .all(match.model_run_id, match.profile_hash, candidateId) as { id: string; opportunity_id: string }[]
 }
 
 // An answer is about the role, so it reaches every city's posting judged with
@@ -167,22 +152,19 @@ function roleOpportunityIds(matchId: string): string[] {
 // candidate took it (applied, dropped) is kept as it was.
 export function respondToMatch(id: string, candidateId: string, response: MatchResponse, reason: string | null): void {
   const db = getDb()
-  const upsert = db.prepare(
+  const decide = db.prepare(
     `INSERT INTO opportunity_decisions (candidate_id, opportunity_id, decision, reason, decided_at) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (candidate_id, opportunity_id) DO UPDATE SET decision = excluded.decision, reason = excluded.reason, decided_at = excluded.decided_at`,
   )
-  for (const opportunityId of roleOpportunityIds(id)) upsert.run(candidateId, opportunityId, response, reason, now())
   // Also on the assessment, which still records what was answered to it.
-  db.prepare(
-      `UPDATE opportunity_matches SET response = ?, response_reason = ?, responded_at = ?
-       WHERE id = ? OR id IN (
-         SELECT sibling.id FROM opportunity_matches m
-         JOIN opportunity_matches sibling
-           ON sibling.model_run_id = m.model_run_id AND sibling.profile_hash = m.profile_hash AND sibling.candidate_id = m.candidate_id
-         WHERE m.id = ? AND m.model_run_id IS NOT NULL
-       )`,
-    )
-    .run(response, reason, now(), id, id)
+  const answer = db.prepare('UPDATE opportunity_matches SET response = ?, response_reason = ?, responded_at = ? WHERE id = ?')
+  inTransaction(() => {
+    const at = now()
+    for (const match of roleMatches(id, candidateId)) {
+      decide.run(candidateId, match.opportunity_id, response, reason, at)
+      answer.run(response, reason, at, match.id)
+    }
+  })
 }
 
 export function listDecisions(candidateId: string): Map<string, DecisionRow> {

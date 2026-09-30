@@ -94,12 +94,13 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
     })
     .sort((a, b) => a.id.localeCompare(b.id))
 
-  const experience = listClaims(candidateId)
+  const claims = listClaims(candidateId)
+  const experience = claims
     .filter((claim) => claim.claim_type === 'experience')
     .slice(0, 30)
     .map((claim) => claim.statement)
 
-  const languageClaims = listClaims(candidateId)
+  const languageClaims = claims
     .filter((claim) => claim.claim_type === 'skill' && LANGUAGE_CLAIM.test(claim.statement) && !PROGRAMMING.test(claim.statement))
     .slice(0, 10)
     .map((claim) => claim.statement)

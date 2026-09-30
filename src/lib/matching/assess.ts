@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { MatchVerdict } from '../db/matching'
-import type { OpportunityRow } from '../db/opportunities'
+import type { OpenOpportunity, OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import { UNTRUSTED_RULE } from '../untrusted'
 import type { MatchingProfile } from './profile'
@@ -236,7 +236,7 @@ function normalise(text: string): string {
 
 export async function assessOpportunity(params: {
   candidateId: string
-  opportunity: OpportunityRow & { company_name: string }
+  opportunity: OpenOpportunity & Pick<OpportunityRow, 'description'>
   profile: MatchingProfile
   query: RoleQuery
 }): Promise<Assessment> {

@@ -1,4 +1,4 @@
-import { getDb } from './db'
+import { getDb, inTransaction, OPEN_OPPORTUNITY_COLUMNS, prepared } from './db'
 import { newId, now } from './repo'
 import { normaliseName, normaliseTitle, normaliseUrl } from '../sourcing/text'
 import type { RawOpportunity } from '../sourcing/types'
@@ -45,11 +45,11 @@ export interface OpportunityRow {
 // ── Companies ────────────────────────────────────────────────────────────
 
 export function getCompanyByName(name: string): CompanyRow | undefined {
-  return getDb().prepare('SELECT * FROM companies WHERE name_norm = ?').get(normaliseName(name)) as unknown as CompanyRow | undefined
+  return prepared('SELECT * FROM companies WHERE name_norm = ?').get(normaliseName(name)) as unknown as CompanyRow | undefined
 }
 
 export function getCompany(id: string): CompanyRow | undefined {
-  return getDb().prepare('SELECT * FROM companies WHERE id = ?').get(id) as unknown as CompanyRow | undefined
+  return prepared('SELECT * FROM companies WHERE id = ?').get(id) as unknown as CompanyRow | undefined
 }
 
 // Keeps what is already known: a later, poorer sighting (an aggregator that
@@ -121,27 +121,23 @@ export function recordCompanyFetch(id: string, error: string | null): void {
 // ── Opportunities ────────────────────────────────────────────────────────
 
 function findOpportunity(raw: RawOpportunity, companyId: string, urlNorm: string | null): OpportunityRow | undefined {
-  const db = getDb()
-  const bySource = db
-    .prepare('SELECT o.* FROM opportunity_sources s JOIN opportunities o ON o.id = s.opportunity_id WHERE s.source = ? AND s.external_id = ?')
-    .get(raw.source, raw.externalId) as unknown as OpportunityRow | undefined
+  const bySource = prepared(
+    'SELECT o.* FROM opportunity_sources s JOIN opportunities o ON o.id = s.opportunity_id WHERE s.source = ? AND s.external_id = ?',
+  ).get(raw.source, raw.externalId) as unknown as OpportunityRow | undefined
   if (bySource) return bySource
   if (urlNorm) {
-    const byUrl = db.prepare('SELECT * FROM opportunities WHERE url_norm = ?').get(urlNorm) as unknown as OpportunityRow | undefined
+    const byUrl = prepared('SELECT * FROM opportunities WHERE url_norm = ?').get(urlNorm) as unknown as OpportunityRow | undefined
     if (byUrl) return byUrl
   }
   // Same company, same title, same place: the same offer seen from two sources.
   // Location is part of the key because one role is often open in several cities.
-  return db
-    .prepare(
-      `SELECT * FROM opportunities
-       WHERE company_id = ? AND title_norm = ? AND COALESCE(lower(location), '') = COALESCE(lower(?), '') AND closed_at IS NULL`,
-    )
-    .get(companyId, normaliseTitle(raw.title), raw.location) as unknown as OpportunityRow | undefined
+  return prepared(
+    `SELECT * FROM opportunities
+     WHERE company_id = ? AND title_norm = ? AND COALESCE(lower(location), '') = COALESCE(lower(?), '') AND closed_at IS NULL`,
+  ).get(companyId, normaliseTitle(raw.title), raw.location) as unknown as OpportunityRow | undefined
 }
 
 export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: string): { opportunityId: string; created: boolean } {
-  const db = getDb()
   const urlNorm = normaliseUrl(raw.url)
   const existing = findOpportunity(raw, companyId, urlNorm)
   let opportunityId: string
@@ -156,7 +152,7 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
     // The richest description wins; missing facts are filled, never overwritten.
     const description =
       raw.description && (!existing.description || raw.description.length > existing.description.length) ? raw.description : existing.description
-    db.prepare(
+    prepared(
       `UPDATE opportunities SET
          description = ?, location = COALESCE(location, ?), workplace = COALESCE(workplace, ?),
          url = COALESCE(url, ?), url_norm = COALESCE(url_norm, ?),
@@ -184,7 +180,7 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
   } else {
     opportunityId = newId('opp')
     created = true
-    db.prepare(
+    prepared(
       `INSERT INTO opportunities (id, company_id, title, title_norm, location, workplace, url, url_norm, description,
          salary_min, salary_max, salary_currency, salary_raw, posted_at, first_seen_at, last_seen_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -208,7 +204,7 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
     )
   }
 
-  db.prepare(
+  prepared(
     `INSERT INTO opportunity_sources (source, external_id, opportunity_id, url, first_seen_at, last_seen_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(source, external_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, closed_at = NULL, url = COALESCE(excluded.url, url)`,
@@ -224,22 +220,26 @@ export function closeMissing(companyId: string, source: string, seenExternalIds:
   const db = getDb()
   const open = db
     .prepare(
-      `SELECT s.external_id, s.opportunity_id FROM opportunity_sources s JOIN opportunities o ON o.id = s.opportunity_id
+      // From the company's offers to their sightings: entering by the source
+      // instead (every Greenhouse sighting, say) took seconds per board.
+      `SELECT s.external_id, s.opportunity_id FROM opportunities o CROSS JOIN opportunity_sources s ON s.opportunity_id = o.id
        WHERE o.company_id = ? AND s.source = ? AND s.closed_at IS NULL`,
     )
     .all(companyId, source) as unknown as { external_id: string; opportunity_id: string }[]
+  const closeSighting = db.prepare('UPDATE opportunity_sources SET closed_at = ? WHERE source = ? AND external_id = ?')
+  const stillListed = db.prepare('SELECT 1 FROM opportunity_sources WHERE opportunity_id = ? AND closed_at IS NULL')
+  const closeOffer = db.prepare('UPDATE opportunities SET closed_at = ? WHERE id = ?')
   let closed = 0
-  for (const row of open) {
-    if (seenExternalIds.has(row.external_id)) continue
-    db.prepare('UPDATE opportunity_sources SET closed_at = ? WHERE source = ? AND external_id = ?').run(closedAt, source, row.external_id)
-    const stillOpen = db
-      .prepare('SELECT 1 FROM opportunity_sources WHERE opportunity_id = ? AND closed_at IS NULL')
-      .get(row.opportunity_id)
-    if (!stillOpen) {
-      db.prepare('UPDATE opportunities SET closed_at = ? WHERE id = ?').run(closedAt, row.opportunity_id)
-      closed++
+  inTransaction(() => {
+    for (const row of open) {
+      if (seenExternalIds.has(row.external_id)) continue
+      closeSighting.run(closedAt, source, row.external_id)
+      if (!stillListed.get(row.opportunity_id)) {
+        closeOffer.run(closedAt, row.opportunity_id)
+        closed++
+      }
     }
-  }
+  })
   return closed
 }
 
@@ -251,25 +251,25 @@ export function countOpportunities(): { open: number; closed: number; companies:
   return { open, closed, companies }
 }
 
+export type OpenOpportunity = Pick<OpportunityRow, (typeof OPEN_OPPORTUNITY_COLUMNS)[number]> & { company_name: string }
+
 // Every open offer without its text: the text of thousands of offers is
 // tens of megabytes, and a pass only reads it for the few it judges
 // (descriptionsOf). Several passes and first reads can then run at once.
+// Read from the index that holds these columns (db.ts), never from the
+// table, where reaching them means reading past every description. Offers
+// first seen at the same moment come in the order they were stored.
 // An offer someone shared on WhatsApp is judged for them alone: only offers
 // amble also found itself are read for everyone (a shared page may carry
 // text written to sway a judge, or a pasted offer something private).
-export function listOpenOpportunities(): (Omit<OpportunityRow, 'description'> & { company_name: string })[] {
-  const columns = (getDb().prepare('PRAGMA table_info(opportunities)').all() as unknown as { name: string }[])
-    .map((column) => column.name)
-    .filter((name) => name !== 'description')
-  return getDb()
-    .prepare(
-      `SELECT ${columns.map((name) => `o.${name}`).join(', ')}, c.name AS company_name FROM opportunities o
-       JOIN companies c ON c.id = o.company_id
-       WHERE o.closed_at IS NULL AND c.status != 'ignored'
-         AND EXISTS (SELECT 1 FROM opportunity_sources s WHERE s.opportunity_id = o.id AND s.source != 'shared')
-       ORDER BY o.first_seen_at DESC`,
-    )
-    .all() as unknown as (Omit<OpportunityRow, 'description'> & { company_name: string })[]
+export function listOpenOpportunities(): OpenOpportunity[] {
+  return prepared(
+    `SELECT ${OPEN_OPPORTUNITY_COLUMNS.map((name) => `o.${name}`).join(', ')}, c.name AS company_name FROM opportunities o
+     JOIN companies c ON c.id = o.company_id
+     WHERE o.closed_at IS NULL AND c.status != 'ignored'
+       AND EXISTS (SELECT 1 FROM opportunity_sources s WHERE s.opportunity_id = o.id AND s.source != 'shared')
+     ORDER BY o.first_seen_at DESC, o.rowid`,
+  ).all() as unknown as OpenOpportunity[]
 }
 
 export function descriptionsOf(opportunityIds: string[]): Map<string, string> {

@@ -1,7 +1,7 @@
-import { getDb } from '../db/db'
+import { getDb, inTransaction } from '../db/db'
 import { candidateById, listCapabilities, listListeningCandidateIds, now } from '../db/repo'
 import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } from '../db/matching'
-import { descriptionsOf, listCompanies, listOpenOpportunities } from '../db/opportunities'
+import { descriptionsOf, listCompanies, listOpenOpportunities, type OpenOpportunity } from '../db/opportunities'
 import { BACKGROUND_SLOTS } from '../model/provider'
 import { describeWhenMissing } from '../sourcing/describe'
 import { releaseLock, takeLock } from '../sourcing/lock'
@@ -64,8 +64,6 @@ export interface MatchingStats {
 export function currentMatchKey(candidateId: string): string {
   return `${buildMatchingProfile(candidateId).hash}:${ASSESS_VERSION}`
 }
-
-type OpenOpportunity = ReturnType<typeof listOpenOpportunities>[number]
 
 // The first posting's text, or any other city's of the same role.
 function descriptionOf(postings: OpenOpportunity[]): string | null {
@@ -135,7 +133,9 @@ export async function runMatching(options: {
   const roles = new Map<string, typeof pending>()
   for (const opportunity of pending) {
     const key = `${opportunity.company_id}|${opportunity.title_norm}|${opportunity.workplace ?? ''}`
-    roles.set(key, [...(roles.get(key) ?? []), opportunity])
+    const postings = roles.get(key)
+    if (postings) postings.push(opportunity)
+    else roles.set(key, [opportunity])
   }
   const batch = [...roles.values()].slice(0, options.limit ?? DEFAULT_LIMIT)
   stats.waiting = pending.length - batch.reduce((sum, postings) => sum + postings.length, 0)
@@ -160,18 +160,21 @@ export async function runMatching(options: {
           // Some boards list offers without their text: read it now, before judging.
           if (!opportunity.description) opportunity.description = await describeWhenMissing(first.id)
           const assessment = await assessOpportunity({ candidateId: candidate.id, opportunity, profile, query })
-          for (const posting of postings) {
-            insertMatch({
-              candidateId: candidate.id,
-              opportunityId: posting.id,
-              profileHash: matchKey,
-              verdict: assessment.verdict,
-              gates: assessment.gates,
-              explanation: assessment.explanation,
-              dropped: assessment.dropped,
-              modelRunId: assessment.modelRunId,
-            })
-          }
+          // Every city's posting of the role, or none: one judgment.
+          inTransaction(() => {
+            for (const posting of postings) {
+              insertMatch({
+                candidateId: candidate.id,
+                opportunityId: posting.id,
+                profileHash: matchKey,
+                verdict: assessment.verdict,
+                gates: assessment.gates,
+                explanation: assessment.explanation,
+                dropped: assessment.dropped,
+                modelRunId: assessment.modelRunId,
+              })
+            }
+          })
           stats.assessedNow++
           stats.sharedAssessments += postings.length - 1
           stats.verdicts[assessment.verdict]++

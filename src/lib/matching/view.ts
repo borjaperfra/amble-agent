@@ -175,7 +175,9 @@ function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchL
   const roles = new Map<string, (MatchRow & MatchListing)[]>()
   for (const match of matches) {
     const key = match.model_run_id ? `${match.model_run_id}|${match.title}` : match.id
-    roles.set(key, [...(roles.get(key) ?? []), match])
+    const postings = roles.get(key)
+    if (postings) postings.push(match)
+    else roles.set(key, [match])
   }
   return [...roles.values()].map((postings) => {
     const lead = postings.find((posting) => !posting.closed_at) ?? postings[0]
