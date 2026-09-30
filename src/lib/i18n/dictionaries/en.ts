@@ -66,6 +66,8 @@ export const en = {
     fileNotUploaded: 'The file could not be uploaded.',
     urlNotStored: 'The URL could not be stored.',
     continueHint: 'To continue, add your CV (or your GitHub or website).',
+    // Back here because nothing they shared could be used.
+    nothingUsable: 'What you’ve shared doesn’t tell me about your work. Upload your CV and we’ll pick up where we left off.',
     starting: 'One moment...',
   },
   processing: {
@@ -121,7 +123,8 @@ export const en = {
     interpretFailed: "Your intent couldn't be interpreted.",
     unsent: "Your intent couldn't be sent. It is still here — try again.",
     revealLead: '“Here’s what I’ll listen for.”',
-    unstructured: 'I couldn’t structure this automatically, so your words are kept exactly. Edit anything below.',
+    unstructured: 'I couldn’t sort this out just now, so your words are kept exactly. Edit anything below, or let me try again.',
+    retryReading: 'Try again',
     valueLabel: (group: string) => `${group} value`,
     confirmQuestion: 'Does this represent you?',
     confirm: 'Yes, start listening',
@@ -149,6 +152,9 @@ export const en = {
     ],
     stillListening: 'Still listening.',
     firstReading: 'Reading your first offers…',
+    // While the first read runs: nothing has been read yet to say none fits.
+    firstReadingTitle: 'I’ve started listening for you.',
+    weekFirstReading: 'What I read on this first pass will show up here.',
     rereading: 'Reading again with your new rules…',
     pause: {
       status: 'Search paused',
@@ -447,7 +453,7 @@ export const en = {
     voiceFailed: 'I couldn’t hear your voice note. Could you write it?',
     agentFailed: 'I can’t answer right now. Write to me again in a while.',
     preferenceButtons: { yes: 'Yes, change it', no: 'No' },
-    preferenceSaved: (label: string) => `Done. From now on I listen with this in mind: ${label}.`,
+    preferenceSaved: (label: string) => `Done, I’ll keep it in mind from now on (${label}). I’m reading what came in lately again with it.`,
     preferenceKept: 'OK, I’ll leave it as it was.',
     preferenceExpired: 'I no longer have that pending. If you want to change something, tell me again.',
     preferenceInApp: (url: string) => `You can change this better in the app, at ${url}.`,
@@ -459,6 +465,11 @@ export const en = {
     resumeKept: 'OK, it stays paused. When you want to pick it up again, tell me.',
     pauseExpiredPaused: 'I no longer have that pending. The search is still paused; if you want to resume it, tell me.',
     pauseExpiredRunning: 'I no longer have that pending. I’m still searching; if you want to pause it, tell me.',
+    tapExpired: 'I no longer have that at hand. Tell me what you need and we’ll look at it.',
+    alreadyApplied: 'You’ve already sent that one. If they get back to you, tell me.',
+    fillNeedsPrepare: 'I need to prepare it first. Shall I?',
+    fillMissing: (missing: string[], url: string) =>
+      `Before I fill it in I still need: ${missing.join(', ')}. Add it at ${url} and ask me again.`,
   },
   setup: {
     reading: 'Reading what you shared…',
@@ -471,7 +482,8 @@ export const en = {
   },
   server: {
     inYourWords: 'In your words',
-    onlyPdfOrText: 'I can only read PDF or plain text files in this build.',
+    onlyPdfOrText: 'I can only read PDFs or text files. If your CV is in another format, save it as a PDF and upload that.',
+    wordDocument: 'This is a Word document. Save it as a PDF (in Word: File → Save As → PDF) and upload that here.',
     fileTooLarge: 'This file is too big for a CV. Try the PDF you export from Word or Google Docs.',
     tooManySources: 'With what you’ve already given me I have plenty to get to know you.',
     tooManyToday: 'You’ve added a lot today; try again tomorrow.',
@@ -480,8 +492,8 @@ export const en = {
     personalDocument: "This looks like a personal document (an ID card, a passport, a medical report…). I haven't kept it: amble only needs your CV.",
     machineText:
       "Your CV carries hidden text or instructions for automated systems. I read it without them, but I won't send it to companies like this: their filters tend to spot it and set it aside. Upload a version without it and I'll use that.",
-    noTextInFile: "I couldn't read any text from this file. It may be a scanned document.",
-    notEnoughText: "I couldn't find enough readable text in this document. If it's scanned, try a text-based PDF or a plain text export.",
+    noTextInFile: "I couldn't read any text from this file: it may be a scan or a photo. Upload the PDF you export from Word, Google Docs or LinkedIn.",
+    notEnoughText: "I can barely find any text in this file: it may be a scan or a photo. Upload the PDF you export from Word, Google Docs or LinkedIn.",
     websiteUnreadableDetail: (why: string) => `I couldn't read this website (${why}). Your Rep stored the URL only.`,
     websiteUnreadable: "I couldn't read this website. The URL is stored, but I couldn't read its text.",
     websiteEmpty: 'The page loaded but contained almost no readable text.',

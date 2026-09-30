@@ -67,6 +67,8 @@ export const es: Dictionary = {
     fileNotUploaded: 'No he podido subir el archivo.',
     urlNotStored: 'No he podido guardar la URL.',
     continueHint: 'Para seguir, añade tu CV (o tu GitHub o tu web).',
+    // Back here because nothing they shared could be used.
+    nothingUsable: 'Lo que me has dado no me sirve para conocer tu trabajo. Sube tu CV y seguimos donde lo dejamos.',
     starting: 'Un momento...',
   },
   processing: {
@@ -122,7 +124,8 @@ export const es: Dictionary = {
     interpretFailed: 'No he podido interpretar lo que buscas.',
     unsent: 'No he podido enviarlo. Sigue aquí: vuelve a intentarlo.',
     revealLead: '«Esto es lo que voy a escuchar.»',
-    unstructured: 'No he podido ordenarlo automáticamente, así que guardo tus palabras tal cual. Edita lo que quieras abajo.',
+    unstructured: 'Ahora mismo no he podido ordenarlo, así que guardo tus palabras tal cual. Edita lo que quieras abajo, o deja que lo intente otra vez.',
+    retryReading: 'Inténtalo otra vez',
     valueLabel: (group: string) => `Valor de ${group}`,
     confirmQuestion: '¿Te representa?',
     confirm: 'Sí, empieza a escuchar',
@@ -150,6 +153,9 @@ export const es: Dictionary = {
     ],
     stillListening: 'Sigo escuchando.',
     firstReading: 'Leyendo tus primeras ofertas…',
+    // While the first read runs: nothing has been read yet to say none fits.
+    firstReadingTitle: 'Empiezo a escuchar por ti.',
+    weekFirstReading: 'Lo que lea en esta primera pasada aparecerá aquí.',
     rereading: 'Releyendo con tus nuevas reglas…',
     pause: {
       status: 'Búsqueda en pausa',
@@ -447,7 +453,7 @@ export const es: Dictionary = {
     voiceFailed: 'No he podido escuchar tu audio. ¿Me lo escribes?',
     agentFailed: 'Ahora mismo no puedo responderte. Vuelve a escribirme en un rato.',
     preferenceButtons: { yes: 'Sí, cámbialo', no: 'No' },
-    preferenceSaved: (label: string) => `Hecho. Desde ahora escucho con esto en cuenta: ${label}.`,
+    preferenceSaved: (label: string) => `Hecho, desde ahora lo tengo en cuenta (${label}). Vuelvo a leer con ello lo que ha llegado estos días.`,
     preferenceKept: 'Vale, lo dejo como estaba.',
     preferenceExpired: 'Eso ya no lo tengo pendiente. Si quieres cambiar algo, dímelo otra vez.',
     preferenceInApp: (url: string) => `Esto lo cambias mejor en la app, en ${url}.`,
@@ -459,6 +465,11 @@ export const es: Dictionary = {
     resumeKept: 'Vale, sigue en pausa. Cuando quieras retomarla, dímelo.',
     pauseExpiredPaused: 'Eso ya no lo tengo pendiente. La búsqueda sigue en pausa; si quieres reactivarla, dímelo.',
     pauseExpiredRunning: 'Eso ya no lo tengo pendiente. Sigo buscando; si quieres pausarla, dímelo.',
+    tapExpired: 'Eso ya no lo tengo a mano. Dime qué necesitas y lo miramos.',
+    alreadyApplied: 'Esa ya la tienes enviada. Si te dicen algo, cuéntamelo.',
+    fillNeedsPrepare: 'Antes tengo que prepararla. ¿Lo hago?',
+    fillMissing: (missing: string[], url: string) =>
+      `Antes de rellenarla me falta: ${missing.join(', ')}. Complétalo en ${url} y vuelve a pedírmelo.`,
   },
   setup: {
     reading: 'Leyendo lo que has compartido…',
@@ -471,7 +482,8 @@ export const es: Dictionary = {
   },
   server: {
     inYourWords: 'En tus palabras',
-    onlyPdfOrText: 'En esta versión solo puedo leer archivos PDF o de texto plano.',
+    onlyPdfOrText: 'Solo puedo leer PDF o archivos de texto. Si tu CV está en otro formato, guárdalo como PDF y súbelo.',
+    wordDocument: 'Es un documento de Word. Guárdalo como PDF (en Word: Archivo → Guardar como → PDF) y súbelo aquí.',
     fileTooLarge: 'Este archivo es demasiado grande para ser un CV. Prueba con el PDF que exportas desde Word o Google Docs.',
     tooManySources: 'Con lo que ya me has dado tengo bastante para conocerte.',
     tooManyToday: 'Has añadido muchas cosas hoy; prueba mañana.',
@@ -480,8 +492,8 @@ export const es: Dictionary = {
     personalDocument: 'Parece un documento personal (un DNI, un pasaporte, un informe médico…). No lo he guardado: amble solo necesita tu CV.',
     machineText:
       'Tu CV lleva texto oculto o instrucciones para sistemas automáticos. Lo he leído sin ese texto, pero así no lo enviaré a empresas: sus filtros suelen detectarlo y descartarlo. Si subes una versión sin él, la usaré.',
-    noTextInFile: 'No he podido leer texto de este archivo. Puede que sea un documento escaneado.',
-    notEnoughText: 'No he encontrado suficiente texto legible en este documento. Si está escaneado, prueba con un PDF con texto o una exportación en texto plano.',
+    noTextInFile: 'No he podido leer texto de este archivo: puede que sea un escaneo o una foto. Sube el PDF que exportas desde Word, Google Docs o LinkedIn.',
+    notEnoughText: 'Apenas encuentro texto en este archivo: puede que sea un escaneo o una foto. Sube el PDF que exportas desde Word, Google Docs o LinkedIn.',
     websiteUnreadableDetail: (why: string) => `No he podido leer esta web (${why}). Tu Rep solo ha guardado la URL.`,
     websiteUnreadable: 'No he podido leer esta web. La URL está guardada, pero no he podido leer su texto.',
     websiteEmpty: 'La página ha cargado pero casi no tenía texto legible.',

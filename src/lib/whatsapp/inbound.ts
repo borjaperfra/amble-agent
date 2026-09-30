@@ -12,9 +12,10 @@ import { answerMessage } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
-import { appUrl, handleAwaitedText, handleOfferTap, parseOfferPayload, sendDueOffers } from './offers'
+import { appUrl, awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settleAwaitedReason } from './offers'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
+import { isMaliciousLink } from '../net/reputation'
 import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
 
 // One event from the provider's webhook. Each is handled once (they retry
@@ -98,7 +99,8 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   if (followupTap) {
     logMessage(candidate.id, 'in', text)
     const thanks = answerFollowup(candidate.id, followupTap)
-    if (thanks) await reply(thanks)
+    // A question amble no longer has: said, not left unanswered.
+    await reply(thanks ?? w.tapExpired)
     return
   }
   const preferenceTap = parsePreferencePayload(interactiveId)
@@ -148,10 +150,9 @@ async function answerWords(
   chat: { config: ZernioConfig; conversationId: string; messageId: string | null },
 ): Promise<void> {
   let text = message
-  if (await handleAwaitedText(candidate.id, text, reply)) {
-    logMessage(candidate.id, 'in', text)
-    return
-  }
+  // Right after a "doesn't fit", amble waits to hear why; the agent tells
+  // the reason from anything else they write.
+  const awaited = awaitedReason(candidate.id)
 
   // A person writes a message now and then; a flood is not a conversation.
   if (overLimit(candidate.id)) {
@@ -168,6 +169,7 @@ async function answerWords(
   if (link) {
     const raw = await readSharedLink(link).catch(() => null)
     if (raw) {
+      if (awaited) settleAwaitedReason(candidate.id, awaited.matchId, null)
       logMessage(candidate.id, 'in', text)
       await reply(w.sharedReading)
       const verdict = await judgeShared(candidate.id, raw).catch(() => null)
@@ -179,8 +181,11 @@ async function answerWords(
       await reply(shown.text, shown.buttons)
       return
     }
-    // Not readable (a page behind a sign-in, for one): the agent asks for the text.
-    text = `${text}\n\n(amble could not read that link.)`
+    // Not readable (a page behind a sign-in, for one): the agent asks for the
+    // text. One known to spread malware was never opened, and they hear why.
+    text = (await isMaliciousLink(link).catch(() => false))
+      ? `${text}\n\n(amble did not open that link: it is on a public list of links known to spread malware.)`
+      : `${text}\n\n(amble could not read that link.)`
   }
   const typingTimer = setInterval(typing, TYPING_EVERY_MS)
   // The line saying it is on its way goes only if the answer is slow, and
@@ -200,10 +205,12 @@ async function answerWords(
     await reply(w.agentFailed)
     return
   }
+  if (awaited) settleAwaitedReason(candidate.id, awaited.matchId, answer.reasonItDoesNotFit)
   let buttons = answer.intent === 'preferences' && answer.preference ? proposePreference(candidate.id, answer.preference) : undefined
   // A pasted offer: judged after the agent's line that it is reading it.
   if (answer.action?.type === 'evaluate_posting') {
-    await reply(answer.reply)
+    // One line that it is reading it: the verdict says the rest, once.
+    await reply(w.sharedReading)
     const verdict = await judgeShared(candidate.id, pastedOffer(text, answer.action.company, answer.action.title)).catch(() => null)
     const shown = verdict ? presentVerdict(verdict, w) : { text: w.agentFailed, buttons: undefined }
     await reply(shown.text, shown.buttons)

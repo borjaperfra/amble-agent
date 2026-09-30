@@ -1,6 +1,6 @@
 import { canFillForm, fillApplication } from '../apply/browser'
 import { cloudBrowserConfigured } from '../apply/cloud'
-import { prepareApplication } from '../apply/prepare'
+import { getPreparedApplication, prepareApplication } from '../apply/prepare'
 import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
 import { getMatch, listMatchesForKey, respondToMatch, type MatchListing, type MatchRow } from '../db/matching'
@@ -196,7 +196,7 @@ export function parseOfferPayload(value: string | null): OfferTap | null {
   if (offer) return { kind: 'offer', matchId: offer[1], answer: offer[2] as 'interested' | 'not_fit' | 'more' }
   const apply = value?.match(/^ap:([\w-]+):(yes|no)$/)
   if (apply) return { kind: 'apply', matchId: apply[1], answer: apply[2] as 'yes' | 'no' }
-  const fill = value?.match(/^af:([w-]+):(yes|no)$/)
+  const fill = value?.match(/^af:([\w-]+):(yes|no)$/)
   if (fill) return { kind: 'fill', matchId: fill[1], answer: fill[2] as 'yes' | 'no' }
   return null
 }
@@ -235,9 +235,13 @@ function answered(candidateId: string, matchId: string, answer: string): void {
 type Reply = (text: string, buttons?: { title: string; payload: string }[]) => Promise<unknown>
 
 export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: Reply): Promise<void> {
-  const match = getMatch(tap.matchId)
-  if (!match || match.candidate_id !== candidateId) return
   const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
+  const match = getMatch(tap.matchId)
+  // A button from an offer amble no longer has: said, not left unanswered.
+  if (!match || match.candidate_id !== candidateId) {
+    await reply(w.tapExpired)
+    return
+  }
   const explanation = JSON.parse(match.explanation) as Explanation
 
   if (tap.kind === 'offer' && tap.answer === 'interested') {
@@ -278,6 +282,16 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     await reply(w.applyLater(appUrl(candidateId, '/opportunities?tab=wanted')))
     return
   }
+  // Sent already (an older button pressed later): nothing to prepare.
+  const applied = (
+    getDb().prepare('SELECT progress FROM opportunity_decisions WHERE candidate_id = ? AND opportunity_id = ?').get(candidateId, match.opportunity_id) as
+      | { progress: string | null }
+      | undefined
+  )?.progress === 'applied'
+  if (tap.kind === 'apply' && tap.answer === 'yes' && applied) {
+    await reply(w.alreadyApplied)
+    return
+  }
   if (tap.kind === 'apply' && tap.answer === 'yes') {
     await reply(w.applyWorking)
     try {
@@ -295,15 +309,38 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     } catch {
       await reply(w.applyFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
     }
+    return
   }
   if (tap.kind === 'fill' && tap.answer === 'no') {
     await reply(w.applyLater(appUrl(candidateId, '/opportunities?tab=wanted')))
     return
   }
   if (tap.kind === 'fill' && tap.answer === 'yes') {
+    const wanted = appUrl(candidateId, '/opportunities?tab=wanted')
+    if (applied) {
+      await reply(w.alreadyApplied)
+      return
+    }
+    // Nothing prepared yet: that comes first.
+    if (!getPreparedApplication(candidateId, match.opportunity_id)) {
+      await reply(w.fillNeedsPrepare, [
+        { title: w.applyButtons.yes, payload: `ap:${match.id}:yes` },
+        { title: w.applyButtons.no, payload: `ap:${match.id}:no` },
+      ])
+      return
+    }
+    // Filled from WhatsApp only in a browser in the cloud, never on the server.
+    if (!cloudBrowserConfigured()) {
+      await reply(w.fillFailed(wanted))
+      return
+    }
     await reply(w.fillWorking)
     try {
       const result = await fillApplication(candidateId, match.opportunity_id, 'whatsapp')
+      if (result.status === 'missing') {
+        await reply(w.fillMissing(result.missing.slice(0, 5), wanted))
+        return
+      }
       if (result.status !== 'filled' || !result.live) {
         await reply(w.fillFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
         return
@@ -316,12 +353,21 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
   }
 }
 
-// Free words right after a "doesn't fit": why, kept on their answer.
-export async function handleAwaitedText(candidateId: string, text: string, reply: Reply): Promise<boolean> {
+// The offer they just said does not fit, while amble waits to hear why.
+export function awaitedReason(candidateId: string): { matchId: string; company: string; title: string } | null {
   const awaiting = awaitingOf(candidateId)
-  if (awaiting?.kind !== 'offer_reason') return false
-  setAwaiting(candidateId, null)
-  respondToMatch(awaiting.matchId, candidateId, 'not_for_me', text.slice(0, 1000))
-  await reply(dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.offerReasonThanks)
-  return true
+  if (awaiting?.kind !== 'offer_reason') return null
+  const row = getDb()
+    .prepare('SELECT o.title, c.name AS company FROM opportunity_matches m JOIN opportunities o ON o.id = m.opportunity_id JOIN companies c ON c.id = o.company_id WHERE m.id = ?')
+    .get(awaiting.matchId) as { title: string; company: string } | undefined
+  return row ? { matchId: awaiting.matchId, company: row.company, title: row.title } : null
+}
+
+// Their words after a "doesn't fit", when they say why (the agent tells
+// that from a question or anything else): kept on their answer. Either way
+// it is no longer awaited: a later message is not taken for the reason.
+export function settleAwaitedReason(candidateId: string, matchId: string, reason: string | null): void {
+  if (reason) respondToMatch(matchId, candidateId, 'not_for_me', reason.slice(0, 1000))
+  const awaiting = awaitingOf(candidateId)
+  if (awaiting?.kind === 'offer_reason' && awaiting.matchId === matchId) setAwaiting(candidateId, null)
 }
