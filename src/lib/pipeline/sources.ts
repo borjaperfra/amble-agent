@@ -183,9 +183,13 @@ export async function createFileSource(
   if (file.size > MAX_PDF_BYTES) return failed(serverText().fileTooLarge)
   const buffer = Buffer.from(await file.arrayBuffer())
   // What it is comes from its bytes; the name and the browser's type only claim it.
-  const isPdf = documentKind(buffer) === 'pdf'
+  const kind = documentKind(buffer)
+  const isPdf = kind === 'pdf'
   const isText = !isPdf && ['.txt', '.md', '.markdown'].includes(extension) && buffer.length <= MAX_TEXT_BYTES && isPlainText(buffer)
-  if (!isPdf && !isText) return failed(serverText().onlyPdfOrText)
+  // A Word file (whatever it is called) is the most common CV there is:
+  // what to do with it, rather than only what is not read.
+  const isWord = kind === 'docx' || ['.doc', '.docx'].includes(extension)
+  if (!isPdf && !isText) return failed(isWord ? serverText().wordDocument : serverText().onlyPdfOrText)
 
   let content = ''
   let hidden = ''
@@ -280,6 +284,9 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
     if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`)
     content = stripHtml(response.body)
   } catch (error) {
+    // Why, for the log; for them, what it means. The network's own words
+    // (ENOTFOUND, a status code) would show wherever the source is listed.
+    console.warn('[sources] website unreadable', hostname, error instanceof Error ? error.message : error)
     insertSource({
       id,
       candidate_id: candidateId,
@@ -291,7 +298,7 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
       stored_path: null,
       char_count: 0,
       status: 'registered',
-      status_detail: serverText().websiteUnreadableDetail(error instanceof Error ? error.message : '?'),
+      status_detail: serverText().websiteUnreadable,
     })
     return {
       id,

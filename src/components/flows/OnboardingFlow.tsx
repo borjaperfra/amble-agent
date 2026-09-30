@@ -14,20 +14,26 @@ interface SourceItem {
   detail: string | null
 }
 
-export default function OnboardingFlow() {
+// Read and usable: just added, or already read into their map.
+const isRead = (source: SourceItem) => source.status === 'extracted' || source.status === 'processed'
+
+export default function OnboardingFlow({ initialSources = [] }: { initialSources?: SourceItem[] }) {
   const router = useRouter()
   const t = useT()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [sources, setSources] = useState<SourceItem[]>([])
+  const [sources, setSources] = useState<SourceItem[]>(initialSources)
   const [githubHandle, setGithubHandle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [busy, setBusy] = useState(false)
   // Which one is being added, to say so where they tapped.
   const [pending, setPending] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Said where they tapped: on a phone, the foot of the page is out of sight.
+  const [error, setError] = useState<{ at: 'file' | 'github' | 'website' | 'linkedin'; text: string } | null>(null)
 
-  const readableCount = sources.filter((source) => source.status === 'extracted').length
+  const readableCount = sources.filter(isRead).length
+  // The same file given twice comes back as the one already there.
+  const keep = (item: SourceItem) => setSources((prev) => [...prev.filter((source) => source.id !== item.id), item])
 
   async function addFile(file: File) {
     setBusy(true)
@@ -39,12 +45,12 @@ export default function OnboardingFlow() {
       const response = await fetch('/api/onboarding/sources', { method: 'POST', body: form })
       const data = (await response.json()) as SourceItem & { error?: string }
       if (!response.ok) {
-        setError(data.error ?? t.onboarding.fileNotStored)
+        setError({ at: 'file', text: data.error ?? t.onboarding.fileNotStored })
         return
       }
-      setSources((prev) => [...prev, data])
+      keep(data)
     } catch {
-      setError(t.onboarding.fileNotUploaded)
+      setError({ at: 'file', text: t.onboarding.fileNotUploaded })
     } finally {
       setBusy(false)
       setPending(null)
@@ -64,13 +70,13 @@ export default function OnboardingFlow() {
       })
       const data = (await response.json()) as SourceItem & { error?: string }
       if (!response.ok) {
-        setError(data.error ?? t.onboarding.urlNotStored)
+        setError({ at: kind, text: data.error ?? t.onboarding.urlNotStored })
         return
       }
-      setSources((prev) => [...prev, data])
+      keep(data)
       reset()
     } catch {
-      setError(t.onboarding.urlNotStored)
+      setError({ at: kind, text: t.onboarding.urlNotStored })
     } finally {
       setBusy(false)
       setPending(null)
@@ -85,12 +91,19 @@ export default function OnboardingFlow() {
         <p className={styles.body}>
           {t.onboarding.body}
         </p>
+        {/* Back here because nothing they shared could be used: why, first. */}
+        {readableCount === 0 && sources.some((source) => source.status === 'rejected') && (
+          <p className={styles.errorNotice} role="status">
+            {t.onboarding.nothingUsable}
+          </p>
+        )}
 
         <div className={styles.sources}>
+          {/* Word files too: whoever picks one is told how to make it a PDF. */}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.txt,.md"
+            accept=".pdf,.txt,.md,.doc,.docx"
             className="visually-hidden"
             aria-label={t.onboarding.cvUploadLabel}
             onChange={(event) => {
@@ -116,15 +129,20 @@ export default function OnboardingFlow() {
               <span className={styles.rowAction}>{t.common.add}</span>
             </span>
           </button>
+          {error?.at === 'file' && (
+            <p className={styles.errorNotice} role="alert">
+              {error.text}
+            </p>
+          )}
 
           {sources.map((source) => (
             <div
               key={source.id}
-              className={`${styles.row} ${source.status === 'extracted' ? styles.rowConnected : ''} ${styles.enter}`}
+              className={`${styles.row} ${isRead(source) ? styles.rowConnected : ''} ${styles.enter}`}
             >
               <span className={styles.rowLabel}>{source.name}</span>
               <span className={styles.rowRight}>
-                {source.status === 'extracted' ? (
+                {isRead(source) ? (
                   <>
                     <span className={styles.rowIdentifier}>{t.onboarding.read}</span>
                     <span className={styles.check} aria-hidden="true">
@@ -135,6 +153,9 @@ export default function OnboardingFlow() {
                   <span className={styles.rowIdentifier}>{source.detail ?? source.status}</span>
                 )}
               </span>
+              {/* Read, with something to know about it: hidden text taken out,
+                  what was read of a GitHub profile. */}
+              {isRead(source) && source.detail && <span className={styles.rowNote}>{source.detail}</span>}
             </div>
           ))}
 
@@ -163,6 +184,11 @@ export default function OnboardingFlow() {
               </button>
             </span>
           </div>
+          {error?.at === 'github' && (
+            <p className={styles.errorNotice} role="alert">
+              {error.text}
+            </p>
+          )}
 
           <div className={`${styles.row} ${styles.enter}`}>
             <span className={styles.rowLabel}>LinkedIn</span>
@@ -191,17 +217,16 @@ export default function OnboardingFlow() {
               </button>
             </span>
           </div>
+          {error?.at === 'website' && (
+            <p className={styles.errorNotice} role="alert">
+              {error.text}
+            </p>
+          )}
         </div>
 
         <p className={styles.notice}>
           {t.onboarding.notice}
         </p>
-
-        {error && (
-          <p className={styles.errorNotice} role="alert">
-            {error}
-          </p>
-        )}
 
         <div className={styles.footer}>
           <button
@@ -216,7 +241,9 @@ export default function OnboardingFlow() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ stage: 'start' }),
               }).catch(() => undefined)
-              router.push('/me/intent')
+              // The next step they have not taken: what they are looking for
+              // the first time; the questions when they come back to add a CV.
+              router.push('/start')
             }}
           >
             {leaving ? t.onboarding.starting : t.common.continue}

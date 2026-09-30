@@ -235,7 +235,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 {paused ? t.listening.pause.status : t.listening.listeningOffers}
               </p>
               <h1 className={styles.title} id="listening-title">
-                {paused ? t.listening.pause.title : found ? t.opportunities.foundTitle : quietLines[headline]}
+                {paused ? t.listening.pause.title : found ? t.opportunities.foundTitle : vm.firstReading ? t.listening.firstReadingTitle : quietLines[headline]}
               </h1>
               <p className={styles.line} role="status">
                 {note === 'failed'
@@ -358,7 +358,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                   </Link>
                 </>
               ) : (
-                <p className={styles.weekEmpty}>{paused ? t.listening.pause.line : t.listening.weekEmpty}</p>
+                <p className={styles.weekEmpty}>{paused ? t.listening.pause.line : vm.firstReading ? t.listening.weekFirstReading : t.listening.weekEmpty}</p>
               )}
             </section>
 

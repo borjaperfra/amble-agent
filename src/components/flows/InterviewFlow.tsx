@@ -9,6 +9,7 @@ import StatusDot from '@/components/StatusDot'
 import VoiceButton from '@/components/VoiceButton'
 import { useT } from '@/components/I18nProvider'
 import { EvaluationControl } from './EvaluationControl'
+import { useDraft } from './useDraft'
 import type { SetupProgress } from '@/lib/pipeline/setup'
 import styles from '@/app/onboarding/interview/interview.module.css'
 
@@ -38,7 +39,8 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
   const [current, setCurrent] = useState<NextQuestion | null>(null)
   const [step, setStep] = useState(firstStep)
   const [progress, setProgress] = useState<SetupProgress | null>(null)
-  const [answer, setAnswer] = useState('')
+  // Kept as they type, per question: a reload does not take away an answer.
+  const [answer, setAnswer] = useDraft(current?.turnId ? `answer:${current.turnId}` : null)
   const [showWhy, setShowWhy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -61,7 +63,6 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
         return
       }
       setCurrent(next)
-      setAnswer('')
       setShowWhy(false)
       setError(null)
       setPhase('ask')
@@ -126,6 +127,8 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
         setPhase('ask')
         return
       }
+      // Kept for real: the draft of it goes.
+      setAnswer('')
       setStep((value) => Math.min(value + 1, steps))
       // Kept. If the next question did not come with it, it is asked for.
       if (data.next) show(data.next)

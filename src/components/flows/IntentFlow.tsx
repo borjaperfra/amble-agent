@@ -7,6 +7,7 @@ import InlineEdit from '@/components/InlineEdit'
 import StatusDot from '@/components/StatusDot'
 import VoiceButton from '@/components/VoiceButton'
 import { useT } from '@/components/I18nProvider'
+import { useDraft } from './useDraft'
 import styles from '@/app/me/intent/intent.module.css'
 
 interface IntentGroup {
@@ -29,7 +30,8 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
   const router = useRouter()
   const t = useT()
   const [phase, setPhase] = useState<Phase>('ask')
-  const [answer, setAnswer] = useState('')
+  // Kept as they type: a reload does not take away what they wrote.
+  const [answer, setAnswer, clearDraft] = useDraft('intent')
   const [result, setResult] = useState<IntentResponse | null>(null)
   const [editedGroups, setEditedGroups] = useState<IntentGroup[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +88,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
         return
       }
     }
+    clearDraft()
     router.push('/start')
   }
 
@@ -164,9 +167,13 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
         <div className={styles.reveal}>
           <h1 className={styles.revealLead}>{t.intent.revealLead}</h1>
           {result && !result.structured && (
-            <p className={styles.hint}>
-              {t.intent.unstructured}
-            </p>
+            <>
+              <p className={styles.hint}>{t.intent.unstructured}</p>
+              {/* Their words are still in the box: the same answer, read again. */}
+              <button type="button" className="text-btn" disabled={confirming} onClick={() => void submit()}>
+                {t.intent.retryReading}
+              </button>
+            </>
           )}
         </div>
 
