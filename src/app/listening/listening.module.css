@@ -395,6 +395,7 @@
   margin-left: auto;
   color: var(--ink-secondary);
   text-underline-offset: 3px;
+  padding: 12px 0;
 }
 
 .repLink:hover {
@@ -439,6 +440,24 @@
     gap: 6px;
   }
 
+  /* In a column the zero width above would hide the title: full width. */
+  .row .rowMain {
+    flex: none;
+    width: 100%;
+  }
+
+  /* What passed keeps its tick beside the title. */
+  .rowFound {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .rowFound .rowMain {
+    flex: 1 1 0;
+    width: 0;
+  }
+
   .rowReason {
     max-width: none;
     text-align: left;
@@ -465,4 +484,15 @@
   border-radius: 12px;
   background: var(--paper-light);
   color: var(--ink);
+}
+
+/* One card, not a card in a card; centred like everything on the moss. */
+.whatsapp > section {
+  margin-bottom: 0;
+  padding: 24px 20px;
+  border: none;
+}
+
+.whatsapp > section > div {
+  justify-content: center;
 }

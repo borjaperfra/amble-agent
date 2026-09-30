@@ -55,3 +55,20 @@
   color: var(--moss-dark);
   white-space: nowrap;
 }
+
+.row :global(.text-btn) {
+  flex: none;
+  white-space: nowrap;
+  color: var(--moss-dark);
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding-top: 16px;
+  }
+
+  .title {
+    margin-top: 24px;
+  }
+}

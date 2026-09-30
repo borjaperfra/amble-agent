@@ -23,7 +23,8 @@
 
 .privacy {
   display: inline-block;
-  margin-top: 16px;
+  margin-top: 6px;
+  padding: 10px 0;
   color: var(--ink-secondary);
 }
 
@@ -68,4 +69,15 @@
 .error {
   margin-top: 12px;
   color: var(--danger, #9b3b2f);
+}
+
+/* On a phone, the same air above the title as the other pages. */
+@media (max-width: 640px) {
+  .page {
+    padding-top: 16px;
+  }
+
+  .title {
+    margin-top: 24px;
+  }
 }

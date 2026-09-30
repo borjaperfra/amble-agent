@@ -34,6 +34,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
   const [editedGroups, setEditedGroups] = useState<IntentGroup[]>([])
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   // The groups come with fixed English labels; they are shown in their language.
   const labelOf = (label: string) => (t.intent.labels as Record<string, string>)[label] ?? label
 
@@ -63,6 +64,8 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
   }
 
   async function confirm() {
+    setConfirming(true)
+    setError(null)
     try {
       window.sessionStorage.setItem('amble-listening-activated', '1')
     } catch {
@@ -79,6 +82,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
       } catch {
         // Not confirmed: they stay here, with what they wrote, to try again.
         setError(t.intent.confirmFailed)
+        setConfirming(false)
         return
       }
     }
@@ -143,7 +147,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
             </div>
 
             {error && (
-              <p className={styles.hint} role="alert">
+              <p className={styles.error} role="alert">
                 {error}
               </p>
             )}
@@ -193,9 +197,14 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
         <div className={styles.confirm}>
           <p className={styles.confirmQuestion}>{t.intent.confirmQuestion}</p>
           <div className={styles.confirmActions}>
-            <button type="button" className="btn" onClick={() => void confirm()}>
-              {t.intent.confirm}
+            <button type="button" className="btn" disabled={confirming} onClick={() => void confirm()}>
+              {confirming ? t.intent.confirming : t.intent.confirm}
             </button>
+            {error && (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            )}
             <button
               type="button"
               className="text-btn"

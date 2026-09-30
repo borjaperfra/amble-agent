@@ -856,3 +856,17 @@
   align-items: center;
   gap: 12px;
 }
+
+/* On a phone the four tabs sit in an even grid, not a ragged wrap. */
+@media (max-width: 560px) {
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-self: stretch;
+  }
+
+  .tab {
+    justify-content: center;
+    height: 44px;
+  }
+}

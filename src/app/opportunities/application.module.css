@@ -269,9 +269,10 @@
 }
 
 .copy {
-  padding: 4px 10px;
+  min-height: 44px;
+  padding: 0 16px;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-secondary);
   background: var(--paper-light);

@@ -44,7 +44,7 @@
   font-size: var(--text-body-sm);
   color: var(--ink-secondary);
   text-decoration: none;
-  padding: 8px 2px;
+  padding: 12px 2px;
   border-radius: var(--radius-sm);
   transition: color var(--motion-fast) ease;
 }

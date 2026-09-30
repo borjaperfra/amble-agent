@@ -22,12 +22,16 @@ export default function OnboardingFlow() {
   const [githubHandle, setGithubHandle] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [busy, setBusy] = useState(false)
+  // Which one is being added, to say so where they tapped.
+  const [pending, setPending] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const readableCount = sources.filter((source) => source.status === 'extracted').length
 
   async function addFile(file: File) {
     setBusy(true)
+    setPending('file')
     setError(null)
     try {
       const form = new FormData()
@@ -43,12 +47,14 @@ export default function OnboardingFlow() {
       setError(t.onboarding.fileNotUploaded)
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }
 
   async function addUrl(kind: 'linkedin' | 'github' | 'website', url: string, reset: () => void) {
     if (!url.trim()) return
     setBusy(true)
+    setPending(kind)
     setError(null)
     try {
       const response = await fetch('/api/onboarding/sources', {
@@ -67,6 +73,7 @@ export default function OnboardingFlow() {
       setError(t.onboarding.urlNotStored)
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }
 
@@ -102,7 +109,7 @@ export default function OnboardingFlow() {
             <span className={styles.fileDropMain}>
               <span className={styles.fileDropLabel}>{t.onboarding.cv}</span>
               <span className={styles.fileDropHint}>
-                {busy ? t.onboarding.reading : t.onboarding.uploadHint}
+                {pending === 'file' ? t.onboarding.reading : t.onboarding.uploadHint}
               </span>
             </span>
             <span className={styles.rowRight}>
@@ -152,7 +159,7 @@ export default function OnboardingFlow() {
                   addUrl('github', url, () => setGithubHandle(''))
                 }}
               >
-                {t.common.add}
+                {pending === 'github' ? t.onboarding.reading : t.common.add}
               </button>
             </span>
           </div>
@@ -180,7 +187,7 @@ export default function OnboardingFlow() {
                 disabled={busy || !websiteUrl.trim()}
                 onClick={() => addUrl('website', websiteUrl, () => setWebsiteUrl(''))}
               >
-                {t.common.add}
+                {pending === 'website' ? t.onboarding.reading : t.common.add}
               </button>
             </span>
           </div>
@@ -199,9 +206,10 @@ export default function OnboardingFlow() {
         <div className={styles.footer}>
           <button
             type="button"
-            className="btn"
-            disabled={readableCount === 0 || busy}
+            className={`btn ${styles.continue}`}
+            disabled={readableCount === 0 || busy || leaving}
             onClick={async () => {
+              setLeaving(true)
               // Reading starts now, in the background; meanwhile, what they are looking for.
               await fetch('/api/onboarding/process', {
                 method: 'POST',
@@ -211,8 +219,10 @@ export default function OnboardingFlow() {
               router.push('/me/intent')
             }}
           >
-            {t.common.continue}
+            {leaving ? t.onboarding.starting : t.common.continue}
           </button>
+          {/* Why it cannot be pressed yet, where they are looking. */}
+          {readableCount === 0 && !busy && <p className={styles.continueHint}>{t.onboarding.continueHint}</p>}
         </div>
       </main>
     </>

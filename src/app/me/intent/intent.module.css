@@ -119,6 +119,13 @@
   max-width: 44ch;
 }
 
+.error {
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--clay);
+  max-width: 44ch;
+}
+
 @keyframes enter {
   from {
     opacity: 0;
