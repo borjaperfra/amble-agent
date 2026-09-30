@@ -1,4 +1,5 @@
 import { requireCandidate } from '@/lib/auth/session'
+import { getRevealedPreference, listOfferProbes } from '@/lib/db/repo'
 import { isRereading, startFirstRead } from '@/lib/matching/run'
 import { isSearchPaused } from '@/lib/pause'
 import { getListeningViewModel } from '@/lib/view'
@@ -7,6 +8,24 @@ import { zernioConfig } from '@/lib/whatsapp/zernio'
 import ListeningFlow from '@/components/flows/ListeningFlow'
 
 export const dynamic = 'force-dynamic'
+
+// Why a rule is believed names the sample offers it came from by number:
+// their titles, by rule, so the page can name them instead.
+function offerTitles(ids: string[]): Record<string, Record<number, string>> {
+  const byTriage = new Map<string, Record<number, string>>()
+  const titles: Record<string, Record<number, string>> = {}
+  for (const id of ids) {
+    const preference = getRevealedPreference(id)
+    if (!preference) continue
+    let probes = byTriage.get(preference.triage_id)
+    if (!probes) {
+      probes = Object.fromEntries(listOfferProbes(preference.triage_id).map((probe) => [probe.idx + 1, probe.title]))
+      byTriage.set(preference.triage_id, probes)
+    }
+    titles[id] = probes
+  }
+  return titles
+}
 
 export default async function ListeningPage() {
   const candidate = await requireCandidate()
@@ -18,5 +37,8 @@ export default async function ListeningPage() {
   // Paused until they resume it; or reading again after a change to their rules.
   const paused = isSearchPaused(candidate.id)
   const rereading = !paused && isRereading(candidate.id)
-  return <ListeningFlow vm={{ ...getListeningViewModel(candidate.id), firstReading, rereading, paused, whatsapp }} />
+  const vm = getListeningViewModel(candidate.id)
+  const { wontConsider, weighs, money } = vm.revealed.rules
+  const titles = offerTitles([...wontConsider, ...weighs, ...money].filter((item) => item.evidence).map((item) => item.id))
+  return <ListeningFlow vm={{ ...vm, firstReading, rereading, paused, whatsapp, offerTitles: titles }} />
 }

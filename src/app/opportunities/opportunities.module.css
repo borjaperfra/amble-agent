@@ -118,6 +118,70 @@
   color: var(--clay);
 }
 
+/* Judged before their latest change of rules: said quietly, as a tag. */
+.staleTag {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 8px;
+  font-size: var(--text-label);
+  line-height: 1.45;
+  color: var(--ink-tertiary);
+  background: var(--paper-dark);
+  border-radius: 4px;
+}
+
+.discardedItem .staleTag {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* A phone only: the offer's two answers at the foot of the screen while the
+   long card is read (useDecisionBar). Above the safe area, on paper. */
+.decisionBar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .decisionBar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--paper-light);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px rgb(37 37 31 / 0.06);
+    animation: barUp var(--motion-default) var(--ease-standard) both;
+  }
+
+  .decisionBar :global(.btn) {
+    flex: 1;
+    height: 48px;
+  }
+
+  .decisionBarOther {
+    flex: none;
+    min-height: 48px;
+    padding: 0 4px;
+  }
+}
+
+@keyframes barUp {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decisionBar {
+    animation: none;
+  }
+}
+
 .summary {
   font-size: var(--text-body-lg);
   line-height: 1.6;
@@ -888,6 +952,20 @@
   max-width: 56ch;
 }
 
+/* Only the button, under a line that already says why (/me, what is still unknown). */
+.whatsappCompact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.whatsappCompact .whatsappLead {
+  margin-top: 0;
+  font-size: var(--text-body-sm);
+}
+
 .whatsappActions {
   margin-top: 14px;
   display: flex;
@@ -908,4 +986,11 @@
     justify-content: center;
     height: 44px;
   }
+}
+
+.asideMore {
+  margin-top: 16px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--border);
 }

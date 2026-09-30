@@ -230,6 +230,14 @@
   text-align: center;
 }
 
+/* Not linked yet: the line, and the way to link it right under it. */
+.gapsConnect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
 /* WhatsApp brings its own card. */
 .nextPlain {
   margin: 24px 0 8px;
@@ -329,4 +337,12 @@
   .searchPulse {
     animation: none;
   }
+}
+
+/* Nothing demonstrated yet: the honest sentence, and where to go from it. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
 }

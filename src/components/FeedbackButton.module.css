@@ -10,6 +10,10 @@
 }
 
 .trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 44px;
   padding: 0 14px;
   font: inherit;
@@ -114,11 +118,47 @@
   }
 }
 
-/* On a phone it keeps to the corner and the page leaves room for it
-   (globals.css), so it never covers a button. */
+
+.icon {
+  flex: none;
+}
+
+/* On a phone it keeps to the corner, only its icon, and the page leaves room
+   for it (globals.css), so it never covers a button, a field or a line. The
+   word stays for screen readers, and the menu has it too. */
 @media (max-width: 640px) {
   .wrap {
     right: 12px;
-    bottom: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .trigger {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    color: var(--ink-tertiary);
+  }
+
+  /* Smaller to the eye, not to the thumb. */
+  .trigger::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* While an offer's decision bar is at the foot of the screen, it sits above it. */
+  :global(body[data-decision-bar]) .wrap {
+    bottom: calc(84px + env(safe-area-inset-bottom));
   }
 }

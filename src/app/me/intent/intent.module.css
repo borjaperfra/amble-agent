@@ -197,3 +197,8 @@
   min-width: 140px;
   min-height: 48px;
 }
+
+.current {
+  margin-top: 8px;
+  font-size: var(--text-body-sm);
+}

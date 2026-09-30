@@ -197,7 +197,9 @@
 .groupItems {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* The space between rules is each rule's own padding: a rule that opens
+     on a tap is then tall enough for a finger. */
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -207,6 +209,7 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
+  padding-block: 6px;
   font-size: var(--text-body);
   line-height: 1.45;
 }
@@ -316,6 +319,20 @@
   color: var(--ink);
   background: var(--paper-light);
   border-color: var(--paper-light);
+}
+
+/* What they are looking for, and what they taught it: side by side, or one
+   above the other on a phone. */
+.changes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+.changes .change {
+  margin-top: 0;
 }
 
 /* This week, on paper. */

@@ -7,6 +7,7 @@ import Symbol from '@/components/Symbol'
 import StatusDot from '@/components/StatusDot'
 import { useI18n } from '@/components/I18nProvider'
 import { postJson, requestJson } from '@/components/api'
+import { nameOffers, quoteTitle } from '@/components/offerNames'
 import type { Locale } from '@/lib/i18n/locale'
 import styles from '@/app/me/triage/triage.module.css'
 
@@ -368,10 +369,13 @@ export default function TriageFlow({ initial }: { initial: Triage | null }) {
 }
 
 // The rule stands on its own; how it was learned is there for whoever asks.
-function Why({ preference }: { preference: Preference }) {
-  const { t } = useI18n()
-  const { evidence, declared, quote, evidenceProbeNumbers, originalStatement } = preference
-  if (!evidence && !declared && !quote && evidenceProbeNumbers.length === 0 && !originalStatement) return null
+// The sample offers it came from are named by their title, not their number.
+function Why({ preference, titles }: { preference: Preference; titles: Record<number, string> }) {
+  const { locale, t } = useI18n()
+  const { declared, quote, originalStatement } = preference
+  const evidence = preference.evidence ? nameOffers(preference.evidence, titles, quoteTitle[locale]) : null
+  const offers = preference.evidenceProbeNumbers.map((n) => titles[n]).filter((title): title is string => Boolean(title))
+  if (!evidence && !declared && !quote && offers.length === 0 && !originalStatement) return null
   return (
     <details className={styles.why}>
       <summary className={styles.whySummary}>{t.triage.why}</summary>
@@ -379,7 +383,7 @@ function Why({ preference }: { preference: Preference }) {
         {evidence && <p className={styles.whyText}>{evidence}</p>}
         {quote && <blockquote className={styles.quote}>&ldquo;{quote}&rdquo;</blockquote>}
         {declared && <p className={styles.meta}>{t.triage.youdSaid(declared)}</p>}
-        {evidenceProbeNumbers.length > 0 && <p className={styles.meta}>{t.triage.fromOffers(evidenceProbeNumbers)}</p>}
+        {offers.length > 0 && <p className={styles.meta}>{t.triage.fromOffers(offers)}</p>}
         {originalStatement && <p className={styles.meta}>{t.triage.correctedByYou(originalStatement)}</p>}
       </div>
     </details>
@@ -400,6 +404,7 @@ function Result({
   const { locale, t } = useI18n()
   const salaryFormat = salaryFormats[locale]
   const pending = triage.preferences.filter((p) => p.status === 'proposed').length
+  const titles = Object.fromEntries(triage.probes.map((probe) => [probe.number, probe.title]))
 
   return (
     <div className={styles.result}>
@@ -428,7 +433,7 @@ function Result({
                   <p className={styles.notice}>{t.triage.neverInherit}</p>
                 )}
                 {preference.addedByYou && <p className={styles.meta}>{t.triage.addedByYou}</p>}
-                <Why preference={preference} />
+                <Why preference={preference} titles={titles} />
                 <div className={styles.decision} role="group" aria-label={t.triage.isThisRight}>
                   <button
                     type="button"

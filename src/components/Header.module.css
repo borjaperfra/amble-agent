@@ -85,6 +85,18 @@
   color: var(--ink);
 }
 
+/* What a page puts in the bar (Save and leave) reads as part of the bar:
+   the same size, no underline. */
+.right :global(.text-btn) {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  text-decoration: none;
+}
+
+.right :global(.text-btn):hover {
+  color: var(--ink);
+}
+
 .inner nav + .right {
   margin-left: 24px;
 }

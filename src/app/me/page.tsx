@@ -26,5 +26,15 @@ export default async function MapPage() {
   // Anything on the profile still written the old way is rewritten for them,
   // without making them wait: the next visit shows it.
   after(() => rewriteExplanationsInBackground(candidate.id))
-  return <MapView vm={getMapViewModel(candidate.id, await serverLocale())} next={mapNextStep(candidate.id, nextStep(candidate))} owner={candidate.role === 'owner'} paused={isSearchPaused(candidate.id)} />
+  // What is still unknown is asked on WhatsApp: only once it is linked.
+  const whatsapp = { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null }
+  return (
+    <MapView
+      vm={getMapViewModel(candidate.id, await serverLocale())}
+      next={mapNextStep(candidate.id, nextStep(candidate))}
+      owner={candidate.role === 'owner'}
+      paused={isSearchPaused(candidate.id)}
+      whatsapp={whatsapp}
+    />
+  )
 }

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useI18n } from './I18nProvider'
 import { postJson } from './api'
+import { OPEN_FEEDBACK } from './FeedbackButton'
 import Symbol from './Symbol'
 import styles from './Header.module.css'
 
@@ -14,23 +15,24 @@ interface HeaderProps {
   right?: React.ReactNode
   // A page that asks for the language itself (/welcome) has no second switch.
   language?: boolean
+  // A step of the setup keeps to itself: no sections to wander off to.
+  nav?: boolean
 }
 
 // On a wide screen, the sections in a row; on a phone, behind a menu button,
 // so nothing wraps or pushes the page sideways. What a page puts on the right
 // (Save and leave) always stays in the bar.
-export default function Header({ right, language = true }: HeaderProps) {
+export default function Header({ right, language = true, nav = true }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { locale, t } = useI18n()
   const [switching, setSwitching] = useState(false)
   const [open, setOpen] = useState(false)
-  const showNav = navRoutes.includes(pathname)
+  const showNav = nav && navRoutes.includes(pathname)
 
   const navItems = [
     { href: '/listening', label: t.header.rep },
     { href: '/me', label: t.header.map },
-    { href: '/me/intent', label: t.header.listeningFor },
     { href: '/opportunities', label: t.opportunities.nav },
     { href: '/invites', label: t.invites.nav },
     { href: '/me/data', label: t.header.data },
@@ -137,6 +139,17 @@ export default function Header({ right, language = true }: HeaderProps) {
             ))}
           </nav>
           <div className={styles.menuFoot}>
+            {/* The same window as the button in the corner. */}
+            <button
+              type="button"
+              className={styles.menuLink}
+              onClick={() => {
+                setOpen(false)
+                window.dispatchEvent(new Event(OPEN_FEEDBACK))
+              }}
+            >
+              {t.feedback.button}
+            </button>
             {language && languageButton(styles.menuLink)}
             <button type="button" className={styles.menuLink} onClick={() => void signOut()}>
               {t.login.signOut}

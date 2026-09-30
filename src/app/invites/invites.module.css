@@ -38,9 +38,12 @@
 }
 
 .link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-body-sm);
-  color: var(--ink);
-  overflow-wrap: anywhere;
+  color: var(--ink-secondary);
   user-select: all;
 }
 

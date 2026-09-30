@@ -10,7 +10,8 @@ const LOOK_MS = 4000
 
 // Linking WhatsApp: a link opens it with the message written, they send it,
 // and the page sees it arrive. Linked, amble asks there how applications go.
-export default function WhatsAppConnect({ linked: initiallyLinked }: { linked: boolean }) {
+// Compact: only the button and what happens, under a line that already said why.
+export default function WhatsAppConnect({ linked: initiallyLinked, compact = false }: { linked: boolean; compact?: boolean }) {
   const w = useT().whatsapp
   const [linked, setLinked] = useState(initiallyLinked)
   const [waiting, setWaiting] = useState(false)
@@ -52,6 +53,27 @@ export default function WhatsAppConnect({ linked: initiallyLinked }: { linked: b
       opened.location.href = result.url
     } else window.location.href = result.url
     setWaiting(true)
+  }
+
+  if (compact) {
+    return (
+      <div className={styles.whatsappCompact}>
+        {linked || waiting ? (
+          <p className={styles.whatsappLead} aria-live="polite">
+            {linked ? w.connected : w.connectWaiting}
+          </p>
+        ) : (
+          <button type="button" className="btn" onClick={() => void connect()}>
+            {w.connect}
+          </button>
+        )}
+        {failed && (
+          <p className={styles.error} role="alert">
+            {w.unavailable}
+          </p>
+        )}
+      </div>
+    )
   }
 
   return (

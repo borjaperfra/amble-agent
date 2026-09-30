@@ -29,7 +29,6 @@ export default function SetupProgressView({ progress }: { progress: SetupProgres
       <div className={styles.bar} aria-hidden="true">
         <span style={{ width: `${Math.round(share(progress) * 100)}%` }} />
       </div>
-      <p className={styles.hint}>{p.hint}</p>
 
       {progress.found.length > 0 && (
         <div className={styles.block}>

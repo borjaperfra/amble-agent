@@ -22,6 +22,8 @@ interface MapViewProps {
   owner: boolean
   // They paused the search until further notice.
   paused: boolean
+  // Whether WhatsApp can be linked, and is: what is still unknown is asked there.
+  whatsapp: { available: boolean; linked: boolean }
 }
 
 const NEXT_HREF: Record<'sources' | 'intent' | 'questions', string> = {
@@ -33,7 +35,7 @@ const NEXT_HREF: Record<'sources' | 'intent' | 'questions', string> = {
 // The gaps worth their time, not every one of them.
 const GAPS_SHOWN = 3
 
-export default function MapView({ vm, next, owner, paused: initiallyPaused }: MapViewProps) {
+export default function MapView({ vm, next, owner, paused: initiallyPaused, whatsapp }: MapViewProps) {
   const t = useT()
   const [openCapability, setOpenCapability] = useState<Capability | null>(null)
   const { paused, switching, note, toggle } = useSearchPause(initiallyPaused)
@@ -77,7 +79,7 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused }: Ma
               {searchLine}
             </p>
             {paused ? (
-              <button type="button" className="btn" onClick={toggle} disabled={switching}>
+              <button type="button" className={next.kind === 'done' ? 'btn' : 'btn btn-quiet'} onClick={toggle} disabled={switching}>
                 {t.listening.pause.resume}
               </button>
             ) : (
@@ -135,11 +137,15 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused }: Ma
               ))}
             </div>
           ) : (
-            <p className={styles.headline}>
-              {vm.counts.sources === 0
-                ? t.map.emptyNoSources
-                : t.map.emptyWithSources}
-            </p>
+            <div className={styles.empty}>
+              <p className={styles.headline}>{vm.counts.sources === 0 ? t.map.emptyNoSources : t.map.emptyWithSources}</p>
+              {/* Somewhere to go from here: sharing more, unless that is already the next step above. */}
+              {next.kind !== 'sources' && (
+                <Link href="/onboarding" className="text-btn">
+                  {t.map.next.sources.action}
+                </Link>
+              )}
+            </div>
           )}
         </section>
 
@@ -188,25 +194,42 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused }: Ma
                 </article>
               ))}
             </div>
-            <p className={styles.gapsNote}>{t.map.gapsLater}</p>
+            {whatsapp.linked ? (
+              <p className={styles.gapsNote}>{t.map.gapsLater}</p>
+            ) : (
+              whatsapp.available && (
+                <div className={styles.gapsConnect}>
+                  <p className={styles.gapsNote}>{t.map.gapsConnect}</p>
+                  {/* Already offered as the next step at the top: taken there, not twice. */}
+                  {next.kind === 'whatsapp' ? (
+                    <a href="#next-step" className="text-btn">
+                      {t.map.gapsConnectAction}
+                    </a>
+                  ) : (
+                    <WhatsAppConnect linked={false} compact />
+                  )}
+                </div>
+              )
+            )}
           </section>
         )}
 
-        <section className={styles.outro} aria-labelledby="outro">
-          <p id="outro" className="kicker">
-            {t.map.oneMore}
-          </p>
-          <h2 className={styles.outroTitle}>
-            {t.map.outro}
-          </h2>
-          <div className={styles.outroCta}>
-            <Link href="/me/intent" className="btn">
-              {t.map.setListening}
-            </Link>
-          </div>
-          <p className={styles.privacy}>
-            {t.map.privacy(vm.counts.claims, vm.counts.evidence, vm.counts.sources)}
-          </p>
+        <section className={styles.outro} aria-labelledby={next.kind === 'intent' ? undefined : 'outro'}>
+          {/* Already the next step at the top: not asked twice. */}
+          {next.kind !== 'intent' && (
+            <>
+              <p id="outro" className="kicker">
+                {t.map.oneMore}
+              </p>
+              <h2 className={styles.outroTitle}>{t.map.outro}</h2>
+              <div className={styles.outroCta}>
+                <Link href="/me/intent" className="btn">
+                  {t.map.setListening}
+                </Link>
+              </div>
+            </>
+          )}
+          <p className={styles.privacy}>{t.map.privacy(vm.counts.claims, vm.counts.evidence, vm.counts.sources)}</p>
         </section>
       </main>
 

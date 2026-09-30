@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Header from '@/components/Header'
 import Deck from '@/components/Deck'
 import ApplicationPanel from '@/components/flows/ApplicationPanel'
 import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
+import DroughtNote from '@/components/DroughtNote'
 import Symbol from '@/components/Symbol'
 import { useI18n, useT } from '@/components/I18nProvider'
 import { postJson, requestJson } from '@/components/api'
@@ -30,6 +32,9 @@ async function markProgress(opportunityIds: string[], progress: Progress): Promi
   return (await postJson('/api/opportunities', { opportunityIds, progress })).ok
 }
 
+// Offers set aside, shown this many at a time.
+const ASIDE_PAGE = 20
+
 // paused: they paused the search, so the empty page does not say it is listening.
 export default function OpportunitiesFlow({ view: initial, tab: initialTab, paused }: { view: OpportunitiesView; tab: Tab | null; paused: boolean }) {
   const t = useT()
@@ -48,6 +53,8 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   // Ready to read, until they open it: offer key to its title.
   const [ready, setReady] = useState<Record<string, string>>({})
   const [focus, setFocus] = useState<string | null>(null)
+  // What was set aside can run to hundreds: a page of them at a time.
+  const [asideShown, setAsideShown] = useState(ASIDE_PAGE)
 
   const newDeck = [...pending(view.found), ...pending(view.maybe)]
 
@@ -172,6 +179,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                 <Symbol size={96} watch breathe={!paused} label={paused ? t.listening.pause.status : t.listening.label} />
                 <p className={styles.emptyLine}>{paused ? t.listening.pause.title : t.opportunities.empty}</p>
                 <p className={styles.emptyLead}>{paused ? t.listening.pause.line : t.opportunities.emptyLead}</p>
+                {!paused && view.drought && <DroughtNote drought={view.drought} t={t.drought} />}
               </div>
             ) : (
               <Deck
@@ -250,7 +258,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                   {view.dropped.length > 0 && <h2 className={styles.sectionTitle}>{t.opportunities.bySetAside}</h2>}
                   <p className={styles.discardedLead}>{t.opportunities.discardedLead}</p>
                   <ul className={styles.discardedList}>
-                    {view.discarded.map((item) => (
+                    {view.discarded.slice(0, asideShown).map((item) => (
                       <DiscardedItem
                         key={item.id}
                         item={item}
@@ -261,6 +269,11 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                       />
                     ))}
                   </ul>
+                  {view.discarded.length > asideShown && (
+                    <button type="button" className={`text-btn ${styles.asideMore}`} onClick={() => setAsideShown((shown) => shown + ASIDE_PAGE)}>
+                      {t.opportunities.asideMore(Math.min(ASIDE_PAGE, view.discarded.length - asideShown))}
+                    </button>
+                  )}
                 </>
               )}
             </>
@@ -353,6 +366,55 @@ function Pay({ salary, estimate }: { salary: string | null; estimate: ShownEstim
   )
 }
 
+// On a phone the card is long and its answer at the end: while it is read, the
+// same two answers wait in a bar at the foot of the screen, until the ones in
+// the card come into sight or it is answered.
+const PHONE = '(max-width: 640px)'
+// The bar's height: the card's own answers count as in sight once above it.
+const BAR_PX = 88
+
+function useDecisionBar(active: boolean) {
+  const cardRef = useRef<HTMLElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const [phone, setPhone] = useState(false)
+  const [cardInView, setCardInView] = useState(false)
+  const [actionsInView, setActionsInView] = useState(false)
+
+  useEffect(() => {
+    const query = window.matchMedia(PHONE)
+    const update = () => setPhone(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+
+  useEffect(() => {
+    const card = cardRef.current
+    const actions = actionsRef.current
+    if (!active || !phone || !card || typeof IntersectionObserver === 'undefined') return
+    const onCard = new IntersectionObserver(([entry]) => setCardInView(entry.isIntersecting))
+    const onActions = new IntersectionObserver(([entry]) => setActionsInView(entry.isIntersecting), { rootMargin: `0px 0px -${BAR_PX}px 0px` })
+    onCard.observe(card)
+    if (actions) onActions.observe(actions)
+    return () => {
+      onCard.disconnect()
+      onActions.disconnect()
+      setCardInView(false)
+      setActionsInView(false)
+    }
+  }, [active, phone])
+
+  const shown = active && phone && cardInView && !actionsInView
+  // The corner button moves up out of its way; the page leaves room at the foot.
+  useEffect(() => {
+    if (!shown) return
+    document.body.setAttribute('data-decision-bar', '')
+    return () => document.body.removeAttribute('data-decision-bar')
+  }, [shown])
+
+  return { cardRef, actionsRef, shown }
+}
+
 function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
   const [leaving, setLeaving] = useState(false)
   const t = useT()
@@ -360,6 +422,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const meta = [item.company, item.location, item.workplace].filter(Boolean).join(' · ')
+  const { cardRef, actionsRef, shown: barShown } = useDecisionBar(item.response === null && !asking && !leaving)
 
   async function answer(response: Response, withReason?: string) {
     setError(null)
@@ -376,12 +439,13 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
   }
 
   return (
-    <article className={leaving ? `${styles.card} ${styles.slidingOut}` : styles.card} data-answered={item.response !== null}>
+    <article ref={cardRef} className={leaving ? `${styles.card} ${styles.slidingOut}` : styles.card} data-answered={item.response !== null}>
       <p className={styles.cardKicker}>
         <Symbol size={20} /> {t.opportunities.worthHearing}
       </p>
       <h2 className={styles.cardTitle}>{item.title}</h2>
       <p className={styles.meta}>{meta}</p>
+      {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
       <Pay salary={item.salary} estimate={item.estimate} />
       {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
       <p className={styles.summary}>{item.summary}</p>
@@ -431,7 +495,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
       )}
 
       {item.response === null && !asking && (
-        <div className={styles.actions}>
+        <div ref={actionsRef} className={styles.actions}>
           <button type="button" className="btn" onClick={() => void answer('interested')}>
             {t.opportunities.interested}
           </button>
@@ -440,6 +504,21 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
           </button>
         </div>
       )}
+
+      {/* On the page itself: the deck's card moves as it comes in, and a
+          fixed bar inside it would move with it instead of staying at the foot. */}
+      {barShown &&
+        createPortal(
+          <div className={styles.decisionBar} role="group" aria-label={t.opportunities.decisionBar(item.title)}>
+            <button type="button" className="btn" onClick={() => void answer('interested')}>
+              {t.opportunities.interested}
+            </button>
+            <button type="button" className={`text-btn ${styles.decisionBarOther}`} onClick={() => setAsking(true)}>
+              {t.opportunities.notForMe}
+            </button>
+          </div>,
+          document.body,
+        )}
 
       {/* DESIGN_SYSTEM §24: ask what to learn, without forcing feedback. */}
       {item.response === null && asking && (
@@ -683,6 +762,7 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
         )}{' '}
         <span className={styles.meta}>· {item.company}</span>
       </p>
+      {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
       {item.reasons.map((reason, index) => (
         <p key={index} className={styles.discardReason}>
           {reason.kind === 'wrong_role'
@@ -701,6 +781,10 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
               ? t.opportunities.remoteElsewhere
               : reason.kind === 'remote_countries'
               ? t.opportunities.remoteCountries
+              : reason.kind === 'unread'
+              ? t.opportunities.unread
+              : reason.kind === 'unverified'
+              ? t.opportunities.unverified(reason.rule, reason.note)
               : t.opportunities.notEnoughReasons}
           {(reason.kind === 'filter' || reason.kind === 'salary_floor' || reason.kind === 'language') && reason.quote && (
             <span className={styles.discardQuote}> — “{reason.quote}”</span>

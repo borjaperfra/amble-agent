@@ -43,7 +43,9 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
     const form = new FormData()
     form.append('file', file)
     const { ok, status, data } = await requestJson<SourceItem>('/api/onboarding/sources', { method: 'POST', body: form })
-    if (ok) keep(data)
+    // Not kept (it could not be read, or is not what it claims): why, next to it.
+    if (ok && data.status === 'failed') setError({ at: 'file', text: data.detail ?? t.onboarding.fileNotStored })
+    else if (ok) keep(data)
     else setError({ at: 'file', text: status === 0 ? t.onboarding.fileNotUploaded : (data.error ?? t.onboarding.fileNotStored) })
     setBusy(false)
     setPending(null)
@@ -55,7 +57,10 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
     setPending(kind)
     setError(null)
     const { ok, data } = await postJson<SourceItem>('/api/onboarding/sources', { kind, url })
-    if (ok) {
+    // An address that could not be read is not kept: why, next to the field,
+    // with what they wrote still in it to correct.
+    if (ok && data.status === 'failed') setError({ at: kind, text: data.detail ?? t.onboarding.urlNotStored })
+    else if (ok) {
       keep(data)
       reset()
     } else setError({ at: kind, text: data.error ?? t.onboarding.urlNotStored })

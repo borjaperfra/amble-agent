@@ -19,12 +19,14 @@ export const en = {
     typePlaceholder: "Take your time. Write it the way you'd say it.",
     unreachable: "Your Rep couldn't be reached. Nothing has been lost.",
     tryAgain: 'Try again →',
+    notFoundTitle: 'This page doesn’t exist.',
+    notFoundLead: 'The link may be old or incomplete. Everything of yours is where it was.',
+    backHome: 'Back to amble',
   },
   header: {
     nav: 'Primary',
     rep: 'Your Rep',
     map: 'Your Map',
-    listeningFor: 'Listening for',
     language: 'Language',
     switchTo: 'Español',
     switchToLabel: 'Cambiar a español',
@@ -112,8 +114,9 @@ export const en = {
     evaluateQuestion: 'Evaluate this question',
   },
   intent: {
-    lead: 'One more thing.',
+    lead: 'Has something changed?',
     leadSetup: 'While I read what you shared:',
+    seeCurrent: 'See what I listen for now →',
     labels: { Role: 'Role', Space: 'Space', Company: 'Company', Compensation: 'Pay', Ownership: 'Ownership', Location: 'Where', 'Not interested in': 'Not interested in', Other: 'Other', 'In your words': 'In your words' },
     confirmFailed: 'I couldn’t save it. It’s still here: try again.',
     question: 'What would have to be true for you to seriously consider leaving your current job?',
@@ -127,7 +130,10 @@ export const en = {
     retryReading: 'Try again',
     valueLabel: (group: string) => `${group} value`,
     confirmQuestion: 'Does this represent you?',
-    confirm: 'Yes, start listening',
+    // During the setup two questions still follow: it only says it got it right.
+    confirm: 'Yes, that’s it',
+    // Changing it later, outside the setup.
+    confirmSave: 'Yes, save it',
     confirming: 'Saving…',
     somethingWrong: 'Something isn’t right',
     changeHint: 'Change anything above. Your Rep listens for exactly what you leave here with.',
@@ -138,6 +144,8 @@ export const en = {
     confirmIntent: 'Confirm what your Rep should listen for.',
     nothingYet: 'You haven’t told your Rep what to listen for yet.',
     notFiltering: 'Not filtering on',
+    // Something they said they will not consider, among what the Rep listens for.
+    notInterested: (value: string) => `Not ${/^.\p{Ll}/u.test(value) ? value.charAt(0).toLowerCase() + value.slice(1) : value}`,
     toReview: (count: number) => `${count} ${count === 1 ? 'thing' : 'things'} from your offers to review →`,
     evidence: (count: number) => `${count} ${count === 1 ? 'piece' : 'pieces'} of evidence`,
     capabilities: (count: number) => `${count} ${count === 1 ? 'capability' : 'capabilities'}`,
@@ -183,6 +191,7 @@ export const en = {
     learnedNote: 'I learned this by talking with you.',
     learnedMarked: 'The marked ones I learned by talking with you.',
     changePreferences: 'Change preferences',
+    changeIntent: 'Change what I’m looking for',
     weekKicker: 'This week',
     weekRead: (read: number, worth: number) => `read · ${worth} ${worth === 1 ? 'is' : 'are'} worth your time`,
     weekEmpty: 'Nothing new read this week yet. Still looking.',
@@ -195,6 +204,8 @@ export const en = {
       remoteUnconfirmed: 'Never says remote',
       remoteElsewhere: 'Remote, from outside Europe',
       remoteCountries: 'Remote, only from other countries',
+      unread: 'Couldn’t read the posting',
+      unverified: 'Couldn’t check it',
       noReason: 'Nothing to hold it up',
     },
     seeAll: 'See everything I read →',
@@ -207,13 +218,16 @@ export const en = {
     evaluate: 'Evaluate',
     emptyNoSources: 'There is nothing here yet. Give your Rep a source to read and it will start building your map.',
     emptyWithSources:
-      'Your Rep has read your sources but cannot yet demonstrate any capability from them. That is an honest result — talk to your Rep to go deeper.',
+      'Your Rep has read what you shared, but can’t demonstrate any capability from it yet. It would rather tell you than make one up: your full CV will make it easier.',
     distinctive: 'Your distinctive profile',
     combinedWith: 'combined with ',
     distinctiveEmpty:
       'I can’t describe what makes your profile distinctive yet — there isn’t enough strong evidence. That’s not a flaw in you; it’s what I know so far.',
     gaps: 'Things I don’t know yet',
     gapsLater: 'I’ll ask you about these on WhatsApp, little by little.',
+    // WhatsApp not linked yet.
+    gapsConnect: 'Connect WhatsApp and I’ll ask you there.',
+    gapsConnectAction: 'Connect WhatsApp →',
     nextStep: 'Next step',
     next: {
       sources: { title: 'Share your CV', lead: 'With your CV or profile your Rep starts to understand what you do.', action: 'Add my CV →' },
@@ -225,7 +239,9 @@ export const en = {
     outro: 'Tell your Rep what would make something worth your attention.',
     setListening: 'Set what I’m listening for →',
     privacy: (claims: number, evidence: number, sources: number) =>
-      `This map is private. Only you can see it. Built from ${claims} extracted claims, ${evidence} pieces of evidence and ${sources} ${sources === 1 ? 'source' : 'sources'} — every one inspectable.`,
+      evidence > 0
+        ? `This map is private: only you can see it. It comes from ${evidence} ${evidence === 1 ? 'piece' : 'pieces'} of evidence in ${sources} ${sources === 1 ? 'source' : 'sources'}, and you can open each one.`
+        : 'This map is private: only you can see it.',
     pieces: (count: number) => `${count} ${count === 1 ? 'piece' : 'pieces'} of evidence`,
     view: 'View →',
   },
@@ -297,6 +313,7 @@ export const en = {
     sending: 'Sending…',
     codeTitle: 'Check your email',
     codeLead: (email: string) => `If ${email} has an amble account, a code is on its way. It lasts 10 minutes.`,
+    joinCodeLead: (email: string) => `I’ve sent a code to ${email}. It lasts 10 minutes.`,
     codeLabel: 'Code',
     verify: 'Sign in',
     verifying: 'Checking…',
@@ -372,7 +389,10 @@ export const en = {
   invites: {
     nav: 'Invite',
     title: 'Invite whoever you like',
-    lead: (count: number) => `You have ${count} invitations. Each link creates one account and works once.`,
+    lead: (count: number) =>
+      count === 0
+        ? 'You’ve used all your invitations.'
+        : `${count === 1 ? 'You have 1 invitation left' : `You have ${count} invitations left`}. Each link creates one account and works once.`,
     copy: 'Copy link',
     copied: 'Copied',
     accepted: 'Accepted',
@@ -405,10 +425,12 @@ export const en = {
     unknown: 'Hi, I’m amble’s AI agent. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
+    // The second and last time, a week later.
+    askAgain: (title: string, company: string) => `It’s been a couple of weeks since you sent the one for ${title} at ${company}. Have they said anything?`,
     // Buttons: WhatsApp allows 20 characters each.
     answers: { called: 'They called me', rejected: 'They said no', nothing: 'Nothing yet' },
-    thanksCalled: (company: string) => `Great! Good luck with ${company}.`,
-    thanksRejected: 'Sorry to hear. Thanks for telling me.',
+    thanksCalled: (company: string) => `Good sign. When ${company ? `${company} gives` : 'they give'} you a date for the interview, tell me and we’ll prepare it together.`,
+    thanksRejected: 'Sorry to hear it. Thanks for telling me: it helps me aim better with the next ones.',
     thanksNothing: 'OK. I’ll ask again in a week.',
     thanksNothingLast: 'OK. I won’t ask about this one again.',
     connectTitle: 'Your Rep, on WhatsApp',
@@ -421,6 +443,11 @@ export const en = {
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',
+    // The pay line of an offer: as published, estimated with its source, or said to be missing.
+    salaryPublished: (salary: string) => `Salary: ${salary}`,
+    salaryEstimated: (range: string, source: string) => `Estimated salary: ${range} · ${source}`,
+    salaryUnknown: 'Salary: not published',
+    inApp: 'In the app',
     offerButtons: { interested: 'Interested', notFit: 'Not a fit', more: 'Tell me more' },
     applyButtons: { yes: 'Yes, prepare it', no: 'Not now' },
     fillOffer: 'Shall I fill it in on the company’s form? You check it and you send it.',
@@ -430,6 +457,7 @@ export const en = {
       `I’ve filled in ${filled} ${filled === 1 ? 'field' : 'fields'}${left.length > 0 ? `. Left for you: ${left.join(', ')}` : ''}. Check it and send it here: ${url}`,
     fillCaptcha: 'The form has a “not a robot” check: that one is yours.',
     fillFailed: (url: string) => `I couldn’t open the form just now. Your answers are ready at ${url}.`,
+    fillUnavailable: (url: string) => `I can’t fill in the company’s form from WhatsApp. Your answers and your CV are ready at ${url}: paste them into the offer and send it yourself.`,
     fillSent: (company: string) => `Sent${company ? ` to ${company}` : ''}. I’ll follow it for you: in a few days I’ll ask how it’s going.`,
     offerInterested: 'Noted. Shall I prepare the application?',
     offerNotFit: 'What doesn’t fit? A sentence is enough: I learn from it.',
@@ -439,6 +467,13 @@ export const en = {
     applyLater: (url: string) => `OK. It’s saved at ${url} for whenever you want.`,
     applyWorking: 'On it. I’m reading the form and preparing it; it takes a couple of minutes.',
     applyReady: 'Ready.',
+    // How to send it, by what the preparation advised.
+    applyChannel: {
+      form: 'It goes through the offer’s own form.',
+      referral: 'Before sending it, it’s worth finding someone inside who can introduce you: it carries more weight than the form alone.',
+      direct: 'Send it through the offer and also write to whoever is hiring.',
+    } as Record<string, string>,
+    applyLead: 'What I’d lead with:',
     applyFinish: (url: string) => `The answers and your CV are at ${url}. Check them, send it on the offer and mark it as sent.`,
     applyFailed: (url: string) => `I couldn’t prepare it now. You can ask me at ${url}.`,
     textOnly: 'I can’t read pictures yet. Write it or send me a voice note.',
@@ -460,6 +495,9 @@ export const en = {
     pauseButtons: { yes: 'Yes, pause it', no: 'No, keep going' },
     resumeButtons: { yes: 'Yes, resume it', no: 'Not yet' },
     paused: 'Done: the search is paused until further notice. I won’t send you offers or write to you first. If you write to me, I’m still here; when you want to pick it up again, just tell me.',
+    pausedUntil: (date: string) =>
+      `Done: the search is paused. I won’t send you offers or write to you first, except on ${new Date(`${date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, to ask whether to pick it up again. If you write before then, I’m here.`,
+    pauseCheckIn: 'Hi. You asked me to stop the search for a while. Shall we pick it up again?',
     resumed: 'Done: I’m searching for you again. I’ll write when something truly fits.',
     pauseKept: 'OK, I’ll keep searching.',
     resumeKept: 'OK, it stays paused. When you want to pick it up again, tell me.',
@@ -475,7 +513,6 @@ export const en = {
     reading: 'Reading what you shared…',
     weighing: 'Working out what you can do…',
     questions: 'Preparing your two questions…',
-    hint: 'This can take a couple of minutes. You can leave the page open.',
     found: 'What I’m finding',
     capabilities: (count: number) => `${count} ${count === 1 ? 'capability' : 'capabilities'}`,
     rejected: (name: string, reason: string) => `I didn’t use “${name}”: ${reason}`,
@@ -496,6 +533,8 @@ export const en = {
     notEnoughText: "I can barely find any text in this file: it may be a scan or a photo. Upload the PDF you export from Word, Google Docs or LinkedIn.",
     websiteUnreadableDetail: (why: string) => `I couldn't read this website (${why}). Your Rep stored the URL only.`,
     websiteUnreadable: "I couldn't read this website. The URL is stored, but I couldn't read its text.",
+    notAnAddress: "That doesn't look like a web address. Write it in full, for example yoursite.com.",
+    notLinkedIn: "That doesn't look like a LinkedIn profile. Copy your profile's link, for example linkedin.com/in/your-name.",
     websiteEmpty: 'The page loaded but contained almost no readable text.',
     githubUnreadable: "I couldn't read this GitHub profile. The handle is stored, not read.",
     githubRead: (repos: number, commits: number) => `${repos} repositories and ${commits} of your own commits read.`,
@@ -576,6 +615,22 @@ export const en = {
     belowFloor: (floor: string) => `It may fall short of your minimum of ${floor}.`,
     source: 'Where this comes from',
   },
+  // Why nothing reaches them yet, from what was read.
+  drought: {
+    title: 'Why nothing has reached you yet',
+    pool: (open: number, ofTheirRole: number) =>
+      `Of ${open.toLocaleString('en-GB')} open offers, ${ofTheirRole.toLocaleString('en-GB')} are your kind of role.`,
+    read: (read: number) => (read === 1 ? 'I read 1 carefully:' : `I read ${read} carefully:`),
+    notYet: 'I haven’t read any carefully yet: I start with the closest to what you’re looking for.',
+    role: (count: number) => `${count} weren’t your role or were below your level`,
+    place: (count: number) => `${count} can’t be done from where you live`,
+    pay: (count: number) => `${count} pay less than your minimum`,
+    language: (count: number) => `${count} ask for a language you don’t speak`,
+    unread: (count: number) => `${count} couldn’t be read in full`,
+    rule: (count: number, rule: string) => `${count} clashed with “${rule}”`,
+    waiting: (count: number) => `${count.toLocaleString('en-GB')} more of your kind to read; I carry on in the next pass.`,
+    change: 'Change what I’m looking for',
+  },
   opportunities: {
     nav: 'What I found',
     foundTitle: 'Your Rep found something.',
@@ -607,6 +662,12 @@ export const en = {
     belowLevel: (reason: string) => `Below your level: ${reason}`,
     brokeFilter: (rule: string) => `It breaks “${rule}”`,
     notEnoughReasons: 'I couldn’t find a real reason to show it to you.',
+    // An offer judged before their latest change of rules, not yet judged again.
+    judgedBefore: 'I read this one before your latest change; I’ll read it again with what you told me.',
+    // The bar at the foot of a phone's screen while an offer is read.
+    decisionBar: (title: string) => `Your answer on “${title}”`,
+    unread: 'I could only read its title, not the posting itself, and I don’t show you something without knowing what it asks.',
+    unverified: (rule: string, note: string) => `I couldn’t check “${rule}”: ${note}`,
     belowFloor: 'The salary it publishes is well below your floor',
     requiredLanguage: 'It requires a language you don’t speak',
     remoteUnconfirmed: 'It never says it can be remote, and none of its offices is somewhere you’d go',
@@ -647,6 +708,8 @@ export const en = {
       liveClose: 'Close without sending',
       liveSent: (company: string) => `Sent to ${company}. I'll follow it for you.`,
       liveBack: 'Back to your offers',
+      liveNoneTitle: 'There’s no form open here.',
+      liveNoneLead: 'When I fill one in for you, you’ll see it here to check it and send it yourself.',
       reopen: 'Open it again',
       fill: 'Fill in the form',
       fillLead: 'I open the offer’s form and fill it with your details, your CV and these answers. What is yours you finish there.',
@@ -698,6 +761,7 @@ export const en = {
     },
     newCount: (count: number) => `${count} new`,
     asideEmpty: 'Nothing set aside yet.',
+    asideMore: (count: number) => `Show ${count} more`,
     bySetAside: 'The ones I set aside',
     wanted: {
       empty: 'When you say you’d hear an offer out, you’ll find it here with its next step.',
@@ -766,7 +830,12 @@ export const en = {
     correctedByYou: (original: string) => `Corrected by you. I had read: ${original}`,
     why: 'Why I think so',
     youdSaid: (declared: string) => `You’d said: ${declared}`,
-    fromOffers: (numbers: number[]) => `From ${numbers.length > 1 ? 'offers' : 'offer'} ${numbers.map((n) => `#${n}`).join(', ')}`,
+    // The sample offers, by their title.
+    fromOffers: (titles: string[]) => {
+      const named = titles.map((title) => `“${title}”`)
+      const list = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}` : (named[0] ?? '')
+      return `From ${named.length > 1 ? 'the offers' : 'the offer'} ${list}`
+    },
     isThisRight: 'Is this right?',
     right: 'That’s right',
     notQuite: 'Not quite',

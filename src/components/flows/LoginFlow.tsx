@@ -262,7 +262,7 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
               <h1 className={styles.title} key={greeting ?? 'code'}>
                 {greeting ?? t.login.codeTitle}
               </h1>
-              <p className={styles.lead}>{withEmail(t.login.codeLead(email.trim()), email.trim())}</p>
+              <p className={styles.lead}>{withEmail((invitation ? t.login.joinCodeLead : t.login.codeLead)(email.trim()), email.trim())}</p>
               <form
                 className={styles.form}
                 onSubmit={(event) => {

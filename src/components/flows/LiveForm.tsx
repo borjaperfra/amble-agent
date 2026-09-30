@@ -63,6 +63,17 @@ export default function LiveForm({ opportunityId, company, left, onSent, onClose
     onClosed()
   }
 
+  // The form is gone: only that, not the words about a form on screen.
+  if (missing) {
+    return (
+      <section className={styles.review}>
+        <p className={styles.warning} role="alert">
+          {a.liveGone}
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section className={styles.review}>
       <p className={styles.windowLine}>
@@ -90,10 +101,6 @@ export default function LiveForm({ opportunityId, company, left, onSent, onClose
           allow="clipboard-read; clipboard-write"
           referrerPolicy="no-referrer"
         />
-      ) : missing ? (
-        <p className={styles.warning} role="alert">
-          {a.liveGone}
-        </p>
       ) : (
         <div className={styles.working} role="status">
           <Symbol size={24} watch breathe />

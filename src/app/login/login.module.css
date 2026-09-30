@@ -260,6 +260,8 @@
 }
 
 .note a {
+  /* Taller to a finger than it looks: inline padding does not move the line. */
+  padding-block: 12px;
   color: var(--moss-dark);
   text-decoration-color: var(--moss-soft);
   text-underline-offset: 3px;

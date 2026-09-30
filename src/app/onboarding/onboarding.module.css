@@ -19,7 +19,8 @@
   line-height: 1.6;
   color: var(--ink-secondary);
   white-space: pre-line;
-  max-width: 36ch;
+  max-width: 44ch;
+  text-wrap: pretty;
 }
 
 .sources {

@@ -29,11 +29,14 @@ export default function InvitesFlow({ invites }: { invites: Invite[] }) {
       <Header />
       <main className={styles.page}>
         <h1 className={styles.title}>{t.invites.title}</h1>
-        <p className={styles.lead}>{t.invites.lead(invites.length)}</p>
+        <p className={styles.lead}>{t.invites.lead(invites.filter((invite) => !invite.accepted).length)}</p>
         <ul className={styles.list}>
           {invites.map((invite) => (
             <li key={invite.id} className={styles.row}>
-              <span className={invite.accepted ? `${styles.link} ${styles.used}` : styles.link}>{invite.link}</span>
+              {/* The address without its scheme, on one line: the button copies all of it. */}
+              <span className={invite.accepted ? `${styles.link} ${styles.used}` : styles.link} title={invite.link}>
+                {invite.link.replace(/^https?:\/\//, '')}
+              </span>
               {invite.accepted ? (
                 <span className={styles.state}>{t.invites.accepted}</span>
               ) : (

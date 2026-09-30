@@ -96,6 +96,18 @@ p {
   margin: 0;
 }
 
+/* Headings set tight unless a page says otherwise: at body leading a
+   two-line title falls apart. */
+h1,
+h2 {
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+h3 {
+  line-height: 1.3;
+}
+
 a {
   color: inherit;
 }
@@ -153,12 +165,28 @@ button {
   cursor: default;
 }
 
+/* The second action beside a first one: same size, outlined, so one dark
+   button per screen says what comes first. */
+.btn.btn-quiet {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--border);
+}
+
+.btn.btn-quiet:hover:not(:disabled) {
+  background: var(--paper-light);
+  border-color: var(--ink-tertiary);
+}
+
 .text-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
+  /* The padding widens what a finger can hit; the negative margin keeps the
+     words on the same edge as the text around them. */
   padding: 6px 4px;
+  margin-inline: -4px;
   font-family: var(--font-ui);
   font-size: var(--text-body);
   color: var(--ink-secondary);
@@ -235,5 +263,10 @@ button {
 @media (max-width: 640px) {
   body {
     padding-bottom: 68px;
+  }
+
+  /* An offer's decision bar is at the foot (opportunities): room for it too. */
+  body[data-decision-bar] {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom));
   }
 }

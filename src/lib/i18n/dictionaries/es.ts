@@ -20,12 +20,14 @@ export const es: Dictionary = {
     typePlaceholder: 'Tómate tu tiempo. Escríbelo como lo dirías.',
     unreachable: 'No he podido conectar con tu Rep. No se ha perdido nada.',
     tryAgain: 'Volver a intentarlo →',
+    notFoundTitle: 'Esta página no existe.',
+    notFoundLead: 'Puede que el enlace sea antiguo o esté incompleto. Lo tuyo sigue donde estaba.',
+    backHome: 'Volver a amble',
   },
   header: {
     nav: 'Principal',
     rep: 'Tu Rep',
     map: 'Tu mapa',
-    listeningFor: 'Qué escucho',
     language: 'Idioma',
     switchTo: 'English',
     switchToLabel: 'Switch to English',
@@ -113,8 +115,9 @@ export const es: Dictionary = {
     evaluateQuestion: 'Evaluar esta pregunta',
   },
   intent: {
-    lead: 'Una cosa más.',
+    lead: '¿Ha cambiado algo?',
     leadSetup: 'Mientras leo lo que has compartido:',
+    seeCurrent: 'Ver lo que escucho ahora →',
     labels: { Role: 'Rol', Space: 'Sector', Company: 'Empresa', Compensation: 'Salario', Ownership: 'Responsabilidad', Location: 'Dónde', 'Not interested in': 'No me interesa', Other: 'Otros', 'In your words': 'En tus palabras' },
     confirmFailed: 'No he podido guardarlo. Sigue aquí: vuelve a intentarlo.',
     question: '¿Qué tendría que pasar para que te plantearas en serio dejar tu trabajo actual?',
@@ -128,7 +131,10 @@ export const es: Dictionary = {
     retryReading: 'Inténtalo otra vez',
     valueLabel: (group: string) => `Valor de ${group}`,
     confirmQuestion: '¿Te representa?',
-    confirm: 'Sí, empieza a escuchar',
+    // During the setup two questions still follow: it only says it got it right.
+    confirm: 'Sí, eso es',
+    // Changing it later, outside the setup.
+    confirmSave: 'Sí, guárdalo',
     confirming: 'Guardando…',
     somethingWrong: 'Algo no está bien',
     changeHint: 'Cambia lo que quieras arriba. Tu Rep escucha exactamente lo que dejes aquí.',
@@ -139,6 +145,8 @@ export const es: Dictionary = {
     confirmIntent: 'Confirma qué debe escuchar tu Rep.',
     nothingYet: 'Aún no le has dicho a tu Rep qué escuchar.',
     notFiltering: 'No filtro por',
+    // Something they said they will not consider, among what the Rep listens for.
+    notInterested: (value: string) => `Nada de ${/^.\p{Ll}/u.test(value) ? value.charAt(0).toLowerCase() + value.slice(1) : value}`,
     toReview: (count: number) => `${count} ${count === 1 ? 'cosa' : 'cosas'} de tus ofertas por revisar →`,
     evidence: (count: number) => `${count} ${count === 1 ? 'evidencia' : 'evidencias'}`,
     capabilities: (count: number) => `${count} ${count === 1 ? 'capacidad' : 'capacidades'}`,
@@ -184,6 +192,7 @@ export const es: Dictionary = {
     learnedNote: 'Lo he aprendido hablando contigo.',
     learnedMarked: 'Lo marcado lo he aprendido hablando contigo.',
     changePreferences: 'Cambiar preferencias',
+    changeIntent: 'Cambiar lo que busco',
     weekKicker: 'Esta semana',
     weekRead: (read: number, worth: number) =>
       `${read === 1 ? 'leída' : 'leídas'} · ${worth} ${worth === 1 ? 'merece' : 'merecen'} tu tiempo`,
@@ -197,6 +206,8 @@ export const es: Dictionary = {
       remoteUnconfirmed: 'No dice si es remoto',
       remoteElsewhere: 'Remoto, pero desde fuera de Europa',
       remoteCountries: 'Remoto, pero solo desde otros países',
+      unread: 'No pude leer la oferta',
+      unverified: 'No pude comprobarlo',
       noReason: 'Nada que la sostenga',
     },
     seeAll: 'Ver todo lo que he leído →',
@@ -209,7 +220,7 @@ export const es: Dictionary = {
     evaluate: 'Evaluar',
     emptyNoSources: 'Aún no hay nada. Dale a tu Rep una fuente que leer y empezará a construir tu mapa.',
     emptyWithSources:
-      'Tu Rep ha leído tus fuentes pero todavía no puede demostrar ninguna capacidad con ellas. Es un resultado honesto: habla con tu Rep para profundizar.',
+      'Tu Rep ha leído lo que compartiste, pero aún no puede demostrar ninguna capacidad con ello. Prefiere decírtelo a inventárselo: con tu CV completo lo tendrá más fácil.',
     distinctive: 'Tu perfil distintivo',
     combinedWith: 'combinado con ',
     distinctiveEmpty:
@@ -217,6 +228,9 @@ export const es: Dictionary = {
     gaps: 'Lo que aún no sé',
     talkItThrough: 'Háblalo con tu Rep →',
     gapsLater: 'Te lo iré preguntando por WhatsApp, poco a poco.',
+    // WhatsApp not linked yet.
+    gapsConnect: 'Conecta WhatsApp y te lo pregunto por ahí.',
+    gapsConnectAction: 'Conectar WhatsApp →',
     nextStep: 'Siguiente paso',
     next: {
       sources: { title: 'Comparte tu CV', lead: 'Con tu CV o tu perfil tu Rep empieza a entender lo que haces.', action: 'Añadir mi CV →' },
@@ -227,7 +241,9 @@ export const es: Dictionary = {
     outro: 'Dile a tu Rep qué haría que algo mereciera tu atención.',
     setListening: 'Decidir qué escucho →',
     privacy: (claims: number, evidence: number, sources: number) =>
-      `Este mapa es privado. Solo tú puedes verlo. Construido a partir de ${claims} afirmaciones extraídas, ${evidence} evidencias y ${sources} ${sources === 1 ? 'fuente' : 'fuentes'}, y todas se pueden inspeccionar.`,
+      evidence > 0
+        ? `Este mapa es privado: solo tú puedes verlo. Sale de ${evidence} ${evidence === 1 ? 'evidencia' : 'evidencias'} de ${sources} ${sources === 1 ? 'fuente' : 'fuentes'}, y puedes abrir cada una.`
+        : 'Este mapa es privado: solo tú puedes verlo.',
     pieces: (count: number) => `${count} ${count === 1 ? 'evidencia' : 'evidencias'}`,
     view: 'Ver →',
   },
@@ -297,6 +313,7 @@ export const es: Dictionary = {
     sending: 'Enviando…',
     codeTitle: 'Mira tu correo',
     codeLead: (email: string) => `Si ${email} tiene cuenta en amble, te llega un código. Caduca en 10 minutos.`,
+    joinCodeLead: (email: string) => `Te he mandado un código a ${email}. Caduca en 10 minutos.`,
     codeLabel: 'Código',
     verify: 'Entrar',
     verifying: 'Comprobando…',
@@ -372,7 +389,10 @@ export const es: Dictionary = {
   invites: {
     nav: 'Invitar',
     title: 'Invita a quien quieras',
-    lead: (count: number) => `Tienes ${count} invitaciones. Cada enlace crea una cuenta y solo sirve una vez.`,
+    lead: (count: number) =>
+      count === 0
+        ? 'Ya has usado todas tus invitaciones.'
+        : `${count === 1 ? 'Te queda 1 invitación' : `Te quedan ${count} invitaciones`}. Cada enlace crea una cuenta y solo sirve una vez.`,
     copy: 'Copiar enlace',
     copied: 'Copiado',
     accepted: 'Aceptada',
@@ -405,10 +425,11 @@ export const es: Dictionary = {
     unknown: 'Hola, soy el agente de IA de amble. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
+    askAgain: (title: string, company: string) => `Hace un par de semanas que enviaste la de ${title} en ${company}. ¿Te han dicho algo?`,
     // Buttons: WhatsApp allows 20 characters each.
     answers: { called: 'Me han llamado', rejected: 'Me han dicho que no', nothing: 'Nada todavía' },
-    thanksCalled: (company: string) => `¡Qué bien! Suerte con ${company}.`,
-    thanksRejected: 'Vaya. Gracias por contármelo.',
+    thanksCalled: (company: string) => `Buena señal. Cuando ${company ? `${company} te dé` : 'te den'} fecha para la entrevista, dímela y la preparamos.`,
+    thanksRejected: 'Vaya, lo siento. Gracias por contármelo: me ayuda a afinar con las próximas.',
     thanksNothing: 'Vale. Te vuelvo a preguntar en una semana.',
     thanksNothingLast: 'Vale. No te pregunto más por esta.',
     connectTitle: 'Tu Rep, en WhatsApp',
@@ -421,6 +442,10 @@ export const es: Dictionary = {
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',
+    salaryPublished: (salary: string) => `Salario: ${salary}`,
+    salaryEstimated: (range: string, source: string) => `Salario estimado: ${range} · ${source}`,
+    salaryUnknown: 'Salario: no lo publica',
+    inApp: 'En la app',
     offerButtons: { interested: 'Me interesa', notFit: 'No encaja', more: 'Cuéntame más' },
     applyButtons: { yes: 'Sí, prepárala', no: 'Ahora no' },
     fillOffer: '¿Te la relleno en el formulario de la empresa? La revisas tú y la envías tú.',
@@ -430,6 +455,7 @@ export const es: Dictionary = {
       `He rellenado ${filled} ${filled === 1 ? 'campo' : 'campos'}${left.length > 0 ? `. Te queda: ${left.join(', ')}` : ''}. Revísala y envíala aquí: ${url}`,
     fillCaptcha: 'El formulario lleva una comprobación de «no soy un robot»: esa la pasas tú.',
     fillFailed: (url: string) => `No he podido abrir el formulario ahora. Tienes las respuestas preparadas en ${url}.`,
+    fillUnavailable: (url: string) => `Desde WhatsApp no puedo rellenar el formulario de la empresa. Tienes las respuestas y tu CV en ${url}: cópialas en la oferta y envíala tú.`,
     fillSent: (company: string) => `Enviada${company ? ` a ${company}` : ''}. La sigo por ti: en unos días te pregunto cómo va.`,
     offerInterested: 'Apuntado. ¿Te preparo la candidatura?',
     offerNotFit: '¿Qué no te encaja? Con una frase me basta: aprendo de ello.',
@@ -439,6 +465,12 @@ export const es: Dictionary = {
     applyLater: (url: string) => `Vale. La tienes guardada en ${url} para cuando quieras.`,
     applyWorking: 'Me pongo. Leo el formulario y te lo preparo; tardo un par de minutos.',
     applyReady: 'Lista.',
+    applyChannel: {
+      form: 'Se envía por el formulario de la oferta.',
+      referral: 'Antes de enviarla, merece la pena buscar a alguien dentro que te presente: pesa más que el formulario solo.',
+      direct: 'Envíala por la oferta y escribe también a quien contrata.',
+    },
+    applyLead: 'Lo que pondría por delante:',
     applyFinish: (url: string) => `Las respuestas y tu CV están en ${url}. Revísalas, envíala en la oferta y márcala como enviada.`,
     applyFailed: (url: string) => `No he podido prepararla ahora. Puedes pedírmelo en ${url}.`,
     textOnly: 'Por ahora no leo imágenes. Escríbemelo o mándame un audio.',
@@ -460,6 +492,9 @@ export const es: Dictionary = {
     pauseButtons: { yes: 'Sí, pausar', no: 'No, sigue' },
     resumeButtons: { yes: 'Sí, reactivar', no: 'Todavía no' },
     paused: 'Hecho: la búsqueda queda en pausa hasta nuevo aviso. No te enviaré ofertas ni te escribiré yo primero. Si me escribes, aquí sigo; cuando quieras retomarla, dímelo.',
+    pausedUntil: (date: string) =>
+      `Hecho: la búsqueda queda en pausa. No te enviaré ofertas ni te escribiré yo primero, salvo el ${new Date(`${date}T12:00:00Z`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}, para preguntarte si la retomamos. Si me escribes antes, aquí sigo.`,
+    pauseCheckIn: 'Hola. Me dijiste que parara la búsqueda un tiempo. ¿La retomamos?',
     resumed: 'Hecho: vuelvo a buscar por ti. Te escribo cuando algo encaje de verdad.',
     pauseKept: 'Vale, sigo buscando.',
     resumeKept: 'Vale, sigue en pausa. Cuando quieras retomarla, dímelo.',
@@ -475,7 +510,6 @@ export const es: Dictionary = {
     reading: 'Leyendo lo que has compartido…',
     weighing: 'Entendiendo qué sabes hacer…',
     questions: 'Preparando tus dos preguntas…',
-    hint: 'Esto puede tardar un par de minutos. Puedes dejar la página abierta.',
     found: 'Lo que voy encontrando',
     capabilities: (count: number) => `${count} ${count === 1 ? 'capacidad' : 'capacidades'}`,
     rejected: (name: string, reason: string) => `No he usado «${name}»: ${reason}`,
@@ -496,6 +530,8 @@ export const es: Dictionary = {
     notEnoughText: 'Apenas encuentro texto en este archivo: puede que sea un escaneo o una foto. Sube el PDF que exportas desde Word, Google Docs o LinkedIn.',
     websiteUnreadableDetail: (why: string) => `No he podido leer esta web (${why}). Tu Rep solo ha guardado la URL.`,
     websiteUnreadable: 'No he podido leer esta web. La URL está guardada, pero no he podido leer su texto.',
+    notAnAddress: 'Esto no parece una dirección web. Escríbela entera, por ejemplo tuweb.com.',
+    notLinkedIn: 'Esto no parece un perfil de LinkedIn. Copia el enlace de tu perfil, por ejemplo linkedin.com/in/tu-nombre.',
     websiteEmpty: 'La página ha cargado pero casi no tenía texto legible.',
     githubUnreadable: 'No he podido leer este perfil de GitHub. El usuario está guardado, pero sin leer.',
     githubRead: (repos: number, commits: number) => `${repos} repositorios y ${commits} commits propios leídos.`,
@@ -575,6 +611,22 @@ export const es: Dictionary = {
     belowFloor: (floor: string) => `Puede quedarse por debajo de tu mínimo de ${floor}.`,
     source: 'De dónde sale',
   },
+  // Why nothing reaches them yet, from what was read.
+  drought: {
+    title: 'Por qué aún no te llega nada',
+    pool: (open: number, ofTheirRole: number) =>
+      `De ${open.toLocaleString('es-ES')} ofertas abiertas, ${ofTheirRole.toLocaleString('es-ES')} son de tu tipo de puesto.`,
+    read: (read: number) => (read === 1 ? 'He leído 1 con calma:' : `He leído ${read} con calma:`),
+    notYet: 'Aún no he leído ninguna con calma: empiezo por las más cercanas a lo que buscas.',
+    role: (count: number) => `${count} no eran tu rol o se quedaban por debajo de tu nivel`,
+    place: (count: number) => `${count} no se pueden hacer desde donde vives`,
+    pay: (count: number) => `${count} pagan menos de tu mínimo`,
+    language: (count: number) => `${count} piden un idioma que no hablas`,
+    unread: (count: number) => `${count} no se podían leer enteras`,
+    rule: (count: number, rule: string) => `${count} chocaban con «${rule}»`,
+    waiting: (count: number) => `Me quedan ${count.toLocaleString('es-ES')} de tu tipo por leer; sigo en la próxima pasada.`,
+    change: 'Cambiar lo que busco',
+  },
   opportunities: {
     nav: 'Encontrado',
     foundTitle: 'Tu Rep ha encontrado algo.',
@@ -606,6 +658,12 @@ export const es: Dictionary = {
     belowLevel: (reason: string) => `Por debajo de tu nivel: ${reason}`,
     brokeFilter: (rule: string) => `Incumple «${rule}»`,
     notEnoughReasons: 'No he encontrado una razón real para enseñártela.',
+    // An offer judged before their latest change of rules, not yet judged again.
+    judgedBefore: 'La leí antes de tu último cambio; la volveré a leer con lo que me has dicho.',
+    // The bar at the foot of a phone's screen while an offer is read.
+    decisionBar: (title: string) => `Tu respuesta a «${title}»`,
+    unread: 'Solo he podido leer el título, no el texto de la oferta, y no te enseño algo sin saber qué pide.',
+    unverified: (rule: string, note: string) => `No he podido comprobar «${rule}»: ${note}`,
     belowFloor: 'El salario que publica queda muy por debajo de tu suelo',
     requiredLanguage: 'Exige un idioma que no hablas',
     remoteUnconfirmed: 'No dice que se pueda hacer en remoto, y ninguna sede está donde aceptarías ir',
@@ -631,7 +689,7 @@ export const es: Dictionary = {
       cvUpload: 'Subir mi CV',
       cvChange: 'Cambiar',
       uploading: 'Subiendo…',
-      missingMeta: (count: number) => `Faltan ${count} ${count === 1 ? 'cosa tuya' : 'cosas tuyas'}`,
+      missingMeta: (count: number) => (count === 1 ? 'Falta 1 cosa tuya' : `Faltan ${count} cosas tuyas`),
       readyMeta: 'Lista para rellenar',
       youInForm: 'Esto lo completas tú en el formulario.',
       cvUsed: (name: string) => `Enviaré tu CV: ${name}.`,
@@ -646,6 +704,8 @@ export const es: Dictionary = {
       liveClose: 'Cerrar sin enviar',
       liveSent: (company: string) => `Enviada a ${company}. La sigo por ti.`,
       liveBack: 'Volver a tus ofertas',
+      liveNoneTitle: 'Aquí no hay ningún formulario abierto.',
+      liveNoneLead: 'Cuando rellene uno por ti, lo verás aquí para revisarlo y enviarlo tú.',
       reopen: 'Abrirlo otra vez',
       fill: 'Rellenar el formulario',
       fillLead: 'Abro el formulario de la oferta y lo relleno con tus datos, tu CV y estas respuestas. Lo que es tuyo lo terminas tú allí.',
@@ -697,6 +757,7 @@ export const es: Dictionary = {
     },
     newCount: (count: number) => `${count} ${count === 1 ? 'nueva' : 'nuevas'}`,
     asideEmpty: 'No he apartado nada todavía.',
+    asideMore: (count: number) => `Ver ${count} más`,
     bySetAside: 'Las que aparté yo',
     wanted: {
       empty: 'Cuando digas que escucharías una oferta, la verás aquí con su siguiente paso.',
@@ -765,7 +826,12 @@ export const es: Dictionary = {
     correctedByYou: (original: string) => `Corregido por ti. Yo había leído: ${original}`,
     why: 'Por qué lo creo',
     youdSaid: (declared: string) => `Habías dicho: ${declared}`,
-    fromOffers: (numbers: number[]) => `De ${numbers.length > 1 ? 'las ofertas' : 'la oferta'} ${numbers.map((n) => `#${n}`).join(', ')}`,
+    // The sample offers, by their title.
+    fromOffers: (titles: string[]) => {
+      const named = titles.map((title) => `«${title}»`)
+      const list = named.length > 1 ? `${named.slice(0, -1).join(', ')} y ${named[named.length - 1]}` : (named[0] ?? '')
+      return `De ${named.length > 1 ? 'las ofertas' : 'la oferta'} ${list}`
+    },
     isThisRight: '¿Es correcto?',
     right: 'Es así',
     notQuite: 'No exactamente',

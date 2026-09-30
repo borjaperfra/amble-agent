@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
+import DroughtNote from '@/components/DroughtNote'
 import Symbol from '@/components/Symbol'
 import EnvelopePile from '@/components/EnvelopePile'
 import type { PileEnvelope } from '@/lib/view'
@@ -11,9 +12,10 @@ import Tumbleweed from '@/components/Tumbleweed'
 import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
 import { useSearchPause } from '@/components/flows/useSearchPause'
 import { useVisibleInterval } from '@/components/flows/useVisibleInterval'
-import { useT } from '@/components/I18nProvider'
+import { useI18n } from '@/components/I18nProvider'
+import { nameOffers, quoteTitle } from '@/components/offerNames'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
-import type { DiscardReason, WeekEntry, WeekLedger } from '@/lib/matching/view'
+import type { DiscardReason, Drought, WeekEntry, WeekLedger } from '@/lib/matching/view'
 import styles from '@/app/listening/listening.module.css'
 
 interface ListeningItem {
@@ -39,6 +41,8 @@ interface ListeningVm {
   unseenOpportunities: number
   pile: PileEnvelope[]
   week: WeekLedger
+  // Nothing of theirs to show: why, in numbers.
+  drought: Drought | null
   // Their first read is running: what it finds appears as it comes.
   firstReading: boolean
   // Reading again with rules they just changed.
@@ -46,6 +50,8 @@ interface ListeningVm {
   // They paused the search until further notice.
   paused: boolean
   whatsapp: { available: boolean; linked: boolean }
+  // By rule: the sample offers its evidence names by number, by their title.
+  offerTitles: Record<string, Record<number, string>>
 }
 
 const activationMs = 2600
@@ -93,10 +99,13 @@ function Condition({ label, marked }: { label: string; marked: boolean }) {
   )
 }
 
-// A learned rule: its short form, and on a tap the whole rule and why amble believes it.
-function Learned({ item, marked, why }: { item: ListeningItem; marked: boolean; why: string }) {
+// A learned rule: its short form, and on a tap the whole rule and why amble
+// believes it, with the sample offers named by their title.
+function Learned({ item, marked, why, titles }: { item: ListeningItem; marked: boolean; why: string; titles: Record<number, string> }) {
+  const { locale } = useI18n()
   const whole = item.wording.trim() !== item.label.trim() ? item.wording : null
-  if (!whole && !item.evidence) return <Condition label={item.label} marked={marked} />
+  const evidence = item.evidence ? nameOffers(item.evidence, titles, quoteTitle[locale]) : null
+  if (!whole && !evidence) return <Condition label={item.label} marked={marked} />
   return (
     <li>
       <details className={styles.learned}>
@@ -106,10 +115,10 @@ function Learned({ item, marked, why }: { item: ListeningItem; marked: boolean; 
         </summary>
         <div className={styles.learnedBody}>
           {whole && <p className={styles.learnedRule}>{whole}</p>}
-          {item.evidence && (
+          {evidence && (
             <p className={styles.learnedWhy}>
               <span className={styles.learnedWhyLabel}>{why}</span>
-              {item.evidence}
+              {evidence}
             </p>
           )}
         </div>
@@ -138,6 +147,10 @@ function asideReason(reason: DiscardReason | null, t: Dictionary['listening']): 
       return t.weekReasons.remoteElsewhere
     case 'remote_countries':
       return t.weekReasons.remoteCountries
+    case 'unread':
+      return t.weekReasons.unread
+    case 'unverified':
+      return t.weekReasons.unverified
     default:
       return t.weekReasons.noReason
   }
@@ -180,8 +193,10 @@ function WeekRow({ entry, t }: { entry: WeekEntry; t: Dictionary['listening'] })
 // time, nothing to say. Below it, on paper, what the Rep read this week and
 // why each one was kept or set aside.
 export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
-  const t = useT()
+  const { t } = useI18n()
   const [arriving, setArriving] = useState(true)
+  // Straight from the setup: it says it starts listening, whatever the first read found yet.
+  const [fromSetup, setFromSetup] = useState(false)
   const [headline, setHeadline] = useState(0)
   const [rolls, setRolls] = useState(0)
   const router = useRouter()
@@ -205,8 +220,11 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
 
   useEffect(() => {
     let activated = false
+    let setup = false
     try {
-      activated = window.sessionStorage.getItem('amble-listening-activated') === '1'
+      const flag = window.sessionStorage.getItem('amble-listening-activated')
+      activated = flag !== null
+      setup = flag === 'setup'
       window.sessionStorage.removeItem('amble-listening-activated')
     } catch {
       activated = false
@@ -215,6 +233,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     const id = window.setTimeout(
       () => {
         setHeadline(pickHeadline(quietLines.length))
+        setFromSetup(setup)
         setArriving(false)
       },
       activated ? activationMs : 0,
@@ -261,7 +280,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 {paused ? t.listening.pause.status : t.listening.listeningOffers}
               </p>
               <h1 className={styles.title} id="listening-title">
-                {paused ? t.listening.pause.title : found ? t.opportunities.foundTitle : vm.firstReading ? t.listening.firstReadingTitle : quietLines[headline]}
+                {paused ? t.listening.pause.title : found ? t.opportunities.foundTitle : vm.firstReading || fromSetup ? t.listening.firstReadingTitle : quietLines[headline]}
               </h1>
               <p className={styles.line} role="status">
                 {note === 'failed'
@@ -315,21 +334,21 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                     {wontConsider.length > 0 && (
                       <Group title={t.listening.groups.must}>
                         {wontConsider.map((item) => (
-                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} />
+                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
                         ))}
                       </Group>
                     )}
                     {money.length > 0 && (
                       <Group title={t.listening.groups.money}>
                         {money.map((item) => (
-                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} />
+                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
                         ))}
                       </Group>
                     )}
                     {weighs.length > 0 && (
                       <Group title={t.listening.groups.weighs}>
                         {weighs.map((item) => (
-                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} />
+                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
                         ))}
                       </Group>
                     )}
@@ -354,9 +373,14 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                   </div>
                 )}
 
-                <Link href="/me/triage" className={styles.change}>
-                  {vm.pendingReview > 0 ? t.listening.toReview(vm.pendingReview) : t.listening.changePreferences}
-                </Link>
+                <div className={styles.changes}>
+                  <Link href="/me/intent" className={styles.change}>
+                    {t.listening.changeIntent}
+                  </Link>
+                  <Link href="/me/triage" className={styles.change}>
+                    {vm.pendingReview > 0 ? t.listening.toReview(vm.pendingReview) : t.listening.changePreferences}
+                  </Link>
+                </div>
               </div>
             </div>
           )}
@@ -387,6 +411,9 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 <p className={styles.weekEmpty}>{paused ? t.listening.pause.line : vm.firstReading ? t.listening.weekFirstReading : t.listening.weekEmpty}</p>
               )}
             </section>
+
+            {/* Nothing of theirs yet: why, from what was read. */}
+            {!paused && !reading && vm.drought && <DroughtNote drought={vm.drought} t={t.drought} />}
 
             <p className={styles.rep}>
               <span className={styles.repLabel}>{t.common.yourRep}</span>

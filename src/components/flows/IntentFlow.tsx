@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Header from '@/components/Header'
@@ -60,7 +61,8 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
     setConfirming(true)
     setError(null)
     try {
-      window.sessionStorage.setItem('amble-listening-activated', '1')
+      // From the setup, /listening says it starts listening once the questions are done.
+      window.sessionStorage.setItem('amble-listening-activated', setupStep ? 'setup' : '1')
     } catch {
       // Session storage unavailable; the Listening screen still works.
     }
@@ -84,10 +86,25 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
     )
   }
 
+  // During the setup this is a step like the two questions after it: the
+  // same bar, with a way to leave that keeps what was written.
+  const header = setupStep ? (
+    <Header
+      nav={false}
+      right={
+        <Link href="/me" className="text-btn">
+          {t.interview.saveAndLeave}
+        </Link>
+      }
+    />
+  ) : (
+    <Header />
+  )
+
   if (phase === 'ask' || phase === 'sending') {
     return (
       <>
-        <Header />
+        {header}
         <main className={styles.page}>
           <div className={styles.ask}>
             {setupStep && <p className={styles.step}>{t.interview.step(setupStep.current, setupStep.total)}</p>}
@@ -136,6 +153,12 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
                 {error}
               </p>
             )}
+            {/* Coming back to change it: what is listened for now is one tap away. */}
+            {!setupStep && (
+              <Link href="/listening" className={`text-btn ${styles.current}`}>
+                {t.intent.seeCurrent}
+              </Link>
+            )}
           </div>
         </main>
       </>
@@ -144,9 +167,10 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
 
   return (
     <>
-      <Header />
+      {header}
       <main className={styles.page}>
         <div className={styles.reveal}>
+          {setupStep && <p className={styles.step}>{t.interview.step(setupStep.current, setupStep.total)}</p>}
           <h1 className={styles.revealLead}>{t.intent.revealLead}</h1>
           {result && !result.structured && (
             <>
@@ -187,7 +211,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
           <p className={styles.confirmQuestion}>{t.intent.confirmQuestion}</p>
           <div className={styles.confirmActions}>
             <button type="button" className="btn" disabled={confirming} onClick={() => void confirm()}>
-              {confirming ? t.intent.confirming : t.intent.confirm}
+              {confirming ? t.intent.confirming : setupStep ? t.intent.confirm : t.intent.confirmSave}
             </button>
             {error && (
               <p className={styles.error} role="alert">
