@@ -1,5 +1,5 @@
 import { getDb } from '../db/db'
-import { candidateById, now } from '../db/repo'
+import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { logMessage } from './conversation'
@@ -125,7 +125,8 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
   }[]
   for (const { candidate_id: candidateId } of candidates) {
     const link = linkOf(candidateId)
-    if (!link?.conversation_id || askedToday(candidateId)) continue
+    // Paused: amble does not write first until they resume it.
+    if (!link?.conversation_id || isSearchPaused(candidateId) || askedToday(candidateId)) continue
     const due = nextDue(candidateId)
     if (!due) continue
     const open = windowOpen(link)

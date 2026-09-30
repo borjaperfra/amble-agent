@@ -4,6 +4,7 @@ import { confirmLatestIntent, interpretIntent } from '@/lib/pipeline/intent'
 import { ModelError } from '@/lib/model/provider'
 import { forCandidate } from '@/lib/auth/request'
 import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
+import { requestReread } from '@/lib/matching/run'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -34,6 +35,8 @@ async function intent(request: Request, candidateId: string) {
     if (!confirmLatestIntent(candidateId, body.intentId, groups)) {
       return NextResponse.json({ error: 'Intent not found.' }, { status: 404 })
     }
+    // What they want changed: what was read lately is read again, in the background.
+    requestReread(candidateId)
     return NextResponse.json({ ok: true })
   }
 

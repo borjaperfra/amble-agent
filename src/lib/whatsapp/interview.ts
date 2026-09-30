@@ -1,5 +1,5 @@
 import { getDb } from '../db/db'
-import { candidateById, getTurn, now } from '../db/repo'
+import { candidateById, getTurn, isSearchPaused, now } from '../db/repo'
 import { refreshDetectedLocale } from '../i18n/candidate'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
@@ -52,7 +52,8 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
   const candidates = db.prepare('SELECT candidate_id FROM whatsapp_links WHERE conversation_id IS NOT NULL').all() as unknown as { candidate_id: string }[]
   for (const { candidate_id: candidateId } of candidates) {
     const link = linkOf(candidateId)
-    if (!link?.conversation_id) continue
+    // Paused: amble does not write first until they resume it.
+    if (!link?.conversation_id || isSearchPaused(candidateId)) continue
     // The setup's questions first, in the web; one waiting here is enough.
     const setupDone = db.prepare("SELECT 1 FROM interviews WHERE candidate_id = ? AND status = 'completed'").get(candidateId)
     if (!setupDone || pendingInterviewQuestion(candidateId) || wroteToday(candidateId)) continue

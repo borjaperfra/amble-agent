@@ -3,6 +3,7 @@ import { ModelNotConfiguredError } from '@/lib/features'
 import { ModelError } from '@/lib/model/provider'
 import { forCandidate } from '@/lib/auth/request'
 import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
+import { requestReread } from '@/lib/matching/run'
 import {
   analyseTriage,
   answerProbe,
@@ -89,6 +90,8 @@ async function act(request: Request, candidateId: string) {
       }
       case 'decide': {
         decidePreference(candidateId, String(body.preferenceId ?? ''), String(body.decision ?? ''))
+        // Their rules changed: what was read lately is read again, in the background.
+        requestReread(candidateId)
         return NextResponse.json({ ok: true })
       }
       case 'revise': {
@@ -98,6 +101,7 @@ async function act(request: Request, candidateId: string) {
           String(body.statement ?? ''),
           typeof body.label === 'string' ? body.label : null,
         )
+        requestReread(candidateId)
         return NextResponse.json({ ok: true })
       }
       case 'add': {
@@ -108,6 +112,7 @@ async function act(request: Request, candidateId: string) {
           offerNumbers: Array.isArray(body.offers) ? body.offers.filter((n): n is number => typeof n === 'number') : [],
           quote: typeof body.quote === 'string' ? body.quote : null,
         })
+        requestReread(candidateId)
         return NextResponse.json({ ok: true, id: preference.id }, { status: 201 })
       }
       default:

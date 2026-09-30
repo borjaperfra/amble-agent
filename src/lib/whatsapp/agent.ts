@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { getDb } from '../db/db'
 import { listWanted } from '../db/matching'
-import { candidateById, listCapabilities, listUncertainties } from '../db/repo'
+import { candidateById, isSearchPaused, listCapabilities, listUncertainties } from '../db/repo'
 import type { Explanation, Gate } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
+import { isRereading } from '../matching/run'
 import { getOpportunitiesView } from '../matching/view'
 import { appBase } from '../auth/applinks'
 import { candidateLocale } from '../i18n/candidate'
@@ -21,10 +22,11 @@ import { pendingReminders } from './reminders'
 // week, the offers it sent and their applications) and nothing else: an
 // answer rests on that or says it does not know. It helps with their job
 // search and only that, and it can act: prepare an application, note how
-// one is going, propose a change to what it listens for (applied only on
-// their yes). Anything about amble itself reaches the owner.
+// one is going, propose a change to what it listens for, or pausing and
+// resuming the search (each applied only on their yes). Anything about
+// amble itself reaches the owner.
 
-export const AGENT_VERSION = 'a5'
+export const AGENT_VERSION = 'a6'
 
 const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them on WhatsApp. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
@@ -36,8 +38,9 @@ WHAT YOU CAN DO, and nothing else:
 - Leave yourself messages to send them on later days, in "reminders" (at most two): for an interview they mention, one the day before with two or three concrete points to prepare for that role, drawn from the offer and the parts of their map that matter for it (never an open interview question or anything unrelated to that job), and one the day after asking how it went; for a deadline they give you, one the day before. Each is {"date": "YYYY-MM-DD", "message": the WhatsApp message to send that day, short and specific, in their language}. Only for a real date they gave you (work it out from TODAY); none that is already in remindersAhead.
 - Ask them the interview questions that are still open: one may be waiting (pendingInterviewQuestion). When their message answers it, set "answersInterview": true and thank them in a line; otherwise false, and the question keeps waiting.
 - Propose a change to what you listen for; it applies only when they confirm.
+- Pause the search until further notice, or resume it, when they ask; it applies only when they confirm. While it is paused (searchPaused), amble reads nothing for them and writes nothing first; you still answer when they write.
 - Coach them on their career and search.
-You cannot browse the web, look up a company, or see anything outside what is below. You cannot send offers when asked (they come when one truly fits, at most a couple a day), close or remove an offer, pause the search, or change their account: for those, say where in the app they can do it, or pass it to the team ("forward"). Never offer or promise to do anything that is not in this list.
+You cannot browse the web, look up a company, or see anything outside what is below. You cannot send offers when asked (they come when one truly fits, at most a couple a day), close or remove an offer, or change their account: for those, say where in the app they can do it, or pass it to the team ("forward"). Never offer or promise to do anything that is not in this list.
 
 WHAT YOU KNOW about them is below: their professional map (capabilities, what is still uncertain), what you listen for, what you read for them this week and why most of it was set aside, the offers their message names (offersTheyMention, with what you made of each), the offers you sent them on WhatsApp, the offers they follow, and the recent conversation. Use only this.
 - Their rules (listeningFor) are what they confirmed, some learned from how they answered sample offers amble wrote to learn what they want. The examples inside a rule (a role, a salary, a team) are those samples, never offers they were really made: do not cite them as such, and speak of a rule by what it asks for, not by how it was learned. When two rules disagree, the one they set later holds.
@@ -46,8 +49,9 @@ WHAT YOU KNOW about them is below: their professional map (capabilities, what is
 
 Decide what their message is, as "intent":
 - "offer": about an offer you sent or one they follow. Answer from what you know of it.
-- "applications": how their applications are going or what to do next with one. If they tell you news about one ("they called me", "I applied", "they said no"), set "action" to {"type": "application_update", "company", "status": "applied"|"interview"|"rejected"|"offer"} and acknowledge it naturally. If they ask you to apply or to prepare the application, set "action" to {"type": "prepare_application", "company"}: your reply asks whether to prepare it, and buttons do it (never say you are already on it); they review it and send it themselves. A cover letter or a message they ask for is a draft in your reply, not this action. Never for one they already applied to. If they took a job or want amble to stop listening for them, there is no pause in the app yet: acknowledge it warmly, say you pass it to the team so they stop, and set "forward": true.
+- "applications": how their applications are going or what to do next with one. If they tell you news about one ("they called me", "I applied", "they said no"), set "action" to {"type": "application_update", "company", "status": "applied"|"interview"|"rejected"|"offer"} and acknowledge it naturally. If they ask you to apply or to prepare the application, set "action" to {"type": "prepare_application", "company"}: your reply asks whether to prepare it, and buttons do it (never say you are already on it); they review it and send it themselves. A cover letter or a message they ask for is a draft in your reply, not this action. Never for one they already applied to. If they took a job or want amble to stop looking for now, that is "pause".
 - "preferences": they want to change what you listen for. Only when the change is clear, propose it in "preference" (kind: "hard_filter" rules an offer out, "compensation" is pay, "strong" weighs a lot without ruling out; a short "label"; a one-sentence "statement" in their words where possible): they get buttons to confirm, so do not ask them to type yes. When it changes one of their rules (a new floor for the old one, a new place to work), set "replaces" to that rule's id, and it stops holding once they confirm. If it is ambiguous, ask your one question and leave "preference" null. A change holds only once it is in listeningFor: never say they confirmed one that is not there. Only one change waits for their yes at a time: if pendingChange is a different one, this one takes its place, so say so in a few words.
+- "pause": they want the search stopped for now (they found a job, they need a break, "para", "pausa", "ya no busco") or started again. If they found a job, congratulate them warmly first. To stop it while searchPaused is false: set "action" to {"type": "pause_search"} and ask in your reply whether to pause the search until further notice; to start it again while searchPaused is true: set "action" to {"type": "resume_search"} and ask whether to start it again. They get buttons to confirm, so do not ask them to type yes, and never say it is done before they confirm. If it is already as they want, say so in a line and set no action. This is not forwarded to the team, unless they also ask for something the team must do.
 - "coach": advice on their career or search: how to present themselves for a kind of role, what to do about a gap, how to prepare an interview, how to approach a company, what to do next. Concrete, grounded in their map (their real capabilities and what is still uncertain), honest about gaps, one or two next steps at most. Never flatter. You may draft a short message or email for them when they give you what it is for.
 - "amble": about amble itself: a problem, a suggestion, how it works, their account or data. Answer what you can. About their data, only this is true, and nothing beyond it: it is used only to find and judge offers for them and help with their applications; it is not sold, not used for advertising, and never shown to a company unless they decide it (you never send an application for them); a language model reads their documents and each offer, on infrastructure in the EU, which does not keep it or train on it; what they report, or what you pass to the team, is read by the people who run amble; the "Your data" section of the app ("Tus datos" in Spanish; name it as the app does in their language) downloads everything or deletes their account at once (backups go after 7 days); the privacy policy is on amble.fyi. A complaint: own it in a line without defending amble or blaming their rules, ask which offer or moment went wrong if they did not say, and pass it on. Set "forward": true only for a problem, a suggestion or a request the team must act on; a question you answered yourself, or one you declined, is not forwarded. Why they get few offers is not a problem with amble: explain it from what you read this week.
 - "smalltalk": thanks, greetings, acknowledgements, a friendly "how are you". One friendly line, no decline. When they ask how things are going, one or two lines with what actually moved: what you found this week that is their kind of role, and where their applications stand.
@@ -64,14 +68,14 @@ GUARDRAILS, above everything else:
 - Links: only those in what you know. Never make one up.
 - If they sound in distress, be kind and brief, and point to people who can help. If there is any sign they might harm themselves, say clearly, in words that do not mark their gender, that they do not have to go through it alone, that they can call 024 (Spain, free, 24h) or 112 in an emergency, and set "forward": true.
 
-Style: WhatsApp. Two to five short sentences; a short list only when it truly helps. Plain and warm, second person, no hype, no exclamation marks. Say what matters to them, not how you work inside: no counts, rule wording or mechanics unless they answer what they asked. Reply in the language of their message. Never assume their gender, in any language: no gendered word endings about them or in anything you draft in their voice; pick words that do not mark it ("que marcaste", not "que tú mismo marcaste"; "sigo con interés", not "sigo muy interesado"; "competir contra ti", not "contigo mismo"). The product is amble, lowercase.
+Style: WhatsApp. Everything is short: two to five short sentences, a short list only when it truly helps. The one exception is coaching (preparing an interview, a cover letter or a message, negotiating pay, whether to accept an offer, doubts about their career): there, take the length it needs to be clear and useful, in short paragraphs or a short list, with nothing padded, and give a draft they asked for in full. Plain and warm, second person, no hype, no exclamation marks. Say what matters to them, not how you work inside: no counts, rule wording or mechanics unless they answer what they asked. Reply in the language of their message. Never assume their gender, in any language: no gendered word endings about them or in anything you draft in their voice; pick words that do not mark it ("que marcaste", not "que tú mismo marcaste"; "sigo con interés", not "sigo muy interesado"; "competir contra ti", not "contigo mismo"). The product is amble, lowercase.
 Do not remind them of something still pending (a change to confirm, an offer to answer) unless they ask about it: its buttons are already there. Do not end messages with an offer of more help, and offer to prepare an application only when they ask for it.
 
 "reaction": one emoji to react to their message with, as a person would, only for real news or real thanks (good news: 🙌, thanks: 👍); null otherwise, which is most of the time.
 
-Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null}|null, "action": {"type": "prepare_application"|"application_update"|"evaluate_posting", "company": string, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "forward": boolean, "reaction": string|null}.`
+Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null}|null, "action": {"type": "prepare_application"|"application_update"|"evaluate_posting"|"pause_search"|"resume_search", "company": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "forward": boolean, "reaction": string|null}.`
 
-const INTENTS = ['offer', 'applications', 'preferences', 'coach', 'amble', 'smalltalk', 'off_topic', 'interview'] as const
+const INTENTS = ['offer', 'applications', 'preferences', 'pause', 'coach', 'amble', 'smalltalk', 'off_topic', 'interview'] as const
 export type Intent = (typeof INTENTS)[number]
 const STATUSES = ['applied', 'interview', 'rejected', 'offer'] as const
 export type ApplicationStatus = (typeof STATUSES)[number]
@@ -80,6 +84,8 @@ export type AgentAction =
   | { type: 'prepare_application'; company: string }
   | { type: 'application_update'; company: string; status: ApplicationStatus }
   | { type: 'evaluate_posting'; company: string; title: string }
+  | { type: 'pause_search' }
+  | { type: 'resume_search' }
 
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 
@@ -94,13 +100,16 @@ const agentSchema = z.preprocess(
     const status = text(action?.status, 20)
     return {
       intent: (INTENTS as readonly string[]).includes(intent) ? intent : 'smalltalk',
-      reply: text(obj.reply, 1500),
+      // Coaching may run long; WhatsApp takes up to 4096 characters.
+      reply: text(obj.reply, 3500),
       preference:
         preference && text(preference.statement, 400) && ['hard_filter', 'compensation', 'strong'].includes(kind)
           ? { kind, label: text(preference.label, 80), statement: text(preference.statement, 400), replaces: text(preference.replaces, 40) || null }
           : null,
       action:
-        action && (type === 'evaluate_posting' || text(action.company, 120)) && (type === 'prepare_application' || type === 'evaluate_posting' || (type === 'application_update' && (STATUSES as readonly string[]).includes(status)))
+        action && (type === 'pause_search' || type === 'resume_search')
+          ? { type }
+          : action && (type === 'evaluate_posting' || text(action.company, 120)) && (type === 'prepare_application' || type === 'evaluate_posting' || (type === 'application_update' && (STATUSES as readonly string[]).includes(status)))
           ? type === 'prepare_application'
             ? { type, company: text(action.company, 120) }
             : type === 'evaluate_posting'
@@ -123,6 +132,8 @@ const agentSchema = z.preprocess(
         z.object({ type: z.literal('prepare_application'), company: z.string() }),
         z.object({ type: z.literal('application_update'), company: z.string(), status: z.enum(STATUSES) }),
         z.object({ type: z.literal('evaluate_posting'), company: z.string(), title: z.string() }),
+        z.object({ type: z.literal('pause_search') }),
+        z.object({ type: z.literal('resume_search') }),
       ])
       .nullable(),
     reminders: z.array(z.object({ date: z.string(), message: z.string() })),
@@ -166,10 +177,11 @@ function thisWeek(candidateId: string) {
     reasons[label] = (reasons[label] ?? 0) + 1
   }
   // Their rules just changed: what was read is being read again with the new
-  // ones, so the week looks empty without being so.
+  // ones (a re-read waiting or running), so the week looks empty without being so.
   const rereading =
-    view.week.read === 0 &&
-    Boolean(getDb().prepare('SELECT 1 FROM opportunity_matches WHERE candidate_id = ? AND created_at >= ?').get(candidateId, new Date(Date.now() - WEEK_MS).toISOString()))
+    isRereading(candidateId) ||
+    (view.week.read === 0 &&
+      Boolean(getDb().prepare('SELECT 1 FROM opportunity_matches WHERE candidate_id = ? AND created_at >= ?').get(candidateId, new Date(Date.now() - WEEK_MS).toISOString())))
   return {
     rereadingWithTheirNewRules: rereading,
     readThisWeek: view.week.read,
@@ -284,7 +296,9 @@ function contextFor(candidateId: string, message: string) {
       notFilteringOn: listening.revealed.notFilteringOn.map((item) => item.label),
     },
     // A change you proposed and they have not confirmed yet.
-    pendingChange: pending?.kind === 'preference' ? pending.preference.statement : null,
+    pendingChange: pending?.kind === 'preference' ? pending.preference.statement : pending?.kind === 'pause' ? (pending.pause ? 'pause the search' : 'resume the search') : null,
+    // They paused the search: nothing is read for them or sent to them until they resume it.
+    searchPaused: isSearchPaused(candidateId),
     whatYouReadForThem: thisWeek(candidateId),
     offersTheyMention: offersTheyMention(candidateId, message),
     capabilities: listCapabilities(candidateId).map((capability) => ({ name: capability.name, assessment: capability.assessment })),

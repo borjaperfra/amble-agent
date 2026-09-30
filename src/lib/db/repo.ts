@@ -21,7 +21,22 @@ export interface CandidateRow {
   email: string | null
   role: 'owner' | 'member'
   setup_at: string | null
+  // Since when the search is paused, until they resume it; null while it runs.
+  search_paused_at?: string | null
   created_at: string
+}
+
+export function isSearchPaused(candidateId: string): boolean {
+  const row = getDb().prepare('SELECT search_paused_at FROM candidates WHERE id = ?').get(candidateId) as { search_paused_at: string | null } | undefined
+  return Boolean(row?.search_paused_at)
+}
+
+// Paused until further notice, or running again. True when it changed.
+export function setSearchPaused(candidateId: string, paused: boolean): boolean {
+  const result = paused
+    ? getDb().prepare('UPDATE candidates SET search_paused_at = ? WHERE id = ? AND search_paused_at IS NULL').run(now(), candidateId)
+    : getDb().prepare('UPDATE candidates SET search_paused_at = NULL WHERE id = ? AND search_paused_at IS NOT NULL').run(candidateId)
+  return result.changes > 0
 }
 
 // The name and language the candidate gave, the first time in. Their own
@@ -982,12 +997,13 @@ export function listRevealedPreferences(triageId: string): RevealedPreferenceRow
 }
 
 // Everyone the Rep listens for: something confirmed to listen for, a
-// preference from their triage or an intent still current. Oldest account first.
+// preference from their triage or an intent still current, and the search not
+// paused. Oldest account first.
 export function listListeningCandidateIds(): string[] {
   const rows = getDb()
     .prepare(
       `SELECT c.id FROM candidates c
-       WHERE EXISTS (SELECT 1 FROM revealed_preferences p WHERE p.candidate_id = c.id AND p.status = 'confirmed')
+       WHERE c.search_paused_at IS NULL AND (EXISTS (SELECT 1 FROM revealed_preferences p WHERE p.candidate_id = c.id AND p.status = 'confirmed')
           OR EXISTS (SELECT 1 FROM intent_profiles i WHERE i.candidate_id = c.id AND i.confirmed_at IS NOT NULL
                      AND (i.valid_until IS NULL OR i.valid_until > ?))
        ORDER BY c.created_at ASC`,

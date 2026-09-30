@@ -36,6 +36,10 @@ interface ListeningVm {
   week: WeekLedger
   // Their first read is running: what it finds appears as it comes.
   firstReading: boolean
+  // Reading again with rules they just changed.
+  rereading: boolean
+  // They paused the search until further notice.
+  paused: boolean
   whatsapp: { available: boolean; linked: boolean }
 }
 
@@ -166,6 +170,33 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   // development, ?envelopes brings the pile out whatever there is.
   const holding = (vm.pile.some((item) => item.kind === 'new') || forcedPile) && vm.pile.length > 0
   const quietLines = t.listening.quiet
+  const [paused, setPaused] = useState(vm.paused)
+  const [switching, setSwitching] = useState(false)
+  const [note, setNote] = useState<'resumed' | 'failed' | null>(null)
+  const reading = vm.firstReading || vm.rereading
+
+  // Pause or resume at once; the page then reads its state again.
+  async function toggleSearch() {
+    const next = !paused
+    setSwitching(true)
+    setNote(null)
+    try {
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: next ? 'pause' : 'resume' }),
+      })
+      if (!response.ok) throw new Error(String(response.status))
+      const result = (await response.json()) as { paused: boolean }
+      setPaused(result.paused)
+      if (!result.paused) setNote('resumed')
+      router.refresh()
+    } catch {
+      setNote('failed')
+    } finally {
+      setSwitching(false)
+    }
+  }
 
   useEffect(() => {
     let activated = false
@@ -186,18 +217,18 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     return () => window.clearTimeout(id)
   }, [quietLines.length])
 
-  // While the first read runs, the page looks again now and then.
+  // While the first read (or a re-read) runs, the page looks again now and then.
   useEffect(() => {
-    if (!vm.firstReading) return
+    if (!reading) return
     const id = window.setInterval(() => router.refresh(), FIRST_READ_REFRESH_MS)
     return () => window.clearInterval(id)
-  }, [vm.firstReading, router])
+  }, [reading, router])
 
   // Now and then, while nothing new has come in, a tumbleweed rolls across.
   // In development, ?tumbleweed brings it out whatever there is, to play with.
   useEffect(() => {
     const forced = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('tumbleweed')
-    if (arriving || (holding && !forced) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (arriving || paused || (holding && !forced) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let id = 0
     const next = (ms: number) => {
       id = window.setTimeout(() => {
@@ -208,14 +239,14 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     }
     next(FIRST_ROLL_MS)
     return () => window.clearTimeout(id)
-  }, [arriving, holding])
+  }, [arriving, holding, paused])
 
   return (
     <>
       <Header />
       <main className={styles.page}>
         <section className={styles.moment} aria-labelledby="listening-title">
-          <Symbol size={148} wake watch breathe label={t.listening.label} className={styles.eye} />
+          <Symbol size={148} wake watch breathe={!paused} label={paused ? t.listening.pause.status : t.listening.label} className={styles.eye} />
 
           {arriving ? (
             <p className={styles.arriving} role="status">
@@ -224,17 +255,42 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
           ) : (
             <div className={styles.say}>
               <p className={styles.status}>
-                <span className={styles.pulse} aria-hidden="true" />
-                {t.listening.listeningOffers}
+                <span className={paused ? styles.still : styles.pulse} aria-hidden="true" />
+                {paused ? t.listening.pause.status : t.listening.listeningOffers}
               </p>
               <h1 className={styles.title} id="listening-title">
-                {found ? t.opportunities.foundTitle : quietLines[headline]}
+                {paused ? t.listening.pause.title : found ? t.opportunities.foundTitle : quietLines[headline]}
               </h1>
-              <p className={styles.line}>{found ? t.opportunities.foundLead : vm.firstReading ? t.listening.firstReading : t.listening.stillListening}</p>
-              {found && (
-                <Link href="/opportunities" className={`btn ${styles.seeIt}`}>
-                  {t.opportunities.seeIt}
-                </Link>
+              <p className={styles.line} role="status">
+                {note === 'failed'
+                  ? t.listening.pause.failed
+                  : paused
+                    ? t.listening.pause.line
+                    : note === 'resumed'
+                      ? t.listening.pause.resumed
+                      : found
+                        ? t.opportunities.foundLead
+                        : vm.firstReading
+                          ? t.listening.firstReading
+                          : vm.rereading
+                            ? t.listening.rereading
+                            : t.listening.stillListening}
+              </p>
+              {paused ? (
+                <button type="button" className={`btn ${styles.seeIt}`} onClick={toggleSearch} disabled={switching}>
+                  {t.listening.pause.resume}
+                </button>
+              ) : (
+                found && (
+                  <Link href="/opportunities" className={`btn ${styles.seeIt}`}>
+                    {t.opportunities.seeIt}
+                  </Link>
+                )
+              )}
+              {!paused && (
+                <button type="button" className={styles.pauseToggle} onClick={toggleSearch} disabled={switching}>
+                  {t.listening.pause.pause}
+                </button>
               )}
 
               {/* The horizon: the offers in their hands, or now and then something rolling by. */}
@@ -326,7 +382,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                   </Link>
                 </>
               ) : (
-                <p className={styles.weekEmpty}>{t.listening.weekEmpty}</p>
+                <p className={styles.weekEmpty}>{paused ? t.listening.pause.line : t.listening.weekEmpty}</p>
               )}
             </section>
 

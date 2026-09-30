@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { backupToday } from './db/backup'
 import { DATA_DIRECTORY } from './db/db'
-import { runListening } from './matching/run'
+import { rereadsInFlight, runListening } from './matching/run'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
@@ -36,8 +36,21 @@ function log(day: string, line: string) {
   console.log(`[listen] ${line}`)
 }
 
+// A re-read after someone changed their rules holds the lock for minutes: the
+// pass waits for it rather than being lost until the next slot.
+const REREAD_WAIT_MS = 30_000
+const REREAD_WAIT_TRIES = 60
+
+async function lockForPass(): Promise<boolean> {
+  for (let tries = 0; ; tries++) {
+    if (takeLock()) return true
+    if (rereadsInFlight() === 0 || tries >= REREAD_WAIT_TRIES) return false
+    await new Promise((resolve) => setTimeout(resolve, REREAD_WAIT_MS))
+  }
+}
+
 async function pass(day: string) {
-  if (!takeLock()) {
+  if (!(await lockForPass())) {
     log(day, `==== ${new Date().toISOString()} another pass is running; nothing done`)
     return
   }

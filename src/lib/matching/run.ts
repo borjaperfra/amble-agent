@@ -4,6 +4,7 @@ import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } f
 import { descriptionsOf, listCompanies, listOpenOpportunities } from '../db/opportunities'
 import { BACKGROUND_SLOTS } from '../model/provider'
 import { describeWhenMissing } from '../sourcing/describe'
+import { releaseLock, takeLock } from '../sourcing/lock'
 import { runSourcing, syncDirectory, type SourcingStats } from '../sourcing/run'
 import { DIRECTORY } from '../sourcing/directory'
 import { normaliseName } from '../sourcing/text'
@@ -371,4 +372,79 @@ export function startFirstRead(candidateId: string): boolean {
       void import('../whatsapp/offers').then(({ sendDueOffers }) => sendDueOffers(candidateId)).catch(() => undefined)
     })
   return true
+}
+
+declare global {
+  var __ambleRereads: { waiting: Map<string, NodeJS.Timeout>; running: Set<string>; again: Set<string> } | undefined
+}
+
+// A read again right after their rules change (or the search is resumed):
+// what came in lately, judged with the rules they have now, so what the Rep
+// says it is re-reading is being re-read. In the background, after a short
+// wait that gathers several changes made one after another into one read;
+// under the sourcing lock, so it never overlaps a pass (it waits for one to
+// end), and at the shared model limit, with the same model as any pass.
+const REREAD_AFTER_MS = 20_000
+const REREAD_LOCK_RETRY_MS = 60_000
+// A pass can hold the lock for hours; after that long, the next pass reads it.
+const REREAD_WAIT_MAX_MS = 4 * 60 * 60 * 1000
+
+const rereads = (globalThis.__ambleRereads ??= { waiting: new Map(), running: new Set(), again: new Set() })
+
+export function isRereading(candidateId: string): boolean {
+  return rereads.waiting.has(candidateId) || rereads.running.has(candidateId)
+}
+
+export function rereadsInFlight(): number {
+  return rereads.running.size
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+export function requestReread(candidateId: string): void {
+  if (rereads.running.has(candidateId)) {
+    rereads.again.add(candidateId)
+    return
+  }
+  clearTimeout(rereads.waiting.get(candidateId))
+  const timer = setTimeout(() => {
+    rereads.waiting.delete(candidateId)
+    // Nothing read for them yet: that is their first read, not a re-read.
+    if (!hasAnyMatch(candidateId)) {
+      startFirstRead(candidateId)
+      return
+    }
+    void reread(candidateId)
+  }, REREAD_AFTER_MS)
+  timer.unref?.()
+  rereads.waiting.set(candidateId, timer)
+}
+
+async function reread(candidateId: string): Promise<void> {
+  rereads.running.add(candidateId)
+  let locked = false
+  try {
+    const giveUpAt = Date.now() + REREAD_WAIT_MAX_MS
+    // Their first read, or a pass, may be running: it goes first.
+    while (firstReads.running.has(candidateId) || !(locked = takeLock())) {
+      if (Date.now() > giveUpAt) {
+        console.log(`[listen] reread for ${candidateId}: the lock stayed taken; the next pass reads it`)
+        return
+      }
+      await sleep(REREAD_LOCK_RETRY_MS)
+    }
+    // Paused, or nothing to listen for: nothing to read.
+    if (!listListeningCandidateIds().includes(candidateId) || listCapabilities(candidateId).length === 0) return
+    const since = new Date(Date.now() - FIRST_READ_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    const stats = await runMatching({ candidateId, limit: FIRST_READ_LIMIT, since })
+    console.log(`[listen] reread for ${candidateId}: ${JSON.stringify({ ...stats, prefilterOut: undefined })}`)
+    // If their WhatsApp is linked, the best of it goes there.
+    void import('../whatsapp/offers').then(({ sendDueOffers }) => sendDueOffers(candidateId)).catch(() => undefined)
+  } catch (error) {
+    console.error(`[listen] reread for ${candidateId} failed:`, error)
+  } finally {
+    if (locked) releaseLock()
+    rereads.running.delete(candidateId)
+    if (rereads.again.delete(candidateId)) requestReread(candidateId)
+  }
 }

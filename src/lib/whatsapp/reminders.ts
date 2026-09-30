@@ -1,5 +1,5 @@
 import { getDb } from '../db/db'
-import { newId, now } from '../db/repo'
+import { isSearchPaused, newId, now } from '../db/repo'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen } from './link'
 import { sendMessage, zernioConfig } from './zernio'
@@ -40,7 +40,8 @@ export async function sendDueReminders(): Promise<{ sent: number; skipped: numbe
     .all(today) as unknown as { id: string; candidate_id: string; message: string }[]
   const done = new Set<string>()
   for (const reminder of due) {
-    if (done.has(reminder.candidate_id)) continue
+    // Paused: kept, and sent if still due once they resume it.
+    if (done.has(reminder.candidate_id) || isSearchPaused(reminder.candidate_id)) continue
     const link = linkOf(reminder.candidate_id)
     const open = link ? windowOpen(link) : false
     // The shared test number only writes inside the 24 hours.
@@ -59,4 +60,12 @@ export async function sendDueReminders(): Promise<{ sent: number; skipped: numbe
     }
   }
   return stats
+}
+
+// Those whose day went by while the search was paused: said late, they would
+// be about an interview or a deadline already past.
+export function dropPastReminders(candidateId: string): void {
+  getDb()
+    .prepare('DELETE FROM whatsapp_reminders WHERE candidate_id = ? AND sent_at IS NULL AND due_on < ?')
+    .run(candidateId, new Date().toISOString().slice(0, 10))
 }

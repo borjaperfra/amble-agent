@@ -635,6 +635,10 @@ function migrate(db: DatabaseSync): void {
   // When the candidate told the Rep their name and language, the first time in.
   addColumn(db, 'candidates', 'setup_at', 'TEXT')
 
+  // The candidate paused the search until further notice: nothing is read for
+  // them and nothing is written to them first, until they resume it.
+  addColumn(db, 'candidates', 'search_paused_at', 'TEXT')
+
   // Answers given before decisions had their own table lived on assessments.
   // Carried over once, the latest per offer; a later decision is never replaced.
   db.exec(`

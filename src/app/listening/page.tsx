@@ -1,5 +1,6 @@
 import { requireCandidate } from '@/lib/auth/session'
-import { startFirstRead } from '@/lib/matching/run'
+import { isRereading, startFirstRead } from '@/lib/matching/run'
+import { isSearchPaused } from '@/lib/pause'
 import { getListeningViewModel } from '@/lib/view'
 import { linkOf } from '@/lib/whatsapp/link'
 import { zernioConfig } from '@/lib/whatsapp/zernio'
@@ -14,5 +15,8 @@ export default async function ListeningPage() {
   const firstReading = startFirstRead(candidate.id)
   // Setting up ends by connecting WhatsApp: from then on the Rep writes there.
   const whatsapp = { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null }
-  return <ListeningFlow vm={{ ...getListeningViewModel(candidate.id), firstReading, whatsapp }} />
+  // Paused until they resume it; or reading again after a change to their rules.
+  const paused = isSearchPaused(candidate.id)
+  const rereading = !paused && isRereading(candidate.id)
+  return <ListeningFlow vm={{ ...getListeningViewModel(candidate.id), firstReading, rereading, paused, whatsapp }} />
 }

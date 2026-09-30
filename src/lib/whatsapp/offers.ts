@@ -2,7 +2,7 @@ import { prepareApplication } from '../apply/prepare'
 import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
 import { getMatch, listMatchesForKey, respondToMatch, type MatchListing, type MatchRow } from '../db/matching'
-import { candidateById, now } from '../db/repo'
+import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import type { Explanation } from '../matching/assess'
@@ -136,7 +136,8 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
       )
   for (const candidateId of ids) {
     const link = linkOf(candidateId)
-    if (!link?.conversation_id || !paceAllows(candidateId)) continue
+    // Paused: nothing goes out until they resume it.
+    if (!link?.conversation_id || isSearchPaused(candidateId) || !paceAllows(candidateId)) continue
     // Outside the 24 hours an offer needs an approved template; the shared
     // test number has none, and the real number's is still to be made.
     if (!windowOpen(link)) {
@@ -197,6 +198,9 @@ export type Awaiting =
   // A change to what it listens for, proposed by the agent, waiting for a yes
   // on its own buttons (the id), and the rule of theirs it would replace.
   | { kind: 'preference'; id?: string; preference: ProposedPreference; until: string }
+  // Pausing the search, or resuming it, proposed by the agent on their word
+  // and waiting for a yes on its own buttons.
+  | { kind: 'pause'; id: string; pause: boolean; until: string }
 
 export interface ProposedPreference {
   kind: 'hard_filter' | 'compensation' | 'strong'

@@ -1,5 +1,5 @@
 import { getDb } from '../db/db'
-import { getCandidate, now, type CandidateRow } from '../db/repo'
+import { getCandidate, isSearchPaused, now, type CandidateRow } from '../db/repo'
 import { emailOwnerAbout, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
@@ -13,6 +13,7 @@ import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
 import { appUrl, handleAwaitedText, handleOfferTap, parseOfferPayload, sendDueOffers } from './offers'
+import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
 import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
 
@@ -104,6 +105,12 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   if (preferenceTap) {
     logMessage(candidate.id, 'in', text)
     await answerPreference(candidate.id, preferenceTap, reply, appUrl)
+    return
+  }
+  const pauseTap = parsePausePayload(interactiveId)
+  if (pauseTap) {
+    logMessage(candidate.id, 'in', text)
+    await answerPause(candidate.id, pauseTap, reply)
     return
   }
 
@@ -202,9 +209,14 @@ async function answerWords(
     await reply(shown.text, shown.buttons)
     return
   }
-  // What it decided to do: prepare an application (offered with buttons),
-  // or keep the news they gave about one.
-  if (answer.action) {
+  // Pausing the search, or resuming it: proposed with its own buttons, and
+  // only when it would change something.
+  if (answer.action?.type === 'pause_search' || answer.action?.type === 'resume_search') {
+    const pause = answer.action.type === 'pause_search'
+    if (pause !== isSearchPaused(candidate.id)) buttons = proposePause(candidate.id, pause)
+  } else if (answer.action) {
+    // What it decided to do: prepare an application (offered with buttons),
+    // or keep the news they gave about one.
     const done = runAction(candidate.id, answer.action, w.applyButtons)
     if (done.buttons) buttons = done.buttons
   }

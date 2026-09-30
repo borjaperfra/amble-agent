@@ -1,6 +1,7 @@
 import { candidateById, decideRevealedPreference, getLatestOfferTriage, getRevealedPreference, insertCandidatePreference, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
+import { requestReread } from '../matching/run'
 import { awaitingOf, setAwaiting, type ProposedPreference } from './offers'
 
 // A change to what the Rep listens for, asked for on WhatsApp: the agent
@@ -65,5 +66,7 @@ export async function answerPreference(candidateId: string, tap: PreferenceTap, 
     quote: null,
   })
   if (awaiting.preference.replaces) decideRevealedPreference(awaiting.preference.replaces, 'rejected')
+  // What was read lately is read again with the new rule, in the background.
+  requestReread(candidateId)
   await reply(w.preferenceSaved(awaiting.preference.label || awaiting.preference.statement))
 }
