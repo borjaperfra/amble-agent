@@ -13,7 +13,7 @@ import { keyOf, type OfferKey } from './map'
 // computed again only when the table or the rules change (the version).
 
 // The rules in map.ts and here: a change to them recomputes every estimate.
-const RULES_VERSION = 3
+const RULES_VERSION = 4
 export const ESTIMATE_VERSION = `${BANDS_VERSION}.${RULES_VERSION}`
 
 export interface SalaryEstimate {
@@ -148,7 +148,7 @@ export function estimateOffer(offer: EstimableOffer): Stored {
       currency: 'EUR',
       source: source.name,
       year: source.year,
-      url: source.url,
+      url: band.url,
       role: band.name,
       experience: band.experience,
       place: band.place,

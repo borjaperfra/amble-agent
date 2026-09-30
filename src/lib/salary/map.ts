@@ -26,8 +26,8 @@ export type NoKey = 'role' | 'place'
 // marketing manager" is marketing, not product management; "engineering
 // manager" is management, not software; "content team lead" is content.
 const ROLE_RULES: [Role, RegExp][] = [
-  // Leading the function.
-  ['cto', /\b(cto|chief technology officer|chief technical officer)\b/],
+  // Leading the function. A CTO is Manfred's "CTO/Head of Engineering".
+  ['head_of_engineering', /\b(cto|chief technology officer|chief technical officer)\b/],
   ['ciso', /\b(ciso|chief information security officer)\b/],
   ['vp_engineering', /\b(vp|vice president)( of)? engineering\b/],
   ['head_of_engineering', /\b(head of engineering|director of engineering|engineering director|director de ingenieria)\b/],
@@ -35,8 +35,9 @@ const ROLE_RULES: [Role, RegExp][] = [
   ['tech_lead', /\b((tech|technical|engineering|development|software|developer|backend|frontend|full ?stack) (team )?lead|lead (developer|engineer|software engineer|backend|frontend)|jefe de equipo de desarrollo|jefe de proyecto de desarrollo)\b/],
   ['staff_engineer', /\b(staff|principal) (software |backend |frontend |full ?stack |platform )?(engineer|developer)\b/],
 
-  // Roles with no public Spanish source yet: placed, so they are counted, but
-  // they get no estimate (bands.ts has no rows for them).
+  // Roles with no row in the table (bands.ts has only Manfred's): placed, so
+  // they are counted, but they get no estimate. The same holds for every
+  // role below whose name bands.ts has no row for; no other source fills in.
   ['devrel', /\b(developer advocate|developer advocacy|developer relations|devrel|dev rel|developer evangelist|technology evangelist|tech evangelist|developer community|developer experience)\b/],
   ['technical_writer', /\b(technical writer|tech writer|documentation (writer|engineer|specialist)|docs engineer|api writer|redactor tecnico|redactora tecnica)\b/],
   ['product_marketing', /\b(product marketing|product marketer|product marketeer|pmm|marketing de producto)\b/],
@@ -56,30 +57,30 @@ const ROLE_RULES: [Role, RegExp][] = [
 
   ['data_architect', /\b(data architect|arquitecto de datos|arquitecta de datos)\b/],
   ['data_engineer', /\b(data engineer|analytics engineer|big data|ingeniero de datos|ingeniera de datos|etl developer|data platform engineer)\b/],
-  ['ml_engineer', /\b(machine learning|ml engineer|mlops|ai engineer|ia engineer|llm engineer|genai engineer|deep learning|computer vision|nlp engineer|applied scientist|ai developer|ai researcher)\b/],
+  ['ml_engineer', /\b(machine learning|ml engineer|ai engineer|ia engineer|llm engineer|genai engineer|deep learning|computer vision|nlp engineer|applied scientist|ai developer|ai researcher)\b/],
+  // After it: an "AI Engineer (Generative AI & MLOps)" is an AI engineer.
+  ['mlops', /\b(mlops|ml ops|ml platform engineer|ml infrastructure)\b/],
   ['data_scientist', /\b(data scientist|cientifico de datos|cientifica de datos|research scientist)\b/],
   ['digital_analyst', /\b((marketing|growth|digital|web|ecommerce|e commerce|crm|campaign|performance)( \w+){0,2} analyst|analyst( \w+){0,2} (growth|marketing)|analista digital|web analytics)\b/],
   ['data_analyst', /\b(data analyst|analista de datos|bi analyst|business intelligence|bi developer|analytics analyst|product analyst|insights analyst|reporting analyst)\b/],
 
   ['qa_manager', /\b(qa manager|quality assurance manager|head of qa|test manager)\b/],
-  ['qa_lead', /\b(qa lead|test lead|qa team lead|lead qa)\b/],
-  ['qa_automation', /\b(qa automation|test automation|automation (qa|test\w*)|sdet|qa engineer|quality engineer|test engineer)\b/],
+  // Manfred's "QA & Testing" is the whole of QA work but its management: a
+  // QA lead takes its upper brackets by level; a QA manager has no row.
+  ['qa_tester', /\b(qa lead|test lead|qa team lead|lead qa)\b/],
+  ['qa_tester', /\b(qa automation|test automation|automation (qa|test\w*)|sdet|qa engineer|quality engineer|test engineer)\b/],
   ['qa_tester', /\b(qa|tester|quality assurance|testing)\b/],
 
-  ['mobile_ios', /\b(ios|swift|flutter)\b/],
-  ['mobile_android', /\b(android)\b/],
+  // Manfred's "Mobile" is iOS, Android and cross-platform alike.
+  ['mobile', /\b(ios|swift|flutter|android|kotlin multiplatform)\b/],
   ['mobile', /\b(mobile (developer|engineer|software engineer)|react native|desarrollador movil|desarrolladora movil|app developer)\b/],
 
   ['software_architect', /\b(software architect|arquitecto de software|arquitecta de software|technical architect|arquitecto tecnico)\b/],
   ['frontend', /\b(frontend|front end|react developer|angular developer|vue developer|maquetador|maquetadora)\b/],
   ['fullstack', /\b(full ?stack)\b/],
-  ['java_developer', /\b(java|j2ee|spring boot)\b/],
-  ['dotnet_developer', /\b(net developer|net engineer|dotnet|c sharp)\b/],
-  ['python_developer', /\b(python|django)\b/],
-  ['node_developer', /\b(node js|nodejs|node)\b/],
-  ['golang_developer', /\b(golang|go developer|go engineer)\b/],
-  ['php_developer', /\b(php|laravel|symfony)\b/],
-  ['ruby_developer', /\b(ruby|rails)\b/],
+  // Manfred has no row per language: a Java, .NET, Python, Node, Go, PHP or
+  // Ruby developer is its "Backend Engineer".
+  ['backend', /\b(java|j2ee|spring boot|net developer|net engineer|dotnet|c sharp|python|django|node js|nodejs|node|golang|go developer|go engineer|php|laravel|symfony|ruby|rails)\b/],
   ['backend', /\b(backend|back end|software engineer|software developer|developer|desarrollador|desarrolladora|programador|programadora|ingeniero de software|ingeniera de software|web developer|web engineer)\b/],
 
   // Product and design.
@@ -89,10 +90,10 @@ const ROLE_RULES: [Role, RegExp][] = [
   ['head_of_design', /\b(head of design|design director|director of design|design manager|vp (of )?design)\b/],
   ['ux_researcher', /\b(ux research\w*|user research\w*)\b/],
   ['ux_writer', /\b(ux writer|content designer|ux content)\b/],
-  ['ux_ui_designer', /\b(ux ui|ui ux)\b/],
-  ['ui_designer', /\b(ui designer|disenador ui|disenadora ui)\b/],
-  ['ux_designer', /\b(ux designer|interaction designer|disenador ux|disenadora ux|experience designer)\b/],
-  ['product_designer', /\b(product designer|disenador de producto|disenadora de producto)\b/],
+  // Manfred counts UX and UI design as product design ("Product Design
+  // (UI/UX)" in its Tech Career Report): its "Product Designer" row.
+  ['product_designer', /\b(ux ui|ui ux|ui designer|disenador ui|disenadora ui|ux designer|interaction designer|disenador ux|disenadora ux|experience designer)\b/],
+  ['product_designer',/\b(product designer|disenador de producto|disenadora de producto)\b/],
   ['graphic_designer', /\b(graphic designer|brand designer|disenador grafico|disenadora grafica|marketing artist|motion designer|creative designer|visual designer)\b/],
   ['copywriter', /\b(copywriter|redactor creativo|redactora creativa)\b/],
 
@@ -109,7 +110,7 @@ const ROLE_RULES: [Role, RegExp][] = [
   ['user_acquisition_manager', /\b(user acquisition|acquisition manager|app marketing)\b/],
   ['performance_manager', /\b((performance|paid (media|social|marketing)) (marketing )?(manager|lead|strategist)|paid marketing strategist)\b/],
   ['performance_specialist', /\b(performance|paid (media|social|marketing)|media buyer|trafficker)\b/],
-  // A specialist in growth is not a growth manager: Hays has no row of its own for it.
+  // A specialist in growth is not a growth manager.
   ['digital_marketing_specialist', /\b(growth( \w+)? (specialist|associate|executive|coordinator)|(specialist|associate|executive)( \w+)? growth)\b/],
   ['growth_manager', /\b(growth)\b/],
   ['marketing_automation', /\b(marketing automation|automation specialist|marketing operations|hubspot|marketo|braze)\b/],

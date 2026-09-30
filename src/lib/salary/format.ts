@@ -13,7 +13,7 @@ export interface EstimateWords {
   experience: (text: string) => string
 }
 
-// "Estimado: 28–33K · Hays 2026, Community manager (2-5 años), Madrid": the
+// "Estimado: 31–40K · Manfred 2026, Backend Engineer (2-5 años), España": the
 // figure is never shown without saying it is an estimate and whose.
 export function estimateLine(
   estimate: { min: number; max: number; source: string; year: number; role: string; experience: string; place: keyof EstimateWords['places'] },
