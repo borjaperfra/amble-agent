@@ -118,9 +118,10 @@ async function fromBoardApi(url: string): Promise<RawOpportunity | null> {
       postedAt: null,
     }
   }
-  const lever = url.match(/jobs\.(?:eu\.)?lever\.co\/([a-z0-9_-]+)\/([0-9a-f-]{36})/i)
+  // A board in Lever's EU region answers on its own API.
+  const lever = url.match(/jobs\.(eu\.)?lever\.co\/([a-z0-9_-]+)\/([0-9a-f-]{36})/i)
   if (lever) {
-    const data = (await fetch(`https://api.lever.co/v0/postings/${lever[1]}/${lever[2]}?mode=json`, { signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const data = (await fetch(`https://api.${lever[1] ?? ''}lever.co/v0/postings/${lever[2]}/${lever[3]}?mode=json`, { signal: AbortSignal.timeout(TIMEOUT_MS) })
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)) as { text?: string; categories?: { location?: string }; descriptionPlain?: string; additionalPlain?: string; workplaceType?: string } | null
     if (!data?.text) return null

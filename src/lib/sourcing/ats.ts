@@ -92,8 +92,14 @@ function leverWorkplace(value: string | undefined, location: string | null): Wor
   return inferWorkplace(location)
 }
 
-async function readLever(token: string, companyName: string, region: 'global' | 'eu' = 'global'): Promise<RawOpportunity[] | null> {
-  const host = region === 'eu' ? 'api.eu.lever.co' : 'api.lever.co'
+// A board on Lever's EU instance (jobs.eu.lever.co/<site>) is pinned as
+// "eu:<site>"; a bare site is on the global one.
+export const LEVER_EU_PREFIX = 'eu:'
+
+async function readLever(board: string, companyName: string): Promise<RawOpportunity[] | null> {
+  const eu = board.startsWith(LEVER_EU_PREFIX)
+  const token = eu ? board.slice(LEVER_EU_PREFIX.length) : board
+  const host = eu ? 'api.eu.lever.co' : 'api.lever.co'
   const data = (await getJson(`https://${host}/v0/postings/${encodeURIComponent(token)}?mode=json`, 'lever')) as LeverJob[] | null
   if (!Array.isArray(data)) return null
   return data.map((job) => {
@@ -284,12 +290,13 @@ async function readTeamtailor(host: string, companyName: string): Promise<RawOpp
 }
 
 // ── Factorial ────────────────────────────────────────────────────────────
-// Factorial's careers site (<company>.factorialhr.com, or .factorial.es) is
-// drawn on the server: each offer is a list item carrying its link, whether
-// it is remote, and under the heading of its office. Many Spanish companies
-// hire through it. The offer's text is on its own page, read when judged.
+// Factorial's careers site (<company>.factorialhr.com, .factorialhr.co or
+// .factorial.es) is drawn on the server: each offer is a list item carrying
+// its link, whether it is remote, and under the heading of its office. Many
+// Spanish companies hire through it. The offer's text is on its own page,
+// read when judged.
 
-const FACTORIAL_HOST = /^[a-z0-9-]+\.factorial(?:hr)?\.(?:com|es)$/i
+const FACTORIAL_HOST = /^[a-z0-9-]+\.factorial(?:hr)?\.(?:com|co|es)$/i
 
 async function readFactorial(host: string, companyName: string): Promise<RawOpportunity[] | null> {
   if (!FACTORIAL_HOST.test(host)) return null
@@ -771,9 +778,11 @@ export function sameCompany(owner: string, name: string, domain?: string | null)
   })
 }
 
-export const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp }[] = [
+// prefix goes before the captured token: an EU Lever board is "eu:<site>".
+export const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp; prefix?: string }[] = [
   { ats: 'greenhouse', pattern: /(?:boards(?:-api)?|job-boards(?:\.eu)?)\.greenhouse\.io\/(?:v1\/boards\/)?(?:embed\/job_board\?for=)?([a-z0-9_-]+)/i },
-  { ats: 'lever', pattern: /jobs\.(?:eu\.)?lever\.co\/([a-z0-9_-]+)/i },
+  { ats: 'lever', pattern: /jobs\.lever\.co\/([a-z0-9_-]+)/i },
+  { ats: 'lever', pattern: /jobs\.eu\.lever\.co\/([a-z0-9_-]+)/i, prefix: LEVER_EU_PREFIX },
   { ats: 'ashby', pattern: /jobs\.ashbyhq\.com\/([a-z0-9_.-]+)/i },
   { ats: 'workable', pattern: /apply\.workable\.com\/([a-z0-9_-]+)/i },
   { ats: 'teamtailor', pattern: /\b([a-z0-9-]+\.teamtailor\.com)\b/i },
@@ -783,7 +792,7 @@ export const BOARD_PATTERNS: { ats: AtsKind; pattern: RegExp }[] = [
   // tenant.wdN/site: the site is the path's first segment after an optional locale.
   { ats: 'workday', pattern: /\b([a-z0-9-]+\.wd\d+)\.myworkdayjobs\.com\/(?:[a-z]{2}-[A-Z]{2}\/)?([A-Za-z0-9_-]+)/ },
   { ats: 'smartrecruiters', pattern: /(?:jobs|careers)\.smartrecruiters\.com\/([A-Za-z0-9_-]+)/i },
-  { ats: 'factorial', pattern: /\b([a-z0-9-]+\.factorial(?:hr)?\.(?:com|es))\b/i },
+  { ats: 'factorial', pattern: /\b([a-z0-9-]+\.factorial(?:hr)?\.(?:com|co|es))\b/i },
 ]
 
 export const NOT_TOKENS = new Set(['api', 'app', 'assets', 'careers-analytics', 'cdn', 'embed', 'j', 'jobs', 'static', 'v1', 'widget', 'www'])
@@ -823,10 +832,10 @@ export async function detectBoard(params: { name: string; careersUrl?: string | 
       clearTimeout(timeout)
       const html = response.ok ? await response.text() : ''
       const found: { ats: AtsKind; token: string }[] = []
-      for (const { ats, pattern } of BOARD_PATTERNS) {
+      for (const { ats, pattern, prefix } of BOARD_PATTERNS) {
         for (const match of html.matchAll(new RegExp(pattern.source, ats === 'workday' ? 'g' : 'gi'))) {
-          const token = ats === 'workday' ? `${match[1].toLowerCase()}/${match[2]}` : match[1]
-          if (!NOT_TOKENS.has(token.split('.')[0].toLowerCase()) && !found.some((f) => f.ats === ats && f.token === token)) found.push({ ats, token })
+          const token = ats === 'workday' ? `${match[1].toLowerCase()}/${match[2]}` : `${prefix ?? ''}${match[1]}`
+          if (!NOT_TOKENS.has(match[1].split('.')[0].toLowerCase()) &&!found.some((f) => f.ats === ats && f.token === token)) found.push({ ats, token })
         }
       }
       // A Teamtailor site on the company's own domain serves the same feed.
