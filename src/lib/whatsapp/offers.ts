@@ -194,8 +194,16 @@ export function parseOfferPayload(value: string | null): OfferTap | null {
 
 export type Awaiting =
   | { kind: 'offer_reason'; matchId: string; until: string }
-  // A change to what it listens for, proposed by the agent, waiting for a yes.
-  | { kind: 'preference'; preference: { kind: 'hard_filter' | 'compensation' | 'strong'; label: string; statement: string }; until: string }
+  // A change to what it listens for, proposed by the agent, waiting for a yes
+  // on its own buttons (the id), and the rule of theirs it would replace.
+  | { kind: 'preference'; id?: string; preference: ProposedPreference; until: string }
+
+export interface ProposedPreference {
+  kind: 'hard_filter' | 'compensation' | 'strong'
+  label: string
+  statement: string
+  replaces: string | null
+}
 
 export function awaitingOf(candidateId: string): Awaiting | null {
   const row = getDb().prepare('SELECT awaiting FROM whatsapp_links WHERE candidate_id = ?').get(candidateId) as { awaiting: string | null } | undefined

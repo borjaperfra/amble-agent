@@ -13,7 +13,7 @@ import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
 import { appUrl, handleAwaitedText, handleOfferTap, parseOfferPayload, sendDueOffers } from './offers'
-import { answerPreference, isPreferencePayload, proposePreference } from './preferences'
+import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
 import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
 
 // One event from the provider's webhook. Each is handled once (they retry
@@ -100,9 +100,10 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
     if (thanks) await reply(thanks)
     return
   }
-  if (isPreferencePayload(interactiveId)) {
+  const preferenceTap = parsePreferencePayload(interactiveId)
+  if (preferenceTap) {
     logMessage(candidate.id, 'in', text)
-    await answerPreference(candidate.id, interactiveId, reply, appUrl)
+    await answerPreference(candidate.id, preferenceTap, reply, appUrl)
     return
   }
 

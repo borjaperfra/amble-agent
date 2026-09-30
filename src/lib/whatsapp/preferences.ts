@@ -1,42 +1,52 @@
-import { candidateById, getLatestOfferTriage, insertCandidatePreference } from '../db/repo'
+import { candidateById, decideRevealedPreference, getLatestOfferTriage, getRevealedPreference, insertCandidatePreference, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
-import { awaitingOf, setAwaiting } from './offers'
+import { awaitingOf, setAwaiting, type ProposedPreference } from './offers'
 
 // A change to what the Rep listens for, asked for on WhatsApp: the agent
 // proposes it, and only a yes makes it one of their rules, written by them.
+// A rule it replaces (a new floor for the old one) stops holding then.
 // Their rules hang on the triage that revealed them; without one yet, the
-// change is made in the app.
+// change is made in the app. Each proposal has its own buttons: a yes on an
+// older one never confirms the newer.
 
 const HOURS_TO_ANSWER = 24
 
 type Reply = (text: string, buttons?: { title: string; payload: string }[]) => Promise<unknown>
 
-export function proposePreference(
-  candidateId: string,
-  preference: { kind: 'hard_filter' | 'compensation' | 'strong'; label: string; statement: string },
-): { title: string; payload: string }[] {
-  setAwaiting(candidateId, { kind: 'preference', preference, until: new Date(Date.now() + HOURS_TO_ANSWER * 60 * 60 * 1000).toISOString() })
+export function proposePreference(candidateId: string, preference: ProposedPreference): { title: string; payload: string }[] {
+  // Only one of their confirmed rules can be replaced.
+  const replaced = preference.replaces ? getRevealedPreference(preference.replaces) : undefined
+  const replaces = replaced?.candidate_id === candidateId && replaced.status === 'confirmed' ? replaced.id : null
+  const id = newId('prp').slice(4, 12)
+  setAwaiting(candidateId, { kind: 'preference', id, preference: { ...preference, replaces }, until: new Date(Date.now() + HOURS_TO_ANSWER * 60 * 60 * 1000).toISOString() })
   const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
   return [
-    { title: w.preferenceButtons.yes, payload: 'pr:yes' },
-    { title: w.preferenceButtons.no, payload: 'pr:no' },
+    { title: w.preferenceButtons.yes, payload: `pr:${id}:yes` },
+    { title: w.preferenceButtons.no, payload: `pr:${id}:no` },
   ]
 }
 
-export function isPreferencePayload(value: string | null): value is 'pr:yes' | 'pr:no' {
-  return value === 'pr:yes' || value === 'pr:no'
+export interface PreferenceTap {
+  id: string | null
+  answer: 'yes' | 'no'
 }
 
-export async function answerPreference(candidateId: string, answer: 'pr:yes' | 'pr:no', reply: Reply, appUrl: (candidateId: string, route: string) => string): Promise<void> {
+// pr:<id>:yes|no; plain pr:yes|no from before proposals had an id.
+export function parsePreferencePayload(value: string | null): PreferenceTap | null {
+  const match = value?.match(/^pr:(?:(\w+):)?(yes|no)$/)
+  return match ? { id: match[1] ?? null, answer: match[2] as 'yes' | 'no' } : null
+}
+
+export async function answerPreference(candidateId: string, tap: PreferenceTap, reply: Reply, appUrl: (candidateId: string, route: string) => string): Promise<void> {
   const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
   const awaiting = awaitingOf(candidateId)
-  if (awaiting?.kind !== 'preference') {
+  if (awaiting?.kind !== 'preference' || (awaiting.id ?? null) !== tap.id) {
     await reply(w.preferenceExpired)
     return
   }
   setAwaiting(candidateId, null)
-  if (answer === 'pr:no') {
+  if (tap.answer === 'no') {
     await reply(w.preferenceKept)
     return
   }
@@ -54,5 +64,6 @@ export async function answerPreference(candidateId: string, answer: 'pr:yes' | '
     evidenceProbeIds: [],
     quote: null,
   })
+  if (awaiting.preference.replaces) decideRevealedPreference(awaiting.preference.replaces, 'rejected')
   await reply(w.preferenceSaved(awaiting.preference.label || awaiting.preference.statement))
 }
