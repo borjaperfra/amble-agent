@@ -159,6 +159,8 @@ export const es: Dictionary = {
       resume: 'Reactivar la búsqueda',
       resumed: 'Búsqueda reactivada. Te aviso cuando algo encaje.',
       failed: 'No se ha podido cambiar. Inténtalo de nuevo.',
+      // Instead of "Volver a escuchar" while nothing is being listened to.
+      back: 'Volver a tu Rep',
     },
     pile: {
       label: (count: number) => (count === 1 ? 'Una oferta en tus manos' : `${count} ofertas en tus manos`),

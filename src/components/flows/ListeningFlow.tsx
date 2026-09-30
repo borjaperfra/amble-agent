@@ -9,6 +9,7 @@ import EnvelopePile from '@/components/EnvelopePile'
 import type { PileEnvelope } from '@/lib/view'
 import Tumbleweed from '@/components/Tumbleweed'
 import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
+import { useSearchPause } from '@/components/flows/useSearchPause'
 import { useT } from '@/components/I18nProvider'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import type { DiscardReason, WeekEntry, WeekLedger } from '@/lib/matching/view'
@@ -170,33 +171,8 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   // development, ?envelopes brings the pile out whatever there is.
   const holding = (vm.pile.some((item) => item.kind === 'new') || forcedPile) && vm.pile.length > 0
   const quietLines = t.listening.quiet
-  const [paused, setPaused] = useState(vm.paused)
-  const [switching, setSwitching] = useState(false)
-  const [note, setNote] = useState<'resumed' | 'failed' | null>(null)
+  const { paused, switching, note, toggle: toggleSearch } = useSearchPause(vm.paused)
   const reading = vm.firstReading || vm.rereading
-
-  // Pause or resume at once; the page then reads its state again.
-  async function toggleSearch() {
-    const next = !paused
-    setSwitching(true)
-    setNote(null)
-    try {
-      const response = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: next ? 'pause' : 'resume' }),
-      })
-      if (!response.ok) throw new Error(String(response.status))
-      const result = (await response.json()) as { paused: boolean }
-      setPaused(result.paused)
-      if (!result.paused) setNote('resumed')
-      router.refresh()
-    } catch {
-      setNote('failed')
-    } finally {
-      setSwitching(false)
-    }
-  }
 
   useEffect(() => {
     let activated = false
@@ -250,7 +226,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
 
           {arriving ? (
             <p className={styles.arriving} role="status">
-              {t.listening.arriving}
+              {paused ? t.listening.pause.title : t.listening.arriving}
             </p>
           ) : (
             <div className={styles.say}>

@@ -551,8 +551,9 @@ export function listEvidenceForCapabilities(candidateId: string, capabilityIds: 
 
 // The voice of what the person reads on their profile (PERSON_FACING_RULES in
 // src/lib/model/tasks.ts), in their language. Everything written from now on
-// is in it; rows marked otherwise are rewritten once.
-export const EXPLANATION_VOICE = 'v2'
+// is in it; rows marked otherwise are rewritten once. v3: nothing marks the
+// person's gender.
+export const EXPLANATION_VOICE = 'v3'
 
 export function explanationVoice(candidateId: string): string {
   const row = getDb().prepare('SELECT locale FROM candidates WHERE id = ?').get(candidateId) as { locale: string | null } | undefined

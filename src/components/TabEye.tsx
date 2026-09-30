@@ -5,7 +5,8 @@ import { useT } from './I18nProvider'
 
 // In a background tab the tab says so and its eye closes; it opens again when
 // you come back. The same behaviour as amble-web (layouts/Base.astro).
-export default function TabEye() {
+// While the search is paused it says so instead of that it is listening.
+export default function TabEye({ paused }: { paused: boolean }) {
   const t = useT()
 
   useEffect(() => {
@@ -14,7 +15,7 @@ export default function TabEye() {
       const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]')
       if (document.hidden) {
         title = document.title
-        document.title = t.meta.away
+        document.title = paused ? t.listening.pause.status : t.meta.away
         icon?.setAttribute('href', '/favicon-closed.svg')
       } else if (title !== null) {
         document.title = title
@@ -24,7 +25,7 @@ export default function TabEye() {
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [t])
+  }, [t, paused])
 
   return null
 }

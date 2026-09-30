@@ -1,6 +1,7 @@
 import OpportunitiesFlow, { type Tab } from '@/components/flows/OpportunitiesFlow'
 import { requireCandidate } from '@/lib/auth/session'
 import { getOpportunitiesView } from '@/lib/matching/view'
+import { isSearchPaused } from '@/lib/pause'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,5 +13,5 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
   const candidate = await requireCandidate()
   const asked = (await searchParams).tab
   const tab = TABS.find((key) => key === asked) ?? null
-  return <OpportunitiesFlow view={getOpportunitiesView(candidate.id)} tab={tab} />
+  return <OpportunitiesFlow view={getOpportunitiesView(candidate.id)} tab={tab} paused={isSearchPaused(candidate.id)} />
 }

@@ -4,6 +4,7 @@ import { nextStep } from '@/lib/journey'
 import { getMapViewModel } from '@/lib/view'
 import { rewriteExplanationsInBackground } from '@/lib/career/explanations'
 import { serverLocale } from '@/lib/i18n/server'
+import { isSearchPaused } from '@/lib/pause'
 import { linkOf } from '@/lib/whatsapp/link'
 import { zernioConfig } from '@/lib/whatsapp/zernio'
 import MapView, { type MapNextStep } from '@/components/flows/MapView'
@@ -25,5 +26,5 @@ export default async function MapPage() {
   // Anything on the profile still written the old way is rewritten for them,
   // without making them wait: the next visit shows it.
   after(() => rewriteExplanationsInBackground(candidate.id))
-  return <MapView vm={getMapViewModel(candidate.id, await serverLocale())} next={mapNextStep(candidate.id, nextStep(candidate))} owner={candidate.role === 'owner'} />
+  return <MapView vm={getMapViewModel(candidate.id, await serverLocale())} next={mapNextStep(candidate.id, nextStep(candidate))} owner={candidate.role === 'owner'} paused={isSearchPaused(candidate.id)} />
 }

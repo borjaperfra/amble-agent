@@ -4,6 +4,7 @@ import { I18nProvider } from '@/components/I18nProvider'
 import FeedbackButton from '@/components/FeedbackButton'
 import TabEye from '@/components/TabEye'
 import { currentCandidate } from '@/lib/auth/session'
+import { isSearchPaused } from '@/lib/pause'
 import { serverDictionary, serverLocale } from '@/lib/i18n/server'
 import './globals.css'
 
@@ -33,12 +34,15 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await serverLocale()
   // Feedback is for people in the beta: once they have signed in.
-  const signedIn = Boolean(await currentCandidate())
+  const candidate = await currentCandidate()
+  const signedIn = Boolean(candidate)
+  // A background tab says it is still listening, unless they paused the search.
+  const paused = candidate ? isSearchPaused(candidate.id) : false
   return (
     <html lang={locale} className={`${inter.variable} ${newsreader.variable}`}>
       <body>
         <I18nProvider locale={locale}>
-          <TabEye />
+          <TabEye paused={paused} />
           {signedIn && <FeedbackButton />}
           {children}
         </I18nProvider>

@@ -185,6 +185,14 @@ How "name", "reason" and every uncertainty "description" are written (the person
 - Address the person directly, in the second person ("you" in English, "tú" in Spanish). Never "the candidate", "el candidato", "he", "she" or their name.
 - Plain words only. Never write internal labels or ids: no SOURCE_FACT, USER_CLAIM, ASSISTED_CLAIM, evidence ids, snake_case, or level names like SOME_EVIDENCE. Say instead what they mean: "your CV says", "you told me", "what you built with AI help", "your employer's site confirms".
 - Name sources as the person knows them: your CV, your LinkedIn, your website, your repositories, your answers.
+- Never mark the person's gender. You do not know it, and Spanish marks it easily: check every adjective, participle and noun that refers to them, including in "name". Rewrite so nothing agrees in gender with the person:
+  - Never "tú mismo", "tú misma", "ti mismo", "ti misma" (also not when turning an English "you yourself" into Spanish) -> "por tu cuenta", "sin ayuda", or just drop it: "has dicho", "lo construiste tú".
+  - A gendered role noun about them ("diseñador e ilustrador", "desarrollador", "experto en") -> the activity or field: "diseño e ilustración", "trabajas en desarrollo", "tienes experiencia en", "sabes de". Words the same for everyone ("autodidacta", "capaz", "responsable") are fine.
+  - A gendered adjective or participle about them ("estás acostumbrado", "formado en", "comprometido", "cualificado") -> a verb or a noun: "tienes costumbre de", "te formaste en", "tu compromiso con", "tienes la cualificación".
+  - Never use slashes, "@", "x" or "-e" endings (no "diseñador/a", "todxs").
+  - Gendered words about something else (a project, a company, an offer) are fine: "la web que hiciste", "un proyecto propio".
+  In English, never "he", "she", "himself", "herself": use "you".
+  Before answering, read each Spanish text once more for any word about the person that ends differently for a man and a woman, and rewrite it.
 - reason: at most 3 short, complete sentences, under 450 characters. Say what the evidence shows and, if it matters, what it does not show yet. No preamble.
 - uncertainty description: one complete sentence, under 200 characters, saying what is not known yet.
 - name: a short capability name, at most 6 words and 50 characters, no brackets.`
@@ -724,12 +732,13 @@ export function runRewriteExplanationsTask(params: {
   capabilities: { id: string; name: string; assessment: string; reason: string }[]
   uncertainties: { id: string; capabilityId: string | null; description: string }[]
 }) {
-  const system = `You are Amble's profile editor, version 1. You receive the capabilities already assessed for one person, with the reason for each and what is still unknown about them. They were written for an internal reader. Rewrite them for the person themself, who reads them on their own profile.
+  const system = `You are Amble's profile editor, version 2. You receive the capabilities already assessed for one person, with the reason for each and what is still unknown about them. They were written for an internal reader. Rewrite them for the person themself, who reads them on their own profile.
 
 Rules:
 - Rewrite wording only. Keep every fact, number, source and caveat. Never add a fact, never drop a caveat, never make anything sound stronger or weaker than it is. The assessment level is given for context and does not change.
 - If a reason was cut off mid-sentence, end it at the last complete idea; never guess how it went on.
 - Keep each id exactly as given. Return every capability and every uncertainty you were given, once.
+- Text you are given may already mark the person's gender ("tú mismo", "diseñador e ilustrador", "experto en"). Rewrite it neutrally as the rules below say, even when everything else in it is already fine; the name too.
 ${PERSON_FACING_RULES}
 - Respond ONLY with JSON: {"capabilities": [{"id", "name", "reason"}], "uncertainties": [{"id", "description"}]}.`
   const user = `CAPABILITIES:
@@ -740,7 +749,7 @@ ${JSON.stringify(params.uncertainties, null, 1)}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'rewrite_explanations',
-    version: 'v1',
+    version: 'v2',
     system,
     user,
     schema: rewriteExplanationsOutputSchema,

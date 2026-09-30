@@ -357,8 +357,15 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
         <span className={styles.summaryMeta}>{yours > 0 ? a.missingMeta(yours) : a.readyMeta}</span>
       </summary>
 
-      <section className={styles.section}>
-        <h4 className={styles.sectionTitle}>{a.howTitle}</h4>
+      <Fold
+        id={`apply-${opportunityId}-how`}
+        title={a.howTitle}
+        summary={
+          <p className={styles.foldPreview} aria-hidden="true">
+            {advice.cv}
+          </p>
+        }
+      >
         <dl className={styles.advice}>
           <div>
             <dt>{a.cv}</dt>
@@ -383,7 +390,7 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
             </ul>
           </>
         )}
-      </section>
+      </Fold>
 
       {prepared.message && advice.coverLetter !== 'skip' && (
         <Fold

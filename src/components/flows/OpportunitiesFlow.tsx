@@ -45,7 +45,8 @@ async function markProgress(opportunityIds: string[], progress: Progress): Promi
   }
 }
 
-export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { view: OpportunitiesView; tab: Tab | null }) {
+// paused: they paused the search, so the empty page does not say it is listening.
+export default function OpportunitiesFlow({ view: initial, tab: initialTab, paused }: { view: OpportunitiesView; tab: Tab | null; paused: boolean }) {
   const t = useT()
   const [view, setView] = useState(initial)
   const pending = (items: FoundOpportunity[]) => items.filter((item) => item.response === null)
@@ -194,9 +195,9 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
           {tab === 'new' &&
             (newDeck.length === 0 ? (
               <div className={styles.empty}>
-                <Symbol size={96} watch breathe label={t.listening.label} />
-                <p className={styles.emptyLine}>{t.opportunities.empty}</p>
-                <p className={styles.emptyLead}>{t.opportunities.emptyLead}</p>
+                <Symbol size={96} watch breathe={!paused} label={paused ? t.listening.pause.status : t.listening.label} />
+                <p className={styles.emptyLine}>{paused ? t.listening.pause.title : t.opportunities.empty}</p>
+                <p className={styles.emptyLead}>{paused ? t.listening.pause.line : t.opportunities.emptyLead}</p>
               </div>
             ) : (
               <Deck
@@ -294,7 +295,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab }: { 
 
         <div className={styles.footer}>
           <Link href="/listening" className="text-btn">
-            {t.triage.backToListening}
+            {paused ? t.listening.pause.back : t.triage.backToListening}
           </Link>
         </div>
       </main>

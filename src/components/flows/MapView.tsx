@@ -10,6 +10,7 @@ import type { Capability } from '@/domains/candidate/types'
 import type { MapViewModel } from '@/lib/view'
 import { EvaluationControl } from './EvaluationControl'
 import WhatsAppConnect from './WhatsAppConnect'
+import { useSearchPause } from './useSearchPause'
 import styles from '@/app/me/me.module.css'
 
 export type MapNextStep = { kind: 'sources' | 'intent' | 'questions' | 'whatsapp' | 'done' }
@@ -19,6 +20,8 @@ interface MapViewProps {
   next: MapNextStep
   // How good each reading is: for the owner, not for the candidate.
   owner: boolean
+  // They paused the search until further notice.
+  paused: boolean
 }
 
 const NEXT_HREF: Record<'sources' | 'intent' | 'questions', string> = {
@@ -30,9 +33,14 @@ const NEXT_HREF: Record<'sources' | 'intent' | 'questions', string> = {
 // The gaps worth their time, not every one of them.
 const GAPS_SHOWN = 3
 
-export default function MapView({ vm, next, owner }: MapViewProps) {
+export default function MapView({ vm, next, owner, paused: initiallyPaused }: MapViewProps) {
   const t = useT()
   const [openCapability, setOpenCapability] = useState<Capability | null>(null)
+  const { paused, switching, note, toggle } = useSearchPause(initiallyPaused)
+  // The search runs once they said what they are looking for (the two
+  // questions can still be pending): only then is there one to pause.
+  const searching = next.kind === 'questions' || next.kind === 'whatsapp' || next.kind === 'done' || paused
+  const searchLine = note === 'failed' ? t.listening.pause.failed : paused ? t.listening.pause.line : note === 'resumed' ? t.listening.pause.resumed : null
 
   const hasContent = vm.capabilities.length > 0
 
@@ -55,6 +63,27 @@ export default function MapView({ vm, next, owner }: MapViewProps) {
                   {t.map.next[next.kind].action}
                 </Link>
               </>
+            )}
+          </section>
+        )}
+
+        {searching && (
+          <section className={styles.search} aria-labelledby="search-status">
+            <p id="search-status" className={styles.searchStatus}>
+              <span className={paused ? styles.searchStill : styles.searchPulse} aria-hidden="true" />
+              {paused ? t.listening.pause.status : t.listening.listeningOffers}
+            </p>
+            <p className={styles.searchLine} role="status">
+              {searchLine}
+            </p>
+            {paused ? (
+              <button type="button" className="btn" onClick={toggle} disabled={switching}>
+                {t.listening.pause.resume}
+              </button>
+            ) : (
+              <button type="button" className={styles.pauseToggle} onClick={toggle} disabled={switching}>
+                {t.listening.pause.pause}
+              </button>
             )}
           </section>
         )}

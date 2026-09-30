@@ -158,6 +158,8 @@ export const en = {
       resume: 'Resume the search',
       resumed: 'Search resumed. I’ll let you know when something fits.',
       failed: 'That didn’t work. Please try again.',
+      // Instead of "Back to listening" while nothing is being listened to.
+      back: 'Back to your Rep',
     },
     pile: {
       label: (count: number) => (count === 1 ? 'One offer in your hands' : `${count} offers in your hands`),

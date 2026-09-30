@@ -237,3 +237,96 @@
   flex-direction: column;
   gap: 10px;
 }
+
+/* Where the search stands, and pausing it: quiet, but a full-size target. */
+.search {
+  margin: 24px 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.searchStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+
+.searchPulse,
+.searchStill {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.searchPulse {
+  background: var(--moss);
+  animation: searchPulse var(--motion-breath) ease-in-out infinite;
+}
+
+.searchStill {
+  border: 1.5px solid var(--moss);
+}
+
+.searchLine {
+  color: var(--ink-secondary);
+  line-height: 1.55;
+}
+
+.searchLine:empty {
+  display: none;
+}
+
+.pauseToggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-left: -12px;
+  padding: 0 12px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: color var(--motion-default) ease;
+}
+
+.pauseToggle:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.pauseToggle:disabled,
+.search :global(.btn):disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@keyframes searchPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .searchPulse {
+    animation: none;
+  }
+}
