@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Header from '@/components/Header'
 import { useI18n } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import type { FeedbackListing } from '@/lib/feedback'
 import styles from '@/app/feedback/feedback.module.css'
 
@@ -16,11 +17,7 @@ export default function FeedbackList({ items: initial }: { items: FeedbackListin
   async function toggle(item: FeedbackListing) {
     const seen = !item.seen_at
     setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, seen_at: seen ? new Date().toISOString() : null } : entry)))
-    await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'seen', id: item.id, seen }),
-    }).catch(() => undefined)
+    await postJson('/api/feedback', { action: 'seen', id: item.id, seen })
   }
 
   return (

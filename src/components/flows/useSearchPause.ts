@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { postJson } from '@/components/api'
 
 // Pausing and resuming the search, the same from /listening and from /me:
 // at once, and then the page reads its state again.
@@ -15,22 +16,13 @@ export function useSearchPause(initial: boolean) {
     const next = !paused
     setSwitching(true)
     setNote(null)
-    try {
-      const response = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: next ? 'pause' : 'resume' }),
-      })
-      if (!response.ok) throw new Error(String(response.status))
-      const result = (await response.json()) as { paused: boolean }
-      setPaused(result.paused)
-      if (!result.paused) setNote('resumed')
+    const { ok, data } = await postJson<{ paused?: boolean }>('/api/search', { action: next ? 'pause' : 'resume' })
+    if (ok && typeof data.paused === 'boolean') {
+      setPaused(data.paused)
+      if (!data.paused) setNote('resumed')
       router.refresh()
-    } catch {
-      setNote('failed')
-    } finally {
-      setSwitching(false)
-    }
+    } else setNote('failed')
+    setSwitching(false)
   }
 
   return { paused, switching, note, toggle }

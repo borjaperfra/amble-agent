@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Header from '@/components/Header'
 import Deck from '@/components/Deck'
 import ApplicationPanel from '@/components/flows/ApplicationPanel'
 import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
 import Symbol from '@/components/Symbol'
 import { useI18n, useT } from '@/components/I18nProvider'
+import { postJson, requestJson } from '@/components/api'
 import type { PreparedApplication } from '@/lib/apply/prepare'
 import type { DiscardedOpportunity, FoundOpportunity, OpportunitiesView, WantedOpportunity } from '@/lib/matching/view'
 import styles from '@/app/opportunities/opportunities.module.css'
@@ -18,31 +19,13 @@ export type Tab = 'new' | 'wanted' | 'sent' | 'aside'
 const TABS: Tab[] = ['new', 'wanted', 'sent', 'aside']
 
 async function respond(matchId: string, response: Response, reason?: string): Promise<boolean> {
-  try {
-    const result = await fetch('/api/opportunities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ matchId, response, reason }),
-    })
-    return result.ok
-  } catch {
-    return false
-  }
+  return (await postJson('/api/opportunities', { matchId, response, reason })).ok
 }
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
 async function markProgress(opportunityIds: string[], progress: Progress): Promise<boolean> {
-  try {
-    const result = await fetch('/api/opportunities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ opportunityIds, progress }),
-    })
-    return result.ok
-  } catch {
-    return false
-  }
+  return (await postJson('/api/opportunities', { opportunityIds, progress })).ok
 }
 
 // paused: they paused the search, so the empty page does not say it is listening.
@@ -67,34 +50,23 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   const newDeck = [...pending(view.found), ...pending(view.maybe)]
 
   async function reload() {
-    try {
-      const response = await fetch('/api/opportunities')
-      if (!response.ok) return
-      setView((await response.json()) as OpportunitiesView)
-    } catch {
-      // The answer is saved; the screen catches up on the next visit.
-    }
+    // If it fails, the answer is saved anyway; the screen catches up on the next visit.
+    const { ok, data } = await requestJson<OpportunitiesView>('/api/opportunities')
+    if (ok) setView(data)
   }
 
   async function prepare(item: WantedOpportunity) {
     const id = item.opportunityIds[0]
     setPreparing((current) => ({ ...current, [id]: true }))
     setPrepareErrors((current) => ({ ...current, [id]: '' }))
-    try {
-      const response = await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opportunityId: id }),
-      })
-      const data = (await response.json().catch(() => ({}))) as PreparedApplication & { error?: string }
-      if (!response.ok) throw new Error(data.error)
+    const { ok, data } = await postJson<PreparedApplication>('/api/applications', { opportunityId: id })
+    if (ok) {
       setDrafts((current) => ({ ...current, [id]: data }))
       setReady((current) => ({ ...current, [item.key]: item.title }))
-    } catch (caught) {
-      setPrepareErrors((current) => ({ ...current, [id]: caught instanceof Error && caught.message ? caught.message : t.opportunities.apply.failed }))
-    } finally {
-      setPreparing((current) => ({ ...current, [id]: false }))
+    } else {
+      setPrepareErrors((current) => ({ ...current, [id]: data.error || t.opportunities.apply.failed }))
     }
+    setPreparing((current) => ({ ...current, [id]: false }))
   }
 
   const preparingItems = view.wanted.filter((item) => preparing[item.opportunityIds[0]])
@@ -323,11 +295,18 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
 }
 
 // A quiet note at the foot of the screen that leaves on its own.
+// It is shown for its own time: the page redrawing behind it (an answer
+// reloading the offers) does not start the count again.
 function Notice({ text, action, onDone }: { text: string; action: { label: string; run: () => void } | null; onDone: () => void }) {
+  const done = useRef(onDone)
   useEffect(() => {
-    const id = window.setTimeout(onDone, action ? 7000 : 3500)
+    done.current = onDone
+  })
+  const withAction = action !== null
+  useEffect(() => {
+    const id = window.setTimeout(() => done.current(), withAction ? 7000 : 3500)
     return () => window.clearTimeout(id)
-  }, [action, onDone])
+  }, [withAction])
   return (
     <div className={styles.notice} role="status">
       <span>{text}</span>

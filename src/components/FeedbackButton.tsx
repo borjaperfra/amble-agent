@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useT } from './I18nProvider'
+import { postJson } from './api'
 import styles from './FeedbackButton.module.css'
 
 // Always at hand for someone in the beta: say what does not work or what is
@@ -34,22 +35,16 @@ export default function FeedbackButton() {
     event.preventDefault()
     if (!message.trim()) return
     setState('sending')
-    try {
-      const response = await fetch('/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, page: pathname }),
-      })
-      if (!response.ok) throw new Error()
-      setState('sent')
-      setMessage('')
-      window.setTimeout(() => {
-        setOpen(false)
-        setState('idle')
-      }, 2200)
-    } catch {
+    if (!(await postJson('/api/feedback', { message, page: pathname })).ok) {
       setState('failed')
+      return
     }
+    setState('sent')
+    setMessage('')
+    window.setTimeout(() => {
+      setOpen(false)
+      setState('idle')
+    }, 2200)
   }
 
   return (

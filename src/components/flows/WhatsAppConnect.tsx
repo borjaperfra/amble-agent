@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useT } from '@/components/I18nProvider'
+import { postJson, requestJson } from '@/components/api'
+import { useVisibleInterval } from './useVisibleInterval'
 import styles from '@/app/opportunities/opportunities.module.css'
 
 const LOOK_MS = 4000
@@ -14,36 +16,26 @@ export default function WhatsAppConnect({ linked: initiallyLinked }: { linked: b
   const [waiting, setWaiting] = useState(false)
   const [failed, setFailed] = useState(false)
 
-  useEffect(() => {
-    if (!waiting) return
-    const id = window.setInterval(async () => {
-      try {
-        const state = (await fetch('/api/whatsapp').then((response) => response.json())) as { linked?: boolean }
-        if (state.linked) {
-          setLinked(true)
-          setWaiting(false)
-        }
-      } catch {
-        // A missed look; the next one tells.
+  // While they are in WhatsApp this tab is in the background: it looks again
+  // as soon as they are back, and every few seconds while they are here.
+  useVisibleInterval(
+    async () => {
+      const { ok, data } = await requestJson<{ linked?: boolean }>('/api/whatsapp')
+      if (ok && data.linked) {
+        setLinked(true)
+        setWaiting(false)
       }
-    }, LOOK_MS)
-    return () => window.clearInterval(id)
-  }, [waiting])
+    },
+    LOOK_MS,
+    waiting,
+  )
 
   async function post(action: 'start' | 'unlink') {
     setFailed(false)
-    try {
-      const response = await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      })
-      if (!response.ok) throw new Error(String(response.status))
-      return (await response.json()) as { url?: string }
-    } catch {
-      setFailed(true)
-      return null
-    }
+    const { ok, data } = await postJson<{ url?: string }>('/api/whatsapp', { action })
+    if (ok) return data
+    setFailed(true)
+    return null
   }
 
   async function connect() {
@@ -54,15 +46,20 @@ export default function WhatsAppConnect({ linked: initiallyLinked }: { linked: b
       opened?.close()
       return
     }
-    if (opened) opened.location.href = result.url
-    else window.location.href = result.url
+    if (opened) {
+      // What opens there cannot reach back into amble.
+      opened.opener = null
+      opened.location.href = result.url
+    } else window.location.href = result.url
     setWaiting(true)
   }
 
   return (
     <section className={styles.whatsapp}>
       <h2 className={styles.whatsappTitle}>{w.connectTitle}</h2>
-      <p className={styles.whatsappLead}>{linked ? w.connected : waiting ? w.connectWaiting : w.connectLead}</p>
+      <p className={styles.whatsappLead} aria-live="polite">
+        {linked ? w.connected : waiting ? w.connectWaiting : w.connectLead}
+      </p>
       <div className={styles.whatsappActions}>
         {linked ? (
           <button

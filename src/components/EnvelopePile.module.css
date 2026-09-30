@@ -164,7 +164,8 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  min-width: 32px;
+  min-width: 44px;
+  justify-content: center;
   margin: 0 0 0 6px;
   font-size: 13px;
   color: var(--moss-soft);

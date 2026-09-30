@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useT } from '@/components/I18nProvider'
+import { requestJson } from '@/components/api'
 import styles from './VoiceButton.module.css'
 
 // Speaking an answer: tap to start, tap to stop. What was said comes back as
@@ -79,18 +80,12 @@ export default function VoiceButton({ onText, disabled }: { onText: (text: strin
 
   async function send(audio: Blob) {
     setState('transcribing')
-    try {
-      const form = new FormData()
-      form.append('audio', audio)
-      const response = await fetch('/api/transcribe', { method: 'POST', body: form })
-      const data = (await response.json()) as { text?: string }
-      if (!response.ok || !data.text) throw new Error()
-      onText(data.text)
-    } catch {
-      setError(v.failed)
-    } finally {
-      setState('idle')
-    }
+    const form = new FormData()
+    form.append('audio', audio)
+    const { ok, data } = await requestJson<{ text?: string }>('/api/transcribe', { method: 'POST', body: form })
+    if (ok && data.text) onText(data.text)
+    else setError(v.failed)
+    setState('idle')
   }
 
   const label = state === 'recording' ? v.stop : state === 'transcribing' ? v.transcribing : v.start

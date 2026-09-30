@@ -61,7 +61,7 @@
 
 .error {
   font-size: var(--text-body-sm);
-  color: var(--danger, #9b3b2f);
+  color: var(--clay);
 }
 
 @keyframes pulse {

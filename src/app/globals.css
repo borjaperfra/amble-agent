@@ -5,6 +5,7 @@
   --paper-dark: #e8e4da;
 
   --ink: #25251f;
+  --ink-hover: #383830;
   --ink-secondary: #67675f;
   /* Darkened from the spec's #929187 (2.8:1 on paper) to pass WCAG AA (4.6:1), as on amble-web. */
   --ink-tertiary: #6f6e65;
@@ -139,8 +140,8 @@ button {
 }
 
 .btn:hover:not(:disabled) {
-  background: #383830;
-  border-color: #383830;
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
 }
 
 .btn:active:not(:disabled) {

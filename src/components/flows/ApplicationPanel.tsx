@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Symbol from '@/components/Symbol'
 import LiveForm from '@/components/flows/LiveForm'
+import { applicationAction as post, requestJson } from '@/components/api'
 import { useT } from '@/components/I18nProvider'
 import type { PreparedAnswer, PreparedApplication } from '@/lib/apply/prepare'
 import styles from '@/app/opportunities/application.module.css'
@@ -47,17 +48,6 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-async function post(body: unknown): Promise<Record<string, unknown> & { error?: string }> {
-  const response = await fetch('/api/applications', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & { error?: string }
-  if (!response.ok) throw new Error(data.error || 'failed')
-  return data
-}
-
 function CvField({ cv, onUploaded }: { cv: string | null; onUploaded: (name: string) => void }) {
   const t = useT().opportunities.apply
   const input = useRef<HTMLInputElement>(null)
@@ -81,19 +71,17 @@ function CvField({ cv, onUploaded }: { cv: string | null; onUploaded: (name: str
           setError(null)
           const form = new FormData()
           form.append('file', file)
-          try {
-            const response = await fetch('/api/applications/cv', { method: 'POST', body: form })
-            const data = (await response.json().catch(() => ({}))) as { filename?: string; error?: string }
-            if (!response.ok || !data.filename) throw new Error(data.error)
-            onUploaded(data.filename)
-          } catch (caught) {
-            setError(caught instanceof Error && caught.message ? caught.message : t.failed)
-          } finally {
-            setBusy(false)
-          }
+          const { ok, data } = await requestJson<{ filename?: string }>('/api/applications/cv', { method: 'POST', body: form })
+          if (ok && data.filename) onUploaded(data.filename)
+          else setError(data.error || t.failed)
+          setBusy(false)
         }}
       />
-      {error && <p className={styles.error}>{error}</p>}
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -170,6 +158,9 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
   const [problem, setProblem] = useState<string | null>(null)
   // Each new picture of the form, so the browser does not show the last one.
   const shots = useRef(0)
+  // The look at the window they fill themselves ends when the panel goes.
+  const watching = useRef(0)
+  useEffect(() => () => window.clearInterval(watching.current), [])
 
   if (preparing) {
     return (
@@ -234,6 +225,7 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
 
   // The window is theirs: every few seconds, whether they sent it or closed it.
   function watch() {
+    window.clearInterval(watching.current)
     const timer = window.setInterval(async () => {
       try {
         const { state } = (await post({ action: 'status', opportunityId })) as { state: string }
@@ -248,6 +240,7 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
         // A missed look; the next one tells.
       }
     }, 3000)
+    watching.current = timer
   }
 
   async function send() {

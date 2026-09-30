@@ -8,6 +8,7 @@ import SetupProgressView from '@/components/SetupProgressView'
 import StatusDot from '@/components/StatusDot'
 import VoiceButton from '@/components/VoiceButton'
 import { useT } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import { EvaluationControl } from './EvaluationControl'
 import { useDraft } from './useDraft'
 import type { SetupProgress } from '@/lib/pipeline/setup'
@@ -73,14 +74,9 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
   const load = useCallback(async () => {
     setPhase('loading')
     setError(null)
-    try {
-      const response = await fetch('/api/interview/next', { method: 'POST' })
-      const data = (await response.json()) as NextQuestion
-      if (!response.ok) throw new Error(data.error)
-      show(data)
-    } catch {
-      setError(t.interview.planFailed)
-    }
+    const { ok, data } = await postJson<NextQuestion>('/api/interview/next', {})
+    if (ok) show(data)
+    else setError(t.interview.planFailed)
   }, [show, t])
 
   useEffect(() => {
@@ -92,14 +88,9 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
   useEffect(() => {
     if (phase !== 'waiting') return
     const id = window.setTimeout(async () => {
-      try {
-        const response = await fetch('/api/interview/next', { method: 'POST' })
-        const data = (await response.json()) as NextQuestion
-        if (response.ok) show(data)
-        else setProgress((value) => (value ? { ...value } : value))
-      } catch {
-        setProgress((value) => (value ? { ...value } : value))
-      }
+      const { ok, data } = await postJson<NextQuestion>('/api/interview/next', {})
+      if (ok) show(data)
+      else setProgress((value) => (value ? { ...value } : value))
     }, LOOK_AGAIN_MS)
     return () => window.clearTimeout(id)
   }, [phase, progress, show])
@@ -114,29 +105,19 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
     if (!current?.turnId || !answer.trim()) return
     setPhase('sending')
     setError(null)
-    try {
-      const response = await fetch('/api/interview/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ turnId: current.turnId, answer }),
-      })
-      const data = (await response.json()) as { ok?: boolean; next?: NextQuestion; error?: string }
-      if (!data.ok) {
-        // Not kept: it is still in the box, to send again.
-        setError(data.error ?? t.interview.answerFailed)
-        setPhase('ask')
-        return
-      }
-      // Kept for real: the draft of it goes.
-      setAnswer('')
-      setStep((value) => Math.min(value + 1, steps))
-      // Kept. If the next question did not come with it, it is asked for.
-      if (data.next) show(data.next)
-      else void load()
-    } catch {
-      setError(t.interview.answerUnsent)
+    const { status, data } = await postJson<{ ok?: boolean; next?: NextQuestion }>('/api/interview/answer', { turnId: current.turnId, answer })
+    if (!data.ok) {
+      // Not kept: it is still in the box, to send again.
+      setError(status === 0 ? t.interview.answerUnsent : (data.error ?? t.interview.answerFailed))
       setPhase('ask')
+      return
     }
+    // Kept for real: the draft of it goes.
+    setAnswer('')
+    setStep((value) => Math.min(value + 1, steps))
+    // Kept. If the next question did not come with it, it is asked for.
+    if (data.next) show(data.next)
+    else void load()
   }
 
   return (

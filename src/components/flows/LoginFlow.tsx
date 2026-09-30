@@ -4,6 +4,7 @@ import { useRef, useState, useSyncExternalStore } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
 import { useI18n } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import { privacyUrl } from '@/lib/legal'
 import styles from '@/app/login/login.module.css'
 
@@ -95,18 +96,8 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
   const verifying = useRef(false)
 
   async function post(path: string, body: unknown): Promise<{ error: string | null; data: Record<string, unknown> }> {
-    try {
-      const response = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
-      if (response.ok) return { error: null, data }
-      return { error: typeof data.error === 'string' ? data.error : 'failed', data }
-    } catch {
-      return { error: 'failed', data: {} }
-    }
+    const { ok, data } = await postJson(path, body)
+    return { error: ok ? null : typeof data.error === 'string' ? data.error : 'failed', data }
   }
 
   async function sendCode(event?: React.FormEvent) {

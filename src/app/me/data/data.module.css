@@ -68,7 +68,7 @@
 
 .error {
   margin-top: 12px;
-  color: var(--danger, #9b3b2f);
+  color: var(--clay);
 }
 
 /* On a phone, the same air above the title as the other pages. */

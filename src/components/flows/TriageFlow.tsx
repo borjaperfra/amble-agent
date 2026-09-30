@@ -6,6 +6,7 @@ import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
 import StatusDot from '@/components/StatusDot'
 import { useI18n } from '@/components/I18nProvider'
+import { postJson, requestJson } from '@/components/api'
 import type { Locale } from '@/lib/i18n/locale'
 import styles from '@/app/me/triage/triage.module.css'
 
@@ -46,7 +47,7 @@ interface Triage {
   preferences: Preference[]
 }
 
-type Phase = 'loading' | 'empty' | 'designing' | 'offer' | 'ready' | 'analysing' | 'result'
+type Phase = 'empty' | 'designing' | 'offer' | 'ready' | 'analysing' | 'result'
 
 const VERDICTS: Verdict[] = ['yes', 'yes_if', 'depends', 'no']
 
@@ -58,25 +59,31 @@ const salaryFormats: Record<Locale, Intl.NumberFormat> = {
   es: new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }),
 }
 
-async function request<T>(init?: RequestInit): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
-  const response = await fetch('/api/triage', init)
-  const data = (await response.json().catch(() => ({}))) as T & { error?: string }
-  return { ok: response.ok, status: response.status, data }
+const request = <T,>() => requestJson<T>('/api/triage')
+const post = <T,>(body: Record<string, unknown>) => postJson<T>('/api/triage', body)
+
+// Where a triage opens: its result once analysed, else the first offer still
+// unanswered, else ready to be read.
+function opening(triage: Triage | null): { phase: Phase; index: number } {
+  if (!triage) return { phase: 'empty', index: 0 }
+  if (triage.status === 'analysed') return { phase: 'result', index: 0 }
+  const firstOpen = triage.probes.findIndex((probe) => probe.verdict === null)
+  return firstOpen === -1 ? { phase: 'ready', index: 0 } : { phase: 'offer', index: firstOpen }
 }
 
-function post<T>(body: Record<string, unknown>) {
-  return request<T>({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-}
-
-export default function TriageFlow() {
+// The latest triage comes with the page (read on the server), so it opens on
+// its first screen without a round trip.
+export default function TriageFlow({ initial }: { initial: Triage | null }) {
   const { locale, t } = useI18n()
   const salaryFormat = salaryFormats[locale]
-  const [phase, setPhase] = useState<Phase>('loading')
-  const [triage, setTriage] = useState<Triage | null>(null)
-  const [index, setIndex] = useState(0)
-  const [verdict, setVerdict] = useState<Verdict | null>(null)
-  const [conditions, setConditions] = useState('')
-  const [reason, setReason] = useState('')
+  const [start] = useState(() => opening(initial))
+  const firstProbe = start.phase === 'offer' ? initial?.probes[start.index] : undefined
+  const [phase, setPhase] = useState<Phase>(start.phase)
+  const [triage, setTriage] = useState<Triage | null>(initial)
+  const [index, setIndex] = useState(start.index)
+  const [verdict, setVerdict] = useState<Verdict | null>(firstProbe?.verdict ?? null)
+  const [conditions, setConditions] = useState(firstProbe?.conditions ?? '')
+  const [reason, setReason] = useState(firstProbe?.reason ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -110,22 +117,6 @@ export default function TriageFlow() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [phase, index])
-
-  useEffect(() => {
-    let cancelled = false
-    void request<Triage>().then(({ ok, status, data }) => {
-      if (cancelled) return
-      if (status === 404) setPhase('empty')
-      else if (ok) show(data)
-      else {
-        setError(data.error ?? t.triage.loadFailed)
-        setPhase('empty')
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [show, t])
 
   async function design() {
     setPhase('designing')
@@ -216,12 +207,6 @@ export default function TriageFlow() {
     <>
       <Header />
       <main className={styles.page}>
-        {phase === 'loading' && (
-          <div className={styles.center} role="status">
-            <StatusDot />
-          </div>
-        )}
-
         {phase === 'empty' && (
           <div className={styles.center}>
             <p className="kicker rep-kicker">

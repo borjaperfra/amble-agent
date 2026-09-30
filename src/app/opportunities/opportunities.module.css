@@ -239,6 +239,10 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* The list of what was set aside runs to hundreds: the ones off screen are
+     laid out only when scrolled to. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
 }
 
 .discardedTitle a {

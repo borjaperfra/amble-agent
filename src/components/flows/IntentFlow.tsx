@@ -7,6 +7,7 @@ import InlineEdit from '@/components/InlineEdit'
 import StatusDot from '@/components/StatusDot'
 import VoiceButton from '@/components/VoiceButton'
 import { useT } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import { useDraft } from './useDraft'
 import styles from '@/app/me/intent/intent.module.css'
 
@@ -44,25 +45,15 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
     if (!answer.trim()) return
     setPhase('sending')
     setError(null)
-    try {
-      const response = await fetch('/api/intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer }),
-      })
-      const data = (await response.json()) as IntentResponse
-      if (!response.ok) {
-        setError(data.error ?? t.intent.interpretFailed)
-        setPhase('ask')
-        return
-      }
-      setResult(data)
-      setEditedGroups(data.groups ?? [])
-      setPhase('reveal')
-    } catch {
-      setError(t.intent.unsent)
+    const { ok, status, data } = await postJson<IntentResponse>('/api/intent', { answer })
+    if (!ok) {
+      setError(status === 0 ? t.intent.unsent : (data.error ?? t.intent.interpretFailed))
       setPhase('ask')
+      return
     }
+    setResult(data)
+    setEditedGroups(data.groups ?? [])
+    setPhase('reveal')
   }
 
   async function confirm() {
@@ -73,20 +64,11 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
     } catch {
       // Session storage unavailable; the Listening screen still works.
     }
-    if (result?.id) {
-      try {
-        const response = await fetch('/api/intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'confirm', intentId: result.id, groups: editedGroups }),
-        })
-        if (!response.ok) throw new Error()
-      } catch {
-        // Not confirmed: they stay here, with what they wrote, to try again.
-        setError(t.intent.confirmFailed)
-        setConfirming(false)
-        return
-      }
+    if (result?.id && !(await postJson('/api/intent', { action: 'confirm', intentId: result.id, groups: editedGroups })).ok) {
+      // Not confirmed: they stay here, with what they wrote, to try again.
+      setError(t.intent.confirmFailed)
+      setConfirming(false)
+      return
     }
     clearDraft()
     router.push('/start')

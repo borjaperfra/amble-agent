@@ -3,23 +3,22 @@
 import { useEffect, useRef, useState } from 'react'
 import Symbol from '@/components/Symbol'
 import { useT } from '@/components/I18nProvider'
+import { applicationAction } from '@/components/api'
+import { useVisibleInterval } from './useVisibleInterval'
 import styles from '@/app/opportunities/application.module.css'
 
 // The form open in a browser in the cloud, shown here, live: they check what
 // amble filled, finish what is theirs, pass a "not a robot" check if there is
-// one, and send it themselves. Every few seconds amble looks whether it was
-// sent, or closed.
+// one, and send it themselves. Every few seconds while it is on screen, amble
+// looks whether it was sent, or closed.
 
-async function post(body: unknown): Promise<Record<string, unknown>> {
-  const response = await fetch('/api/applications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-  if (!response.ok) throw new Error('failed')
-  return (await response.json()) as Record<string, unknown>
-}
+const LOOK_MS = 3000
 
 export default function LiveForm({ opportunityId, company, left, onSent, onClosed }: { opportunityId: string; company: string; left: string[]; onSent: () => void; onClosed: () => void }) {
   const a = useT().opportunities.apply
   const [url, setUrl] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
+  const [watching, setWatching] = useState(true)
   // The latest callbacks, without restarting the watch when the page redraws.
   const done = useRef({ onSent, onClosed })
   useEffect(() => {
@@ -28,40 +27,44 @@ export default function LiveForm({ opportunityId, company, left, onSent, onClose
 
   useEffect(() => {
     let alive = true
-    void post({ action: 'live', opportunityId })
+    applicationAction({ action: 'live', opportunityId })
       .then((data) => {
         if (!alive) return
         if (typeof data.url === 'string') setUrl(data.url)
         else setMissing(true)
       })
       .catch(() => alive && setMissing(true))
-    const timer = window.setInterval(async () => {
+    return () => {
+      alive = false
+    }
+  }, [opportunityId])
+
+  useVisibleInterval(
+    async () => {
       try {
-        const { state } = (await post({ action: 'status', opportunityId })) as { state: string }
+        const { state } = await applicationAction<{ state: string }>({ action: 'status', opportunityId })
         if (state === 'sent') {
-          window.clearInterval(timer)
+          setWatching(false)
           done.current.onSent()
         } else if (state === 'closed' || state === 'none') {
-          window.clearInterval(timer)
+          setWatching(false)
           done.current.onClosed()
         }
       } catch {
         // A missed look; the next one tells.
       }
-    }, 3000)
-    return () => {
-      alive = false
-      window.clearInterval(timer)
-    }
-  }, [opportunityId])
+    },
+    LOOK_MS,
+    watching,
+  )
 
   async function close() {
-    await post({ action: 'cancel', opportunityId }).catch(() => undefined)
+    await applicationAction({ action: 'cancel', opportunityId }).catch(() => undefined)
     onClosed()
   }
 
   return (
-    <section className={styles.review} role="status">
+    <section className={styles.review}>
       <p className={styles.windowLine}>
         <Symbol size={28} watch breathe />
         <span>{a.liveOpen(company)}</span>
@@ -77,11 +80,22 @@ export default function LiveForm({ opportunityId, company, left, onSent, onClose
         </>
       )}
       {url ? (
-        <iframe className={styles.live} src={url} title={a.liveTitle(company)} sandbox="allow-same-origin allow-scripts" allow="clipboard-read; clipboard-write" />
+        // A page from another site, kept apart: it can run and keep its own
+        // session, but cannot open windows, navigate this one or reach amble.
+        <iframe
+          className={styles.live}
+          src={url}
+          title={a.liveTitle(company)}
+          sandbox="allow-same-origin allow-scripts"
+          allow="clipboard-read; clipboard-write"
+          referrerPolicy="no-referrer"
+        />
       ) : missing ? (
-        <p className={styles.warning}>{a.liveGone}</p>
+        <p className={styles.warning} role="alert">
+          {a.liveGone}
+        </p>
       ) : (
-        <div className={styles.working}>
+        <div className={styles.working} role="status">
           <Symbol size={24} watch breathe />
         </div>
       )}

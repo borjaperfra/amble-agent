@@ -5,6 +5,7 @@ import { useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
 import { useT } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import styles from '@/app/login/login.module.css'
 
 const GREET_MS = 1100
@@ -36,29 +37,23 @@ export default function LinkFlow({ token, email }: { token: string; email: strin
 
   async function signIn() {
     setBusy(true)
-    try {
-      const response = await fetch('/api/auth/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      })
-      const data = (await response.json().catch(() => ({}))) as { name?: unknown; joined?: unknown }
-      if (!response.ok) throw new Error()
-      const first = typeof data.name === 'string' ? data.name.trim().split(/\s+/)[0] : ''
-      if (first && data.joined !== true) {
-        setGreeting(t.login.welcomeBack(first))
-        await wait(GREET_MS)
-      }
-      setLid(1)
-      setLeaving(true)
-      await wait(LEAVE_MS)
-      // A full load, not a client navigation: the page that fades out here must
-      // not stay on screen if the new session's first render stalls.
-      window.location.replace('/start')
-    } catch {
+    const { ok, data } = await postJson<{ name?: unknown; joined?: unknown }>('/api/auth/link', { token })
+    if (!ok) {
       setBusy(false)
       setExpired(true)
+      return
     }
+    const first = typeof data.name === 'string' ? data.name.trim().split(/\s+/)[0] : ''
+    if (first && data.joined !== true) {
+      setGreeting(t.login.welcomeBack(first))
+      await wait(GREET_MS)
+    }
+    setLid(1)
+    setLeaving(true)
+    await wait(LEAVE_MS)
+    // A full load, not a client navigation: the page that fades out here must
+    // not stay on screen if the new session's first render stalls.
+    window.location.replace('/start')
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Header from '@/components/Header'
 import { useI18n } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import { privacyUrl } from '@/lib/legal'
 import styles from '@/app/me/data/data.module.css'
 
@@ -16,21 +17,12 @@ export default function DataFlow({ owner }: { owner: boolean }) {
   async function remove() {
     setError(null)
     setState('deleting')
-    try {
-      const response = await fetch('/api/account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', email }),
-      })
-      if (response.ok) {
-        setState('deleted')
-        return
-      }
-      const body = (await response.json().catch(() => null)) as { error?: string } | null
-      setError(body?.error === 'email' ? d.wrongEmail : d.deleteFailed)
-    } catch {
-      setError(d.deleteFailed)
+    const { ok, data } = await postJson('/api/account', { action: 'delete', email })
+    if (ok) {
+      setState('deleted')
+      return
     }
+    setError(data.error === 'email' ? d.wrongEmail : d.deleteFailed)
     setState('idle')
   }
 

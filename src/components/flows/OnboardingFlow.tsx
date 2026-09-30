@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import Header from '@/components/Header'
 import { useT } from '@/components/I18nProvider'
+import { postJson, requestJson } from '@/components/api'
 import styles from '@/app/onboarding/onboarding.module.css'
 
 interface SourceItem {
@@ -39,22 +40,13 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
     setBusy(true)
     setPending('file')
     setError(null)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const response = await fetch('/api/onboarding/sources', { method: 'POST', body: form })
-      const data = (await response.json()) as SourceItem & { error?: string }
-      if (!response.ok) {
-        setError({ at: 'file', text: data.error ?? t.onboarding.fileNotStored })
-        return
-      }
-      keep(data)
-    } catch {
-      setError({ at: 'file', text: t.onboarding.fileNotUploaded })
-    } finally {
-      setBusy(false)
-      setPending(null)
-    }
+    const form = new FormData()
+    form.append('file', file)
+    const { ok, status, data } = await requestJson<SourceItem>('/api/onboarding/sources', { method: 'POST', body: form })
+    if (ok) keep(data)
+    else setError({ at: 'file', text: status === 0 ? t.onboarding.fileNotUploaded : (data.error ?? t.onboarding.fileNotStored) })
+    setBusy(false)
+    setPending(null)
   }
 
   async function addUrl(kind: 'linkedin' | 'github' | 'website', url: string, reset: () => void) {
@@ -62,25 +54,13 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
     setBusy(true)
     setPending(kind)
     setError(null)
-    try {
-      const response = await fetch('/api/onboarding/sources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, url }),
-      })
-      const data = (await response.json()) as SourceItem & { error?: string }
-      if (!response.ok) {
-        setError({ at: kind, text: data.error ?? t.onboarding.urlNotStored })
-        return
-      }
+    const { ok, data } = await postJson<SourceItem>('/api/onboarding/sources', { kind, url })
+    if (ok) {
       keep(data)
       reset()
-    } catch {
-      setError({ at: kind, text: t.onboarding.urlNotStored })
-    } finally {
-      setBusy(false)
-      setPending(null)
-    }
+    } else setError({ at: kind, text: data.error ?? t.onboarding.urlNotStored })
+    setBusy(false)
+    setPending(null)
   }
 
   return (
@@ -236,11 +216,7 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
             onClick={async () => {
               setLeaving(true)
               // Reading starts now, in the background; meanwhile, what they are looking for.
-              await fetch('/api/onboarding/process', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stage: 'start' }),
-              }).catch(() => undefined)
+              await postJson('/api/onboarding/process', { stage: 'start' })
               // The next step they have not taken: what they are looking for
               // the first time; the questions when they come back to add a CV.
               router.push('/start')

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useI18n } from './I18nProvider'
+import { postJson } from './api'
 import Symbol from './Symbol'
 import styles from './Header.module.css'
 
@@ -46,23 +47,16 @@ export default function Header({ right, language = true }: HeaderProps) {
   }, [open])
 
   async function signOut() {
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
+    await postJson('/api/auth/logout', {})
     router.replace('/login')
     router.refresh()
   }
 
   async function switchLanguage() {
     setSwitching(true)
-    try {
-      await fetch('/api/locale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locale: locale === 'es' ? 'en' : 'es' }),
-      })
-      router.refresh()
-    } finally {
-      setSwitching(false)
-    }
+    await postJson('/api/locale', { locale: locale === 'es' ? 'en' : 'es' })
+    router.refresh()
+    setSwitching(false)
   }
 
   const languageButton = (className: string) => (

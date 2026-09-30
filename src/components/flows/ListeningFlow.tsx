@@ -10,6 +10,7 @@ import type { PileEnvelope } from '@/lib/view'
 import Tumbleweed from '@/components/Tumbleweed'
 import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
 import { useSearchPause } from '@/components/flows/useSearchPause'
+import { useVisibleInterval } from '@/components/flows/useVisibleInterval'
 import { useT } from '@/components/I18nProvider'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import type { DiscardReason, WeekEntry, WeekLedger } from '@/lib/matching/view'
@@ -193,12 +194,9 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
     return () => window.clearTimeout(id)
   }, [quietLines.length])
 
-  // While the first read (or a re-read) runs, the page looks again now and then.
-  useEffect(() => {
-    if (!reading) return
-    const id = window.setInterval(() => router.refresh(), FIRST_READ_REFRESH_MS)
-    return () => window.clearInterval(id)
-  }, [reading, router])
+  // While the first read (or a re-read) runs, the page looks again now and
+  // then, while it is on screen.
+  useVisibleInterval(() => router.refresh(), FIRST_READ_REFRESH_MS, reading)
 
   // Now and then, while nothing new has come in, a tumbleweed rolls across.
   // In development, ?tumbleweed brings it out whatever there is, to play with.

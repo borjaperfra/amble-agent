@@ -5,6 +5,7 @@ import { useState } from 'react'
 import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
 import { useT } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import { privacyUrl } from '@/lib/legal'
 import type { Locale } from '@/lib/i18n/locale'
 import styles from '@/app/login/login.module.css'
@@ -28,29 +29,19 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
   // it at once, so whoever cannot read this one is not left guessing.
   function choose(next: Locale) {
     setLocale(next)
-    void fetch('/api/locale', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locale: next }),
+    void postJson('/api/locale', { locale: next }).then(({ status }) => {
+      if (status !== 0) router.refresh()
     })
-      .then(() => router.refresh())
-      .catch(() => undefined)
   }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     setBusy(true)
     setFailed(false)
-    try {
-      const response = await fetch('/api/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, locale }),
-      })
-      if (!response.ok) throw new Error()
+    if ((await postJson('/api/setup', { name, locale })).ok) {
       router.push('/onboarding')
       router.refresh()
-    } catch {
+    } else {
       setBusy(false)
       setFailed(true)
     }

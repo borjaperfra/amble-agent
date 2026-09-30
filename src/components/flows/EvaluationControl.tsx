@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useT } from '@/components/I18nProvider'
+import { postJson } from '@/components/api'
 import styles from './evaluation.module.css'
 
 interface EvaluationControlProps {
@@ -20,15 +21,8 @@ export function EvaluationControl({ targetType, targetId, label, verdicts }: Eva
 
   async function send() {
     if (!verdict) return
-    try {
-      await fetch('/api/evaluations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetType, targetId, verdict, comment }),
-      })
-    } catch {
-      // Evaluation is observational; failures are silent for the flow.
-    }
+    // Evaluation is observational; failures are silent for the flow.
+    await postJson('/api/evaluations', { targetType, targetId, verdict, comment })
     setSent(true)
   }
 
