@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { applicationCv, CvRejectedError, storeApplicationCv } from '@/lib/apply/answers'
 import { forCandidate } from '@/lib/auth/request'
+import { serverText } from '@/lib/i18n/candidate'
+import { takeIntake } from '@/lib/limits'
 
 export const runtime = 'nodejs'
 
@@ -20,6 +22,7 @@ export async function POST(request: Request) {
     if (Number(request.headers.get('content-length') ?? 0) > 9 * 1024 * 1024) {
       return NextResponse.json({ error: 'The CV must be under 8 MB.' }, { status: 413 })
     }
+    if (takeIntake(candidate.id, 'application_cv')) return NextResponse.json({ error: serverText().tooManyCvsToday }, { status: 429 })
     const form = await request.formData().catch(() => null)
     const file = form?.get('file')
     if (!(file instanceof File)) return NextResponse.json({ error: 'No file was provided.' }, { status: 400 })

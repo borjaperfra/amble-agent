@@ -3,14 +3,16 @@ import https from 'node:https'
 import net from 'node:net'
 import zlib from 'node:zlib'
 import type { IncomingMessage } from 'node:http'
+import { isMaliciousLink } from './reputation'
 
 // Reading a page someone gave us (their website, a link on WhatsApp) without
 // letting the link reach what is not public: our own server, the private
 // network next to it, a cloud's metadata address. Only https on its usual
 // port; every address a name resolves to is checked on the connection itself
 // (so a name cannot answer one address to the check and another to the
-// request), and again on each redirect. Bounded in time and in bytes, and
-// only the kinds of content we read.
+// request), and again on each redirect. A link known to spread malware
+// (reputation.ts) is not followed, nor is a redirect to one. Bounded in time
+// and in bytes, and only the kinds of content we read.
 
 export class BlockedUrlError extends Error {}
 
@@ -151,6 +153,7 @@ export async function safeFetchText(raw: string, options: Options = {}): Promise
   for (let hop = 0; hop <= settings.maxRedirects; hop++) {
     const problem = urlProblem(current)
     if (problem) throw new BlockedUrlError(problem)
+    if (await isMaliciousLink(current)) throw new BlockedUrlError('a link known to spread malware')
     const url = new URL(current)
     const response = await request(url, settings.headers ?? {}, signal)
     const status = response.statusCode ?? 0

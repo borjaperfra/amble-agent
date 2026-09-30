@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { getDocumentProxy } from 'unpdf'
+import { inkRuns, splitByInk, type InkRun, type PageItem } from './pdf-ink'
 import { DATA_DIRECTORY, getDb } from '../db/db'
 import { documentKind, isPlainText } from '../files'
 import { safeFetchText } from '../net/safe-fetch'
@@ -43,7 +44,8 @@ class TooManyPagesError extends Error {}
 // Text a reader cannot see: too small to read, or placed off the page. A CV
 // carries it only to be read by a machine (keywords or instructions for a
 // screening system), so it is kept out of what amble reads and counted.
-// Text coloured like the page is not seen here.
+// So is text coloured like the page, transparent, or drawn invisibly
+// (pdf-ink.ts).
 const MIN_VISIBLE_SIZE = 3
 const PAGE_MARGIN = 5
 // A stray footnote mark is not a hidden paragraph.
@@ -63,17 +65,19 @@ async function extractPdfText(buffer: Buffer): Promise<PdfText> {
     for (let number = 1; number <= pdf.numPages; number++) {
       const page = await pdf.getPage(number)
       const { width, height } = page.getViewport({ scale: 1 })
-      const content = await page.getTextContent()
-      let text = ''
+      const [content, runs] = await Promise.all([page.getTextContent(), inkRuns(page).catch(() => [] as InkRun[])])
+      const items: PageItem[] = []
       for (const item of content.items) {
         if (!('str' in item)) continue
         const [a, b, c, d, x, y] = item.transform as number[]
         const size = Math.max(Math.hypot(a, b), Math.hypot(c, d))
         const off = x < -PAGE_MARGIN || x > width + PAGE_MARGIN || y < -PAGE_MARGIN || y > height + PAGE_MARGIN
-        const piece = item.str + (item.hasEOL ? '\n' : '')
-        if (item.str.trim() && (size < MIN_VISIBLE_SIZE || off)) hidden += `${piece} `
-        else text += piece
+        items.push({ text: item.str + (item.hasEOL ? '\n' : ''), hidden: Boolean(item.str.trim()) && (size < MIN_VISIBLE_SIZE || off) })
       }
+      // Text coloured like the page, transparent or drawn invisibly.
+      const split = splitByInk(items, runs)
+      const text = split.visible
+      hidden += `${split.hidden} `
       pages.push(cleanText(text).replace(/\s+/g, ' ').trim())
     }
     return { pages, hidden: hidden.replace(/\s+/g, ' ').trim() }

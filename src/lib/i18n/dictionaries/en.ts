@@ -465,6 +465,9 @@ export const en = {
     inYourWords: 'In your words',
     onlyPdfOrText: 'I can only read PDF or plain text files in this build.',
     fileTooLarge: 'This file is too big for a CV. Try the PDF you export from Word or Google Docs.',
+    tooManySources: 'With what you’ve already given me I have plenty to get to know you.',
+    tooManyToday: 'You’ve added a lot today; try again tomorrow.',
+    tooManyCvsToday: 'You’ve uploaded a lot of CVs today; try again tomorrow with the one you want to send.',
     invoiceDocument: "This looks like an invoice, a quote or a statement, not a CV. I haven't kept it. If you meant to upload your CV, try again.",
     personalDocument: "This looks like a personal document (an ID card, a passport, a medical report…). I haven't kept it: amble only needs your CV.",
     machineText:

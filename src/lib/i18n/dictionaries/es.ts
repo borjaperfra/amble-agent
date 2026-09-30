@@ -465,6 +465,9 @@ export const es: Dictionary = {
     inYourWords: 'En tus palabras',
     onlyPdfOrText: 'En esta versión solo puedo leer archivos PDF o de texto plano.',
     fileTooLarge: 'Este archivo es demasiado grande para ser un CV. Prueba con el PDF que exportas desde Word o Google Docs.',
+    tooManySources: 'Con lo que ya me has dado tengo bastante para conocerte.',
+    tooManyToday: 'Has añadido muchas cosas hoy; prueba mañana.',
+    tooManyCvsToday: 'Has subido muchos CV hoy; prueba mañana con el que quieras enviar.',
     invoiceDocument: 'Esto parece una factura, un presupuesto o un extracto, no un CV. No lo he guardado. Si querías subir tu CV, prueba de nuevo.',
     personalDocument: 'Parece un documento personal (un DNI, un pasaporte, un informe médico…). No lo he guardado: amble solo necesita tu CV.',
     machineText:

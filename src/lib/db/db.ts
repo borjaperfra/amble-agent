@@ -649,6 +649,17 @@ function migrate(db: DatabaseSync): void {
   // instructions for a screening system): read without it, never sent on.
   addColumn(db, 'sources', 'flag', 'TEXT')
 
+  // Each time a person gave amble something to read (a file, a link, a CV to
+  // send), accepted or not: what the daily limits count (src/lib/limits.ts).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS intake_events (
+      candidate_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS intake_events_by_candidate ON intake_events (candidate_id, kind, created_at);
+  `)
+
   // Answers given before decisions had their own table lived on assessments.
   // Carried over once, the latest per offer; a later decision is never replaced.
   db.exec(`

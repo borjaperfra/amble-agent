@@ -15,6 +15,7 @@ export const maxDuration = 300
 //   curl -H "Authorization: Bearer $TOKEN" -F database=@amble.db.gz -F uploads=@src_x.original.pdf https://host/api/admin/restore
 
 const MIN_TOKEN = 24
+const MAX_DATABASE_BYTES = 2 * 1024 * 1024 * 1024
 
 function authorised(request: Request): boolean {
   const token = process.env.AMBLE_RESTORE_TOKEN ?? ''
@@ -31,7 +32,14 @@ export async function POST(request: Request) {
   if (!(database instanceof File)) return NextResponse.json({ error: 'A database file is required.' }, { status: 400 })
 
   let bytes = Buffer.from(await database.arrayBuffer())
-  if (database.name.endsWith('.gz')) bytes = gunzipSync(bytes)
+  if (database.name.endsWith('.gz')) {
+    // Unpacked within a bound: a small upload that inflates without end stops here.
+    try {
+      bytes = gunzipSync(bytes, { maxOutputLength: MAX_DATABASE_BYTES })
+    } catch {
+      return NextResponse.json({ error: 'The database could not be unpacked, or is larger than 2 GB.' }, { status: 400 })
+    }
+  }
   if (bytes.subarray(0, 16).toString('latin1') !== 'SQLite format 3\u0000') {
     return NextResponse.json({ error: 'That is not an SQLite database.' }, { status: 400 })
   }

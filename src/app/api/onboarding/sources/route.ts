@@ -10,6 +10,7 @@ import {
   type SourceCreated,
 } from '@/lib/pipeline/sources'
 import { serverText } from '@/lib/i18n/candidate'
+import { takeIntake } from '@/lib/limits'
 
 export const runtime = 'nodejs'
 
@@ -34,6 +35,12 @@ export async function POST(request: Request) {
 
 async function addSource(request: Request, candidate: CandidateRow) {
   const contentType = request.headers.get('content-type') ?? ''
+
+  // Before anything is read: enough sources, or enough tries for today.
+  const refused = takeIntake(candidate.id, 'source')
+  if (refused) {
+    return NextResponse.json({ error: refused === 'too_many_sources' ? serverText().tooManySources : serverText().tooManyToday }, { status: 429 })
+  }
 
   try {
     let result: SourceCreated

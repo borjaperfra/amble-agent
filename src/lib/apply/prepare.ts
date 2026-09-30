@@ -8,6 +8,7 @@ import { runStructuredTask } from '../model/provider'
 import { isUnverifiedAssisted } from '../pipeline/attribution'
 import { injectionSignals, UNTRUSTED_RULE } from '../untrusted'
 import { readApplicationForm, type FormField } from './form'
+import { isKnownMaliciousLink } from '../net/reputation'
 
 // "Prepare my application": for an offer the candidate wants, how best to
 // apply, a short message, and an answer for each field of the form.
@@ -126,11 +127,12 @@ Evidence marked attributed:false rests on work the candidate has not defended as
 Respond ONLY with JSON: {"advice": {"channel": string, "channelWhy": string, "cv": string, "coverLetter": string, "coverLetterWhy": string, "emphasise": string[]}, "message": {"text": string, "evidenceIds": string[]}, "answers": [{"fieldId": string, "answer": string|null, "evidenceIds": string[], "needsYou": string|null}]}.`
 }
 
-// What the Rep knows of their links: GitHub and a website from their sources.
+// What the Rep knows of their links: GitHub and a website from their sources,
+// never one known to spread malware, which would go to a company in their name.
 function links(candidateId: string): { github: string | null; website: string | null } {
-  const sources = listSources(candidateId)
-  const github = sources.find((source) => source.type === 'github' && source.uri)?.uri ?? null
-  const site = sources.find((source) => source.type === 'website' && source.uri)?.uri ?? null
+  const sources = listSources(candidateId).filter((source) => source.uri && !isKnownMaliciousLink(source.uri))
+  const github = sources.find((source) => source.type === 'github')?.uri ?? null
+  const site = sources.find((source) => source.type === 'website')?.uri ?? null
   let website: string | null = null
   if (site) {
     try {

@@ -16,6 +16,7 @@ import { followupOutcomes } from './followups'
 import { awaitingOf, type ProposedPreference } from './offers'
 import { pendingInterviewQuestion } from './interview'
 import { pendingReminders } from './reminders'
+import { isKnownMaliciousLink } from '../net/reputation'
 
 // The Rep on WhatsApp, answering what someone writes. It knows what amble
 // knows about them (their map, what it listens for and what it read this
@@ -397,7 +398,7 @@ export async function answerMessage(candidateId: string, message: string): Promi
     // The language of their message, not of their account.
     language: null,
   })
-  const allowed = [appBase(), 'https://amble.fyi', ...context.offersSentOnWhatsApp.map((offer) => offer.url).filter((url): url is string => Boolean(url))]
+  const allowed = [appBase(), 'https://amble.fyi', ...context.offersSentOnWhatsApp.map((offer) => offer.url).filter((url): url is string => typeof url === 'string' && Boolean(url) && !isKnownMaliciousLink(url))]
   let reply = keepKnownLinks(data.reply, allowed)
   const crisis = soundsLikeCrisis(message)
   if (crisis && !reply.includes(HELP_LINE)) reply = `${reply}\n\n${dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.helpLine}`
