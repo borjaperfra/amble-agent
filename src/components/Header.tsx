@@ -11,12 +11,14 @@ const navRoutes = ['/me', '/me/intent', '/me/data', '/me/triage', '/listening', 
 
 interface HeaderProps {
   right?: React.ReactNode
+  // A page that asks for the language itself (/welcome) has no second switch.
+  language?: boolean
 }
 
 // On a wide screen, the sections in a row; on a phone, behind a menu button,
 // so nothing wraps or pushes the page sideways. What a page puts on the right
 // (Save and leave) always stays in the bar.
-export default function Header({ right }: HeaderProps) {
+export default function Header({ right, language = true }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { locale, t } = useI18n()
@@ -109,7 +111,7 @@ export default function Header({ right }: HeaderProps) {
               {t.login.signOut}
             </button>
           )}
-          {languageButton(`${styles.language} ${showNav ? styles.wideOnly : ''}`)}
+          {language && languageButton(`${styles.language} ${showNav ? styles.wideOnly : ''}`)}
           {showNav && (
             <button
               type="button"
@@ -141,7 +143,7 @@ export default function Header({ right }: HeaderProps) {
             ))}
           </nav>
           <div className={styles.menuFoot}>
-            {languageButton(styles.menuLink)}
+            {language && languageButton(styles.menuLink)}
             <button type="button" className={styles.menuLink} onClick={() => void signOut()}>
               {t.login.signOut}
             </button>

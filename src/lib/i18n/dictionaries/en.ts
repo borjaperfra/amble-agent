@@ -477,11 +477,11 @@ export const en = {
     linkedinExport: 'LinkedIn profile export: contact header, skills and pagination typical of the LinkedIn PDF.',
     noReasonGiven: 'No reason given.',
     notCovered: 'The answer did not cover this point.',
-    evidenceRetracted: 'The evidence behind this capability was retracted after a defence question. It stays in the record, not in the assessment.',
+    evidenceRetracted: 'When I asked you about it, what held this up did not stand, so I no longer count it. It stays in your record.',
     assistedCeiling: (unverified: number, total: number) =>
-      `Capped at some evidence: ${unverified} of ${total} pieces are co-produced work nobody has defended.`,
+      `For now it counts as some evidence: ${unverified} of ${total} pieces come from work you did with AI help and have not yet told me about.`,
     attributionUnknown: (capability: string, unverified: number, total: number) =>
-      `I don't know whose judgment is behind "${capability}": ${unverified} of ${total} pieces of evidence come from work co-produced with AI, and nobody has defended them.`,
+      `I don't know yet how much of "${capability}" is your own judgment: ${unverified} of ${total} pieces come from work you did with AI help, and you have not told me about them yet.`,
     attributionReason: 'Attribution (PRODUCT_SPEC §14.1). Only a defence question settles it.',
     attributionResolved: 'The assisted evidence was defended or retracted.',
     discoveredInTurn: (turn: number) => `Discovered in interview turn ${turn}`,
@@ -645,6 +645,10 @@ export const en = {
       copy: 'Copy',
       copied: 'Copied',
       again: 'Prepare it again',
+      show: 'Show',
+      hide: 'Hide',
+      formCount: (total: number, yours: number) =>
+        `${total} ${total === 1 ? 'field' : 'fields'}${yours > 0 ? ` · ${yours} yours to decide` : ''}`,
     },
     newCount: (count: number) => `${count} new`,
     asideEmpty: 'Nothing set aside yet.',

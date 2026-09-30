@@ -477,11 +477,11 @@ export const es: Dictionary = {
     linkedinExport: 'Exportación de perfil de LinkedIn: cabecera de contacto, aptitudes y paginación propias del PDF de LinkedIn.',
     noReasonGiven: 'Sin motivo indicado.',
     notCovered: 'La respuesta no cubrió este punto.',
-    evidenceRetracted: 'La evidencia que sostenía esta capacidad fue retirada tras una pregunta de defensa. Queda en el registro, no en la evaluación.',
+    evidenceRetracted: 'Cuando te pregunté por ello, lo que la sostenía no se mantuvo, así que ya no lo cuento. Sigue en tu registro.',
     assistedCeiling: (unverified: number, total: number) =>
-      `Limitado a algo de evidencia: ${unverified} de ${total} evidencias son trabajo co-producido que nadie ha defendido.`,
+      `Por ahora cuenta como algo de evidencia: ${unverified} de ${total} piezas salen de trabajo que hiciste con ayuda de IA y del que aún no me has hablado.`,
     attributionUnknown: (capability: string, unverified: number, total: number) =>
-      `No sé de quién es el criterio detrás de "${capability}": ${unverified} de ${total} evidencias salen de trabajo co-producido con IA y nadie las ha defendido.`,
+      `Aún no sé cuánto de «${capability}» es criterio tuyo: ${unverified} de ${total} piezas salen de trabajo que hiciste con ayuda de IA y del que aún no me has hablado.`,
     attributionReason: 'Atribución (PRODUCT_SPEC §14.1). Solo la resuelve una pregunta de defensa.',
     attributionResolved: 'La evidencia asistida fue defendida o retirada.',
     discoveredInTurn: (turn: number) => `Descubierto en el turno ${turn} de la entrevista`,
@@ -644,6 +644,10 @@ export const es: Dictionary = {
       copy: 'Copiar',
       copied: 'Copiado',
       again: 'Prepararla de nuevo',
+      show: 'Ver',
+      hide: 'Ocultar',
+      formCount: (total: number, yours: number) =>
+        `${total} ${total === 1 ? 'campo' : 'campos'}${yours > 0 ? ` · ${yours} ${yours === 1 ? 'lo decides' : 'los decides'} tú` : ''}`,
     },
     newCount: (count: number) => `${count} ${count === 1 ? 'nueva' : 'nuevas'}`,
     asideEmpty: 'No he apartado nada todavía.',

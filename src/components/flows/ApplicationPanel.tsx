@@ -117,6 +117,29 @@ function Field({ answer }: { answer: PreparedAnswer }) {
   )
 }
 
+// A long part of the application, folded until they ask for it: on a phone
+// the letter and the form together are several screens. Folded, it is only
+// hidden, so nothing inside is lost or reset.
+function Fold({ id, title, summary, children }: { id: string; title: string; summary: React.ReactNode; children: React.ReactNode }) {
+  const a = useT().opportunities.apply
+  const [open, setOpen] = useState(false)
+  return (
+    <section className={styles.section}>
+      <div className={styles.foldHead}>
+        <h4 className={styles.sectionTitle}>{title}</h4>
+        <button type="button" className={styles.foldToggle} aria-expanded={open} aria-controls={id} onClick={() => setOpen((value) => !value)}>
+          {open ? a.hide : a.show}
+          <span className="visually-hidden"> {title}</span>
+        </button>
+      </div>
+      {!open && summary}
+      <div id={id} className={styles.foldBody} hidden={!open}>
+        {children}
+      </div>
+    </section>
+  )
+}
+
 type Stage =
   | { step: 'review' }
   | { step: 'filling' }
@@ -176,6 +199,8 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
   // What the Rep fills in on its own needs nothing from them.
   const shown = prepared.answers.filter((answer) => answer.source !== 'fact')
   // What is left for them to fill in the form itself (the CV is not: it goes).
+  // The form's questions, as listed (the CV has its own line).
+  const fields = shown.filter((answer) => answer.kind !== 'resume')
   const yours = shown.filter((answer) => answer.source === 'you' && answer.kind !== 'resume' && !saved[questionKey(answer.label)]).length
 
   async function fill() {
@@ -361,30 +386,38 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
       </section>
 
       {prepared.message && advice.coverLetter !== 'skip' && (
-        <section className={styles.section}>
-          <h4 className={styles.sectionTitle}>{a.messageTitle}</h4>
+        <Fold
+          id={`apply-${opportunityId}-letter`}
+          title={a.messageTitle}
+          summary={
+            <p className={styles.foldPreview} aria-hidden="true">
+              {prepared.message}
+            </p>
+          }
+        >
           <div className={styles.letter}>
             <p>{prepared.message}</p>
             <CopyButton text={prepared.message} />
           </div>
-        </section>
+        </Fold>
       )}
 
-      {shown.length > 0 && (
-        <section className={styles.section}>
-          <h4 className={styles.sectionTitle}>{a.formTitle}</h4>
+      {fields.length > 0 && (
+        <Fold
+          id={`apply-${opportunityId}-form`}
+          title={a.formTitle}
+          summary={<p className={styles.note}>{a.formCount(fields.length, fields.filter((answer) => answer.source === 'you').length)}</p>}
+        >
           <p className={styles.legend}>
             <span className={`${styles.dot} ${styles.dotRep}`} /> {a.legendRep}
             <span className={`${styles.dot} ${styles.dotYou}`} /> {a.legendYou}
           </p>
           <ul className={styles.fields}>
-            {shown
-              .filter((answer) => answer.kind !== 'resume')
-              .map((answer) => (
-                <Field key={answer.fieldId} answer={answer} />
-              ))}
+            {fields.map((answer) => (
+              <Field key={answer.fieldId} answer={answer} />
+            ))}
           </ul>
-        </section>
+        </Fold>
       )}
 
       <div className={styles.cvLine}>

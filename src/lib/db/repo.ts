@@ -1,5 +1,6 @@
 ﻿import { randomUUID } from 'node:crypto'
 import { getDb } from './db'
+import { DEFAULT_LOCALE, isLocale } from '../i18n/locale'
 
 export const DEFAULT_CANDIDATE_ID = 'user-zero'
 
@@ -548,14 +549,24 @@ export function listEvidenceForCapabilities(candidateId: string, capabilityIds: 
     .all(candidateId, ...capabilityIds) as unknown as EvidenceRow[]
 }
 
+// The voice of what the person reads on their profile (PERSON_FACING_RULES in
+// src/lib/model/tasks.ts), in their language. Everything written from now on
+// is in it; rows marked otherwise are rewritten once.
+export const EXPLANATION_VOICE = 'v2'
+
+export function explanationVoice(candidateId: string): string {
+  const row = getDb().prepare('SELECT locale FROM candidates WHERE id = ?').get(candidateId) as { locale: string | null } | undefined
+  return `${EXPLANATION_VOICE}@${isLocale(row?.locale) ? row.locale : DEFAULT_LOCALE}`
+}
+
 export function upsertCapability(candidateId: string, id: string, name: string, assessment: string, reason: string): void {
   getDb()
     .prepare(
-      `INSERT INTO capabilities (id, candidate_id, name, assessment, reason, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id, candidate_id) DO UPDATE SET name = excluded.name, assessment = excluded.assessment, reason = excluded.reason, updated_at = excluded.updated_at`,
+      `INSERT INTO capabilities (id, candidate_id, name, assessment, reason, updated_at, written_for)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id, candidate_id) DO UPDATE SET name = excluded.name, assessment = excluded.assessment, reason = excluded.reason, updated_at = excluded.updated_at, written_for = excluded.written_for`,
     )
-    .run(id, candidateId, name, assessment, reason, now())
+    .run(id, candidateId, name, assessment, reason, now(), explanationVoice(candidateId))
 }
 
 export function linkCapabilityEvidence(candidateId: string, capabilityId: string, evidenceIds: string[]): void {
@@ -600,8 +611,8 @@ export function insertUncertainty(
 ): UncertaintyRow {
   const db = getDb()
   db.prepare(
-    `INSERT INTO uncertainties (id, candidate_id, capability_id, description, reason, materiality, status, resolvable_by_interview, kind, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO uncertainties (id, candidate_id, capability_id, description, reason, materiality, status, resolvable_by_interview, kind, created_at, written_for)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.candidate_id,
@@ -613,6 +624,7 @@ export function insertUncertainty(
     row.resolvable_by_interview,
     row.kind ?? 'MATERIALITY',
     now(),
+    explanationVoice(row.candidate_id),
   )
   return db.prepare('SELECT * FROM uncertainties WHERE id = ?').get(row.id) as unknown as UncertaintyRow
 }
@@ -1005,7 +1017,7 @@ export function listListeningCandidateIds(): string[] {
       `SELECT c.id FROM candidates c
        WHERE c.search_paused_at IS NULL AND (EXISTS (SELECT 1 FROM revealed_preferences p WHERE p.candidate_id = c.id AND p.status = 'confirmed')
           OR EXISTS (SELECT 1 FROM intent_profiles i WHERE i.candidate_id = c.id AND i.confirmed_at IS NOT NULL
-                     AND (i.valid_until IS NULL OR i.valid_until > ?))
+                     AND (i.valid_until IS NULL OR i.valid_until > ?)))
        ORDER BY c.created_at ASC`,
     )
     .all(now()) as { id: string }[]

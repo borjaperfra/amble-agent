@@ -24,6 +24,19 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
 
+  // The only language switch on this page: choosing one turns the page into
+  // it at once, so whoever cannot read this one is not left guessing.
+  function choose(next: Locale) {
+    setLocale(next)
+    void fetch('/api/locale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: next }),
+    })
+      .then(() => router.refresh())
+      .catch(() => undefined)
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     setBusy(true)
@@ -45,7 +58,7 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
 
   return (
     <>
-      <Header />
+      <Header language={false} />
       <main className={styles.page}>
         <div className={styles.stage}>
           <Symbol size={72} watch className={styles.eye} label={t.common.yourRep} />
@@ -74,7 +87,7 @@ export default function WelcomeFlow({ name: initialName, locale: initialLocale }
                     name="language"
                     className="visually-hidden"
                     checked={locale === language.locale}
-                    onChange={() => setLocale(language.locale)}
+                    onChange={() => choose(language.locale)}
                   />
                   {language.name}
                 </label>

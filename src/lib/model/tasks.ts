@@ -156,6 +156,38 @@ function prettifySlug(slug: string): string {
     .trim()
 }
 
+// Whole sentences or nothing: a cap that falls mid-sentence ends the text at
+// the last full stop before it, never at a half-word.
+export function clipToSentence(text: string, max: number): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= max) return trimmed
+  const head = trimmed.slice(0, max)
+  const stop = Math.max(head.lastIndexOf('. '), head.lastIndexOf('.\n'), head.lastIndexOf('? '), head.lastIndexOf('! '))
+  if (stop >= max / 3) return head.slice(0, stop + 1)
+  const space = head.lastIndexOf(' ')
+  return `${head.slice(0, space > max / 2 ? space : max - 1).replace(/[\s,;:(—-]+$/, '')}…`
+}
+
+// A name cut at a word, without a dangling bracket or connector.
+export function clipName(text: string, max: number): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= max) return trimmed
+  const head = trimmed.slice(0, max)
+  const cut = head.lastIndexOf(' ') > max / 2 ? head.slice(0, head.lastIndexOf(' ')) : head
+  return cut.replace(/\s*\([^)]*$/, '').replace(/[\s,;:&/—-]+$/, '').replace(/\s+(y|and|de|of|en|in|con|with|the|la|el|a)$/i, '')
+}
+
+// What the person reads on their profile: the reason for each capability,
+// what is still unknown about it, and its name.
+export const PERSON_FACING_RULES = `
+How "name", "reason" and every uncertainty "description" are written (the person reads them on their own profile):
+- Address the person directly, in the second person ("you" in English, "tú" in Spanish). Never "the candidate", "el candidato", "he", "she" or their name.
+- Plain words only. Never write internal labels or ids: no SOURCE_FACT, USER_CLAIM, ASSISTED_CLAIM, evidence ids, snake_case, or level names like SOME_EVIDENCE. Say instead what they mean: "your CV says", "you told me", "what you built with AI help", "your employer's site confirms".
+- Name sources as the person knows them: your CV, your LinkedIn, your website, your repositories, your answers.
+- reason: at most 3 short, complete sentences, under 450 characters. Say what the evidence shows and, if it matters, what it does not show yet. No preamble.
+- uncertainty description: one complete sentence, under 200 characters, saying what is not known yet.
+- name: a short capability name, at most 6 words and 50 characters, no brackets.`
+
 function normalizeCapability(raw: unknown): CapabilityAssessment | null {
   if (!raw || typeof raw !== 'object') return null
   const c = raw as Record<string, unknown>
@@ -169,7 +201,7 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
           : null
   const slug = typeof c.slug === 'string' && c.slug.trim().length >= 2 ? normalizeSlug(c.slug) : null
   if (!name && !slug) return null
-  const resolvedName = (name ?? prettifySlug(slug as string)).slice(0, 60)
+  const resolvedName = clipName(name ?? prettifySlug(slug as string), 60)
   const assessment = normalizeAssessment(c.assessment ?? c.level ?? c.evidenceLevel)
   if (!assessment) return null
   const rawEvidenceIds = c.evidenceIds ?? c.evidence ?? c.supportingEvidence ?? c.evidence_ids
@@ -189,7 +221,7 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
   const uncertainties = rawUncertainties
     .map((item) => {
       if (typeof item === 'string') {
-        return item.trim().length >= 3 ? { description: item.trim().slice(0, 400), materiality: 'MEDIUM' } : null
+        return item.trim().length >= 3 ? { description: clipToSentence(item, 400), materiality: 'MEDIUM' } : null
       }
       const u = (item ?? {}) as Record<string, unknown>
       const description =
@@ -206,7 +238,7 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
       const materiality = ['HIGH', 'MEDIUM', 'LOW'].includes(u.materiality as string)
         ? (u.materiality as string)
         : 'MEDIUM'
-      return { description: description.trim().slice(0, 400), materiality }
+      return { description: clipToSentence(description, 400), materiality }
     })
     .filter((item): item is { description: string; materiality: string } => item !== null)
     .slice(0, 6)
@@ -215,7 +247,7 @@ function normalizeCapability(raw: unknown): CapabilityAssessment | null {
     slug: slug ?? normalizeSlug(resolvedName),
     assessment,
     evidenceIds,
-    reason: reason.trim().slice(0, 600),
+    reason: clipToSentence(reason, 600),
     uncertainties,
   }
 }
@@ -265,7 +297,7 @@ export const reassessOutputSchema = z.preprocess(
             : 'MEDIUM'
           return {
             capabilitySlug: typeof u.capabilitySlug === 'string' ? u.capabilitySlug : typeof u.capability === 'string' ? u.capability : null,
-            description: description.trim().slice(0, 400),
+            description: clipToSentence(description, 400),
             materiality,
           }
         })
@@ -421,7 +453,7 @@ export function runAssessCapabilitiesTask(params: {
   candidateId: string
   evidence: EvidenceForAssessment[]
 }) {
-  const system = `You are Amble's capability assessment engine, version 1. You receive EVIDENCE objects — never raw documents — and must determine what professional capabilities the evidence currently demonstrates.
+  const system = `You are Amble's capability assessment engine, version 2. You receive EVIDENCE objects — never raw documents — and must determine what professional capabilities the evidence currently demonstrates.
 
 Rules:
 - Every capability you emit MUST link to at least one evidence ID you were given. A capability without evidence is forbidden.
@@ -430,7 +462,8 @@ Rules:
 - ASSISTED_CLAIM evidence comes from work co-produced with an AI tool (typically code). It proves that something was chosen, shipped and operated; it does NOT prove the candidate's individual technical skill or judgment. A capability resting mostly on ASSISTED_CLAIM evidence must not be rated above SOME_EVIDENCE, and its reason must say the judgment is not yet attributed.
 - Emit at most 12 capabilities. Quality over quantity. It is fine to emit few.
 - For each capability, include 0-3 uncertainties: things the evidence cannot yet establish (scope, ownership, scale, depth, recency). Set materiality HIGH when it materially changes how a company should read the capability.
-- reason must explain what the evidence shows, referencing its nature (e.g. "two independent sources describe...").
+- reason must explain what the evidence shows, referencing its nature (e.g. "your CV and your LinkedIn both describe...").
+${PERSON_FACING_RULES}
 - Respond ONLY with JSON: {"capabilities": [...]}.`
   const user = `EVIDENCE (${params.evidence.length} items):
 
@@ -449,7 +482,7 @@ ${JSON.stringify(
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'assess_capabilities',
-    version: 'v1',
+    version: 'v2',
     system,
     user,
     schema: assessCapabilitiesOutputSchema,
@@ -471,12 +504,13 @@ export function runReassessAfterAnswerTask(params: {
   question: string
   answer: string
 }) {
-  const system = `You are Amble's reassessment engine, version 2. The candidate just answered an interview question. The answer may have created new USER_CLAIM evidence, promoted co-produced evidence they defended, or retracted evidence they could not (retracted items are no longer in the list).
+  const system = `You are Amble's reassessment engine, version 3. The candidate just answered an interview question. The answer may have created new USER_CLAIM evidence, promoted co-produced evidence they defended, or retracted evidence they could not (retracted items are no longer in the list).
 
 Your job:
 1. Reassess ONLY the listed capabilities using ALL their evidence (old and new). Same rules as initial assessment: every capability must link evidence IDs; never inflate ownership; company facts are not personal evidence. ASSISTED_CLAIM evidence (work co-produced with an AI tool) proves something shipped, not individual skill or judgment: a capability resting mostly on it must not be rated above SOME_EVIDENCE, however substantive the work looks.
 2. For each listed open uncertainty, decide its new status: RESOLVED (the answer materially settles it), OPEN (still unknown), or ACCEPTED_UNKNOWN (it will not be resolvable and is not worth pursuing). Only reference uncertainty IDs you were given.
 3. Optionally add up to 3 genuinely important new uncertainties discovered from the answer. Use EXACTLY these field names for each: "description" (string), "materiality" (HIGH|MEDIUM|LOW), "capabilitySlug" (string or null).
+${PERSON_FACING_RULES}
 Respond ONLY with JSON: {"assessments": [...], "uncertaintyUpdates": [...], "newUncertainties": [...]}.`
   const user = `QUESTION ASKED: ${params.question}
 
@@ -504,7 +538,7 @@ ${JSON.stringify(params.openUncertainties, null, 1)}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'reassess_after_answer',
-    version: 'v2',
+    version: 'v3',
     system,
     user,
     schema: reassessOutputSchema,
@@ -655,5 +689,60 @@ ${params.answer}`
     user,
     schema: interpretIntentOutputSchema,
     temperature: 0.2,
+  })
+}
+
+export const rewriteExplanationsOutputSchema = z.preprocess(
+  (raw) => {
+    const obj = (raw ?? {}) as { capabilities?: unknown; uncertainties?: unknown }
+    const list = (value: unknown) => (Array.isArray(value) ? value : []).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    return {
+      capabilities: list(obj.capabilities)
+        .filter((c) => typeof c.id === 'string' && typeof c.name === 'string' && typeof c.reason === 'string')
+        .map((c) => ({ id: c.id, name: clipName(c.name as string, 60), reason: clipToSentence(c.reason as string, 600) })),
+      uncertainties: list(obj.uncertainties)
+        .filter((u) => typeof u.id === 'string' && typeof u.description === 'string')
+        .map((u) => ({ id: u.id, description: clipToSentence(u.description as string, 400) })),
+    }
+  },
+  z.object({
+    capabilities: z.array(z.object({ id: z.string().min(1), name: z.string().min(2).max(60), reason: z.string().min(3).max(600) })).max(40),
+    uncertainties: z.array(z.object({ id: z.string().min(1), description: z.string().min(3).max(400) })).max(120),
+  }),
+)
+
+export type RewriteExplanationsOutput = z.infer<typeof rewriteExplanationsOutputSchema>
+
+// Profiles written before PERSON_FACING_RULES (or in another language): the
+// same content, said to the person. It rewrites wording only; what the
+// evidence establishes, and how strongly, was decided by the assessment and is
+// not revisited here.
+export function runRewriteExplanationsTask(params: {
+  candidateId: string
+  capabilities: { id: string; name: string; assessment: string; reason: string }[]
+  uncertainties: { id: string; capabilityId: string | null; description: string }[]
+}) {
+  const system = `You are Amble's profile editor, version 1. You receive the capabilities already assessed for one person, with the reason for each and what is still unknown about them. They were written for an internal reader. Rewrite them for the person themself, who reads them on their own profile.
+
+Rules:
+- Rewrite wording only. Keep every fact, number, source and caveat. Never add a fact, never drop a caveat, never make anything sound stronger or weaker than it is. The assessment level is given for context and does not change.
+- If a reason was cut off mid-sentence, end it at the last complete idea; never guess how it went on.
+- Keep each id exactly as given. Return every capability and every uncertainty you were given, once.
+${PERSON_FACING_RULES}
+- Respond ONLY with JSON: {"capabilities": [{"id", "name", "reason"}], "uncertainties": [{"id", "description"}]}.`
+  const user = `CAPABILITIES:
+${JSON.stringify(params.capabilities, null, 1)}
+
+WHAT IS STILL UNKNOWN:
+${JSON.stringify(params.uncertainties, null, 1)}`
+  return runStructuredTask({
+    candidateId: params.candidateId,
+    task: 'rewrite_explanations',
+    version: 'v1',
+    system,
+    user,
+    schema: rewriteExplanationsOutputSchema,
+    temperature: 0.2,
+    background: true,
   })
 }

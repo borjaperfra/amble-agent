@@ -561,6 +561,12 @@ function addColumn(db: DatabaseSync, table: string, column: string, definition: 
 }
 
 function migrate(db: DatabaseSync): void {
+  // Which voice and language what the person reads on their profile was
+  // written in (a capability's name and reason, an uncertainty's description):
+  // rows from before are rewritten once (src/lib/career/explanations.ts).
+  addColumn(db, 'capabilities', 'written_for', 'TEXT')
+  addColumn(db, 'uncertainties', 'written_for', 'TEXT')
+
   // What the agent waits for on WhatsApp next (why an offer does not fit, a
   // yes to a change): one thing at a time, as JSON.
   addColumn(db, 'whatsapp_links', 'awaiting', 'TEXT')

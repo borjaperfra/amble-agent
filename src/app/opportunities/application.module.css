@@ -106,6 +106,65 @@
   color: var(--ink-tertiary);
 }
 
+/* A folded part: its title, and Show / Hide on the same line. */
+.foldHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: -6px;
+}
+
+.foldToggle {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--moss-dark);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--moss-soft);
+  cursor: pointer;
+}
+
+.foldToggle:hover {
+  text-decoration-color: var(--moss);
+}
+
+.foldToggle:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: 2px;
+}
+
+/* Folded, the letter shows how it begins. */
+.foldPreview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink-secondary);
+  white-space: normal;
+}
+
+.foldBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.foldBody[hidden] {
+  display: none;
+}
+
 .advice {
   margin: 0;
   display: flex;

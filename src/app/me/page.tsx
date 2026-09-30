@@ -1,6 +1,8 @@
+import { after } from 'next/server'
 import { requireCandidate } from '@/lib/auth/session'
 import { nextStep } from '@/lib/journey'
 import { getMapViewModel } from '@/lib/view'
+import { rewriteExplanationsInBackground } from '@/lib/career/explanations'
 import { serverLocale } from '@/lib/i18n/server'
 import { linkOf } from '@/lib/whatsapp/link'
 import { zernioConfig } from '@/lib/whatsapp/zernio'
@@ -20,5 +22,8 @@ function mapNextStep(candidateId: string, step: string): MapNextStep {
 
 export default async function MapPage() {
   const candidate = await requireCandidate()
+  // Anything on the profile still written the old way is rewritten for them,
+  // without making them wait: the next visit shows it.
+  after(() => rewriteExplanationsInBackground(candidate.id))
   return <MapView vm={getMapViewModel(candidate.id, await serverLocale())} next={mapNextStep(candidate.id, nextStep(candidate))} owner={candidate.role === 'owner'} />
 }
