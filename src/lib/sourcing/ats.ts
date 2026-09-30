@@ -530,11 +530,15 @@ function workdayPostedAt(text: string | undefined): string | null {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 }
 
-// "6 Locations" says nothing; the posting's path names the first one.
+// "6 Locations" says nothing; the posting's path names the first one
+// (/job/<place>/<slug>). A posting can come with no locationsText at all
+// (Santander lists some as just title, path and date), and then its path is
+// /job/<slug>, with no place in it: the location is unknown, not the slug.
 function workdayLocation(posting: WorkdayPosting): string | null {
-  const text = posting.locationsText?.trim() ?? ''
+  const text = typeof posting.locationsText === 'string' ? posting.locationsText.trim() : ''
   if (text && !/^\d+\s+locations?$/i.test(text)) return text
-  const first = posting.externalPath.split('/')[2]
+  const segments = posting.externalPath.split('/')
+  const first = segments.length > 3 ? segments[2] : undefined
   if (!first) return text || null
   const place = decodeURIComponent(first).replace(/---/g, ' - ').replace(/-/g, ' ').trim()
   return text ? `${place} (+${Number(text.match(/\d+/)?.[0] ?? 1) - 1})` : place
