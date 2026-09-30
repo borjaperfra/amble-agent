@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { normaliseEmail, requestLoginCode } from '@/lib/auth/codes'
+import { signInEmailsConfigured } from '@/lib/auth/email'
 import { betaIsFull, openInvitation } from '@/lib/auth/invitations'
 import { serverLocale } from '@/lib/i18n/server'
 
@@ -18,12 +19,15 @@ export async function POST(request: Request) {
     if (!invitation) return NextResponse.json({ error: 'invitation_used' }, { status: 410 })
     if (betaIsFull()) return NextResponse.json({ error: 'beta_full' }, { status: 409 })
   }
-  try {
-    const result = await requestLoginCode(email, await serverLocale(), invitation)
-    if (!result.sent) return NextResponse.json({ error: result.reason }, { status: 429 })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[amble] sign-in code not sent:', error instanceof Error ? error.message : error)
+  if (!signInEmailsConfigured()) {
+    console.error('[amble] sign-in code not sent: RESEND_API_KEY is not set.')
     return NextResponse.json({ error: 'failed' }, { status: 502 })
   }
+  const result = requestLoginCode(email, await serverLocale(), invitation)
+  if (!result.sent) return NextResponse.json({ error: result.reason }, { status: 429 })
+  // Sent after answering, whether there is an email or not: the time the
+  // answer takes says nothing about the address.
+  const deliver = result.deliver
+  if (deliver) after(() => deliver().catch((error) => console.error('[amble] sign-in code not sent:', error instanceof Error ? error.message : error)))
+  return NextResponse.json({ ok: true })
 }

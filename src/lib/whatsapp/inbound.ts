@@ -1,9 +1,9 @@
 import { getDb } from '../db/db'
 import { getCandidate, isSearchPaused, now, type CandidateRow } from '../db/repo'
-import { emailOwnerAbout, recordFeedback } from '../feedback'
+import { emailOwnerAbout, feedbackToday, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
-import { transcribe } from '../model/transcribe'
+import { MAX_AUDIO_BYTES, transcribe } from '../model/transcribe'
 import { runAction } from './actions'
 import { answerInterviewQuestion, pendingInterviewQuestion } from './interview'
 import { leaveReminder } from './reminders'
@@ -16,6 +16,7 @@ import { appUrl, awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
 import { isMaliciousLink } from '../net/reputation'
+import { allow } from './throttle'
 import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
 
 // One event from the provider's webhook. Each is handled once (they retry
@@ -40,20 +41,27 @@ interface InboundEvent {
   metadata?: { interactiveId?: string } | null
 }
 
+// Where to start, said to a number amble does not know: once in a while,
+// not to every message a script sends.
+const STRANGER_REPLIES = 2
+const STRANGER_WINDOW_MS = 6 * 60 * 60 * 1000
+
 export async function handleEvent(event: InboundEvent): Promise<void> {
+  // Without its id an event could not be handled only once.
+  if (typeof event?.id !== 'string' || !event.id) return
   const db = getDb()
   const seen = db.prepare('INSERT OR IGNORE INTO whatsapp_events (id, event, received_at) VALUES (?, ?, ?)').run(event.id, event.event, now())
   if (seen.changes === 0) return
   if (event.event !== 'message.received') return
   const message = event.message
-  if (!message || message.platform !== 'whatsapp' || message.direction !== 'incoming') return
+  if (!message || message.platform !== 'whatsapp' || message.direction !== 'incoming' || typeof message.conversationId !== 'string' || !message.sender) return
   const config = zernioConfig()
   if (!config) return
 
   // WhatsApp's own id for the person, when it comes; the number otherwise.
   const phone = (message.sender.phoneNumber ?? `+${message.sender.id}`).replace(/[^\d+]/g, '')
   const userId = message.sender.businessScopedUserId ?? null
-  const text = (message.text ?? '').trim()
+  const text = typeof message.text === 'string' ? message.text.trim() : ''
   const interactiveId = event.metadata?.interactiveId ?? null
 
   // Each reply its own key: one event can be answered in several messages.
@@ -64,7 +72,7 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
     if (replyTo) logMessage(replyTo, 'out', body)
   }
 
-  const linkingCandidate = text ? takeLinkCode(text) : null
+  const linkingCandidate = text ? takeLinkCode(text, userId ?? phone) : null
   if (linkingCandidate) {
     saveLink(linkingCandidate, { phone, userId, conversationId: message.conversationId })
     replyTo = linkingCandidate
@@ -78,7 +86,9 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   const link = linkBySender({ userId, phone })
   if (!link) {
     // Someone amble does not know: where to start, and nothing more.
-    await reply(`${dictionaries.es.whatsapp.unknown}\n\n${dictionaries.en.whatsapp.unknown}`)
+    if (allow('stranger', userId ?? phone, STRANGER_REPLIES, STRANGER_WINDOW_MS)) {
+      await reply(`${dictionaries.es.whatsapp.unknown}\n\n${dictionaries.en.whatsapp.unknown}`)
+    }
     return
   }
   touchLink(link.candidate_id, message.conversationId)
@@ -234,7 +244,7 @@ async function answerWords(
   if (question) answerInterviewQuestion(candidate.id, question.turnId, text)
   // Only what the agent marks for the team (a problem, a suggestion, a sign
   // of distress), and not more than a few a day from one person.
-  if (answer.forward && forwardsToday(candidate.id) < MAX_FORWARDS_A_DAY) {
+  if (answer.forward && feedbackToday(candidate.id, 'whatsapp') < MAX_FORWARDS_A_DAY) {
     const row = recordFeedback(candidate, { message: text, page: null, channel: 'whatsapp' })
     await emailOwnerAbout(candidate, row)
   }
@@ -247,7 +257,11 @@ async function hear(apiKey: string, url: string, mimeType: string, language: str
   const own = new URL(url).hostname === 'zernio.com'
   const response = await fetch(url, { headers: own ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(30_000) })
   if (!response.ok) return ''
-  const audio = new Blob([await response.arrayBuffer()], { type: mimeType })
+  // A voice note, not a file of any size.
+  if (Number(response.headers.get('content-length') ?? 0) > MAX_AUDIO_BYTES) return ''
+  const bytes = await response.arrayBuffer()
+  if (bytes.byteLength > MAX_AUDIO_BYTES) return ''
+  const audio = new Blob([bytes], { type: mimeType })
   return transcribe(audio, mimeType.includes('mp4') ? 'note.m4a' : 'note.ogg', language)
 }
 
@@ -265,14 +279,6 @@ function overLimit(candidateId: string): boolean {
         .get(candidateId, new Date(Date.now() - since).toISOString()) as { n: number }
     ).n
   return count(60 * 60 * 1000) >= PER_HOUR || count(24 * 60 * 60 * 1000) >= PER_DAY
-}
-
-function forwardsToday(candidateId: string): number {
-  return (
-    getDb()
-      .prepare("SELECT COUNT(*) AS n FROM feedback WHERE candidate_id = ? AND channel = 'whatsapp' AND created_at >= ?")
-      .get(candidateId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) as { n: number }
-  ).n
 }
 
 // The verdict on an offer they brought, as a message: what it is for them

@@ -23,7 +23,11 @@ export interface FeedbackListing extends FeedbackRow {
   name: string | null
 }
 
-const MAX_MESSAGE = 4000
+export const MAX_FEEDBACK_MESSAGE = 4000
+// Emails to the owner about one person's feedback in a day: everything is
+// kept (and listed), but a flood does not become a flood of email.
+const EMAILS_PER_DAY = 10
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export function recordFeedback(candidate: CandidateRow, params: { message: string; page: string | null; channel: FeedbackChannel }): FeedbackRow {
   const row: FeedbackRow = {
@@ -31,7 +35,7 @@ export function recordFeedback(candidate: CandidateRow, params: { message: strin
     candidate_id: candidate.id,
     channel: params.channel,
     page: params.page ? params.page.slice(0, 200) : null,
-    message: params.message.trim().slice(0, MAX_MESSAGE),
+    message: params.message.trim().slice(0, MAX_FEEDBACK_MESSAGE),
     created_at: now(),
     seen_at: null,
   }
@@ -54,10 +58,20 @@ export function markFeedbackSeen(id: string, seen: boolean): void {
   getDb().prepare('UPDATE feedback SET seen_at = ? WHERE id = ?').run(seen ? now() : null, id)
 }
 
+// What one person sent through a channel in the last day.
+export function feedbackToday(candidateId: string, channel: FeedbackChannel): number {
+  return (
+    getDb()
+      .prepare('SELECT COUNT(*) AS n FROM feedback WHERE candidate_id = ? AND channel = ? AND created_at >= ?')
+      .get(candidateId, channel, new Date(Date.now() - DAY_MS).toISOString()) as { n: number }
+  ).n
+}
+
 // The owner hears about it at once; a failed email never loses the feedback.
 export async function emailOwnerAbout(candidate: CandidateRow, row: FeedbackRow): Promise<void> {
   const to = ownerEmail()
-  if (!to) return
+  // This one included: past the day's emails, it waits in the list.
+  if (!to || feedbackToday(candidate.id, row.channel) > EMAILS_PER_DAY) return
   await sendEmail({
     to,
     subject: `Feedback de ${candidate.name ?? candidate.email ?? candidate.id}`,

@@ -15,7 +15,7 @@ export async function GET() {
   if (!(await isOwner())) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
   const file = path.join(os.tmpdir(), `amble-export-${Date.now()}.db`)
   try {
-    getDb().exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`)
+    getDb().prepare('VACUUM INTO ?').run(file)
     const body = gzipSync(fs.readFileSync(file))
     const day = new Date().toISOString().slice(0, 10)
     return new NextResponse(new Uint8Array(body), {

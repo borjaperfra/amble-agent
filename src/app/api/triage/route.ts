@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
-import { ModelNotConfiguredError } from '@/lib/features'
-import { ModelError } from '@/lib/model/provider'
-import { forCandidate } from '@/lib/auth/request'
-import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
+import { failure, forCandidate } from '@/lib/auth/request'
+import { refreshDetectedLocale } from '@/lib/i18n/candidate'
 import { requestReread } from '@/lib/matching/run'
 import {
   analyseTriage,
@@ -27,22 +25,13 @@ export const maxDuration = 300
 // POST { action: 'analyse' }            -> propose revealed preferences (a model call)
 // POST { action: 'decide', preferenceId, decision: 'confirmed' | 'rejected' }
 // POST { action: 'revise', preferenceId, statement, label? }      -> the candidate's correction
-// POST { action: 'add', kind, statement, label?, offers?, quote? } -> something the analysis missed| 'rejected' }
+// POST { action: 'add', kind, statement, label?, offers?, quote? } -> something the analysis missed
 
 function errorResponse(error: unknown) {
   if (error instanceof TriageError) {
     return NextResponse.json({ error: error.message }, { status: error.status })
   }
-  if (error instanceof ModelNotConfiguredError) {
-    return NextResponse.json({ error: error.message, unconfigured: true }, { status: 503 })
-  }
-  if (error instanceof ModelError) {
-    return NextResponse.json({ error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
-  }
-  return NextResponse.json(
-    { error: error instanceof Error ? error.message : 'The triage request failed.' },
-    { status: 500 },
-  )
+  return failure('triage', error)
 }
 
 export async function GET(request: Request) {

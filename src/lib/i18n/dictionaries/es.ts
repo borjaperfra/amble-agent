@@ -360,7 +360,7 @@ export const es: Dictionary = {
   },
   welcome: {
     title: 'Hola. Soy tu Rep.',
-    lead: 'Dos cosas antes de empezar.',
+    lead: 'Soy un agente de inteligencia artificial que busca trabajo contigo. Lo que se envíe en tu nombre lo decides tú. Dos cosas antes de empezar.',
     nameLabel: '¿Cómo te llamo?',
     languageLabel: '¿En qué idioma hablamos?',
     continue: 'Seguir',
@@ -401,8 +401,8 @@ export const es: Dictionary = {
     // What they send to link it. The code is what matters; the rest is theirs.
     linkMessage: (code: string) => `Hola, amble. Soy yo: ${code}`,
     linked: (name: string | null) =>
-      `Hecho${name ? `, ${name}` : ''}. Por aquí te escribiré solo cuando algo merezca tu atención: ofertas que encajan de verdad y cómo van tus candidaturas. Y pregúntame lo que quieras sobre tu búsqueda.`,
-    unknown: 'Hola. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
+      `Hecho${name ? `, ${name}` : ''}. Por aquí te escribiré solo cuando algo merezca tu atención: ofertas que encajan de verdad y cómo van tus candidaturas. Y pregúntame lo que quieras sobre tu búsqueda. Soy el agente de IA de amble: lo que se envíe en tu nombre lo decides tú.`,
+    unknown: 'Hola, soy el agente de IA de amble. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
     // Buttons: WhatsApp allows 20 characters each.

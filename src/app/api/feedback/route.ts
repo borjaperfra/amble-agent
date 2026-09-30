@@ -1,7 +1,7 @@
 import { after, NextResponse } from 'next/server'
 import { forCandidate } from '@/lib/auth/request'
 import { isOwner } from '@/lib/auth/session'
-import { emailOwnerAbout, listFeedback, markFeedbackSeen, recordFeedback } from '@/lib/feedback'
+import { emailOwnerAbout, listFeedback, markFeedbackSeen, MAX_FEEDBACK_MESSAGE, recordFeedback } from '@/lib/feedback'
 
 export const runtime = 'nodejs'
 
@@ -25,8 +25,8 @@ export async function POST(request: Request) {
     }
 
     const message = typeof body.message === 'string' ? body.message.trim() : ''
-    if (message.length < 2) return NextResponse.json({ error: 'A message is required.' }, { status: 400 })
-    const page = typeof body.page === 'string' ? body.page : null
+    if (message.length < 2 || message.length > MAX_FEEDBACK_MESSAGE) return NextResponse.json({ error: 'A message is required.' }, { status: 400 })
+    const page = typeof body.page === 'string' ? body.page.slice(0, 200) : null
     const row = recordFeedback(candidate, { message, page, channel: 'app' })
 
     after(() => emailOwnerAbout(candidate, row))

@@ -16,8 +16,10 @@ const SECRET_COLUMNS = new Set(['token', 'token_hash', 'code_hash', 'link_hash']
 function candidateTables(): string[] {
   const db = getDb()
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all() as unknown as { name: string }[]
+  // Names go into SQL as identifiers: only plain ones are taken.
   return tables
     .map((table) => table.name)
+    .filter((name) => /^[a-z_][a-z0-9_]*$/.test(name))
     .filter((name) => (db.prepare(`PRAGMA table_info(${name})`).all() as unknown as { name: string }[]).some((column) => column.name === 'candidate_id'))
 }
 
@@ -60,11 +62,29 @@ export function exportAccount(candidateId: string): Record<string, unknown> {
   return data
 }
 
+// Offers only they brought (a link or a text they pasted on WhatsApp, which
+// may carry a recruiter's message to them): no board has them and no one
+// else was judged on them.
+function offersOnlyTheyShared(candidateId: string): string[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT m.opportunity_id AS id FROM opportunity_matches m
+       WHERE m.candidate_id = ?
+         AND EXISTS (SELECT 1 FROM opportunity_sources s WHERE s.opportunity_id = m.opportunity_id AND s.source = 'shared')
+         AND NOT EXISTS (SELECT 1 FROM opportunity_sources s WHERE s.opportunity_id = m.opportunity_id AND s.source != 'shared')
+         AND NOT EXISTS (SELECT 1 FROM opportunity_matches o WHERE o.opportunity_id = m.opportunity_id AND o.candidate_id != m.candidate_id)
+         AND NOT EXISTS (SELECT 1 FROM opportunity_decisions d WHERE d.opportunity_id = m.opportunity_id AND d.candidate_id != m.candidate_id)`,
+    )
+    .all(candidateId) as unknown as { id: string }[]
+  return rows.map((row) => row.id)
+}
+
 export function deleteAccount(candidateId: string): void {
   const db = getDb()
   const email = (db.prepare('SELECT email FROM candidates WHERE id = ?').get(candidateId) as { email: string | null } | undefined)?.email ?? null
   const sources = sourceIds(candidateId)
   const interviews = interviewIds(candidateId)
+  const shared = offersOnlyTheyShared(candidateId)
 
   // One transaction, with foreign keys checked only at the end: the tables
   // refer to one another, and all of them go.
@@ -81,6 +101,11 @@ export function deleteAccount(candidateId: string): void {
     // The account first: what is append-only while it exists can then go.
     db.prepare('DELETE FROM candidates WHERE id = ?').run(candidateId)
     for (const table of candidateTables()) db.prepare(`DELETE FROM ${table} WHERE candidate_id = ?`).run(candidateId)
+    // What they shared goes once nothing of theirs points at it.
+    if (shared.length > 0) {
+      db.prepare(`DELETE FROM opportunity_sources WHERE opportunity_id IN (${placeholders(shared)})`).run(...shared)
+      db.prepare(`DELETE FROM opportunities WHERE id IN (${placeholders(shared)})`).run(...shared)
+    }
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')

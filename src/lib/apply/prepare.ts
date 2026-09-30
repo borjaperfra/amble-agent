@@ -182,7 +182,24 @@ export function getPreparedApplication(candidateId: string, opportunityId: strin
 
 export class NotWantedError extends Error {}
 
-export async function prepareApplication(candidateId: string, opportunityId: string): Promise<PreparedApplication> {
+declare global {
+  var __amblePreparing: Map<string, Promise<PreparedApplication>> | undefined
+}
+
+// Preparations under way: asked again meanwhile (a double tap on WhatsApp, a
+// second click), the answer is the one being written, not a second model call.
+const preparing = (globalThis.__amblePreparing ??= new Map<string, Promise<PreparedApplication>>())
+
+export function prepareApplication(candidateId: string, opportunityId: string): Promise<PreparedApplication> {
+  const key = `${candidateId}:${opportunityId}`
+  const running = preparing.get(key)
+  if (running) return running
+  const job = prepare(candidateId, opportunityId).finally(() => preparing.delete(key))
+  preparing.set(key, job)
+  return job
+}
+
+async function prepare(candidateId: string, opportunityId: string): Promise<PreparedApplication> {
   const db = getDb()
   const offer = db
     .prepare(

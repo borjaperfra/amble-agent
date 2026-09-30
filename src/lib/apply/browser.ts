@@ -44,14 +44,26 @@ interface Session {
   // In the cloud: the session to end, and its live view (never sent anywhere).
   cloudId: string | null
   liveUrl: string | null
+  // The form already said "thank you" before anything was sent (a form that
+  // thanks you for your interest): then only the form gone means it was.
+  thanksBefore: boolean
 }
 
 declare global {
   var __ambleApplySessions: Map<string, Session> | undefined
+  var __ambleApplyFilling: Map<string, Promise<FillResult>> | undefined
+  var __ambleApplySubmitting: Map<string, Promise<SubmitResult>> | undefined
 }
 
 const sessions = (globalThis.__ambleApplySessions ??= new Map<string, Session>())
+// Fills under way: a second ask for the same form (a double tap) waits for
+// the first instead of opening a second browser.
+const filling = (globalThis.__ambleApplyFilling ??= new Map<string, Promise<FillResult>>())
+// Sends under way: a second yes (a double click) never presses the button twice.
+const submitting = (globalThis.__ambleApplySubmitting ??= new Map<string, Promise<SubmitResult>>())
 const sessionKey = (candidateId: string, opportunityId: string) => `${candidateId}:${opportunityId}`
+// Forms one person can have open at once: each is a browser, in the cloud a paid one.
+const MAX_OPEN_FORMS = 2
 
 async function closeSession(key: string) {
   const session = sessions.get(key)
@@ -215,9 +227,26 @@ export function canFillForm(opportunityId: string): boolean {
   return Boolean(offer && applyUrl(offer))
 }
 
+function openFormsOf(candidateId: string, except: string): number {
+  const prefix = `${candidateId}:`
+  const open = [...sessions].filter(([key, session]) => key.startsWith(prefix) && key !== except && session.state === 'open' && session.expires > Date.now()).length
+  const starting = [...filling.keys()].filter((key) => key.startsWith(prefix) && key !== except).length
+  return open + starting
+}
+
 // `via`: where they asked for it. Asked on WhatsApp, they are told there
 // when the page says it was sent.
-export async function fillApplication(candidateId: string, opportunityId: string, via: 'app' | 'whatsapp' = 'app'): Promise<FillResult> {
+export function fillApplication(candidateId: string, opportunityId: string, via: 'app' | 'whatsapp' = 'app'): Promise<FillResult> {
+  const key = sessionKey(candidateId, opportunityId)
+  const running = filling.get(key)
+  if (running) return running
+  if (openFormsOf(candidateId, key) >= MAX_OPEN_FORMS) return Promise.resolve({ status: 'unavailable', reason: 'too_many_open' })
+  const job = fill(candidateId, opportunityId, via).finally(() => filling.delete(key))
+  filling.set(key, job)
+  return job
+}
+
+async function fill(candidateId: string, opportunityId: string, via: 'app' | 'whatsapp'): Promise<FillResult> {
   const prepared = getPreparedApplication(candidateId, opportunityId)
   if (!prepared) return { status: 'unavailable', reason: 'not_prepared' }
   const offer = offerOf(opportunityId)
@@ -295,7 +324,8 @@ export async function fillApplication(candidateId: string, opportunityId: string
     fs.mkdirSync(path.dirname(shot), { recursive: true })
     await page.screenshot({ path: shot, fullPage: true })
     const captcha = (await page.locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .grecaptcha-badge').count()) > 0
-    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl }
+    const thanksBefore = SENT.test(await page.evaluate(() => document.body.innerText).catch(() => ''))
+    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl, thanksBefore }
     sessions.set(key, session)
     if (WINDOW) watchWindow(candidateId, opportunityId, session, prepared.answers.filter((answer) => left.includes(answer.label)), via)
     return { status: 'filled', filled, left, captcha, window: WINDOW, live: Boolean(liveUrl), retried }
@@ -326,8 +356,7 @@ function watchWindow(candidateId: string, opportunityId: string, session: Sessio
       return
     }
     try {
-      const text = await page.evaluate(() => document.body.innerText)
-      if (SENT.test(text)) {
+      if (await readsAsSent(page, session.thanksBefore)) {
         clearInterval(timer)
         session.state = 'sent'
         setProgress(candidateId, [opportunityId], 'applied')
@@ -362,8 +391,30 @@ export type SubmitResult = { status: 'sent' } | { status: 'expired' } | { status
 
 const SENT = /(thank you|thanks for applying|application (has been )?(submitted|received)|we('|’)ve received your application|successfully (submitted|applied))/i
 
-export async function submitApplication(candidateId: string, opportunityId: string): Promise<SubmitResult> {
+// Whether the page says the application went: its words, and, when the form
+// said them from the start, the form no longer there.
+const READS_AS_SENT = String.raw`([pattern, thanksBefore]) => {
+  if (!new RegExp(pattern, 'i').test(document.body.innerText)) return false
+  if (!thanksBefore) return true
+  // The form gone: none of the fields amble marked, and hardly a control left.
+  const controls = document.querySelectorAll('input:not([type=hidden]):not([type=search]), textarea, select').length
+  return document.querySelectorAll('[data-amble-field]').length === 0 && controls < 2
+}`
+
+export async function readsAsSent(page: Page, thanksBefore: boolean): Promise<boolean> {
+  return Boolean(await page.evaluate(`(${READS_AS_SENT})(${JSON.stringify([SENT.source, thanksBefore])})`))
+}
+
+export function submitApplication(candidateId: string, opportunityId: string): Promise<SubmitResult> {
   const key = sessionKey(candidateId, opportunityId)
+  const running = submitting.get(key)
+  if (running) return running
+  const job = submit(candidateId, opportunityId, key).finally(() => submitting.delete(key))
+  submitting.set(key, job)
+  return job
+}
+
+async function submit(candidateId: string, opportunityId: string, key: string): Promise<SubmitResult> {
   if (DRY) {
     await closeSession(key)
     return { status: 'blocked', reason: 'unclear' }
@@ -379,7 +430,7 @@ export async function submitApplication(candidateId: string, opportunityId: stri
     if ((await submit.count()) === 0) return { status: 'blocked', reason: 'unclear' }
     await submit.click()
     const outcome = await Promise.race([
-      page.waitForFunction((pattern) => new RegExp(pattern, 'i').test(document.body.innerText), SENT.source, { timeout: SUBMIT_WAIT_MS }).then(() => 'sent' as const),
+      page.waitForFunction(`(${READS_AS_SENT})(${JSON.stringify([SENT.source, session.thanksBefore])})`, undefined, { timeout: SUBMIT_WAIT_MS }).then(() => 'sent' as const),
       page
         .locator('iframe[src*="recaptcha/api2/bframe"], iframe[src*="hcaptcha"]')
         .first()
@@ -399,4 +450,11 @@ export async function submitApplication(candidateId: string, opportunityId: stri
 
 export async function cancelApplication(candidateId: string, opportunityId: string): Promise<void> {
   await closeSession(sessionKey(candidateId, opportunityId))
+}
+
+// Every form a person has open, closed: their account is going.
+export async function closeApplicationsOf(candidateId: string): Promise<void> {
+  const prefix = `${candidateId}:`
+  await Promise.allSettled([...filling].filter(([key]) => key.startsWith(prefix)).map(([, job]) => job))
+  await Promise.all([...sessions.keys()].filter((key) => key.startsWith(prefix)).map((key) => closeSession(key)))
 }

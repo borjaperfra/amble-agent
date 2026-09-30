@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { deleteAccount, exportAccount } from '@/lib/account'
+import { closeApplicationsOf } from '@/lib/apply/browser'
 import { currentCandidate, endSession } from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
@@ -24,11 +25,13 @@ export async function GET() {
 export async function POST(request: Request) {
   const candidate = await currentCandidate()
   if (!candidate) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  const body = (await request.json().catch(() => null)) as { action?: string; email?: string } | null
+  const body = (await request.json().catch(() => null)) as { action?: unknown; email?: unknown } | null
   if (body?.action !== 'delete') return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
   if (candidate.role === 'owner') return NextResponse.json({ error: 'owner' }, { status: 403 })
-  const typed = (body.email ?? '').trim().toLowerCase()
+  const typed = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (!candidate.email || typed !== candidate.email.toLowerCase()) return NextResponse.json({ error: 'email' }, { status: 400 })
+  // A form of theirs still open in a browser (in the cloud, with their answers) closes first.
+  await closeApplicationsOf(candidate.id)
   deleteAccount(candidate.id)
   await endSession()
   return NextResponse.json({ ok: true })

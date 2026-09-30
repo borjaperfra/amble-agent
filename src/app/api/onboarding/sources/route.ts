@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { forCandidate } from '@/lib/auth/request'
+import { failure, forCandidate, textField } from '@/lib/auth/request'
 import { listSources, type CandidateRow } from '@/lib/db/repo'
 import {
   createFileSource,
@@ -56,9 +56,9 @@ async function addSource(request: Request, candidate: CandidateRow) {
       }
       result = await createFileSource(candidate.id, file)
     } else {
-      const body = (await request.json()) as { kind?: string; url?: string }
-      const url = body.url?.trim()
-      if (!url) {
+      const body = (await request.json().catch(() => null)) as { kind?: unknown; url?: unknown } | null
+      const url = textField(body?.url, 2048)?.trim()
+      if (!body || !url) {
         return NextResponse.json({ error: 'No URL was provided.' }, { status: 400 })
       }
       if (body.kind === 'linkedin') {
@@ -73,9 +73,6 @@ async function addSource(request: Request, candidate: CandidateRow) {
     }
     return NextResponse.json(result)
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'The source could not be stored.' },
-      { status: 500 },
-    )
+    return failure('source', error)
   }
 }

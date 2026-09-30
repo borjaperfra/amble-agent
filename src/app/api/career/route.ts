@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server'
-import { forCandidate } from '@/lib/auth/request'
-import { ModelNotConfiguredError } from '@/lib/features'
-import { ModelError } from '@/lib/model/provider'
-import { serverText } from '@/lib/i18n/candidate'
+import { failure, forCandidate } from '@/lib/auth/request'
 import { buildCareerMarkdown, getStoredCareer, listStoredCareerVersions, NoEvidenceError } from '@/lib/career/build'
 
 export const runtime = 'nodejs'
@@ -16,19 +13,10 @@ export const runtime = 'nodejs'
 // time; regenerating on read would silently replace it.
 
 function errorResponse(error: unknown) {
-  if (error instanceof ModelNotConfiguredError) {
-    return NextResponse.json({ error: error.message }, { status: 503 })
-  }
   if (error instanceof NoEvidenceError) {
     return NextResponse.json({ error: error.message }, { status: 409 })
   }
-  if (error instanceof ModelError) {
-    return NextResponse.json({ error: serverText().modelUnavailable, detail: error.detail ?? error.message }, { status: 502 })
-  }
-  return NextResponse.json(
-    { error: error instanceof Error ? error.message : 'Unknown error building career.md' },
-    { status: 500 },
-  )
+  return failure('career.md', error)
 }
 
 export async function GET(request: Request) {

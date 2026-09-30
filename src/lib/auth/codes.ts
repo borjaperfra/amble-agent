@@ -13,9 +13,12 @@ import { acceptInvitation, betaIsFull, getInvitation, type InvitationRow } from 
 
 const CODE_MINUTES = 10
 const MAX_ATTEMPTS = 5
-// Codes one address can ask for in a quarter of an hour.
+// Codes one address can ask for in a quarter of an hour, and in a day: five
+// guesses at each, so a stranger has a handful of tries a day at a million.
 const MAX_CODES_PER_WINDOW = 3
 const WINDOW_MINUTES = 15
+const MAX_CODES_PER_DAY = 10
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export function normaliseEmail(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -36,18 +39,23 @@ export function signInLink(token: string): string {
   return `${base}/login/link?token=${encodeURIComponent(token)}`
 }
 
-export type CodeRequest = { sent: true } | { sent: false; reason: 'too_many' }
+// `deliver` sends the email: the caller does it after answering, so how long
+// the answer takes never says whether there was an email to send.
+export type CodeRequest = { sent: true; deliver: (() => Promise<void>) | null } | { sent: false; reason: 'too_many' }
 
 // Whether an address has an account is never revealed: the answer is the same
-// either way, and only an account receives a code. From an open invitation,
-// an address without an account receives one too: using it creates the
-// account. An address that already has one simply signs in, and the
-// invitation stays unused.
-export async function requestLoginCode(email: string, locale: Locale, invitation: InvitationRow | null = null): Promise<CodeRequest> {
+// either way, as fast either way, and only an account receives a code. From
+// an open invitation, an address without an account receives one too: using
+// it creates the account. An address that already has one simply signs in,
+// and the invitation stays unused.
+export function requestLoginCode(email: string, locale: Locale, invitation: InvitationRow | null = null): CodeRequest {
   const db = getDb()
-  const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString()
-  const recent = db.prepare('SELECT COUNT(*) AS n FROM login_codes WHERE email = ? AND created_at > ?').get(email, since) as { n: number }
-  if (recent.n >= MAX_CODES_PER_WINDOW) return { sent: false, reason: 'too_many' }
+  // What was asked more than a day ago counts for nothing: it goes, with
+  // the addresses of people who have no account.
+  db.prepare('DELETE FROM login_codes WHERE created_at <= ?').run(new Date(Date.now() - DAY_MS).toISOString())
+  const count = (since: number) =>
+    (db.prepare('SELECT COUNT(*) AS n FROM login_codes WHERE email = ? AND created_at > ?').get(email, new Date(Date.now() - since).toISOString()) as { n: number }).n
+  if (count(WINDOW_MINUTES * 60_000) >= MAX_CODES_PER_WINDOW || count(DAY_MS) >= MAX_CODES_PER_DAY) return { sent: false, reason: 'too_many' }
 
   const candidate = getCandidateByEmail(email)
   const joining = !candidate && invitation !== null
@@ -61,7 +69,7 @@ export async function requestLoginCode(email: string, locale: Locale, invitation
       now(),
       now(),
     )
-    return { sent: true }
+    return { sent: true, deliver: null }
   }
 
   const id = newId('lc')
@@ -74,8 +82,8 @@ export async function requestLoginCode(email: string, locale: Locale, invitation
     'INSERT INTO login_codes (id, email, code_hash, link_hash, created_at, expires_at, invitation_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).run(id, email, hashCode(id, code), hashLink(linkToken), now(), expiresAt, joining ? invitation.id : null)
   const candidateLocale = candidate?.locale === 'es' || candidate?.locale === 'en' ? candidate.locale : null
-  await sendLoginCode({ to: email, code, link: signInLink(linkToken), locale: candidateLocale ?? locale, idempotencyKey: id })
-  return { sent: true }
+  const letter = { to: email, code, link: signInLink(linkToken), locale: candidateLocale ?? locale, idempotencyKey: id }
+  return { sent: true, deliver: () => sendLoginCode(letter) }
 }
 
 interface LoginCodeRow {

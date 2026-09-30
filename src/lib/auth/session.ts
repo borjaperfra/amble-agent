@@ -56,6 +56,8 @@ export async function isOwner(): Promise<boolean> {
 export async function startSession(candidateId: string): Promise<void> {
   const token = randomBytes(32).toString('base64url')
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000)
+  // Sessions that ran out are of no use to anyone: they go.
+  getDb().prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now())
   getDb()
     .prepare('INSERT INTO sessions (token_hash, candidate_id, created_at, expires_at, last_seen_at) VALUES (?, ?, ?, ?, ?)')
     .run(hashToken(token), candidateId, now(), expires.toISOString(), now())

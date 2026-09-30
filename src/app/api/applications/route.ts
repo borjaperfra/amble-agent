@@ -3,11 +3,8 @@ import { NextResponse } from 'next/server'
 import { saveAnswer } from '@/lib/apply/answers'
 import { applicationState, cancelApplication, fillApplication, liveViewFor, screenshotPath, submitApplication } from '@/lib/apply/browser'
 import { NotWantedError, prepareApplication } from '@/lib/apply/prepare'
-import { forCandidate } from '@/lib/auth/request'
+import { failure, forCandidate } from '@/lib/auth/request'
 import { setProgress } from '@/lib/db/matching'
-import { ModelNotConfiguredError } from '@/lib/features'
-import { serverText } from '@/lib/i18n/candidate'
-import { ModelError } from '@/lib/model/provider'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -41,10 +38,13 @@ export async function POST(request: Request) {
   return forCandidate(request, async (candidate) => {
     const body = (await request.json().catch(() => ({}))) as { action?: unknown; opportunityId?: unknown; label?: unknown; answer?: unknown; confirm?: unknown }
     const action = typeof body.action === 'string' ? body.action : 'prepare'
-    const opportunityId = typeof body.opportunityId === 'string' ? body.opportunityId : ''
+    const opportunityId = typeof body.opportunityId === 'string' && body.opportunityId.length <= 64 ? body.opportunityId : ''
     try {
       if (action === 'answer') {
-        if (typeof body.label !== 'string' || typeof body.answer !== 'string') return NextResponse.json({ error: 'label and answer are required.' }, { status: 400 })
+        // A form's question, and what they answer to it: bounded like any text they give.
+        if (typeof body.label !== 'string' || !body.label.trim() || body.label.length > 500 || typeof body.answer !== 'string' || body.answer.length > 3000) {
+          return NextResponse.json({ error: 'label and answer are required.' }, { status: 400 })
+        }
         saveAnswer(candidate.id, body.label, body.answer)
         return NextResponse.json({ ok: true })
       }
@@ -68,9 +68,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
     } catch (error) {
       if (error instanceof NotWantedError) return NextResponse.json({ error: 'Offer not found.' }, { status: 404 })
-      if (error instanceof ModelNotConfiguredError) return NextResponse.json({ error: error.message }, { status: 503 })
-      if (error instanceof ModelError) return NextResponse.json({ error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
-      return NextResponse.json({ error: error instanceof Error ? error.message : 'The application step failed.' }, { status: 500 })
+      return failure(`application ${action}`, error)
     }
   })
 }

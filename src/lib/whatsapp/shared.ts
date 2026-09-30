@@ -133,7 +133,7 @@ async function fromBoardApi(url: string): Promise<RawOpportunity | null> {
     return {
       source: 'shared',
       externalId: url,
-      companyName: lever[1],
+      companyName: lever[2],
       title: data.text,
       location: data.categories?.location ?? null,
       workplace: data.workplaceType === 'remote' ? 'remote' : data.workplaceType === 'hybrid' ? 'hybrid' : inferWorkplace(data.categories?.location ?? null),

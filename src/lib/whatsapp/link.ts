@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto'
 import { getDb } from '../db/db'
 import { now } from '../db/repo'
+import { count, exhausted, forget } from './throttle'
 import { chatLink, zernioConfig } from './zernio'
 
 // A person links their WhatsApp by writing to amble first, from the app, with
@@ -9,6 +10,12 @@ import { chatLink, zernioConfig } from './zernio'
 // the 24 hours in which amble can answer.
 
 const CODE_MINUTES = 30
+// Long enough that guessing one is hopeless: one guess per message, and
+// only a few messages an hour from one number (a code-like number that is
+// no one's counts as a guess).
+const CODE_DIGITS = 8
+const GUESSES_PER_HOUR = 5
+const HOUR_MS = 60 * 60 * 1000
 
 export interface WhatsAppLink {
   candidate_id: string
@@ -42,7 +49,7 @@ export function startLink(candidateId: string, text: (code: string) => string): 
   db.prepare('DELETE FROM whatsapp_link_codes WHERE candidate_id = ? OR expires_at < ?').run(candidateId, now())
   let code = ''
   for (let tries = 0; tries < 5; tries++) {
-    code = String(randomInt(0, 1_000_000)).padStart(6, '0')
+    code = String(randomInt(0, 10 ** CODE_DIGITS)).padStart(CODE_DIGITS, '0')
     if (!db.prepare('SELECT 1 FROM whatsapp_link_codes WHERE code = ?').get(code)) break
   }
   db.prepare('INSERT INTO whatsapp_link_codes (code, candidate_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(
@@ -54,19 +61,24 @@ export function startLink(candidateId: string, text: (code: string) => string): 
   return { url: chatLink(config, text(code)), code }
 }
 
-// A code found in what someone wrote, still valid: whose it is. Used once.
-export function takeLinkCode(text: string): string | null {
+// The code in what someone wrote (the first one, and only that), still
+// valid: whose it is. Used once. `sender` is the number that wrote it.
+const CODE_IN_TEXT = new RegExp(`\\b(\\d{${CODE_DIGITS}})\\b`)
+
+export function takeLinkCode(text: string, sender: string): string | null {
+  const code = text.match(CODE_IN_TEXT)?.[1]
+  if (!code || exhausted('link', sender, GUESSES_PER_HOUR, HOUR_MS)) return null
   const db = getDb()
-  for (const match of text.matchAll(/\b(\d{6})\b/g)) {
-    const row = db.prepare('SELECT candidate_id FROM whatsapp_link_codes WHERE code = ? AND expires_at >= ?').get(match[1], now()) as
-      | { candidate_id: string }
-      | undefined
-    if (row) {
-      db.prepare('DELETE FROM whatsapp_link_codes WHERE code = ?').run(match[1])
-      return row.candidate_id
-    }
+  const row = db.prepare('SELECT candidate_id FROM whatsapp_link_codes WHERE code = ? AND expires_at >= ?').get(code, now()) as
+    | { candidate_id: string }
+    | undefined
+  if (!row) {
+    count('link', sender, HOUR_MS)
+    return null
   }
-  return null
+  db.prepare('DELETE FROM whatsapp_link_codes WHERE code = ?').run(code)
+  forget('link', sender)
+  return row.candidate_id
 }
 
 export function saveLink(candidateId: string, params: { phone: string; userId: string | null; conversationId: string }): void {

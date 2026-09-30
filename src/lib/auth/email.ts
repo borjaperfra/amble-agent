@@ -23,11 +23,20 @@ function loginHtml(t: (typeof dictionaries)['en']['login']['email'], code: strin
 </table></td></tr></table></body></html>`
 }
 
-// Any plain email from amble; without a key (local development) it goes to the log.
+// Whether sign-in emails can go out: in production only with a key; in
+// development they are written to the log.
+export function signInEmailsConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY) || process.env.NODE_ENV !== 'production'
+}
+
+// Any plain email from amble; without a key (local development) it goes to
+// the log. On a server without one, what it says (someone's feedback) is not
+// written there: only that it was not sent.
 export async function sendEmail(params: { to: string; subject: string; text: string; idempotencyKey: string }): Promise<void> {
   const key = process.env.RESEND_API_KEY
   if (!key) {
-    console.info(`[amble] email to ${params.to}: ${params.subject}
+    if (process.env.NODE_ENV === 'production') console.warn('[amble] email not sent: RESEND_API_KEY is not set.')
+    else console.info(`[amble] email to ${params.to}: ${params.subject}
 ${params.text}`)
     return
   }

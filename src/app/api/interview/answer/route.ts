@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
-import { ModelNotConfiguredError } from '@/lib/features'
-import { forCandidate } from '@/lib/auth/request'
+import { failure, forCandidate, textField } from '@/lib/auth/request'
 import { ownsTurn } from '@/lib/db/repo'
 import { refreshDerivedProfile } from '@/lib/pipeline/graph'
 import { planNextQuestion, takeAnswer } from '@/lib/pipeline/interview'
-import { refreshDetectedLocale, serverText } from '@/lib/i18n/candidate'
-import { ModelError } from '@/lib/model/provider'
+import { refreshDetectedLocale } from '@/lib/i18n/candidate'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -18,9 +16,9 @@ export async function POST(request: Request) {
 }
 
 async function answer(request: Request, candidateId: string) {
-  const body = (await request.json().catch(() => ({}))) as { turnId?: string; answer?: string }
-  const turnId = body.turnId?.trim()
-  const answer = body.answer?.trim()
+  const body = (await request.json().catch(() => ({}))) as { turnId?: unknown; answer?: unknown }
+  const turnId = textField(body.turnId, 64)?.trim()
+  const answer = textField(body.answer, 8000)?.trim()
   if (!turnId || !answer) {
     return NextResponse.json({ error: 'A turn id and an answer are required.' }, { status: 400 })
   }
@@ -36,12 +34,6 @@ async function answer(request: Request, candidateId: string) {
     return NextResponse.json({ ok: true, next: await planNextQuestion(candidateId) })
   } catch (error) {
     // The answer is kept whatever happens here: only the next question failed.
-    if (error instanceof ModelNotConfiguredError) {
-      return NextResponse.json({ ok: true, error: error.message, unconfigured: true }, { status: 503 })
-    }
-    if (error instanceof ModelError) {
-      return NextResponse.json({ ok: true, error: serverText().modelUnavailable, detail: error.message }, { status: 502 })
-    }
-    return NextResponse.json({ ok: true, error: error instanceof Error ? error.message : 'The next question failed.' }, { status: 500 })
+    return failure('next question', error, { ok: true })
   }
 }

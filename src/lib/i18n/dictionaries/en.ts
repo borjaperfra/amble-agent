@@ -360,7 +360,7 @@ export const en = {
   },
   welcome: {
     title: 'Hi. I’m your Rep.',
-    lead: 'Two things before we start.',
+    lead: 'I’m an artificial intelligence agent that looks for work with you. What is sent in your name is your call. Two things before we start.',
     nameLabel: 'What should I call you?',
     languageLabel: 'Which language shall we use?',
     continue: 'Continue',
@@ -401,8 +401,8 @@ export const en = {
     // What they send to link it. The code is what matters; the rest is theirs.
     linkMessage: (code: string) => `Hi amble, it’s me: ${code}`,
     linked: (name: string | null) =>
-      `Done${name ? `, ${name}` : ''}. I’ll only write to you here when something deserves your attention: offers that truly fit and how your applications are going. And ask me anything about your search.`,
-    unknown: 'Hi. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
+      `Done${name ? `, ${name}` : ''}. I’ll only write to you here when something deserves your attention: offers that truly fit and how your applications are going. And ask me anything about your search. I’m amble’s AI agent: what is sent in your name is your call.`,
+    unknown: 'Hi, I’m amble’s AI agent. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
     // Buttons: WhatsApp allows 20 characters each.
