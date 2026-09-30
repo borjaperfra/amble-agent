@@ -10,6 +10,9 @@ import { dictionaries } from '../i18n/dictionaries'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
 import { currentMatchKey } from '../matching/run'
+import { storedRoleQuery } from '../matching/role-query'
+import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
+import { estimateLine, estimateRange } from '../salary/format'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen, type WhatsAppLink } from './link'
 import { reviewForSending, type Pitch } from './review'
@@ -29,7 +32,7 @@ const SEND_UNTIL_HOUR = 21
 // Second readings per person per run: each is a model call.
 const REVIEWS_PER_RUN = 4
 
-type Listed = MatchRow & MatchListing
+type Listed = MatchRow & MatchListing & { estimate: ShownEstimate | null }
 
 function madridHour(date = new Date()): number {
   return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(date))
@@ -50,8 +53,10 @@ function paceAllows(candidateId: string): boolean {
 }
 
 // What the first reading found to be their kind of role, open, unanswered,
-// never read a second time: offers that publish a salary first, then newest.
-function candidatesToSend(candidateId: string): Listed[] {
+// never read a second time: offers that publish a salary first, then those
+// whose estimated pay reaches their floor, then those with nothing known,
+// then those estimated below it; then newest.
+function candidatesToSend(candidateId: string, floor: { amount: number; currency: string } | null): Listed[] {
   const db = getDb()
   const considered = new Set(
     (db.prepare('SELECT match_id FROM offer_sends WHERE candidate_id = ?').all(candidateId) as unknown as { match_id: string }[]).map((row) => row.match_id),
@@ -62,7 +67,7 @@ function candidatesToSend(candidateId: string): Listed[] {
     ),
   )
   const seenRoles = new Set<string>()
-  const picked: Listed[] = []
+  const picked: (MatchRow & MatchListing)[] = []
   for (const match of listMatchesForKey(candidateId, currentMatchKey(candidateId))) {
     // One role posted in several cities is one message.
     const role = match.model_run_id ?? match.id
@@ -73,16 +78,28 @@ function candidatesToSend(candidateId: string): Listed[] {
     if (explanation.roleFit.fit !== 'fits') continue
     picked.push(match)
   }
-  const hasSalary = (match: Listed) => Number(Boolean(match.salary_raw || match.salary_min))
-  return picked.sort((a, b) => hasSalary(b) - hasSalary(a) || b.created_at.localeCompare(a.created_at))
+  const estimates = estimatesFor(picked.map((match) => match.opportunity_id))
+  const listed = picked.map((match) => ({
+    ...match,
+    estimate: publishedSalary(match) ? null : shownEstimate(estimates.get(match.opportunity_id), floor),
+  }))
+  const rank = (match: Listed) => payRank({ salary: publishedSalary(match), estimate: match.estimate })
+  return listed.sort((a, b) => rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
+}
+
+function publishedSalary(match: MatchListing): string | null {
+  return match.salary_raw ?? (match.salary_min ? `${match.salary_min}–${match.salary_max ?? '?'} ${match.salary_currency ?? ''}`.trim() : null)
 }
 
 // A few of the places it lists: the rest is in the app.
 const PLACES_SHOWN = 3
 
-function offerText(match: Listed, pitch: Pitch | null, w: (typeof dictionaries)['es']['whatsapp']): string {
+// Exported for the script that shows what a message reads like.
+export function offerText(match: Listed, pitch: Pitch | null, d: (typeof dictionaries)['es']): string {
+  const w = d.whatsapp
   const explanation = JSON.parse(match.explanation) as Explanation
-  const salary = match.salary_raw ?? (match.salary_min ? `${match.salary_min}–${match.salary_max ?? '?'} ${match.salary_currency ?? ''}`.trim() : null)
+  // As published; otherwise the table's estimate, said to be one, with its source.
+  const salary = publishedSalary(match) ?? (match.estimate ? estimateLine(match.estimate, d.salaryEstimate) : null)
   const places = (match.location ?? '').split(' · ').filter(Boolean)
   const shownPlaces = places.length > PLACES_SHOWN ? `${places.slice(0, PLACES_SHOWN).join(' · ')}…` : places.join(' · ')
   const where = [shownPlaces, match.workplace ? (w.workplace[match.workplace as keyof typeof w.workplace] ?? null) : null].filter(Boolean).join(' · ')
@@ -90,6 +107,7 @@ function offerText(match: Listed, pitch: Pitch | null, w: (typeof dictionaries)[
     `*${match.title}*`,
     `${match.company_name}${where ? ` · ${where}` : ''}`,
     salary,
+    match.estimate?.belowFloor ? d.salaryEstimate.belowFloor(estimateRange({ min: match.estimate.belowFloor, max: match.estimate.belowFloor })) : null,
     '',
     pitch?.summary ?? explanation.summary,
     ...(pitch?.reasons ?? explanation.why.slice(0, 3).map((reason) => reason.text)).map((reason) => `• ${reason}`),
@@ -101,8 +119,9 @@ function offerText(match: Listed, pitch: Pitch | null, w: (typeof dictionaries)[
 }
 
 async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, pitch: Pitch | null): Promise<void> {
-  const w = dictionaries[candidateLocale(candidateById(link.candidate_id))].whatsapp
-  const body = offerText(match, pitch, w)
+  const d = dictionaries[candidateLocale(candidateById(link.candidate_id))]
+  const w = d.whatsapp
+  const body = offerText(match, pitch, d)
   await sendMessage(config, {
     conversationId: link.conversation_id as string,
     text: body,
@@ -147,8 +166,9 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
       continue
     }
     const profile = buildMatchingProfile(candidateId)
+    const floor = storedRoleQuery(candidateId, profile)?.salaryFloor ?? null
     let reviews = 0
-    for (const match of candidatesToSend(candidateId)) {
+    for (const match of candidatesToSend(candidateId, floor)) {
       if (reviews >= REVIEWS_PER_RUN) break
       reviews++
       try {

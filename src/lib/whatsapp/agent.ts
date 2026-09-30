@@ -229,8 +229,8 @@ function offersTheyMention(candidateId: string, message: string) {
     company: string
   }[]
   const rules = new Map(
-    (getDb().prepare('SELECT id, label, statement FROM revealed_preferences WHERE candidate_id = ?').all(candidateId) as unknown as { id: string; label: string | null; statement: string }[]).map(
-      (row) => [row.id, row.label ?? row.statement],
+    (getDb().prepare('SELECT id, label, wording, statement FROM revealed_preferences WHERE candidate_id = ?').all(candidateId) as unknown as { id: string; label: string | null; wording: string | null; statement: string }[]).map(
+      (row) => [row.id, row.label ?? row.wording ?? row.statement],
     ),
   )
   const named = (value: string) => {
@@ -260,7 +260,8 @@ function offersTheyMention(candidateId: string, message: string) {
   return found
 }
 
-const rule = (item: { id: string; label: string; statement: string }) => ({ id: item.id, label: item.label, statement: item.statement })
+// The rule as they read it: how it was learned is not theirs to hear again.
+const rule = (item: { id: string; label: string; wording: string }) => ({ id: item.id, label: item.label, statement: item.wording })
 
 // Everything the agent may rest an answer on.
 function contextFor(candidateId: string, message: string) {

@@ -105,6 +105,13 @@ Only confirmed rules are given to you; do not invent constraints they do not sta
 
 Respond ONLY with JSON: {"titleInclude": [], "titleExclude": [], "locationExclude": [], "locationRuleIds": [], "requireRemote": boolean, "officeAllowed": [], "remoteRuleIds": [], "homeCountry": string|null, "seniority": [], "salaryFloor": {"amount": number, "currency": string, "ruleId": string}|null, "languages": []}.`
 
+// The query already designed for this profile, if there is one: for screens,
+// which never wait for a model call.
+export function storedRoleQuery(candidateId: string, profile: MatchingProfile): RoleQuery | null {
+  const stored = getRoleQuery(candidateId, `${profile.hash}:${ROLE_QUERY_VERSION}`)
+  return stored ? (JSON.parse(stored.query) as RoleQuery) : null
+}
+
 export async function roleQueryFor(candidateId: string, profile: MatchingProfile): Promise<RoleQuery> {
   const key = `${profile.hash}:${ROLE_QUERY_VERSION}`
   const stored = getRoleQuery(candidateId, key)

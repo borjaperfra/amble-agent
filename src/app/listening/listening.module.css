@@ -211,6 +211,48 @@
   line-height: 1.45;
 }
 
+/* A learned rule opens on a tap: the whole rule, and why amble believes it. */
+.learnedSummary {
+  cursor: pointer;
+  list-style: none;
+  text-decoration: underline dotted;
+  text-decoration-color: rgb(221 227 216 / 0.45);
+  text-underline-offset: 5px;
+}
+
+.learnedSummary::-webkit-details-marker {
+  display: none;
+}
+
+.learned[open] > .learnedSummary {
+  text-decoration-color: transparent;
+}
+
+.learnedBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding-left: 12px;
+  border-left: 1px solid rgb(221 227 216 / 0.35);
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+
+.learnedRule {
+  color: inherit;
+}
+
+.learnedWhy {
+  color: var(--moss-soft);
+}
+
+.learnedWhyLabel {
+  display: block;
+  font-family: var(--font-display);
+  color: inherit;
+}
+
 .condition .mark {
   transform: translateY(-1px);
 }

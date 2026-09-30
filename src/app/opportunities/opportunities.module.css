@@ -78,6 +78,41 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* What the offer does not publish, as a guide says such a role pays: never
+   written like a published salary. */
+.estimate {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.estimateFigure {
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.estimateLabel {
+  font-style: italic;
+}
+
+.estimateSource {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.estimateSource a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.estimateShort {
+  font-size: var(--text-body-sm);
+  color: var(--clay);
+}
+
 .closed {
   font-size: var(--text-body-sm);
   color: var(--clay);

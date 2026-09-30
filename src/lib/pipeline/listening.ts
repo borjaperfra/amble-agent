@@ -23,6 +23,10 @@ export interface ListeningItem {
   label: string
   // The full sentence: what a matcher checks an offer against.
   statement: string
+  // The rule as the person reads it, and why amble believes it. The matcher
+  // never reads these: the statement is its input.
+  wording: string
+  evidence: string | null
 }
 
 export interface ListeningProfile {
@@ -45,7 +49,7 @@ export interface ListeningProfile {
 // the most faithful short form available.
 function shortLabel(row: RevealedPreferenceRow): string {
   if (row.label) return row.label
-  const clause = row.statement.split(/[:;.—]/)[0].trim()
+  const clause = (row.wording ?? row.statement).split(/[:;.—]/)[0].trim()
   return clause.length > 70 ? `${clause.slice(0, 67).trimEnd()}…` : clause
 }
 
@@ -72,7 +76,7 @@ export function getListeningProfile(candidateId: string): ListeningProfile {
       staleCount++
       continue
     }
-    const item = { id: row.id, label: shortLabel(row), statement: row.statement }
+    const item = { id: row.id, label: shortLabel(row), statement: row.statement, wording: row.wording ?? row.statement, evidence: row.evidence }
     if (row.kind === 'hard_filter') wontConsider.push(item)
     else if (row.kind === 'strong') weighs.push(item)
     else if (row.kind === 'compensation') money.push(item)

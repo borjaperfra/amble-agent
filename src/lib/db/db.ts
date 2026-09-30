@@ -646,11 +646,33 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'revealed_preferences', 'original_label', 'TEXT')
   addColumn(db, 'revealed_preferences', 'revised_at', 'TEXT')
 
+  // A rule as the person reads it (the rule itself, plainly), and apart from
+  // it why amble believes it (which sample offers, what they answered).
+  // `statement` is what the matcher reads, and it is in the fingerprint of
+  // their assessments: rules written before stated how they were learned, and
+  // their plain wording goes here (scripts/rewrite-rules.ts) so that the
+  // matcher's input, and every assessment, stays as it is. NULL: not yet
+  // reworded, shown as the statement.
+  addColumn(db, 'revealed_preferences', 'wording', 'TEXT')
+  addColumn(db, 'revealed_preferences', 'evidence', 'TEXT')
+
   // The directory (src/lib/sourcing/directory.ts): whether a company is built in
   // Spain or hires people there from elsewhere, and whether its offers carry a
   // salary.
   addColumn(db, 'companies', 'segment', 'TEXT')
   addColumn(db, 'companies', 'public_salary', 'INTEGER NOT NULL DEFAULT 0')
+
+  // What an offer that publishes no salary probably pays, from the reference
+  // table (src/lib/salary/): computed once, as JSON with the table's version.
+  // Its own table: a column after the description would make reading it read
+  // every description. Goes with the offer when the offer is deleted.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS opportunity_salary_estimates (
+      opportunity_id TEXT PRIMARY KEY REFERENCES opportunities(id) ON DELETE CASCADE,
+      estimate TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `)
 
   // Accounts: the email a candidate signs in with, and whether they own the
   // installation (the sourcing tools and the trace are theirs alone).

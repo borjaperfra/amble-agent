@@ -64,7 +64,7 @@ export function intentRules(candidateId: string): MatchingRule[] {
     const known = INTENT_KINDS[group.label]
     const values = (group.values ?? []).map((value) => value.trim()).filter(Boolean)
     if (!known || values.length === 0) return []
-    return [{ id: `intent_${group.label.toLowerCase().replace(/[^a-z]+/g, '_')}`, label: values.join(', '), statement: `${known.lead}: ${values.join('; ')}.`, kind: known.kind }]
+    return [{ id: `intent_${group.label.toLowerCase().replace(/[^a-z]+/g, '_')}`, label: values.join(', '), statement: `${known.lead}: ${values.join('; ')}.`, wording: values.join('; '), evidence: null, kind: known.kind }]
   })
 }
 

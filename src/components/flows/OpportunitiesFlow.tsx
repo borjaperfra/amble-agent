@@ -11,6 +11,8 @@ import { useI18n, useT } from '@/components/I18nProvider'
 import { postJson, requestJson } from '@/components/api'
 import type { PreparedApplication } from '@/lib/apply/prepare'
 import type { DiscardedOpportunity, FoundOpportunity, OpportunitiesView, WantedOpportunity } from '@/lib/matching/view'
+import { estimateRange, estimateSource } from '@/lib/salary/format'
+import type { ShownEstimate } from '@/lib/salary/estimate'
 import styles from '@/app/opportunities/opportunities.module.css'
 
 type Response = 'interested' | 'not_for_me' | 'wanted_anyway'
@@ -326,6 +328,31 @@ function Notice({ text, action, onDone }: { text: string; action: { label: strin
   )
 }
 
+// The pay: as the offer publishes it, or, when it publishes none, what a
+// public guide says such a role pays, always marked as an estimate with its
+// source, and whether it falls short of their minimum.
+function Pay({ salary, estimate }: { salary: string | null; estimate: ShownEstimate | null }) {
+  const t = useT()
+  if (salary) return <p className={styles.salary}>{salary}</p>
+  if (!estimate) return null
+  const words = t.salaryEstimate
+  return (
+    <div className={styles.estimate}>
+      <p className={styles.estimateFigure}>
+        <span className={styles.estimateLabel}>{words.label}:</span> {estimateRange(estimate)}
+      </p>
+      <p className={styles.estimateSource}>
+        <a href={estimate.url} target="_blank" rel="noreferrer" aria-label={`${words.source}: ${estimateSource(estimate, words)}`}>
+          {estimateSource(estimate, words)}
+        </a>
+      </p>
+      {estimate.belowFloor !== null && (
+        <p className={styles.estimateShort}>{words.belowFloor(estimateRange({ min: estimate.belowFloor, max: estimate.belowFloor }))}</p>
+      )}
+    </div>
+  )
+}
+
 function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
   const [leaving, setLeaving] = useState(false)
   const t = useT()
@@ -355,7 +382,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
       </p>
       <h2 className={styles.cardTitle}>{item.title}</h2>
       <p className={styles.meta}>{meta}</p>
-      {item.salary && <p className={styles.salary}>{item.salary}</p>}
+      <Pay salary={item.salary} estimate={item.estimate} />
       {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
       <p className={styles.summary}>{item.summary}</p>
 
@@ -549,7 +576,7 @@ function WantedCard({
           <span className={styles.strikeable}>{item.title}</span>
         </h3>
         <p className={styles.meta}>{meta}</p>
-        {item.salary && <p className={styles.salary}>{item.salary}</p>}
+        <Pay salary={item.salary} estimate={item.estimate} />
         {applied && item.outcome && <p className={styles.outcome}>{t.whatsapp.outcome[item.outcome]}</p>}
         {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
         {item.summary && <p className={styles.wantedSummary}>{item.summary}</p>}

@@ -566,6 +566,15 @@ export const es: Dictionary = {
     dropped: (count: number) =>
       `_${count} afirmación(es) propuestas por el modelo se descartaron por no tener procedencia resoluble. No aparecen arriba._`,
   },
+  // Lo que suele pagar una oferta que no publica salario, según guías
+  // salariales públicas: siempre dicho como estimación, y de quién es.
+  salaryEstimate: {
+    label: 'Estimado',
+    places: { madrid: 'Madrid', barcelona: 'Barcelona', valencia: 'Valencia', spain: 'España', bilbao: 'Bilbao', sevilla: 'Sevilla' },
+    experience: (text: string) => text,
+    belowFloor: (floor: string) => `Puede quedarse por debajo de tu mínimo de ${floor}.`,
+    source: 'De dónde sale',
+  },
   opportunities: {
     nav: 'Encontrado',
     foundTitle: 'Tu Rep ha encontrado algo.',
@@ -754,6 +763,7 @@ export const es: Dictionary = {
     neverInherit: 'No actuaré sobre esto sin hablarlo antes contigo.',
     addedByYou: 'Añadido por ti.',
     correctedByYou: (original: string) => `Corregido por ti. Yo había leído: ${original}`,
+    why: 'Por qué lo creo',
     youdSaid: (declared: string) => `Habías dicho: ${declared}`,
     fromOffers: (numbers: number[]) => `De ${numbers.length > 1 ? 'las ofertas' : 'la oferta'} ${numbers.map((n) => `#${n}`).join(', ')}`,
     isThisRight: '¿Es correcto?',

@@ -567,6 +567,15 @@ export const en = {
     dropped: (count: number) =>
       `_${count} statement(s) proposed by the model were dropped for lacking resolvable provenance. They do not appear above._`,
   },
+  // What an offer that publishes no pay probably pays, from public salary
+  // guides: always said to be an estimate, and whose it is.
+  salaryEstimate: {
+    label: 'Estimated',
+    places: { madrid: 'Madrid', barcelona: 'Barcelona', valencia: 'Valencia', spain: 'Spain', bilbao: 'Bilbao', sevilla: 'Seville' },
+    experience: (text: string) => text.replace(/años/g, 'years').replace(/año/g, 'year'),
+    belowFloor: (floor: string) => `It may fall short of your minimum of ${floor}.`,
+    source: 'Where this comes from',
+  },
   opportunities: {
     nav: 'What I found',
     foundTitle: 'Your Rep found something.',
@@ -755,6 +764,7 @@ export const en = {
     neverInherit: 'I won’t act on this without talking to you first.',
     addedByYou: 'Added by you.',
     correctedByYou: (original: string) => `Corrected by you. I had read: ${original}`,
+    why: 'Why I think so',
     youdSaid: (declared: string) => `You’d said: ${declared}`,
     fromOffers: (numbers: number[]) => `From ${numbers.length > 1 ? 'offers' : 'offer'} ${numbers.map((n) => `#${n}`).join(', ')}`,
     isThisRight: 'Is this right?',

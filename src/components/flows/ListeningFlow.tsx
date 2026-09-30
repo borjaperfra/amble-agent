@@ -19,6 +19,9 @@ import styles from '@/app/listening/listening.module.css'
 interface ListeningItem {
   id: string
   label: string
+  // The whole rule, plainly, and why amble believes it.
+  wording: string
+  evidence: string | null
 }
 
 interface ListeningVm {
@@ -86,6 +89,31 @@ function Condition({ label, marked }: { label: string; marked: boolean }) {
     <li className={styles.condition}>
       {marked && <span className={styles.mark} aria-hidden="true" />}
       {label}
+    </li>
+  )
+}
+
+// A learned rule: its short form, and on a tap the whole rule and why amble believes it.
+function Learned({ item, marked, why }: { item: ListeningItem; marked: boolean; why: string }) {
+  const whole = item.wording.trim() !== item.label.trim() ? item.wording : null
+  if (!whole && !item.evidence) return <Condition label={item.label} marked={marked} />
+  return (
+    <li>
+      <details className={styles.learned}>
+        <summary className={`${styles.condition} ${styles.learnedSummary}`}>
+          {marked && <span className={styles.mark} aria-hidden="true" />}
+          <span>{item.label}</span>
+        </summary>
+        <div className={styles.learnedBody}>
+          {whole && <p className={styles.learnedRule}>{whole}</p>}
+          {item.evidence && (
+            <p className={styles.learnedWhy}>
+              <span className={styles.learnedWhyLabel}>{why}</span>
+              {item.evidence}
+            </p>
+          )}
+        </div>
+      </details>
     </li>
   )
 }
@@ -287,21 +315,21 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                     {wontConsider.length > 0 && (
                       <Group title={t.listening.groups.must}>
                         {wontConsider.map((item) => (
-                          <Condition key={item.id} label={item.label} marked={mixed} />
+                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} />
                         ))}
                       </Group>
                     )}
                     {money.length > 0 && (
                       <Group title={t.listening.groups.money}>
                         {money.map((item) => (
-                          <Condition key={item.id} label={item.label} marked={mixed} />
+                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} />
                         ))}
                       </Group>
                     )}
                     {weighs.length > 0 && (
                       <Group title={t.listening.groups.weighs}>
                         {weighs.map((item) => (
-                          <Condition key={item.id} label={item.label} marked={mixed} />
+                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} />
                         ))}
                       </Group>
                     )}

@@ -31,6 +31,7 @@ interface Preference {
   id: string
   kind: Kind
   statement: string
+  evidence: string | null
   declared: string | null
   evidenceProbeNumbers: number[]
   quote: string | null
@@ -366,6 +367,25 @@ export default function TriageFlow({ initial }: { initial: Triage | null }) {
   )
 }
 
+// The rule stands on its own; how it was learned is there for whoever asks.
+function Why({ preference }: { preference: Preference }) {
+  const { t } = useI18n()
+  const { evidence, declared, quote, evidenceProbeNumbers, originalStatement } = preference
+  if (!evidence && !declared && !quote && evidenceProbeNumbers.length === 0 && !originalStatement) return null
+  return (
+    <details className={styles.why}>
+      <summary className={styles.whySummary}>{t.triage.why}</summary>
+      <div className={styles.whyBody}>
+        {evidence && <p className={styles.whyText}>{evidence}</p>}
+        {quote && <blockquote className={styles.quote}>&ldquo;{quote}&rdquo;</blockquote>}
+        {declared && <p className={styles.meta}>{t.triage.youdSaid(declared)}</p>}
+        {evidenceProbeNumbers.length > 0 && <p className={styles.meta}>{t.triage.fromOffers(evidenceProbeNumbers)}</p>}
+        {originalStatement && <p className={styles.meta}>{t.triage.correctedByYou(originalStatement)}</p>}
+      </div>
+    </details>
+  )
+}
+
 function Result({
   triage,
   error,
@@ -408,14 +428,7 @@ function Result({
                   <p className={styles.notice}>{t.triage.neverInherit}</p>
                 )}
                 {preference.addedByYou && <p className={styles.meta}>{t.triage.addedByYou}</p>}
-                {preference.originalStatement && (
-                  <p className={styles.meta}>{t.triage.correctedByYou(preference.originalStatement)}</p>
-                )}
-                {preference.declared && <p className={styles.meta}>{t.triage.youdSaid(preference.declared)}</p>}
-                {preference.quote && <blockquote className={styles.quote}>&ldquo;{preference.quote}&rdquo;</blockquote>}
-                {preference.evidenceProbeNumbers.length > 0 && (
-                  <p className={styles.meta}>{t.triage.fromOffers(preference.evidenceProbeNumbers)}</p>
-                )}
+                <Why preference={preference} />
                 <div className={styles.decision} role="group" aria-label={t.triage.isThisRight}>
                   <button
                     type="button"

@@ -14,6 +14,7 @@ import { ASSESS_VERSION, assessOpportunity } from './assess'
 import { buildMatchingProfile } from './profile'
 import { EUROPE } from './places'
 import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
+import { estimatesFor } from '../salary/estimate'
 
 // Each assessment is a model call. A run reads at most this many new roles
 // per candidate; the rest wait for the next run. It is a reading pace, not
@@ -104,6 +105,7 @@ export async function runMatching(options: {
   const open = options.open ?? listOpenOpportunities()
   stats.open = open.length
   const pending: typeof open = []
+  const passed: string[] = []
   for (const opportunity of open) {
     if (options.since && (opportunity.posted_at ?? opportunity.first_seen_at) < options.since) continue
     const result = prefilter(opportunity, query)
@@ -113,9 +115,16 @@ export async function runMatching(options: {
       continue
     }
     stats.prefilterPassed++
+    passed.push(opportunity.id)
     if (assessed.has(opportunity.id)) stats.alreadyAssessed++
     else pending.push(opportunity)
   }
+
+  // What an offer that could be shown to them probably pays, when it
+  // publishes nothing: read once from the reference table and kept on the
+  // offer (only what is new or was estimated with an older table is read).
+  // It never decides what is judged or shown: only a published salary can.
+  estimatesFor(passed)
 
   // What is fresh goes first: an offer of this week never waits behind an old
   // backlog. Within fresh and within older, offers that publish a salary go

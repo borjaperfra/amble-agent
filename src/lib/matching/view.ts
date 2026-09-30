@@ -8,6 +8,9 @@ import { candidateById, listCapabilities, listConfirmedPreferences } from '../db
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey } from './run'
+import { buildMatchingProfile } from './profile'
+import { storedRoleQuery } from './role-query'
+import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { intentRules } from './profile'
 
 // What the opportunities screen shows. Only assessments made against the
@@ -22,6 +25,9 @@ export interface FoundOpportunity {
   workplace: string | null
   // As published; null when the offer does not say.
   salary: string | null
+  // When it publishes none: what the reference table says such a role pays,
+  // always shown as an estimate with its source. Never a reason to set it aside.
+  estimate: ShownEstimate | null
   url: string | null
   closed: boolean
   fit: RoleFit
@@ -83,6 +89,7 @@ export interface WantedOpportunity {
   location: string | null
   workplace: string | null
   salary: string | null
+  estimate: ShownEstimate | null
   url: string | null
   closed: boolean
   summary: string | null
@@ -122,10 +129,12 @@ const wants = (decision: MatchResponse | undefined) => decision === 'interested'
 
 // Offers they want, one entry per role. Their decisions outlive any
 // assessment, so what is shown about each comes from its latest one.
-function wantedOpportunities(candidateId: string): WantedOpportunity[] {
+function wantedOpportunities(candidateId: string, floor: Floor): WantedOpportunity[] {
   const byRole = new Map<string, WantedOpportunity>()
   const outcomes = followupOutcomes(candidateId)
-  for (const row of listWanted(candidateId)) {
+  const rows = listWanted(candidateId)
+  const estimates = estimatesFor(rows.map((row) => row.opportunity_id))
+  for (const row of rows) {
     const key = row.model_run_id ? `${row.model_run_id}|${row.title}` : `${row.company_name}|${row.title}|${row.workplace ?? ''}`
     const known = byRole.get(key)
     if (known) {
@@ -147,6 +156,7 @@ function wantedOpportunities(candidateId: string): WantedOpportunity[] {
       location: row.location,
       workplace: row.workplace,
       salary: salaryText(row),
+      estimate: salaryText(row) ? null : shownEstimate(estimates.get(row.opportunity_id), floor),
       url: row.url,
       closed: row.closed_at !== null,
       summary: explanation?.summary || null,
@@ -160,6 +170,8 @@ function wantedOpportunities(candidateId: string): WantedOpportunity[] {
   }
   return [...byRole.values()]
 }
+
+type Floor = { amount: number; currency: string } | null
 
 function salaryText(match: Pick<MatchListing, 'salary_raw' | 'salary_min' | 'salary_max' | 'salary_currency'>): string | null {
   if (match.salary_raw) return match.salary_raw
@@ -192,10 +204,14 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const matches = collapseRoles(listMatchesForKey(candidate.id, currentMatchKey(candidate.id)))
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map([
-    ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.statement]),
+    ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.wording ?? row.statement]),
     ...intentRules(candidate.id).map((rule): [string, string] => [rule.id, rule.label]),
   ])
   const decisions = listDecisions(candidate.id)
+  // What the table says the roles that publish no salary pay, and the floor
+  // it is compared with (from the query already designed for their profile).
+  const estimates = estimatesFor(matches.map((match) => match.opportunity_id))
+  const floor = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))?.salaryFloor ?? null
 
   const found: FoundOpportunity[] = []
   const discarded: DiscardedOpportunity[] = []
@@ -221,6 +237,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
         location: match.location,
         workplace: match.workplace,
         salary: salaryText(match),
+        estimate: salaryText(match) ? null : shownEstimate(estimates.get(match.opportunity_id), floor),
         url: match.url,
         closed: match.closed_at !== null,
         fit: explanation.roleFit.fit,
@@ -268,12 +285,14 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     .slice(0, WEEK_ENTRIES)
     .map((entry) => ({ id: entry.id, company: entry.company, title: entry.title, status: entry.status, reason: entry.reason }))
 
-  const wantedAll = wantedOpportunities(candidate.id)
+  const wantedAll = wantedOpportunities(candidate.id, floor)
 
   // Unanswered first; within that, offers that publish a salary (the candidate
-  // asked for them first); then newest, as the query already orders.
+  // asked for them first), then those whose estimate reaches their floor,
+  // then those with nothing known, then those estimated below it; then
+  // newest, as the query already orders.
   const byAnswered = (a: FoundOpportunity, b: FoundOpportunity) =>
-    Number(a.response !== null) - Number(b.response !== null) || Number(b.salary !== null) - Number(a.salary !== null)
+    Number(a.response !== null) - Number(b.response !== null) || payRank(b) - payRank(a)
   const fits = found.filter((item) => item.fit === 'fits').sort(byAnswered)
   const maybe = found.filter((item) => item.fit !== 'fits').sort(byAnswered)
 

@@ -888,6 +888,11 @@ export interface RevealedPreferenceRow {
   original_statement: string | null
   original_label: string | null
   revised_at: string | null
+  // The rule as the person reads it; NULL on a rule written before, not yet
+  // reworded (then the statement is shown). The statement is what the matcher reads.
+  wording: string | null
+  // Why amble believes it: the sample offers and what they answered.
+  evidence: string | null
   declared: string | null
   evidence_probe_ids: string
   quote: string | null
@@ -975,14 +980,14 @@ export function replaceProposedPreferences(
   triageId: string,
   rows: Omit<
     RevealedPreferenceRow,
-    'id' | 'created_at' | 'decided_at' | 'status' | 'origin' | 'original_statement' | 'original_label' | 'revised_at'
+    'id' | 'created_at' | 'decided_at' | 'status' | 'origin' | 'original_statement' | 'original_label' | 'revised_at' | 'wording'
   >[],
 ): RevealedPreferenceRow[] {
   const db = getDb()
   db.prepare("DELETE FROM revealed_preferences WHERE triage_id = ? AND status = 'proposed'").run(triageId)
   const insert = db.prepare(
-    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, label, declared, evidence_probe_ids, quote, status, model_run_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`,
+    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, evidence, declared, evidence_probe_ids, quote, status, model_run_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`,
   )
   const ts = now()
   for (const row of rows) {
@@ -992,7 +997,10 @@ export function replaceProposedPreferences(
       row.triage_id,
       row.kind,
       row.statement,
+      // Written plainly from the start: what is read and what is matched on are the same.
+      row.statement,
       row.label,
+      row.evidence,
       row.declared,
       row.evidence_probe_ids,
       row.quote,
@@ -1039,17 +1047,27 @@ export function getRevealedPreference(id: string): RevealedPreferenceRow | undef
     .get(id) as unknown as RevealedPreferenceRow | undefined
 }
 
-// The first revision keeps what the analysis said; later ones only move the text.
+// The first revision keeps what the analysis said; later ones only move the
+// text. Their own words are the rule, as read and as matched on.
 export function reviseRevealedPreference(id: string, statement: string, label: string | null): void {
   getDb()
     .prepare(
       `UPDATE revealed_preferences SET
          original_statement = COALESCE(original_statement, statement),
          original_label = COALESCE(original_label, label),
-         statement = ?, label = ?, revised_at = ?
+         statement = ?, wording = ?, label = ?, revised_at = ?
        WHERE id = ?`,
     )
-    .run(statement, label, now(), id)
+    .run(statement, statement, label, now(), id)
+}
+
+// The plain wording of a rule written before (scripts/rewrite-rules.ts). Only
+// a row still holding the statement that was reworded, and not reworded yet.
+export function setRevealedPreferenceWording(id: string, statement: string, wording: string, evidence: string | null): boolean {
+  const result = getDb()
+    .prepare('UPDATE revealed_preferences SET wording = ?, evidence = ? WHERE id = ? AND statement = ? AND wording IS NULL')
+    .run(wording, evidence, id, statement)
+  return Number(result.changes) === 1
 }
 
 // Written by the candidate: confirmed by definition, and never replaced by a
@@ -1067,10 +1085,10 @@ export function insertCandidatePreference(row: {
   const ts = now()
   getDb()
     .prepare(
-      `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, decided_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'candidate', NULL, ?, ?, 'confirmed', NULL, ?, ?)`,
+      `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, decided_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'candidate', NULL, ?, ?, 'confirmed', NULL, ?, ?)`,
     )
-    .run(id, row.candidateId, row.triageId, row.kind, row.statement, row.label, JSON.stringify(row.evidenceProbeIds), row.quote, ts, ts)
+    .run(id, row.candidateId, row.triageId, row.kind, row.statement, row.statement, row.label, JSON.stringify(row.evidenceProbeIds), row.quote, ts, ts)
   return getRevealedPreference(id) as RevealedPreferenceRow
 }
 
