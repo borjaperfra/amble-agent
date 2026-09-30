@@ -17,8 +17,11 @@ import { prefilter, roleQueryFor, type RoleQuery } from './role-query'
 
 // Each assessment is a model call. A run reads at most this many new roles
 // per candidate; the rest wait for the next run. It is a reading pace, not
-// how many are shown: most of what is read is set aside.
-const DEFAULT_LIMIT = 25
+// how many are shown: most of what is read is set aside. 100 a pass keeps up
+// with a directory of some 400 companies (25 left a backlog of a thousand).
+const DEFAULT_LIMIT = 100
+// Offers this recent are read before any older one.
+const FRESH_DAYS = 7
 // As many at once as background work may have in flight; with several people
 // the shared limit takes turns between them.
 const CONCURRENCY = BACKGROUND_SLOTS
@@ -106,13 +109,15 @@ export async function runMatching(options: {
     else pending.push(opportunity)
   }
 
-  // Offers that publish a salary go first: the candidate asked for them to be
-  // prioritised, and they can be checked against the floor. Then newest.
+  // What is fresh goes first: an offer of this week never waits behind an old
+  // backlog. Within fresh and within older, offers that publish a salary go
+  // first (the candidate asked for them, and they can be checked against the
+  // floor), then newest.
+  const dated = (o: (typeof pending)[number]) => o.posted_at ?? o.first_seen_at
+  const freshSince = new Date(Date.now() - FRESH_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const isFresh = (o: (typeof pending)[number]) => Number(dated(o) >= freshSince)
   const hasSalary = (o: (typeof pending)[number]) => Number(Boolean(o.salary_raw || o.salary_min))
-  pending.sort(
-    (a, b) =>
-      hasSalary(b) - hasSalary(a) || (b.posted_at ?? b.first_seen_at).localeCompare(a.posted_at ?? a.first_seen_at),
-  )
+  pending.sort((a, b) => isFresh(b) - isFresh(a) || hasSalary(b) - hasSalary(a) || dated(b).localeCompare(dated(a)))
   // One role posted in several cities is one judgment: the model reads it once,
   // with every city, and the verdict is kept on each posting. The shared model
   // run marks them as one role on the screen. Remote and on-site postings of a

@@ -226,8 +226,6 @@ const LISTED: DirectoryEntry[] = [
   spain('Libelium', 'libelium.com', 'factorial:libelium.factorial.es'),
   spain('Grupo Espiral', 'grupoespiral.com', 'recruitee:grupoespiral'),
   spain('Clue Technologies', 'clue.aero', 'teamtailor:cluetech.teamtailor.com'),
-  // Balearic Islands
-  spain('Meliá', 'melia.com', 'successfactors:careers.melia.com'),
 
   // ── Hire in Spain: hubs in Madrid, Barcelona, Málaga, Valencia ───────────
   hires('Datadog', 'datadoghq.com', 'https://careers.datadoghq.com'),
