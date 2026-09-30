@@ -653,6 +653,86 @@ function smartRecruitersOpportunity(posting: SmartRecruitersPosting, token: stri
   }
 }
 
+// ── SuccessFactors ───────────────────────────────────────────────────────
+//
+// SAP SuccessFactors' career site builder ("RMK") draws a company's site on
+// its own host (careers.company.com) and publishes an RSS feed of every open
+// offer, each with its full text. The token is that host, with a path when
+// the host serves several brands and only one is the company's
+// (jobs.vista.com/Vista: the same site lists Cimpress's offers). The feed
+// pages by rows=, not by startrow= (which it ignores), so one request reads
+// the whole board.
+
+function successFactorsParts(token: string): { host: string; prefix: string | null } | null {
+  const match = token.match(/^([a-z0-9-]+(?:\.[a-z0-9-]+)+)(?:\/([A-Za-z0-9_-]+))?\/?$/i)
+  if (!match) return null
+  return { host: match[1].toLowerCase(), prefix: match[2] ?? null }
+}
+
+// Titles end with the offer's place: "Engineer (Madrid, MD, ES)",
+// "Operator (Reno, NV, US, 89506)", "Accounting Manager (US)". A trailing
+// "(m/w/d)" is part of the title, not a place.
+// A place can hold parentheses of its own: "(PRAT DE LLOBREGAT (EL), ES, ES)".
+function successFactorsTitle(raw: string): { title: string; location: string | null } {
+  const text = raw.trim()
+  let open = -1
+  if (text.endsWith(')')) {
+    for (let index = text.length - 1, depth = 0; index >= 0; index--) {
+      if (text[index] === ')') depth++
+      else if (text[index] === '(' && --depth === 0) {
+        open = index
+        break
+      }
+    }
+  }
+  if (open <= 0) return { title: text, location: null }
+  const parts = text.slice(open + 1, -1).split(',').map((part) => part.trim()).filter(Boolean)
+  if (parts.length < 2 && !/^[A-Z]{2}$/.test(parts[0] ?? '')) return { title: text, location: null }
+  // Postcodes (80202, D-10587, 5928 LW) and repeats say nothing more.
+  const places = [...new Set(parts.filter((part) => !/\d/.test(part)))]
+  return { title: text.slice(0, open).trim(), location: places.join(', ') || null }
+}
+
+async function readSuccessFactors(token: string, companyName: string): Promise<RawOpportunity[] | null> {
+  const parts = successFactorsParts(token)
+  if (!parts) return null
+  const xml = await getText(`https://${parts.host}/services/rss/job/?locale=en_US&keywords=&rows=${BOARD_MAX}`, 'successfactors')
+  if (!xml || !/<rss/i.test(xml)) return null
+  const offers: RawOpportunity[] = []
+  for (const item of xmlBlocks(xml, 'item')) {
+    const link = xmlTag(item, 'link')
+    if (!link) continue
+    let url: URL
+    try {
+      url = new URL(link)
+    } catch {
+      continue
+    }
+    if (parts.prefix && !url.pathname.startsWith(`/${parts.prefix}/`)) continue
+    const id = url.pathname.match(/\/job\/[^/]+\/(\d+)\/?$/)?.[1]
+    if (!id) continue
+    const { title, location } = successFactorsTitle(xmlTag(item, 'title') ?? '')
+    if (!title) continue
+    url.search = ''
+    offers.push({
+      source: 'successfactors',
+      externalId: id,
+      companyName,
+      title,
+      location,
+      workplace: inferWorkplace(location, title),
+      url: url.toString(),
+      description: htmlToText(xmlTag(item, 'description')),
+      salaryMin: null,
+      salaryMax: null,
+      salaryCurrency: null,
+      salaryRaw: null,
+      postedAt: toIso(xmlTag(item, 'pubDate')),
+    })
+  }
+  return offers
+}
+
 // The description of an offer whose board lists none, read when it is about
 // to be judged. Null when the source gives none.
 export async function describeOpportunity(source: string, token: string, externalId: string): Promise<string | null> {
@@ -703,6 +783,7 @@ export const ATS_KINDS: AtsKind[] = [
   'workday',
   'smartrecruiters',
   'factorial',
+  'successfactors',
 ]
 
 // null: the board does not exist. []: it exists and has no open offers.
@@ -730,6 +811,8 @@ export function readAtsBoard(ats: AtsKind, token: string, companyName: string): 
       return readSmartRecruiters(token, companyName)
     case 'factorial':
       return readFactorial(token, companyName)
+    case 'successfactors':
+      return readSuccessFactors(token, companyName)
   }
 }
 
@@ -766,6 +849,13 @@ export async function boardOwner(ats: AtsKind, token: string): Promise<string | 
         content?: SmartRecruitersPosting[]
       } | null
       return data?.content?.[0]?.company?.name ?? null
+    }
+    case 'successfactors': {
+      // The feed is titled "<owner> - Custom Search", in the site's language.
+      const parts = successFactorsParts(token)
+      const xml = parts ? await getText(`https://${parts.host}/services/rss/job/?locale=en_US&keywords=&rows=1`, ats) : null
+      const title = xml ? xmlTag(xmlTag(xml, 'channel') ?? '', 'title') : null
+      return title?.replace(/\s+-\s+[^-]*$/, '').trim() || null
     }
     default:
       return null
@@ -820,8 +910,9 @@ const SUBDOMAIN_ATS = new Set<AtsKind>(['teamtailor', 'recruitee', 'personio', '
 // short names are taken ("chorus" is a London firm, not Chorus One). Their
 // boards are taken only from a careers page that links them, or pinned in the
 // directory.
-// A Workday token (tenant, server, site) cannot be guessed from a name at all.
-const NEVER_PROBED = new Set<AtsKind>(['workable', 'bamboohr', 'workday'])
+// A Workday token (tenant, server, site) cannot be guessed from a name at all,
+// nor can a SuccessFactors site's host.
+const NEVER_PROBED = new Set<AtsKind>(['workable', 'bamboohr', 'workday', 'successfactors'])
 
 // Personio names the owner on most boards, not all; a guess there stands only
 // when it does ("neon" is NEON, a German bank, not Neon).
@@ -853,6 +944,8 @@ export async function detectBoard(params: { name: string; careersUrl?: string | 
       }
       // A Teamtailor site on the company's own domain serves the same feed.
       if (/teamtailor/i.test(html) && response.url) found.push({ ats: 'teamtailor', token: new URL(response.url).host })
+      // A SuccessFactors career site draws its pages from SAP's RMK CDN.
+      if (/rmkcdn\.successfactors\.com/i.test(html) && response.url) found.push({ ats: 'successfactors', token: new URL(response.url).host })
       for (const { ats, token } of found) {
         const jobs = await readAtsBoard(ats, token, params.name).catch(() => null)
         if (jobs) return { ats, token, openCount: jobs.length, via: 'careers_page' }

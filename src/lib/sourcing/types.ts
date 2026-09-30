@@ -13,6 +13,7 @@ export type AtsKind =
   | 'workday'
   | 'smartrecruiters'
   | 'factorial'
+  | 'successfactors'
 // 'shared': an offer someone brought to the Rep themselves (whatsapp/shared.ts).
 export type SourceKind = AtsKind | 'theirstack' | 'infojobs' | 'shared'
 export type Workplace = 'remote' | 'hybrid' | 'onsite'

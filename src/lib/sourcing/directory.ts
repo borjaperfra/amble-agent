@@ -30,7 +30,7 @@ export interface DirectoryEntry {
 
 function entry(segment: DirectorySegment, name: string, domain: string, where?: string): DirectoryEntry {
   if (!where) return { name, domain, segment }
-  const pinned = where.match(/^(greenhouse|lever|ashby|workable|teamtailor|recruitee|personio|bamboohr|workday|smartrecruiters|factorial):(.+)$/)
+  const pinned = where.match(/^(greenhouse|lever|ashby|workable|teamtailor|recruitee|personio|bamboohr|workday|smartrecruiters|factorial|successfactors):(.+)$/)
   return pinned ? { name, domain, segment, board: { ats: pinned[1] as AtsKind, token: pinned[2] } } : { name, domain, segment, careersUrl: where }
 }
 
@@ -154,6 +154,7 @@ const LISTED: DirectoryEntry[] = [
   spain('Netenders', 'netenders.com', 'teamtailor:netendersholding.teamtailor.com'),
   spain('RavenPack', 'ravenpack.com', 'teamtailor:ravenpack.teamtailor.com'),
   spain('Hispavista', 'hispavista.com', 'personio:hispavista-sl'),
+  spain('Indra', 'indragroup.com', 'successfactors:careers.indragroup.com'),
   // Barcelona
   spain('SeQura', 'sequra.com', 'recruitee:sequra'),
   spain('Innovamat', 'innovamat.com', 'teamtailor:innovamat.teamtailor.com'),
@@ -192,6 +193,7 @@ const LISTED: DirectoryEntry[] = [
   spain('Exoticca', 'exoticca.com', 'workable:exoticca'),
   spain('Worldsensing', 'worldsensing.com', 'bamboohr:worldsensing'),
   spain('Wiris', 'wiris.com', 'bamboohr:wiris'),
+  spain('Hotusa', 'grupohotusa.com', 'successfactors:jobs.grupohotusa.com'),
   // Valencia
   spain('Avantio', 'avantio.com', 'teamtailor:avantio.teamtailor.com'),
   spain('Quibim', 'quibim.com', 'personio:quibim'),
@@ -214,6 +216,7 @@ const LISTED: DirectoryEntry[] = [
   spain('FMIT Group', 'fmit.io', 'factorial:fmit.factorial.es'),
   spain('Monei', 'monei.com', 'ashby:monei'),
   spain('CONVOTIS Iberia', 'convotis.es', 'teamtailor:convotisiberia.teamtailor.com'),
+  spain('Aertec Solutions', 'aertecsolutions.com', 'successfactors:jobs.aertecsolutions.com'),
   // North: Basque Country, Navarre, Galicia, Aragon, Murcia, Canaries
   spain('Ingeteam', 'ingeteam.com', 'teamtailor:ingeteam.teamtailor.com'),
   spain('Veridas', 'veridas.com', 'personio:veridas-1'),
@@ -223,6 +226,8 @@ const LISTED: DirectoryEntry[] = [
   spain('Libelium', 'libelium.com', 'factorial:libelium.factorial.es'),
   spain('Grupo Espiral', 'grupoespiral.com', 'recruitee:grupoespiral'),
   spain('Clue Technologies', 'clue.aero', 'teamtailor:cluetech.teamtailor.com'),
+  // Balearic Islands
+  spain('Meliá', 'melia.com', 'successfactors:careers.melia.com'),
 
   // ── Hire in Spain: hubs in Madrid, Barcelona, Málaga, Valencia ───────────
   hires('Datadog', 'datadoghq.com', 'https://careers.datadoghq.com'),
@@ -237,10 +242,11 @@ const LISTED: DirectoryEntry[] = [
   hires('Veepee', 'veepee.com'),
   hires('Zalando', 'zalando.com', 'workday:zalando.wd3/ZalandoSiteWD'),
   hires('Ocado Technology', 'ocadogroup.com'),
-  hires('Vistaprint', 'vistaprint.com', 'https://careers.vistaprint.com'),
+  // Its board is shared with other Cimpress businesses; only Vista's part is Vistaprint's.
+  hires('Vistaprint', 'vistaprint.com', 'successfactors:jobs.vista.com/Vista'),
   hires('Thoughtworks', 'thoughtworks.com'),
   hires('TomTom', 'tomtom.com', 'lever:eu:tomtom'),
-  hires('Dynatrace', 'dynatrace.com', 'https://careers.dynatrace.com'),
+  hires('Dynatrace', 'dynatrace.com', 'successfactors:apply.careers.dynatrace.com'),
   hires('Celonis', 'celonis.com', 'https://www.celonis.com/careers/'),
   hires('Contentsquare', 'contentsquare.com', 'https://contentsquare.com/careers/'),
   hires('Deel', 'deel.com', 'https://www.deel.com/careers'),
