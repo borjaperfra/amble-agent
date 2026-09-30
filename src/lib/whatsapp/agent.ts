@@ -264,7 +264,12 @@ function offersTheyMention(candidateId: string, message: string) {
       readOn: row.created_at.slice(0, 10),
       verdict: row.verdict === 'show' ? (explanation.roleFit.fit === 'fits' ? 'shown: their kind of role' : 'shown: adjacent role') : row.verdict === 'hold' ? 'held back' : 'set aside',
       roleFit: explanation.roleFit.reason,
-      failedRules: failed.map((gate) => ({ rule: rules.get(gate.ruleId) ?? gate.ruleId.replace(/^amble:/, ''), why: gate.note || gate.quote })),
+      failedRules: failed.map((gate) => ({
+        rule: rules.get(gate.ruleId) ?? gate.ruleId.replace(/^amble:/, ''),
+        why: gate.note || gate.quote,
+        // The offer's own words, when the reason is not already them.
+        quote: gate.note && gate.quote ? gate.quote : undefined,
+      })),
       summary: explanation.summary,
     })
     if (found.length >= 5) break

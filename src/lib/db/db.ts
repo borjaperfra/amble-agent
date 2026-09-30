@@ -674,6 +674,22 @@ function migrate(db: DatabaseSync): void {
     );
   `)
 
+  // What an offer states about itself (matching/facts.ts): way of working,
+  // where remote work may be done from, offices, required languages, salary,
+  // a minimum level; each with the words that say it. Read once for everyone,
+  // read again only when the offer's text or the reader's version changes.
+  // Goes with the offer when the offer is deleted.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS opportunity_facts (
+      opportunity_id TEXT PRIMARY KEY REFERENCES opportunities(id) ON DELETE CASCADE,
+      facts_version TEXT NOT NULL,
+      text_hash TEXT NOT NULL,
+      facts TEXT NOT NULL,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL
+    );
+  `)
+
   // Accounts: the email a candidate signs in with, and whether they own the
   // installation (the sourcing tools and the trace are theirs alone).
   addColumn(db, 'candidates', 'email', 'TEXT')

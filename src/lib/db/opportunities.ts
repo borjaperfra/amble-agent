@@ -282,6 +282,29 @@ export function descriptionsOf(opportunityIds: string[]): Map<string, string> {
   return new Map(rows.map((row) => [row.id, row.description]))
 }
 
+// ── What an offer states (matching/facts.ts) ─────────────────────────────
+
+export interface OfferFactsRow {
+  opportunity_id: string
+  facts_version: string
+  text_hash: string
+  facts: string
+  model_run_id: string | null
+  created_at: string
+}
+
+export function getOfferFacts(opportunityId: string): OfferFactsRow | undefined {
+  return prepared('SELECT * FROM opportunity_facts WHERE opportunity_id = ?').get(opportunityId) as unknown as OfferFactsRow | undefined
+}
+
+export function putOfferFacts(row: { opportunityId: string; version: string; textHash: string; facts: unknown; modelRunId: string | null }): void {
+  prepared(
+    `INSERT INTO opportunity_facts (opportunity_id, facts_version, text_hash, facts, model_run_id, created_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (opportunity_id) DO UPDATE SET facts_version = excluded.facts_version, text_hash = excluded.text_hash,
+       facts = excluded.facts, model_run_id = excluded.model_run_id, created_at = excluded.created_at`,
+  ).run(row.opportunityId, row.version, row.textHash, JSON.stringify(row.facts), row.modelRunId, now())
+}
+
 // ── Runs ─────────────────────────────────────────────────────────────────
 
 export function startSourcingRun(): string {

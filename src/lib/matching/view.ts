@@ -7,7 +7,7 @@ import { getPreparedApplication, type PreparedApplication } from '../apply/prepa
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
-import { ASSESS_VERSION, LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
+import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey, lastReadStats } from './run'
 import { buildMatchingProfile } from './profile'
 import { storedRoleQuery } from './role-query'
@@ -53,6 +53,9 @@ export type DiscardReason =
   | { kind: 'remote_unconfirmed'; places: string | null }
   | { kind: 'remote_elsewhere'; places: string | null }
   | { kind: 'remote_countries'; places: string | null }
+  // Office days, and its offices are only where they would not go (set aside
+  // on what the offer states: facts.ts).
+  | { kind: 'office_elsewhere'; places: string | null }
   // The posting's text could not be read: judged on its title, never shown.
   | { kind: 'unread' }
   // None of their rules failed, but one could not be checked: why, in the assessor's words.
@@ -161,7 +164,7 @@ function droughtOf(candidateId: string, discarded: DiscardedOpportunity[]): Drou
     const reason = offer.reasons[0]
     if (!reason) continue
     if (reason.kind === 'wrong_role' || reason.kind === 'below_level') add('role')
-    else if (reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries') add('place')
+    else if (reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere') add('place')
     else if (reason.kind === 'salary_floor') add('pay')
     else if (reason.kind === 'language') add('language')
     else if (reason.kind === 'unread') add('unread')
@@ -347,6 +350,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
       if (gate.ruleId === REMOTE_UNCONFIRMED_GATE) reasons.push({ kind: 'remote_unconfirmed', places: gate.quote })
       else if (gate.ruleId === REMOTE_ELSEWHERE_GATE) reasons.push({ kind: 'remote_elsewhere', places: gate.quote })
       else if (gate.ruleId === REMOTE_COUNTRIES_GATE) reasons.push({ kind: 'remote_countries', places: gate.quote })
+      else if (gate.ruleId === OFFICE_ELSEWHERE_GATE) reasons.push({ kind: 'office_elsewhere', places: gate.quote })
       else if (gate.result !== 'fail') continue
       else if (gate.ruleId === SALARY_FLOOR_GATE) reasons.push({ kind: 'salary_floor', quote: gate.quote })
       else if (gate.ruleId === LANGUAGE_GATE) reasons.push({ kind: 'language', quote: gate.quote })

@@ -20,7 +20,7 @@ import type { RoleQuery } from './role-query'
 //   - the model reads the published salary and the required languages with a
 //     verbatim quote; comparing them with the candidate is done here
 
-const MAX_DESCRIPTION_CHARS = 9_000
+export const MAX_DESCRIPTION_CHARS = 9_000
 // Below this, a posting's text says nothing beyond its title.
 const MIN_DESCRIPTION_CHARS = 200
 
@@ -45,12 +45,33 @@ export const REMOTE_COUNTRIES_GATE = 'amble:remote_countries'
 // the floor is what the candidate said, not a precise number.
 const SALARY_FLOOR_MARGIN = 0.1
 
+// Set aside on what the offer states, before the assessor (facts.ts): no
+// explanation, only the gate that decided it.
+export const OFFICE_ELSEWHERE_GATE = 'amble:office_elsewhere'
+
 export interface Gate {
   ruleId: string
   result: GateResult
   quote: string | null
   note: string
+  // 'pre_gate' when it was decided from the offer's facts, not by the assessor.
+  by?: 'pre_gate'
 }
+
+export interface PostedSalary {
+  min: number | null
+  max: number | null
+  currency: string
+  period: 'year' | 'month'
+  quote: string
+}
+
+export interface LanguageRequirement {
+  anyOf: string[]
+  quote: string | null
+}
+
+type Dropped = { what: string; reason: string }
 
 export interface Reason {
   text: string
@@ -131,7 +152,7 @@ const assessmentSchema = z.preprocess(
   }),
 )
 
-function postedSalaryOf(value: unknown) {
+export function postedSalaryOf(value: unknown): PostedSalary | null {
   if (!value || typeof value !== 'object') return null
   const e = value as Record<string, unknown>
   const num = (raw: unknown) => (typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : null)
@@ -165,7 +186,7 @@ const EUROPE_WORD =
 const WHERE_YOU_WORK =
   /\b(remote|remotely|work|working|based|located|location|live|living|reside|residing|hire|hiring|candidates?|applicants?|time ?zones?|distributed)\b/
 
-function openToEurope(text: string): boolean {
+export function openToEurope(text: string): boolean {
   for (const match of text.matchAll(EUROPE_WORD)) {
     const before = text.slice(Math.max(0, (match.index ?? 0) - 60), match.index)
     if (WHERE_YOU_WORK.test(before)) return true
@@ -174,7 +195,7 @@ function openToEurope(text: string): boolean {
 }
 
 // Words that say, somewhere in the posting, that the work can be remote.
-const REMOTE_MENTION =
+export const REMOTE_MENTION =
   /\b(remote|remotely|remoto|remota|work from home|working from home|wfh|from anywhere|anywhere in|distributed team|fully distributed|telework|teletrabajo|smart working|home office|location independent)\b/
 
 
@@ -218,7 +239,7 @@ Respond ONLY with JSON: {"roleFit": {"fit": "fits"|"stretch"|"wrong_role"|"below
 // Words that turn a location into a restriction on where remote work is allowed.
 const REMOTE_RESTRICTION = /\b(remote|remoto|only|based|resident|residents|citizens?|authori[sz]ed|amer|americas|emea|apac|latam)\b/i
 
-function normalise(text: string): string {
+export function normalise(text: string): string {
   return text
     .toLowerCase()
     .normalize('NFD')
@@ -234,6 +255,85 @@ function normalise(text: string): string {
     .trim()
 }
 
+type PostingFields = Pick<OpportunityRow, 'title' | 'location' | 'workplace' | 'salary_raw' | 'salary_min' | 'salary_max' | 'salary_currency' | 'description'>
+
+// Everything a quote about the offer may be copied from: its fields and its text.
+export function postingTextOf(opportunity: PostingFields): string {
+  const structuredSalary = opportunity.salary_min
+    ? `${opportunity.salary_min}–${opportunity.salary_max ?? '?'} ${opportunity.salary_currency ?? ''}`
+    : null
+  return [
+    opportunity.title,
+    opportunity.location ?? '',
+    opportunity.workplace ?? '',
+    opportunity.salary_raw ?? '',
+    structuredSalary ?? '',
+    (opportunity.description ?? '').slice(0, MAX_DESCRIPTION_CHARS),
+  ].join('\n')
+}
+
+// Whether a quote is words of that text, as the domain rules check it.
+export function quoteCheck(postingText: string): (quote: string | null) => boolean {
+  const haystack = normalise(postingText)
+  return (quote) => quote !== null && quote.length >= 4 && haystack.includes(normalise(quote))
+}
+
+export function hasReadableText(description: string | null): boolean {
+  return (description ?? '').trim().length >= MIN_DESCRIPTION_CHARS
+}
+
+// A published salary well below the floor is a no, however good the rest.
+// Only on the posting's own figures: no salary published is never a no.
+export function salaryFloorCheck(
+  salary: PostedSalary | null,
+  floor: RoleQuery['salaryFloor'],
+  inPosting: (quote: string | null) => boolean,
+): { gate: Gate | null; dropped: Dropped | null } {
+  if (salary && !inPosting(salary.quote)) {
+    return { gate: null, dropped: { what: 'posted salary', reason: 'salary quote not found verbatim in the posting' } }
+  }
+  if (!salary || !floor || salary.max === null) return { gate: null, dropped: null }
+  // "From X" (no maximum) says nothing about how high it goes.
+  const top = salary.max
+  if (!amountsIn(salary.quote).some((figure) => Math.abs(figure - top) < 1)) {
+    return { gate: null, dropped: { what: 'posted salary', reason: `maximum ${top} is not a figure in the quote` } }
+  }
+  if (salary.currency !== floor.currency) return { gate: null, dropped: null }
+  // Monthly figures count fourteen payments, as in Spain and Italy: the
+  // generous reading, so a salary is never discarded by how it is split.
+  const yearly = salary.period === 'month' ? top * 14 : top
+  if (yearly >= floor.amount * (1 - SALARY_FLOOR_MARGIN)) return { gate: null, dropped: null }
+  return {
+    gate: {
+      ruleId: SALARY_FLOOR_GATE,
+      result: 'fail',
+      quote: salary.quote,
+      note: `${Math.round(yearly)} ${salary.currency} a year at most, below the floor of ${floor.amount}`,
+    },
+    dropped: null,
+  }
+}
+
+// A language the posting requires and the candidate does not speak. Only
+// when both are known: an unknown language never discards.
+export function languageCheck(
+  requirements: LanguageRequirement[],
+  languages: string[],
+  inPosting: (quote: string | null) => boolean,
+): { gate: Gate | null; dropped: Dropped[] } {
+  const dropped: Dropped[] = []
+  if (languages.length === 0) return { gate: null, dropped }
+  for (const requirement of requirements) {
+    if (requirement.anyOf.length === 0 || requirement.anyOf.some((code) => languages.includes(code))) continue
+    if (!inPosting(requirement.quote)) {
+      dropped.push({ what: `language ${requirement.anyOf.join('/')}`, reason: 'required language without a verbatim quote' })
+      continue
+    }
+    return { gate: { ruleId: LANGUAGE_GATE, result: 'fail', quote: requirement.quote, note: requirement.anyOf.join(' / ') }, dropped }
+  }
+  return { gate: null, dropped }
+}
+
 export async function assessOpportunity(params: {
   candidateId: string
   opportunity: OpenOpportunity & Pick<OpportunityRow, 'description'>
@@ -244,16 +344,9 @@ export async function assessOpportunity(params: {
   const structuredSalary = opportunity.salary_min
     ? `${opportunity.salary_min}–${opportunity.salary_max ?? '?'} ${opportunity.salary_currency ?? ''}`
     : null
-  const postingText = [
-    opportunity.title,
-    opportunity.location ?? '',
-    opportunity.workplace ?? '',
-    opportunity.salary_raw ?? '',
-    structuredSalary ?? '',
-    (opportunity.description ?? '').slice(0, MAX_DESCRIPTION_CHARS),
-  ].join('\n')
+  const postingText = postingTextOf(opportunity)
   const haystack = normalise(postingText)
-  const inPosting = (quote: string | null) => quote !== null && quote.length >= 4 && haystack.includes(normalise(quote))
+  const inPosting = quoteCheck(postingText)
 
   // A list of places means different things by workplace. For an on-site or
   // hybrid role it is where you must be: proof. For a remote role (or one whose
@@ -315,45 +408,13 @@ export async function assessOpportunity(params: {
     return { ...proposed, quote: proposed.quote && inPosting(proposed.quote) ? proposed.quote : null }
   })
 
-  // A published salary well below the floor is a no, however good the rest.
-  // Only on the posting's own figures: no salary published is never a no.
-  const salary = data.postedSalary
-  const floor = query.salaryFloor
-  if (salary && !inPosting(salary.quote)) {
-    dropped.push({ what: 'posted salary', reason: 'salary quote not found verbatim in the posting' })
-  } else if (salary && floor && salary.max !== null) {
-    // "From X" (no maximum) says nothing about how high it goes.
-    const top = salary.max
-    if (!amountsIn(salary.quote).some((figure) => Math.abs(figure - top) < 1)) {
-      dropped.push({ what: 'posted salary', reason: `maximum ${top} is not a figure in the quote` })
-    } else if (salary.currency === floor.currency) {
-      // Monthly figures count fourteen payments, as in Spain and Italy: the
-      // generous reading, so a salary is never discarded by how it is split.
-      const yearly = salary.period === 'month' ? top * 14 : top
-      if (yearly < floor.amount * (1 - SALARY_FLOOR_MARGIN)) {
-        gates.push({
-          ruleId: SALARY_FLOOR_GATE,
-          result: 'fail',
-          quote: salary.quote,
-          note: `${Math.round(yearly)} ${salary.currency} a year at most, below the floor of ${floor.amount}`,
-        })
-      }
-    }
-  }
+  const salaryCheck = salaryFloorCheck(data.postedSalary, query.salaryFloor, inPosting)
+  if (salaryCheck.dropped) dropped.push(salaryCheck.dropped)
+  if (salaryCheck.gate) gates.push(salaryCheck.gate)
 
-  // A language the posting requires and the candidate does not speak. Only
-  // when both are known: an unknown language never discards.
-  if (query.languages.length > 0) {
-    for (const requirement of data.requiredLanguages) {
-      if (requirement.anyOf.length === 0 || requirement.anyOf.some((code) => query.languages.includes(code))) continue
-      if (!inPosting(requirement.quote)) {
-        dropped.push({ what: `language ${requirement.anyOf.join('/')}`, reason: 'required language without a verbatim quote' })
-        continue
-      }
-      gates.push({ ruleId: LANGUAGE_GATE, result: 'fail', quote: requirement.quote, note: requirement.anyOf.join(' / ') })
-      break
-    }
-  }
+  const language = languageCheck(data.requiredLanguages, query.languages, inPosting)
+  dropped.push(...language.dropped)
+  if (language.gate) gates.push(language.gate)
 
   const failed = gates.some((gate) => gate.result === 'fail')
 
@@ -448,7 +509,7 @@ export async function assessOpportunity(params: {
   // An offer whose text could not be read was judged on its title alone: its
   // salary, languages and way of working are unknown, and the reasons found
   // for it rest on nothing the posting says. Never an interruption.
-  const unread = (opportunity.description ?? '').trim().length < MIN_DESCRIPTION_CHARS
+  const unread = !hasReadableText(opportunity.description)
   const verdict: MatchVerdict =
     failed || wrongRole
       ? 'discarded'

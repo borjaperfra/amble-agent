@@ -82,6 +82,7 @@ export function applyRetention(at: string = now()): RetentionStats {
     const doomed = `SELECT o.id FROM opportunities o WHERE o.closed_at IS NOT NULL AND o.closed_at < ? AND NOT ${HAS_TRACE}`
     db.prepare(`DELETE FROM opportunity_matches WHERE opportunity_id IN (${doomed})`).run(deleteBefore)
     db.prepare(`DELETE FROM opportunity_sources WHERE opportunity_id IN (${doomed})`).run(deleteBefore)
+    db.prepare(`DELETE FROM opportunity_facts WHERE opportunity_id IN (${doomed})`).run(deleteBefore)
     stats.deleted = Number(db.prepare(`DELETE FROM opportunities WHERE id IN (${doomed})`).run(deleteBefore).changes)
 
     stats.stripped = Number(

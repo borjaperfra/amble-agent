@@ -781,6 +781,8 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
               ? t.opportunities.remoteElsewhere
               : reason.kind === 'remote_countries'
               ? t.opportunities.remoteCountries
+              : reason.kind === 'office_elsewhere'
+              ? t.opportunities.officeElsewhere
               : reason.kind === 'unread'
               ? t.opportunities.unread
               : reason.kind === 'unverified'
@@ -789,7 +791,7 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
           {(reason.kind === 'filter' || reason.kind === 'salary_floor' || reason.kind === 'language') && reason.quote && (
             <span className={styles.discardQuote}> — “{reason.quote}”</span>
           )}
-          {(reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries') && reason.places && (
+          {(reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere') && reason.places && (
             <span className={styles.discardQuote}> — {reason.places}</span>
           )}
         </p>

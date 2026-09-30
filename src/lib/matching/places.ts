@@ -145,6 +145,44 @@ export function countryOf(place: string): string | null {
   return COUNTRY_NAMES[place.trim()] ?? null
 }
 
+// The places a sentence about where the work is done names, for the checks
+// made on an offer's facts (facts.ts): the countries (with the US's states and
+// cities), and whether it opens to Europe, to anywhere, names a region or city
+// outside Europe, or a European city (whose country is not known here).
+export interface PlacesNamed {
+  countries: Set<string>
+  europe: boolean
+  anywhere: boolean
+  outside: boolean
+  europeanCity: boolean
+}
+
+const EUROPE_WORDS = ['europe', 'european', 'emea', 'eu', 'eea']
+const ANYWHERE_WORDS = ['anywhere', 'worldwide', 'world wide', 'global', 'globally', 'international', 'any country', 'any location']
+// "us" is also the pronoun ("join us"): the country only as written in capitals.
+const US_IN_CAPITALS = /\bU\.?S\.?(A\.?)?(?![A-Za-z])/
+const PRONOUN_FORMS = new Set(['us', 'u s'])
+
+export function placesNamedIn(text: string): PlacesNamed {
+  const t = normaliseTitle(text)
+  const countries = new Set<string>()
+  for (const [name, code] of Object.entries(COUNTRY_NAMES)) {
+    if (!PRONOUN_FORMS.has(name) && names(t, name)) countries.add(code)
+  }
+  if (placeTerms('united states').some((term) => !PRONOUN_FORMS.has(term) && names(t, term)) || US_IN_CAPITALS.test(text)) countries.add('US')
+  const outside = [...OUTSIDE_EUROPE_AREAS, ...OUTSIDE_EUROPE_CITIES].some((term) => !PRONOUN_FORMS.has(term) && names(t, term))
+  const europeanCity = EUROPE_OR_ANYWHERE.some(
+    (term) => !COUNTRY_NAMES[term] && !EUROPE_WORDS.includes(term) && !ANYWHERE_WORDS.includes(term) && names(t, term),
+  )
+  return {
+    countries,
+    europe: EUROPE_WORDS.some((term) => names(t, term)),
+    anywhere: ANYWHERE_WORDS.some((term) => names(t, term)),
+    outside,
+    europeanCity,
+  }
+}
+
 // Regions and words that open a list to someone anywhere in Europe.
 const OPEN_REGIONS = ['europe', 'european', 'emea', 'eu', 'eea', 'anywhere', 'worldwide', 'global', 'international', 'remote']
 

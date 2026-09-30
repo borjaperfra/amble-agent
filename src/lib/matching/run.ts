@@ -10,7 +10,8 @@ import { DIRECTORY } from '../sourcing/directory'
 import { normaliseName } from '../sourcing/text'
 import { infoJobsConfigured, type InfoJobsQuery } from '../sourcing/infojobs'
 import { theirStackConfigured, type TheirStackQuery } from '../sourcing/theirstack'
-import { ASSESS_VERSION, assessOpportunity } from './assess'
+import { ASSESS_VERSION, assessOpportunity, type Explanation, type Gate } from './assess'
+import { FACTS_VERSION, hasStoredFacts, offerFacts, offerFactsEnabled, preGate, preGatesCanApply, worthReadingFacts } from './facts'
 import { buildMatchingProfile } from './profile'
 import { EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeMatches, placeOf, placeOutsideEurope } from './places'
 import { prefilter, roleQueryFor, titleRank, type RoleQuery } from './role-query'
@@ -54,6 +55,8 @@ export interface MatchingStats {
   assessedNow: number
   // Offers judged together with another city's posting of the same role.
   sharedAssessments: number
+  // Roles set aside on the offer's facts, without the assessor (facts.ts).
+  preGated: number
   verdicts: Record<MatchVerdict, number>
   waiting: number
   // Roles left for the next pass because this one ran out of time.
@@ -89,6 +92,44 @@ function placeFit(location: string | null, query: RoleQuery): number {
   return places.every(placeOutsideEurope) ? 3 : 2
 }
 
+// Whether what a role's postings state settles it for this person: every
+// posting's facts must fail one of their rules (one city's office may be one
+// they accept). The lead's text is the one the assessor would read.
+async function settledByFacts(
+  postings: OpenOpportunity[],
+  leadDescription: string | null,
+  query: RoleQuery,
+): Promise<{ gates: { posting: OpenOpportunity; gate: Gate }[]; modelRunId: string | null } | null> {
+  const texts = descriptionsOf(postings.map((posting) => posting.id))
+  const [first, ...rest] = postings
+  const lead = { ...first, description: texts.get(first.id) ?? leadDescription }
+  // A new reading only where it is likely to settle the role: elsewhere it
+  // would only add a call before the assessor's.
+  if (!hasStoredFacts(lead) && !worthReadingFacts(lead, query)) return null
+  const leadFacts = await offerFacts(lead)
+  const leadGate = leadFacts ? preGate(leadFacts.facts, lead, query) : null
+  if (!leadFacts || !leadGate) return null
+  const others = await Promise.all(
+    rest.map(async (posting) => {
+      const withText = { ...posting, description: texts.get(posting.id) ?? null }
+      const reading = await offerFacts(withText)
+      return reading ? { posting, gate: preGate(reading.facts, withText, query) } : null
+    }),
+  )
+  const gates: { posting: OpenOpportunity; gate: Gate }[] = [{ posting: first, gate: leadGate }]
+  for (const other of others) {
+    if (!other?.gate) return null
+    gates.push({ posting: other.posting, gate: other.gate })
+  }
+  return { gates, modelRunId: leadFacts.modelRunId }
+}
+
+// What a role set aside on its facts keeps as its explanation: none of its
+// own. The gate says why (the screens and the WhatsApp agent read it there).
+function preGateExplanation(): Explanation {
+  return { roleFit: { fit: 'stretch', reason: '' }, summary: '', why: [], considerAlso: null, unknowns: [] }
+}
+
 // `open` is shared by a whole pass: the offers are read once, not once per
 // person, and without their text, which is read only for what is judged. Past `deadline`, no new read starts.
 export async function runMatching(options: {
@@ -113,6 +154,7 @@ export async function runMatching(options: {
     alreadyAssessed: 0,
     assessedNow: 0,
     sharedAssessments: 0,
+    preGated: 0,
     verdicts: { show: 0, hold: 0, discarded: 0 },
     waiting: 0,
     outOfTime: 0,
@@ -184,6 +226,7 @@ export async function runMatching(options: {
   const batch = [...roles.values()].slice(0, options.limit ?? DEFAULT_LIMIT)
   stats.waiting = pending.length - batch.reduce((sum, postings) => sum + postings.length, 0)
 
+  const factsOn = offerFactsEnabled() && preGatesCanApply(query)
   const queue = [...batch]
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
@@ -203,6 +246,31 @@ export async function runMatching(options: {
         try {
           // Some boards list offers without their text: read it now, before judging.
           if (!opportunity.description) opportunity.description = await describeWhenMissing(first.id)
+          // What the offer states may already settle it for them: set aside
+          // with the gate the assessor would have used, and not read again.
+          if (factsOn) {
+            const settled = await settledByFacts(postings, opportunity.description, query)
+            if (settled) {
+              inTransaction(() => {
+                for (const { posting, gate } of settled.gates) {
+                  insertMatch({
+                    candidateId: candidate.id,
+                    opportunityId: posting.id,
+                    profileHash: matchKey,
+                    verdict: 'discarded',
+                    gates: [gate],
+                    explanation: preGateExplanation(),
+                    dropped: [{ what: 'pre-gate', reason: `set aside on the offer's facts (${FACTS_VERSION}), before the assessor` }],
+                    modelRunId: settled.modelRunId,
+                  })
+                }
+              })
+              stats.preGated++
+              stats.sharedAssessments += postings.length - 1
+              stats.verdicts.discarded++
+              continue
+            }
+          }
           const assessment = await assessOpportunity({ candidateId: candidate.id, opportunity, profile, query })
           // Every city's posting of the role, or none: one judgment.
           inTransaction(() => {
