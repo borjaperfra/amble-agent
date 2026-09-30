@@ -62,20 +62,18 @@ const WORKPLACE_PARAM: Record<Workplace, string> = { remote: 'remote', hybrid: '
 const PAGE_SIZE = 25
 
 async function fetchPage(apiKey: string, body: Record<string, unknown>): Promise<TheirStackJob[]> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  // The whole exchange, the answer's body too, within the time allowed.
+  const signal = AbortSignal.timeout(TIMEOUT_MS)
   let response: Response
   try {
     response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal,
     })
   } catch (error) {
     throw new SourceError(`TheirStack could not be reached: ${error instanceof Error ? error.message : 'unknown error'}`, 'theirstack')
-  } finally {
-    clearTimeout(timeout)
   }
   if (!response.ok) {
     // Their own message says what is wrong (a key, a plan limit, a filter);
@@ -85,7 +83,9 @@ async function fetchPage(apiKey: string, body: Record<string, unknown>): Promise
       response.status === 401 ? 'rejected the API key' : response.status === 402 ? 'says credits are exhausted' : `answered ${response.status}`
     throw new SourceError(`TheirStack ${what}${detail ? `: ${detail}` : ''}`, 'theirstack', response.status)
   }
-  const data = (await response.json()) as { data?: TheirStackJob[] }
+  const data = (await response.json().catch((error) => {
+    throw new SourceError(`TheirStack's answer could not be read: ${error instanceof Error ? error.message : 'unknown error'}`, 'theirstack')
+  })) as { data?: TheirStackJob[] }
   return data.data ?? []
 }
 

@@ -375,6 +375,7 @@ async function reassessScope(
 ): Promise<{ resolvedUncertaintyIds: string[]; reassessedCapabilityIds: string[] }> {
   const turnId = turn.id
   const capabilities = listCapabilities(candidateId)
+  const links = listCapabilityEvidenceIds(candidateId)
   const scopedEvidence = listEvidenceForCapabilities(candidateId, scope)
   const allScopeEvidence = [
     ...scopedEvidence,
@@ -388,7 +389,7 @@ async function reassessScope(
       name: capability.name,
       assessment: capability.assessment,
       reason: capability.reason.slice(0, 200),
-      evidenceIds: listCapabilityEvidenceIds(candidateId).get(capability.id) ?? [],
+      evidenceIds: links.get(capability.id) ?? [],
     }))
 
   // Attribution uncertainty is domain state (syncAttributionUncertainties), not a

@@ -1,6 +1,6 @@
 import { candidateById, listCapabilities, listClaims, listEvidence, listUnprocessedSources } from '../db/repo'
 import { candidateLocale, withLocale } from '../i18n/candidate'
-import { assessCapabilities, buildDescriptor, buildDistinctiveProfile, claimsToEvidence } from './graph'
+import { assessCapabilities, claimsToEvidence, refreshDerivedProfile } from './graph'
 import { prepareSetupQuestions } from './interview'
 import { processSource, SourceRejectedError } from './sources'
 
@@ -84,8 +84,7 @@ async function run(candidateId: string, progress: SetupProgress): Promise<void> 
     void import('../matching/run').then(({ startFirstRead }) => startFirstRead(candidateId)).catch(() => undefined)
 
     // The map's summary: after, with nobody waiting for it.
-    await buildDistinctiveProfile(candidateId).catch(() => undefined)
-    await buildDescriptor(candidateId).catch(() => undefined)
+    await refreshDerivedProfile(candidateId).catch(() => undefined)
   } catch (error) {
     progress.stage = 'failed'
     progress.error = error instanceof Error ? error.message : String(error)

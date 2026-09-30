@@ -1,28 +1,46 @@
 import { clampText, decodeEntities, htmlToText, inferWorkplace, normaliseName } from './text'
+import { safeFetchText, urlProblem } from '../net/safe-fetch'
 import { SourceError, type AtsKind, type RawOpportunity, type Workplace } from './types'
 
 // Public job-board APIs that companies use to power their own careers pages.
 // Each returns the company's full current list, so an offer missing from a
 // successful read has closed.
 
-const TIMEOUT_MS = 20_000
+// Greenhouse draws a big board with its texts on demand when it is not cached:
+// Anthropic's took 23 s on 2026-09-30, and at 20 s it was lost for the pass.
+const TIMEOUT_MS = 45_000
+// A careers page is read only to find the board it links to.
+const CAREERS_PAGE_BYTES = 5 * 1024 * 1024
 const USER_AGENT = 'Amble/0.1 (+job sourcing for a single candidate)'
 
-async function getJson(url: string, source: AtsKind): Promise<unknown | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+// One request to a board, bounded in time from the first byte sent to the
+// last one read. A board's address is built from its token, and some tokens
+// are hosts (a Teamtailor or SuccessFactors site on the company's own
+// domain): one that names a private address or name is never asked.
+async function fetchBoard<T>(
+  url: string,
+  source: AtsKind,
+  init: RequestInit,
+  read: (response: Response) => Promise<T | null>,
+): Promise<T | null> {
+  const problem = urlProblem(url)
+  if (problem) throw new SourceError(`${source} board address refused: ${problem}`, source)
   try {
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: controller.signal })
-    if (response.status === 404) return null
+    const response = await fetch(url, { ...init, headers: { 'User-Agent': USER_AGENT, ...init.headers }, signal: AbortSignal.timeout(TIMEOUT_MS) })
     if (response.status === 429) throw new SourceError(`${source} rate limit reached`, source, 429)
-    if (!response.ok) throw new SourceError(`${source} answered ${response.status}`, source, response.status)
-    return await response.json()
+    return await read(response)
   } catch (error) {
     if (error instanceof SourceError) throw error
     throw new SourceError(`${source} could not be read: ${error instanceof Error ? error.message : 'unknown error'}`, source)
-  } finally {
-    clearTimeout(timeout)
   }
+}
+
+async function getJson(url: string, source: AtsKind): Promise<unknown | null> {
+  return fetchBoard(url, source, { headers: { Accept: 'application/json' } }, async (response) => {
+    if (response.status === 404) return null
+    if (!response.ok) throw new SourceError(`${source} answered ${response.status}`, source, response.status)
+    return (await response.json()) as unknown
+  })
 }
 
 function toIso(value: string | number | null | undefined): string | null {
@@ -228,20 +246,11 @@ async function readWorkable(token: string, companyName: string): Promise<RawOppo
 
 // Unknown boards redirect (Personio) or 404 (Teamtailor): both mean no board.
 async function getText(url: string, source: AtsKind): Promise<string | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
-  try {
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: controller.signal, redirect: 'manual' })
+  return fetchBoard(url, source, { redirect: 'manual' }, async (response) => {
     if (response.status === 404 || (response.status >= 300 && response.status < 400)) return null
-    if (response.status === 429) throw new SourceError(`${source} rate limit reached`, source, 429)
     if (!response.ok) throw new SourceError(`${source} answered ${response.status}`, source, response.status)
-    return await response.text()
-  } catch (error) {
-    if (error instanceof SourceError) throw error
-    throw new SourceError(`${source} could not be read: ${error instanceof Error ? error.message : 'unknown error'}`, source)
-  } finally {
-    clearTimeout(timeout)
-  }
+    return response.text()
+  })
 }
 
 function xmlTag(xml: string, tag: string): string | null {
@@ -427,6 +436,7 @@ async function readPersonio(token: string, companyName: string): Promise<RawOppo
 // Boards are small; a bound keeps one unusually large board from stalling a run.
 
 const BAMBOOHR_MAX_DETAILS = 60
+const BAMBOOHR_DETAILS_AT_ONCE = 4
 
 interface BambooListing {
   id: string
@@ -463,13 +473,20 @@ async function readBambooHr(token: string, companyName: string): Promise<RawOppo
   } catch {
     return null
   }
+  // A few details at a time: a board with dozens of openings no longer reads
+  // them one after another.
+  const details: (BambooDetail | null)[] = []
+  const wanted = listings.slice(0, BAMBOOHR_MAX_DETAILS)
+  for (let at = 0; at < wanted.length; at += BAMBOOHR_DETAILS_AT_ONCE) {
+    const batch = wanted.slice(at, at + BAMBOOHR_DETAILS_AT_ONCE).map(async (listing) => {
+      const detail = (await getJson(`${base}/${encodeURIComponent(listing.id)}/detail`, 'bamboohr').catch(() => null)) as { result?: BambooDetail } | null
+      return detail?.result ?? null
+    })
+    details.push(...(await Promise.all(batch)))
+  }
   const opportunities: RawOpportunity[] = []
   for (const [index, listing] of listings.entries()) {
-    const detail =
-      index < BAMBOOHR_MAX_DETAILS
-        ? ((await getJson(`${base}/${encodeURIComponent(listing.id)}/detail`, 'bamboohr').catch(() => null)) as { result?: BambooDetail } | null)
-        : null
-    const opening = detail?.result?.jobOpening
+    const opening = details[index]?.jobOpening
     const place = opening?.location ?? listing.location
     const location = [place?.city, place?.state, opening?.location?.addressCountry].filter(Boolean).join(', ') || null
     opportunities.push({
@@ -544,41 +561,61 @@ function workdayLocation(posting: WorkdayPosting): string | null {
   return text ? `${place} (+${Number(text.match(/\d+/)?.[0] ?? 1) - 1})` : place
 }
 
+type WorkdayPage = { total?: number; jobPostings?: WorkdayPosting[] }
+
+// A page of the board, or null when Workday says there is no such board (404,
+// or 422 for a site that does not exist).
+function workdayPage(endpoint: string, offset: number): Promise<WorkdayPage | null> {
+  return fetchBoard(
+    endpoint,
+    'workday',
+    {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE, offset, searchText: '' }),
+    },
+    async (response) => {
+      if (response.status === 404 || response.status === 422) return null
+      if (!response.ok) throw new SourceError(`workday answered ${response.status}`, 'workday', response.status)
+      return (await response.json()) as WorkdayPage
+    },
+  )
+}
+
+// Workday serves 20 postings a page and a big board has hundreds: after the
+// first page (which gives the total), the rest are asked a few at a time,
+// and read in order as if one by one.
+const WORKDAY_PAGES_AT_ONCE = 3
+
 async function readWorkday(token: string, companyName: string): Promise<RawOpportunity[] | null> {
   const parts = workdayParts(token)
   if (!parts) return null
   const endpoint = `${parts.host}/wday/cxs/${parts.tenant}/${parts.site}/jobs`
   const postings: WorkdayPosting[] = []
+  const opportunities = () => postings.map((posting) => workdayOpportunity(posting, parts, companyName))
+  const first = await workdayPage(endpoint, 0)
+  if (!first) return null
   // Workday gives the total on the first page only; later pages say 0.
-  let total = 0
+  const total = first.total ?? 0
   let listed = 0
-  for (let offset = 0; offset < BOARD_MAX; offset += WORKDAY_PAGE) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
-    let page: { total?: number; jobPostings?: WorkdayPosting[] } | null
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE, offset, searchText: '' }),
-        signal: controller.signal,
-      })
-      if (response.status === 404 || response.status === 422) return offset === 0 ? null : postings.map((p) => workdayOpportunity(p, parts, companyName))
-      if (!response.ok) throw new SourceError(`workday answered ${response.status}`, 'workday', response.status)
-      page = (await response.json()) as { total?: number; jobPostings?: WorkdayPosting[] }
-    } catch (error) {
-      if (error instanceof SourceError) throw error
-      throw new SourceError(`workday could not be read: ${error instanceof Error ? error.message : 'unknown error'}`, 'workday')
-    } finally {
-      clearTimeout(timeout)
-    }
-    const batch = page?.jobPostings ?? []
+  // Whether the board goes on after this page.
+  const take = (page: WorkdayPage): boolean => {
+    const batch = page.jobPostings ?? []
     listed += batch.length
     postings.push(...batch.filter(isWorkdayPosting))
-    if (offset === 0) total = page?.total ?? 0
-    if (batch.length < WORKDAY_PAGE || listed >= total) break
+    return batch.length === WORKDAY_PAGE && listed < total
   }
-  return postings.map((posting) => workdayOpportunity(posting, parts, companyName))
+  if (!take(first)) return opportunities()
+  const offsets: number[] = []
+  for (let offset = WORKDAY_PAGE; offset < Math.min(total, BOARD_MAX); offset += WORKDAY_PAGE) offsets.push(offset)
+  for (let at = 0; at < offsets.length; at += WORKDAY_PAGES_AT_ONCE) {
+    const pages = await Promise.all(offsets.slice(at, at + WORKDAY_PAGES_AT_ONCE).map((offset) => workdayPage(endpoint, offset)))
+    for (const page of pages) {
+      // A page that is not there any more ends the board where it was.
+      if (!page || !take(page)) return opportunities()
+    }
+  }
+  return opportunities()
 }
 
 function workdayOpportunity(posting: WorkdayPosting, parts: { host: string; site: string }, companyName: string): RawOpportunity {
@@ -930,16 +967,15 @@ export interface DetectedBoard {
 export async function detectBoard(params: { name: string; careersUrl?: string | null; domain?: string | null }): Promise<DetectedBoard | null> {
   if (params.careersUrl) {
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
-      const response = await fetch(params.careersUrl, { headers: { 'User-Agent': USER_AGENT }, signal: controller.signal, redirect: 'follow' })
-      clearTimeout(timeout)
-      const html = response.ok ? await response.text() : ''
+      // A careers address may come from outside (the owner's tools, a
+      // directory entry): it is read as any page someone gave us is.
+      const response = await safeFetchText(params.careersUrl, { headers: { 'User-Agent': USER_AGENT }, timeoutMs: TIMEOUT_MS, maxBytes: CAREERS_PAGE_BYTES, maxRedirects: 5 })
+      const html = response.status >= 200 && response.status < 300 ? response.body : ''
       const found: { ats: AtsKind; token: string }[] = []
       for (const { ats, pattern, prefix } of BOARD_PATTERNS) {
         for (const match of html.matchAll(new RegExp(pattern.source, ats === 'workday' ? 'g' : 'gi'))) {
           const token = ats === 'workday' ? `${match[1].toLowerCase()}/${match[2]}` : `${prefix ?? ''}${match[1]}`
-          if (!NOT_TOKENS.has(match[1].split('.')[0].toLowerCase()) &&!found.some((f) => f.ats === ats && f.token === token)) found.push({ ats, token })
+          if (!NOT_TOKENS.has(match[1].split('.')[0].toLowerCase()) && !found.some((f) => f.ats === ats && f.token === token)) found.push({ ats, token })
         }
       }
       // A Teamtailor site on the company's own domain serves the same feed.
@@ -969,18 +1005,21 @@ export async function detectBoard(params: { name: string; careersUrl?: string | 
   // confirmed wins, then the largest (a "fever" Personio with three offers is
   // not Fever, whose 500 offers are on Greenhouse as "feverup"). An empty
   // board is trusted only when the company's own careers page links to it.
+  // Each guess is tried on every ATS at once (each its own host), one guess
+  // after another (the same host is not asked several names at once).
   const hits: (DetectedBoard & { confirmed: boolean })[] = []
   for (const candidate of candidates) {
-    for (const ats of ATS_KINDS) {
-      if (NEVER_PROBED.has(ats)) continue
-      if (SUBDOMAIN_ATS.has(ats) && candidate.includes('.')) continue
-      const token = ats === 'teamtailor' ? `${candidate}.teamtailor.com` : candidate
-      const jobs = await readAtsBoard(ats, token, params.name).catch(() => null)
-      if (!jobs || jobs.length === 0) continue
-      const owner = await boardOwner(ats, token).catch(() => null)
-      if (owner ? !sameCompany(owner, params.name, params.domain) : OWNER_REQUIRED.has(ats)) continue
-      hits.push({ ats, token, openCount: jobs.length, via: 'probe', confirmed: owner !== null })
-    }
+    const tried = await Promise.all(
+      ATS_KINDS.filter((ats) => !NEVER_PROBED.has(ats) && !(SUBDOMAIN_ATS.has(ats) && candidate.includes('.'))).map(async (ats) => {
+        const token = ats === 'teamtailor' ? `${candidate}.teamtailor.com` : candidate
+        const jobs = await readAtsBoard(ats, token, params.name).catch(() => null)
+        if (!jobs || jobs.length === 0) return null
+        const owner = await boardOwner(ats, token).catch(() => null)
+        if (owner ? !sameCompany(owner, params.name, params.domain) : OWNER_REQUIRED.has(ats)) return null
+        return { ats, token, openCount: jobs.length, via: 'probe' as const, confirmed: owner !== null }
+      }),
+    )
+    for (const hit of tried) if (hit) hits.push(hit)
   }
   hits.sort((a, b) => Number(b.confirmed) - Number(a.confirmed) || b.openCount - a.openCount)
   if (!hits.length) return null

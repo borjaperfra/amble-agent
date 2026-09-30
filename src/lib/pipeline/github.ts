@@ -21,6 +21,8 @@ const MAX_ORGS = 3
 const MAX_REPOS_PER_OWNER = 100
 const MAX_DEEP_REPOS = 6
 const MAX_README_CHARS = 4000
+// Enough bytes for MAX_README_CHARS characters of any script.
+const README_BYTES = MAX_README_CHARS * 4
 const MAX_COMMITS = 40
 
 export class GitHubError extends Error {
@@ -78,16 +80,29 @@ async function api<T>(path: string): Promise<T | null> {
   }
 }
 
-async function raw(path: string): Promise<string | null> {
+// A file of a repository, only as much of it as is read (a README can be
+// megabytes; its start is what goes in the digest).
+async function raw(path: string, maxBytes: number): Promise<string | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const response = await fetch(`${RAW}${path}`, { signal: controller.signal })
-    return response.ok ? await response.text() : null
+    if (!response.ok || !response.body) return null
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    while (size < maxBytes) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      size += value.length
+    }
+    return Buffer.concat(chunks).subarray(0, maxBytes).toString('utf8')
   } catch {
     return null
   } finally {
     clearTimeout(timeout)
+    controller.abort()
   }
 }
 
@@ -143,18 +158,20 @@ export async function buildGitHubDigest(handleOrUrl: string): Promise<GitHubDige
   }>(`/users/${handle}`)
   if (!profile) throw new GitHubError(serverText().githubNoProfile(handle), 404)
 
-  const ownRepos = (await api<GitHubRepo[]>(`/users/${handle}/repos?per_page=${MAX_REPOS_PER_OWNER}&sort=pushed`)) ?? []
-  const orgs = (await api<{ login: string }[]>(`/users/${handle}/orgs`)) ?? []
-
-  const orgRepos: GitHubRepo[] = []
-  for (const org of orgs.slice(0, MAX_ORGS)) {
-    const repos = await api<GitHubRepo[]>(`/orgs/${org.login}/repos?per_page=${MAX_REPOS_PER_OWNER}&sort=pushed`)
-    if (repos) orgRepos.push(...repos)
-  }
-
+  // What does not depend on anything else is asked at once: the same
+  // requests as one by one, sooner.
   // Public events reveal the organisations someone actually works in, which org
   // membership often hides. Without this, an employed developer can look idle.
-  const events = (await api<{ type: string; repo: { name: string } }[]>(`/users/${handle}/events/public?per_page=100`)) ?? []
+  const [ownRepos, orgs, events] = await Promise.all([
+    api<GitHubRepo[]>(`/users/${handle}/repos?per_page=${MAX_REPOS_PER_OWNER}&sort=pushed`).then((repos) => repos ?? []),
+    api<{ login: string }[]>(`/users/${handle}/orgs`).then((list) => list ?? []),
+    api<{ type: string; repo: { name: string } }[]>(`/users/${handle}/events/public?per_page=100`).then((list) => list ?? []),
+  ])
+
+  const orgRepos: GitHubRepo[] = (
+    await Promise.all(orgs.slice(0, MAX_ORGS).map((org) => api<GitHubRepo[]>(`/orgs/${org.login}/repos?per_page=${MAX_REPOS_PER_OWNER}&sort=pushed`)))
+  ).flatMap((repos) => repos ?? [])
+
   const eventRepoNames = [...new Set(events.map((event) => event.repo.name))]
   const knownNames = new Set([...ownRepos, ...orgRepos].map((repo) => repo.full_name))
   for (const name of eventRepoNames) {
@@ -213,16 +230,22 @@ export async function buildGitHubDigest(handleOrUrl: string): Promise<GitHubDige
     )
   }
 
-  for (const repo of deepTargets) {
-    const commits =
-      (await api<GitHubCommit[]>(`/repos/${repo.full_name}/commits?author=${handle}&per_page=${MAX_COMMITS}`)) ?? []
+  // Each repository in detail, all of them at once, kept in their order.
+  const details = await Promise.all(
+    deepTargets.map(async (repo) => {
+      const readmeAt = (name: string) => raw(`/${repo.full_name}/${repo.default_branch}/${name}`, README_BYTES)
+      const [commits, readme] = await Promise.all([
+        api<GitHubCommit[]>(`/repos/${repo.full_name}/commits?author=${handle}&per_page=${MAX_COMMITS}`).then((list) => list ?? []),
+        readmeAt('README.md').then((text) => text ?? readmeAt('readme.md')),
+      ])
+      return { repo, commits, readme }
+    }),
+  )
+  for (const { repo, commits, readme } of details) {
     ownCommitCount += commits.length
 
     const parts = [`[github] REPOSITORIO EN DETALLE: ${repo.full_name}`, describeRepo(repo, commits.length)]
 
-    const readme =
-      (await raw(`/${repo.full_name}/${repo.default_branch}/README.md`)) ??
-      (await raw(`/${repo.full_name}/${repo.default_branch}/readme.md`))
     if (readme) {
       parts.push(`README (primeros ${MAX_README_CHARS} caracteres):\n${readme.slice(0, MAX_README_CHARS)}`)
     }

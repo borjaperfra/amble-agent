@@ -8,13 +8,17 @@ export class ModelError extends Error {
   status?: number
   detail?: string
   retryAfterMs?: number
+  // The provider could not be reached (the connection refused or cut): as
+  // passing as it being busy.
+  unreachable?: boolean
 
-  constructor(message: string, options?: { status?: number; detail?: string; retryAfterMs?: number }) {
+  constructor(message: string, options?: { status?: number; detail?: string; retryAfterMs?: number; unreachable?: boolean }) {
     super(message)
     this.name = 'ModelError'
     this.status = options?.status
     this.detail = options?.detail
     this.retryAfterMs = options?.retryAfterMs
+    this.unreachable = options?.unreachable
   }
 }
 
@@ -52,6 +56,10 @@ interface Slots {
   active: number
   interactive: (() => void)[]
   background: (() => void)[]
+  // After a 429 no call starts before this: the calls waiting would all be
+  // refused too, and each refusal pushes the provider's limit further away.
+  pausedUntil?: number
+  wake?: NodeJS.Timeout
 }
 
 declare global {
@@ -63,6 +71,14 @@ declare global {
 const slots = (globalThis.__ambleModelSlots ??= { active: 0, interactive: [], background: [] })
 
 function dispatch() {
+  const paused = (slots.pausedUntil ?? 0) - Date.now()
+  if (paused > 0) {
+    slots.wake ??= setTimeout(() => {
+      slots.wake = undefined
+      dispatch()
+    }, paused)
+    return
+  }
   while (slots.active < MODEL_CONCURRENCY && slots.interactive.length > 0) {
     slots.active++
     slots.interactive.shift()!()
@@ -85,27 +101,46 @@ function releaseSlot() {
   dispatch()
 }
 
-// Busy or rate-limited: wait as long as the provider asks (or a growing
-// while), with the slot given back, and try again a few times.
-const BUSY_STATUSES = new Set([429, 502, 503])
+// Busy, rate-limited or briefly unreachable: wait as long as the provider
+// asks (or a growing while, never in step with the other calls waiting), with
+// the slot given back, and try again, within a budget of time: a person on
+// the screen is told sooner than a listening pass gives up.
+const BUSY_STATUSES = new Set([429, 502, 503, 504])
 const BUSY_RETRIES = 4
+const MAX_WAIT_MS = 60_000
+const RETRY_BUDGET_MS = { interactive: 60_000, background: 5 * 60_000 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isBusy(error: unknown): error is ModelError {
+  return error instanceof ModelError && (BUSY_STATUSES.has(error.status ?? 0) || error.unreachable === true)
+}
+
+function busyWait(error: ModelError, retry: number): number {
+  const jitter = Math.random()
+  // What the provider asked, and a little more so the calls waiting do not all come back at once.
+  if (error.retryAfterMs) return Math.min(MAX_WAIT_MS, error.retryAfterMs + jitter * 1_000)
+  const base = 2_000 * 2 ** retry
+  return Math.min(MAX_WAIT_MS, base / 2 + (jitter * base) / 2)
 }
 
 async function callWhenFree(
   background: boolean,
   ...args: Parameters<typeof callChatCompletion>
 ): Promise<{ content: string; latencyMs: number }> {
+  const deadline = Date.now() + RETRY_BUDGET_MS[background ? 'background' : 'interactive']
   for (let retry = 0; ; retry++) {
     await acquireSlot(background)
     let waitMs = 0
     try {
       return await callChatCompletion(...args)
     } catch (error) {
-      if (!(error instanceof ModelError) || !BUSY_STATUSES.has(error.status ?? 0) || retry >= BUSY_RETRIES) throw error
-      waitMs = Math.min(60_000, error.retryAfterMs ?? 2_000 * 2 ** retry)
+      if (!isBusy(error) || retry >= BUSY_RETRIES) throw error
+      waitMs = busyWait(error, retry)
+      if (Date.now() + waitMs > deadline) throw error
+      if (error.status === 429) slots.pausedUntil = Math.max(slots.pausedUntil ?? 0, Date.now() + waitMs)
     } finally {
       releaseSlot()
     }
@@ -143,6 +178,14 @@ function formatSchemaIssues(
     .join('; ')
 }
 
+// Retry-After is seconds or an HTTP date.
+function retryAfterMs(header: string | null): number | undefined {
+  if (!header) return undefined
+  const seconds = Number(header)
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - Date.now()
+  return ms > 0 ? ms : undefined
+}
+
 async function callChatCompletion(
   baseUrl: string,
   apiKey: string,
@@ -175,11 +218,10 @@ async function callChatCompletion(
     const latencyMs = Date.now() - startedAt
     const body = (await response.json().catch(() => null)) as ChatCompletionResponse | null
     if (!response.ok) {
-      const retryAfter = Number(response.headers.get('retry-after'))
       throw new ModelError(`The model returned an error (HTTP ${response.status}).`, {
         status: response.status,
         detail: body?.error?.message ?? undefined,
-        retryAfterMs: retryAfter > 0 ? retryAfter * 1000 : undefined,
+        retryAfterMs: retryAfterMs(response.headers.get('retry-after')),
       })
     }
     const content = body?.choices?.[0]?.message?.content
@@ -192,9 +234,9 @@ async function callChatCompletion(
     if (error instanceof Error && error.name === 'AbortError') {
       throw new ModelError('The model took too long to respond.')
     }
-    throw new ModelError(
-      error instanceof Error ? `Could not reach the model: ${error.message}` : 'Could not reach the model.',
-    )
+    throw new ModelError(error instanceof Error ? `Could not reach the model: ${error.message}` : 'Could not reach the model.', {
+      unreachable: true,
+    })
   } finally {
     clearTimeout(timeout)
   }
@@ -218,60 +260,10 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
     const attemptUser =
       attempt === 1
         ? user
-        : `${user}\n\nIMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unknown issue'}. Respond again with JSON that strictly satisfies the schema.`
-    try {
-      const { content, latencyMs } = await callWhenFree(
-        options.background ?? false,
-        config.baseUrl,
-        config.apiKey,
-        config.modelId,
-        system,
-        attemptUser,
-        temperature,
-      )
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(stripCodeFences(content))
-      } catch {
-        insertModelRun({
-          id: runId,
-          candidate_id: candidateId,
-          task,
-          task_version: version,
-          provider: config.provider,
-          model_id: config.modelId,
-          base_url: config.baseUrl,
-          prompt_chars: attemptUser.length,
-          output_chars: content.length,
-          latency_ms: latencyMs,
-          ok: 0,
-          error: 'Invalid JSON in model response',
-          raw_output: content.slice(0, 8000),
-        })
-        throw new ModelError('The model returned invalid JSON.', { detail: 'json_parse' })
-      }
-      const validated = schema.safeParse(parsed)
-      if (!validated.success) {
-        insertModelRun({
-          id: runId,
-          candidate_id: candidateId,
-          task,
-          task_version: version,
-          provider: config.provider,
-          model_id: config.modelId,
-          base_url: config.baseUrl,
-          prompt_chars: attemptUser.length,
-          output_chars: content.length,
-          latency_ms: latencyMs,
-          ok: 0,
-          error: `Schema validation failed: ${formatSchemaIssues(validated.error.issues)}`,
-          raw_output: content.slice(0, 8000),
-        })
-        lastError = new ModelError('The model response did not match the expected schema.', {
-          detail: formatSchemaIssues(validated.error.issues),
-        })
-        continue
-      }
+        : `${user}
+
+IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unknown issue'}. Respond again with JSON that strictly satisfies the schema.`
+    const record = (outcome: { content: string | null; latencyMs: number | null; error: string | null }) =>
       insertModelRun({
         id: runId,
         candidate_id: candidateId,
@@ -281,43 +273,48 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
         model_id: config.modelId,
         base_url: config.baseUrl,
         prompt_chars: attemptUser.length,
-        output_chars: content.length,
-        latency_ms: latencyMs,
-        ok: 1,
-        error: null,
-        raw_output: content.slice(0, 8000),
+        output_chars: outcome.content?.length ?? 0,
+        latency_ms: outcome.latencyMs,
+        ok: outcome.error === null ? 1 : 0,
+        error: outcome.error,
+        raw_output: outcome.content?.slice(0, 8000) ?? null,
       })
-      return { data: validated.data, modelRunId: runId, latencyMs }
+    let reply: { content: string; latencyMs: number }
+    try {
+      reply = await callWhenFree(options.background ?? false, config.baseUrl, config.apiKey, config.modelId, system, attemptUser, temperature)
     } catch (error) {
-      const modelError =
-        error instanceof ModelError
-          ? error
-          : new ModelError(error instanceof Error ? error.message : 'Unknown model error')
-      if (error instanceof ModelNotConfiguredError) throw error
-      if (!(error instanceof ModelError)) throw modelError
-      lastError = modelError
-      // Invalid JSON was already recorded under this run id inside the try, and
-      // deserves the retry. Anything else (HTTP, network, timeout) is recorded
-      // here and ends the task.
-      if (modelError.detail !== 'json_parse') {
-        insertModelRun({
-          id: runId,
-          candidate_id: candidateId,
-          task,
-          task_version: version,
-          provider: config.provider,
-          model_id: config.modelId,
-          base_url: config.baseUrl,
-          prompt_chars: attemptUser.length,
-          output_chars: 0,
-          latency_ms: null,
-          ok: 0,
-          error: modelError.message,
-          raw_output: null,
-        })
-        throw modelError
-      }
+      // HTTP, network or time: recorded, and the task ends.
+      const modelError = error instanceof ModelError ? error : new ModelError(error instanceof Error ? error.message : 'Unknown model error')
+      record({ content: null, latencyMs: null, error: modelError.message })
+      throw modelError
     }
+    const { content, latencyMs } = reply
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(stripCodeFences(content))
+    } catch {
+      // Invalid JSON deserves the retry.
+      record({ content, latencyMs, error: 'Invalid JSON in model response' })
+      lastError = new ModelError('The model returned invalid JSON.', { detail: 'json_parse' })
+      continue
+    }
+    let validated: ReturnType<typeof schema.safeParse>
+    try {
+      validated = schema.safeParse(parsed)
+    } catch (error) {
+      // A shape so far off that reading it failed.
+      const modelError = new ModelError('The model response could not be read.', { detail: error instanceof Error ? error.message : undefined })
+      record({ content, latencyMs, error: modelError.message })
+      throw modelError
+    }
+    if (!validated.success) {
+      const issues = formatSchemaIssues(validated.error.issues)
+      record({ content, latencyMs, error: `Schema validation failed: ${issues}` })
+      lastError = new ModelError('The model response did not match the expected schema.', { detail: issues })
+      continue
+    }
+    record({ content, latencyMs, error: null })
+    return { data: validated.data, modelRunId: runId, latencyMs }
   }
 
   throw lastError ?? new ModelError('The model failed after repeated attempts.')

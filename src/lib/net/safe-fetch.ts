@@ -124,10 +124,21 @@ function request(url: URL, headers: Record<string, string>, signal: AbortSignal)
   })
 }
 
-function readBody(response: IncomingMessage, maxBytes: number): Promise<Buffer> {
+function decoder(response: IncomingMessage): zlib.Gunzip | zlib.Inflate | zlib.BrotliDecompress | null {
   const encoding = String(response.headers['content-encoding'] ?? '').toLowerCase()
-  const stream =
-    encoding === 'gzip' ? response.pipe(zlib.createGunzip()) : encoding === 'deflate' ? response.pipe(zlib.createInflate()) : encoding === 'br' ? response.pipe(zlib.createBrotliDecompress()) : response
+  if (encoding === 'gzip') return zlib.createGunzip()
+  if (encoding === 'deflate') return zlib.createInflate()
+  if (encoding === 'br') return zlib.createBrotliDecompress()
+  return null
+}
+
+function readBody(response: IncomingMessage, maxBytes: number): Promise<Buffer> {
+  const unpack = decoder(response)
+  // A pipe does not carry the response's own failure (the connection cut, the
+  // time up) to what reads from it: without passing it on, a compressed page
+  // cut halfway would be waited for forever.
+  const stream = unpack ? response.pipe(unpack) : response
+  if (unpack) response.on('error', (error) => unpack.destroy(error))
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     let size = 0
@@ -138,11 +149,14 @@ function readBody(response: IncomingMessage, maxBytes: number): Promise<Buffer> 
       size += chunk.length
       if (size >= maxBytes) {
         response.destroy()
+        unpack?.destroy()
         done()
       }
     })
     stream.on('end', done)
     stream.on('error', (error) => (size >= maxBytes ? done() : reject(error)))
+    // Closed before its end without an error of its own: nothing more comes.
+    stream.on('close', () => (size >= maxBytes ? done() : reject(new Error('the page ended before it was complete'))))
   })
 }
 

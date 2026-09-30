@@ -41,6 +41,7 @@ const PDF_READ_MS = 15_000
 
 class TooManyPagesError extends Error {}
 
+
 // Text a reader cannot see: too small to read, or placed off the page. A CV
 // carries it only to be read by a machine (keywords or instructions for a
 // screening system), so it is kept out of what amble reads and counted.
@@ -57,8 +58,9 @@ interface PdfText {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<PdfText> {
+  let pdf: Awaited<ReturnType<typeof getDocumentProxy>> | null = null
   const read = (async () => {
-    const pdf = await getDocumentProxy(new Uint8Array(buffer))
+    pdf = await getDocumentProxy(new Uint8Array(buffer))
     if (pdf.numPages > MAX_PDF_PAGES) throw new TooManyPagesError()
     const pages: string[] = []
     let hidden = ''
@@ -90,6 +92,12 @@ async function extractPdfText(buffer: Buffer): Promise<PdfText> {
     return await Promise.race([read, late])
   } finally {
     clearTimeout(timer)
+    // Read, refused or out of time, the document is let go: a PDF kept open
+    // holds its pages and fonts in memory, and one still being read stops.
+    // One that took too long even to open is let go once it opens.
+    const release = () => void pdf?.loadingTask.destroy().catch(() => undefined)
+    if (pdf) release()
+    else void read.catch(() => undefined).finally(release)
   }
 }
 

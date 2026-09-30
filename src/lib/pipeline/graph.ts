@@ -273,12 +273,12 @@ export async function buildDescriptor(candidateId: string): Promise<string | nul
 }
 
 // The distinctive profile and descriptor are built from capability levels; when a
-// level moves, what was derived from it must move too. Two model calls, and
-// nothing the next interview question depends on, so callers run it after
-// answering the candidate rather than while they wait.
+// level moves, what was derived from it must move too. Two model calls, at
+// once (neither reads what the other writes), and nothing the next interview
+// question depends on, so callers run it after answering the candidate rather
+// than while they wait.
 export async function refreshDerivedProfile(candidateId: string): Promise<void> {
-  await buildDistinctiveProfile(candidateId)
-  await buildDescriptor(candidateId)
+  await Promise.all([buildDistinctiveProfile(candidateId), buildDescriptor(candidateId)])
 }
 
 export interface GraphBuildSummary {
@@ -291,8 +291,7 @@ export interface GraphBuildSummary {
 export async function buildGraph(candidateId: string): Promise<GraphBuildSummary> {
   const claimsConverted = claimsToEvidence(candidateId)
   const capabilities = await assessCapabilities(candidateId)
-  const distinctive = await buildDistinctiveProfile(candidateId)
-  const descriptor = await buildDescriptor(candidateId)
+  const [distinctive, descriptor] = await Promise.all([buildDistinctiveProfile(candidateId), buildDescriptor(candidateId)])
   return { claimsConverted, capabilities, distinctive, descriptor }
 }
 

@@ -95,13 +95,13 @@ async function pass(day: string, slot: string, until: number) {
     return
   }
   running = true
-  const resumed = Boolean(readState().passes[slot])
-  writeState((state) => {
-    state.passes[slot] = { startedAt: state.passes[slot]?.startedAt ?? new Date().toISOString() }
-  })
-  log(day, `==== ${new Date().toISOString()}${resumed ? ` (resuming ${slot}, cut short by a restart)` : ''}`)
   let done = true
   try {
+    const resumed = Boolean(readState().passes[slot])
+    writeState((state) => {
+      state.passes[slot] = { startedAt: state.passes[slot]?.startedAt ?? new Date().toISOString() }
+    })
+    log(day, `==== ${new Date().toISOString()}${resumed ? ` (resuming ${slot}, cut short by a restart)` : ''}`)
     // The first pass of the day copies the database before writing to it.
     const copy = backupToday()
     if (copy) log(day, `backup: ${copy}`)
@@ -120,8 +120,18 @@ async function pass(day: string, slot: string, until: number) {
     log(day, `pass failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)
   } finally {
     running = false
-    if (done) writeState((state) => void (state.passes[slot] = { ...state.passes[slot], finishedAt: new Date().toISOString() }))
     releaseLock()
+    if (done) writeState((state) => void (state.passes[slot] = { ...state.passes[slot], finishedAt: new Date().toISOString() }))
+  }
+}
+
+// What the schedule does runs on timers: a failure of its own (the volume
+// full, its state unwritable) is logged, never left to end the server.
+function safely(what: string, work: () => unknown): void {
+  try {
+    void Promise.resolve(work()).catch((error) => console.error(`[listen] ${what} failed:`, error instanceof Error ? error.message : error))
+  } catch (error) {
+    console.error(`[listen] ${what} failed:`, error instanceof Error ? error.message : error)
   }
 }
 
@@ -162,7 +172,7 @@ export function startListeningSchedule(): void {
       writeState((next) => void (next.roundDay = day))
       // In this order, one after another: an interview question only goes to
       // someone nothing else was sent to that day.
-      void (async () => {
+      safely('rounds', async () => {
         const rounds: [string, () => Promise<unknown>][] = [
           ['followups', sendDueFollowups],
           ['reminders', sendDueReminders],
@@ -173,7 +183,7 @@ export function startListeningSchedule(): void {
             .then((stats) => log(day, `${name}: ${JSON.stringify(stats)}`))
             .catch((error) => log(day, `${name} failed: ${error instanceof Error ? error.message : String(error)}`))
         }
-      })()
+      })
     }
     // The slot's pass, if it has not finished: at its hour, or resumed after a
     // restart while there is still time for it.
@@ -181,10 +191,10 @@ export function startListeningSchedule(): void {
     if (!due || running || stopping() || due.minutesIn > RESUME_WITHIN_MINUTES) return
     // A slot missed while the server was down is made up too.
     if (state.passes[due.slot]?.finishedAt) return
-    void pass(due.day, due.slot, due.until)
+    safely('pass', () => pass(due.day, due.slot, due.until))
   }
-  globalThis.__ambleSchedule = setInterval(tick, TICK_MS)
+  globalThis.__ambleSchedule = setInterval(() => safely('tick', tick), TICK_MS)
   globalThis.__ambleSchedule.unref?.()
   // Right away too: a pass cut short by the restart resumes now, not in a minute.
-  setTimeout(tick, 5_000).unref?.()
+  setTimeout(() => safely('tick', tick), 5_000).unref?.()
 }

@@ -22,8 +22,17 @@ import { searchTheirStack, theirStackConfigured, type TheirStackQuery } from './
 import { normaliseName } from './text'
 import { SourceError, type AtsKind, type RawOpportunity } from './types'
 
-// A read never stalls on one slow board, and never hammers the APIs either.
-const CONCURRENCY = 4
+// A read never stalls on one slow board, and never hammers the APIs either:
+// several boards at once, but only a few on any one ATS (most serve every
+// company from the same API host). Workable answered a burst with a day-long
+// ban (ats.ts), and BambooHR reads a detail per offer: two at a time there.
+const CONCURRENCY = 16
+const PER_ATS = 4
+const DIRECTORY_CONCURRENCY = 4
+const PER_ATS_LIMIT: Partial<Record<AtsKind, number>> = { workable: 2, bamboohr: 2, successfactors: 2 }
+// Paged boards (Workday, SmartRecruiters) take longest: started first, they
+// do not become the pass's tail.
+const FIRST: AtsKind[] = ['workday', 'smartrecruiters', 'bamboohr']
 
 export interface SourcingStats {
   companiesRead: number
@@ -38,21 +47,88 @@ export interface SourcingStats {
   errors: { company?: string; source: string; message: string }[]
 }
 
-async function pool<T>(items: T[], worker: (item: T) => Promise<void>): Promise<void> {
+// Runs worker over every item, at most `limit` at once and at most
+// `limitOf(key)` at once for any one key.
+async function pool<T>(
+  items: T[],
+  worker: (item: T) => Promise<void>,
+  options: { limit: number; keyOf?: (item: T) => string; limitOf?: (key: string) => number },
+): Promise<void> {
+  const keyOf = options.keyOf ?? (() => '')
+  const limitOf = options.limitOf ?? (() => options.limit)
   const queue = [...items]
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
-      for (let item = queue.shift(); item !== undefined; item = queue.shift()) await worker(item)
-    }),
-  )
+  const running = new Map<string, number>()
+  let active = 0
+  await new Promise<void>((resolve) => {
+    const next = () => {
+      if (queue.length === 0 && active === 0) return resolve()
+      for (let index = 0; index < queue.length && active < options.limit; ) {
+        const key = keyOf(queue[index])
+        if ((running.get(key) ?? 0) >= limitOf(key)) {
+          index++
+          continue
+        }
+        const [item] = queue.splice(index, 1)
+        active++
+        running.set(key, (running.get(key) ?? 0) + 1)
+        // A worker handles its own failures; one that throws still frees its place.
+        void worker(item)
+          .catch(() => undefined)
+          .finally(() => {
+            active--
+            running.set(key, (running.get(key) ?? 0) - 1)
+            next()
+          })
+      }
+    }
+    next()
+  })
 }
 
-async function store(raws: RawOpportunity[], companyId: string, seenAt: string): Promise<{ seen: number; created: number }> {
+function store(raws: RawOpportunity[], companyId: string, seenAt: string): { seen: number; created: number } {
   let created = 0
-  inTransaction(() => {
-    for (const raw of raws) if (recordSighting(raw, companyId, seenAt).created) created++
-  })
+  for (const raw of raws) if (recordSighting(raw, companyId, seenAt).created) created++
   return { seen: raws.length, created }
+}
+
+// A search is not a full listing: its offers are stored, and nothing is ever
+// closed from their absence. Its companies are kept as unresolved.
+function storeSearch(
+  raws: RawOpportunity[],
+  discoveredVia: 'theirstack' | 'infojobs',
+  stats: SourcingStats,
+): { ran: boolean; returned: number; newCompanies: number } {
+  const result = { ran: true, returned: raws.length, newCompanies: 0 }
+  const seenAt = now()
+  const known = new Set(listCompanies().map((company) => company.id))
+  inTransaction(() => {
+    for (const raw of raws) {
+      const company = upsertCompany({
+        name: raw.companyName,
+        domain: discoveredVia === 'theirstack' ? (raw.companyDomain ?? null) : null,
+        status: 'unresolved',
+        discoveredVia,
+      })
+      if (!known.has(company.id)) {
+        known.add(company.id)
+        result.newCompanies++
+      }
+      const stored = store([raw], company.id, seenAt)
+      stats.seen += stored.seen
+      stats.created += stored.created
+    }
+  })
+  return result
+}
+
+// Every search at once; one that fails loses only its own results (a
+// TheirStack search already paid for is kept even if another one failed).
+async function searchAll<Q>(queries: Q[], search: (query: Q) => Promise<RawOpportunity[]>): Promise<{ raws: RawOpportunity[]; errors: string[] }> {
+  const settled = await Promise.allSettled(queries.map((query) => search(query)))
+  return {
+    raws: settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])),
+    errors: settled.flatMap((result) => (result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : 'unknown error'] : [])),
+  }
 }
 
 // `theirstack`: the aggregator searches for this pass, one per person due one.
@@ -71,74 +147,58 @@ export async function runSourcing(options: { theirstack?: TheirStackQuery[]; inf
   }
   const errors = stats.errors
 
-  const watched = listCompanies('watching').filter((company) => company.ats && company.ats_token)
-  await pool(watched, async (company: CompanyRow) => {
-    const seenAt = now()
-    try {
-      const raws = await readAtsBoard(company.ats as AtsKind, company.ats_token as string, company.name)
-      if (raws === null) {
-        // The board is gone (renamed or moved ATS). Nothing is closed on a
-        // missing board: absence of evidence is not closure.
-        stats.boardsMissing.push(company.name)
-        recordCompanyFetch(company.id, `No ${company.ats} board "${company.ats_token}" any more`)
-        return
-      }
-      const result = await store(raws, company.id, seenAt)
-      stats.seen += result.seen
-      stats.created += result.created
-      stats.closed += closeMissing(company.id, company.ats as string, new Set(raws.map((raw) => raw.externalId)), seenAt)
-      stats.companiesRead++
-      recordCompanyFetch(company.id, null)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'unknown error'
-      errors.push({ company: company.name, source: company.ats as string, message })
-      recordCompanyFetch(company.id, message)
-    }
-  })
+  // The searches go out while the boards are read (other hosts entirely);
+  // what they bring is stored after the boards, in the same order as ever.
+  const theirstack = options.theirstack?.length && theirStackConfigured() ? searchAll(options.theirstack, searchTheirStack) : null
+  const infojobs = options.infojobs?.length && infoJobsConfigured() ? searchAll(options.infojobs, searchInfoJobs) : null
 
-  if (options.theirstack?.length && theirStackConfigured()) {
-    stats.theirstack = { ran: true, returned: 0, newCompanies: 0 }
-    try {
-      const raws = (await Promise.all(options.theirstack.map((query) => searchTheirStack(query)))).flat()
-      stats.theirstack.returned = raws.length
+  const watched = listCompanies('watching')
+    .filter((company) => company.ats && company.ats_token)
+    .sort((a, b) => Number(FIRST.includes(b.ats as AtsKind)) - Number(FIRST.includes(a.ats as AtsKind)))
+  await pool(
+    watched,
+    async (company: CompanyRow) => {
       const seenAt = now()
-      const before = new Set(listCompanies().map((company) => company.id))
-      // A search is not a full listing: nothing is ever closed from its absence.
-      for (const raw of raws) {
-        const company = upsertCompany({
-          name: raw.companyName,
-          domain: raw.companyDomain ?? null,
-          status: 'unresolved',
-          discoveredVia: 'theirstack',
+      try {
+        const raws = await readAtsBoard(company.ats as AtsKind, company.ats_token as string, company.name)
+        if (raws === null) {
+          // The board is gone (renamed or moved ATS). Nothing is closed on a
+          // missing board: absence of evidence is not closure.
+          stats.boardsMissing.push(company.name)
+          recordCompanyFetch(company.id, `No ${company.ats} board "${company.ats_token}" any more`)
+          return
+        }
+        // One write for the whole board: what it lists, what it no longer
+        // lists, and when it was read.
+        inTransaction(() => {
+          const result = store(raws, company.id, seenAt)
+          stats.seen += result.seen
+          stats.created += result.created
+          stats.closed += closeMissing(company.id, company.ats as string, new Set(raws.map((raw) => raw.externalId)), seenAt)
+          recordCompanyFetch(company.id, null)
         })
-        if (!before.has(company.id)) stats.theirstack.newCompanies++
-        const result = await store([raw], company.id, seenAt)
-        stats.seen += result.seen
-        stats.created += result.created
+        stats.companiesRead++
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'unknown error'
+        errors.push({ company: company.name, source: company.ats as string, message })
+        recordCompanyFetch(company.id, message)
       }
-    } catch (error) {
-      errors.push({ source: 'theirstack', message: error instanceof Error ? error.message : 'unknown error' })
-    }
-  }
+    },
+    { limit: CONCURRENCY, keyOf: (company) => company.ats as string, limitOf: (ats) => PER_ATS_LIMIT[ats as AtsKind] ?? PER_ATS },
+  )
 
-  // InfoJobs: free, one search per person due one. A search is not a full
-  // listing either: nothing is closed from its absence.
-  if (options.infojobs?.length && infoJobsConfigured()) {
-    stats.infojobs = { ran: true, returned: 0, newCompanies: 0 }
+  for (const [source, searching] of [
+    ['theirstack', theirstack],
+    ['infojobs', infojobs],
+  ] as const) {
+    if (!searching) continue
+    const { raws, errors: failed } = await searching
+    for (const message of failed) errors.push({ source, message })
     try {
-      const raws = (await Promise.all(options.infojobs.map((query) => searchInfoJobs(query)))).flat()
-      stats.infojobs.returned = raws.length
-      const seenAt = now()
-      const before = new Set(listCompanies().map((company) => company.id))
-      for (const raw of raws) {
-        const company = upsertCompany({ name: raw.companyName, domain: null, status: 'unresolved', discoveredVia: 'infojobs' })
-        if (!before.has(company.id)) stats.infojobs.newCompanies++
-        const result = await store([raw], company.id, seenAt)
-        stats.seen += result.seen
-        stats.created += result.created
-      }
+      stats[source] = storeSearch(raws, source, stats)
     } catch (error) {
-      errors.push({ source: 'infojobs', message: error instanceof Error ? error.message : 'unknown error' })
+      stats[source] = { ran: true, returned: raws.length, newCompanies: 0 }
+      errors.push({ source, message: error instanceof Error ? error.message : 'unknown error' })
     }
   }
 
@@ -194,43 +254,48 @@ export async function syncDirectory(options: { refresh?: boolean; entries?: Dire
   const stats: DirectoryStats = { entries: entries.length, watching: 0, resolvedNow: [], unresolved: [], errors: [] }
   const known = new Map(listCompanies().map((company) => [company.name_norm, company]))
 
-  await pool(entries, async (entry) => {
-    try {
-      let company = known.get(normaliseName(entry.name))
-      if (!company || !company.ats || options.refresh) {
-        if (entry.board) {
-          const jobs = await readAtsBoard(entry.board.ats, entry.board.token, entry.name)
-          if (!jobs && company?.ats) clearCompanyBoard(company.id)
-          company = upsertCompany({
-            name: entry.name,
-            domain: entry.domain,
-            careersUrl: entry.careersUrl ?? null,
-            ats: jobs ? entry.board.ats : null,
-            atsToken: jobs ? entry.board.token : null,
-            status: jobs ? 'watching' : 'unresolved',
-            discoveredVia: company?.discovered_via ?? 'directory',
-          })
-        } else {
-          const result = await watchCompany({
-            name: entry.name,
-            domain: entry.domain,
-            careersUrl: entry.careersUrl ?? `https://${entry.domain}/careers`,
-            discoveredVia: company?.discovered_via ?? 'directory',
-          })
-          company = result.company
-          if (!result.board && company.ats) {
-            clearCompanyBoard(company.id)
-            company = getCompany(company.id) as CompanyRow
+  await pool(
+    entries,
+    async (entry) => {
+      try {
+        let company = known.get(normaliseName(entry.name))
+        if (!company || !company.ats || options.refresh) {
+          if (entry.board) {
+            const jobs = await readAtsBoard(entry.board.ats, entry.board.token, entry.name)
+            if (!jobs && company?.ats) clearCompanyBoard(company.id)
+            company = upsertCompany({
+              name: entry.name,
+              domain: entry.domain,
+              careersUrl: entry.careersUrl ?? null,
+              ats: jobs ? entry.board.ats : null,
+              atsToken: jobs ? entry.board.token : null,
+              status: jobs ? 'watching' : 'unresolved',
+              discoveredVia: company?.discovered_via ?? 'directory',
+            })
+          } else {
+            const result = await watchCompany({
+              name: entry.name,
+              domain: entry.domain,
+              careersUrl: entry.careersUrl ?? `https://${entry.domain}/careers`,
+              discoveredVia: company?.discovered_via ?? 'directory',
+            })
+            company = result.company
+            if (!result.board && company.ats) {
+              clearCompanyBoard(company.id)
+              company = getCompany(company.id) as CompanyRow
+            }
           }
+          if (company.status === 'watching') stats.resolvedNow.push(entry.name)
         }
-        if (company.status === 'watching') stats.resolvedNow.push(entry.name)
+        setCompanyDirectoryInfo(company.id, entry.segment, Boolean(entry.publicSalary))
+        if (company.status === 'watching') stats.watching++
+        else stats.unresolved.push(entry.name)
+      } catch (error) {
+        stats.errors.push({ company: entry.name, message: error instanceof Error ? error.message : 'unknown error' })
       }
-      setCompanyDirectoryInfo(company.id, entry.segment, Boolean(entry.publicSalary))
-      if (company.status === 'watching') stats.watching++
-      else stats.unresolved.push(entry.name)
-    } catch (error) {
-      stats.errors.push({ company: entry.name, message: error instanceof Error ? error.message : 'unknown error' })
-    }
-  })
+    },
+    // Resolving a company probes several ATSs for it: a few companies at a time.
+    { limit: DIRECTORY_CONCURRENCY },
+  )
   return stats
 }
