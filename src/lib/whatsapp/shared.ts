@@ -8,6 +8,7 @@ import { roleQueryFor } from '../matching/role-query'
 import { currentMatchKey } from '../matching/run'
 import { clampText, htmlToText, inferWorkplace, normaliseUrl } from '../sourcing/text'
 import type { RawOpportunity } from '../sourcing/types'
+import { safeFetchText } from '../net/safe-fetch'
 
 // An offer someone brings to the Rep: a link they were sent (by a recruiter,
 // a friend, a board) or its text pasted in. It is read, judged by the same
@@ -70,7 +71,11 @@ function knownOffer(url: string): RawOpportunity | null {
   const norm = normaliseUrl(url)
   if (!norm) return null
   const row = getDb()
-    .prepare('SELECT o.*, c.name AS company_name FROM opportunities o JOIN companies c ON c.id = o.company_id WHERE o.url_norm = ? LIMIT 1')
+    // Only an offer amble found itself: what someone else shared stays theirs.
+    .prepare(
+      `SELECT o.*, c.name AS company_name FROM opportunities o JOIN companies c ON c.id = o.company_id
+       WHERE o.url_norm = ? AND EXISTS (SELECT 1 FROM opportunity_sources s WHERE s.opportunity_id = o.id AND s.source != 'shared') LIMIT 1`,
+    )
     .get(norm) as
     | { title: string; company_name: string; location: string | null; workplace: RawOpportunity['workplace']; url: string | null; description: string | null; salary_min: number | null; salary_max: number | null; salary_currency: string | null; salary_raw: string | null; posted_at: string | null }
     | undefined
@@ -150,13 +155,13 @@ export async function readSharedLink(url: string): Promise<RawOpportunity | null
   if (known?.description) return known
   const viaApi = await fromBoardApi(url)
   if (viaApi) return viaApi
-  const response = await fetch(url, {
+  // Never a private address, only https, bounded in time and size.
+  const response = await safeFetchText(url.replace(/^http:/i, 'https:'), {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36' },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    timeoutMs: TIMEOUT_MS,
   }).catch(() => null)
-  if (!response?.ok) return null
-  const html = await response.text().catch(() => '')
+  if (!response || response.status < 200 || response.status >= 300) return null
+  const html = response.body
   const host = new URL(response.url || url).hostname.replace(/^www\./, '')
   const posting = findJobPosting(html)
   if (posting?.title) {
@@ -244,6 +249,9 @@ export async function judgeShared(candidateId: string, raw: RawOpportunity): Pro
     const opportunity = db
       .prepare('SELECT o.*, c.name AS company_name FROM opportunities o JOIN companies c ON c.id = o.company_id WHERE o.id = ?')
       .get(opportunityId) as unknown as Parameters<typeof assessOpportunity>[0]['opportunity']
+    // An offer amble knows without its text is judged on what they shared,
+    // which stays with this judgment and never rewrites the offer.
+    if (!opportunity.description && raw.description) opportunity.description = raw.description
     const profile = buildMatchingProfile(candidateId)
     const query = await roleQueryFor(candidateId, profile)
     const assessment = await assessOpportunity({ candidateId, opportunity, profile, query })

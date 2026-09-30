@@ -347,9 +347,41 @@ export function soundsLikeCrisis(message: string): boolean {
   return CRISIS.test(message)
 }
 
-// Only links it was given can leave: an offer's own, and amble's.
-function keepKnownLinks(reply: string, allowed: string[]): string {
-  return reply.replace(/https?:\/\/[^\s)>\]]+/g, (url) => (allowed.some((known) => url.startsWith(known)) ? url : '')).replace(/\s{2,}/g, ' ').trim()
+// Only links it was given can leave: an offer's own, and amble's. A link is
+// known when its origin is exactly a known one and its path starts with that
+// one's ("app.amble.fyi.evil.com" or "app.amble.fyi@evil.com" are not amble).
+// A bare domain WhatsApp would make a link ("evil.com/x") goes too, unless it
+// is a known host.
+const BARE_DOMAIN = /\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|es|co|ai|app|dev|me|info|xyz|link|click|ly|to|gg|fyi|eu|uk|de|fr|site|online|top|shop|biz|cc|tk|ru|cn)(?:\/[^\s)>\]]*)?(?![a-z0-9])/gi
+
+export function keepKnownLinks(reply: string, allowed: string[]): string {
+  const known = allowed.flatMap((value) => {
+    try {
+      const url = new URL(value)
+      return [{ origin: url.origin, path: url.pathname.replace(/\/$/, '') }]
+    } catch {
+      return []
+    }
+  })
+  const isKnown = (value: string) => {
+    try {
+      const url = new URL(value)
+      if (url.username || url.password) return false
+      return known.some((item) => url.origin === item.origin && (url.pathname === item.path || url.pathname.startsWith(`${item.path}/`) || item.path === ''))
+    } catch {
+      return false
+    }
+  }
+  const knownHosts = new Set(known.map((item) => new URL(item.origin).hostname))
+  return reply
+    .replace(/https?:\/\/[^\s)>\]]+/gi, (url) => (isKnown(url) ? url : ''))
+    .replace(BARE_DOMAIN, (text, offset: number, whole: string) => {
+      // Part of a link already kept, or an email address: left as it is.
+      if (whole.slice(Math.max(0, offset - 8), offset).includes('://') || whole[offset - 1] === '/' || whole[offset - 1] === '@') return text
+      return knownHosts.has(text.split('/')[0].toLowerCase()) ? text : ''
+    })
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
 }
 
 export async function answerMessage(candidateId: string, message: string): Promise<AgentAnswer> {
@@ -365,7 +397,7 @@ export async function answerMessage(candidateId: string, message: string): Promi
     // The language of their message, not of their account.
     language: null,
   })
-  const allowed = [appBase(), ...context.offersSentOnWhatsApp.map((offer) => offer.url).filter((url): url is string => Boolean(url))]
+  const allowed = [appBase(), 'https://amble.fyi', ...context.offersSentOnWhatsApp.map((offer) => offer.url).filter((url): url is string => Boolean(url))]
   let reply = keepKnownLinks(data.reply, allowed)
   const crisis = soundsLikeCrisis(message)
   if (crisis && !reply.includes(HELP_LINE)) reply = `${reply}\n\n${dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.helpLine}`

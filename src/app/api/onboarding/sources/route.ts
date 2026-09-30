@@ -6,8 +6,10 @@ import {
   createGitHubSource,
   createLinkedInSource,
   createWebsiteSource,
+  MAX_PDF_BYTES,
   type SourceCreated,
 } from '@/lib/pipeline/sources'
+import { serverText } from '@/lib/i18n/candidate'
 
 export const runtime = 'nodejs'
 
@@ -36,6 +38,10 @@ async function addSource(request: Request, candidate: CandidateRow) {
   try {
     let result: SourceCreated
     if (contentType.includes('multipart/form-data')) {
+      // Refused before it is read into memory, not after.
+      if (Number(request.headers.get('content-length') ?? 0) > MAX_PDF_BYTES + 64 * 1024) {
+        return NextResponse.json({ error: serverText().fileTooLarge }, { status: 413 })
+      }
       const form = await request.formData()
       const file = form.get('file')
       if (!(file instanceof File)) {

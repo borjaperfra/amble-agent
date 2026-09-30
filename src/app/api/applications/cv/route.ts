@@ -16,6 +16,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return forCandidate(request, async (candidate) => {
+    // Refused before it is read into memory, not after.
+    if (Number(request.headers.get('content-length') ?? 0) > 9 * 1024 * 1024) {
+      return NextResponse.json({ error: 'The CV must be under 8 MB.' }, { status: 413 })
+    }
     const form = await request.formData().catch(() => null)
     const file = form?.get('file')
     if (!(file instanceof File)) return NextResponse.json({ error: 'No file was provided.' }, { status: 400 })

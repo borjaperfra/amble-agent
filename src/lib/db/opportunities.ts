@@ -147,7 +147,11 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
   let opportunityId: string
   let created = false
 
-  if (existing) {
+  if (existing && raw.source === 'shared') {
+    // What someone shares never rewrites an offer others are judged on: a
+    // pasted text or a page may say anything.
+    opportunityId = existing.id
+  } else if (existing) {
     opportunityId = existing.id
     // The richest description wins; missing facts are filled, never overwritten.
     const description =
@@ -250,6 +254,9 @@ export function countOpportunities(): { open: number; closed: number; companies:
 // Every open offer without its text: the text of thousands of offers is
 // tens of megabytes, and a pass only reads it for the few it judges
 // (descriptionsOf). Several passes and first reads can then run at once.
+// An offer someone shared on WhatsApp is judged for them alone: only offers
+// amble also found itself are read for everyone (a shared page may carry
+// text written to sway a judge, or a pasted offer something private).
 export function listOpenOpportunities(): (Omit<OpportunityRow, 'description'> & { company_name: string })[] {
   const columns = (getDb().prepare('PRAGMA table_info(opportunities)').all() as unknown as { name: string }[])
     .map((column) => column.name)
@@ -258,7 +265,9 @@ export function listOpenOpportunities(): (Omit<OpportunityRow, 'description'> & 
     .prepare(
       `SELECT ${columns.map((name) => `o.${name}`).join(', ')}, c.name AS company_name FROM opportunities o
        JOIN companies c ON c.id = o.company_id
-       WHERE o.closed_at IS NULL AND c.status != 'ignored' ORDER BY o.first_seen_at DESC`,
+       WHERE o.closed_at IS NULL AND c.status != 'ignored'
+         AND EXISTS (SELECT 1 FROM opportunity_sources s WHERE s.opportunity_id = o.id AND s.source != 'shared')
+       ORDER BY o.first_seen_at DESC`,
     )
     .all() as unknown as (Omit<OpportunityRow, 'description'> & { company_name: string })[]
 }

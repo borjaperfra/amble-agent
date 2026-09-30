@@ -462,6 +462,7 @@ export const en = {
   server: {
     inYourWords: 'In your words',
     onlyPdfOrText: 'I can only read PDF or plain text files in this build.',
+    fileTooLarge: 'This file is too big for a CV. Try the PDF you export from Word or Google Docs.',
     noTextInFile: "I couldn't read any text from this file. It may be a scanned document.",
     notEnoughText: "I couldn't find enough readable text in this document. If it's scanned, try a text-based PDF or a plain text export.",
     websiteUnreadableDetail: (why: string) => `I couldn't read this website (${why}). Your Rep stored the URL only.`,

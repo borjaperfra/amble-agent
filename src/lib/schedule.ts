@@ -3,6 +3,7 @@ import path from 'node:path'
 import { backupToday } from './db/backup'
 import { DATA_DIRECTORY } from './db/db'
 import { rereadsInFlight, runListening } from './matching/run'
+import { sweepUploads } from './pipeline/sources'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
@@ -59,6 +60,8 @@ async function pass(day: string) {
     // The first pass of the day copies the database before writing to it.
     const copy = backupToday()
     if (copy) log(day, `backup: ${copy}`)
+    // And, once a day too, drops what was set aside of what people uploaded.
+    if (copy) log(day, `uploads: ${JSON.stringify(sweepUploads())}`)
     log(day, JSON.stringify(await runListening(), null, 2))
     // What this pass found that deserves a message, at the pace allowed.
     log(day, `offers: ${JSON.stringify(await sendDueOffers())}`)

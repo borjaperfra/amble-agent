@@ -1,7 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { extractText, getDocumentProxy } from 'unpdf'
-import { DATA_DIRECTORY } from '../db/db'
+import { DATA_DIRECTORY, getDb } from '../db/db'
+import { documentKind, isPlainText } from '../files'
+import { safeFetchText } from '../net/safe-fetch'
 import {
   insertClaim,
   insertSource,
@@ -28,11 +30,61 @@ export interface SourceCreated {
   detail: string | null
 }
 
+// A CV fits well within these; a file past them is something else, or made
+// to keep the server busy.
+export const MAX_PDF_BYTES = 10 * 1024 * 1024
+const MAX_TEXT_BYTES = 1024 * 1024
+const MAX_PDF_PAGES = 20
+const PDF_READ_MS = 15_000
+
+class TooManyPagesError extends Error {}
+
 async function extractPdfText(buffer: Buffer): Promise<string[]> {
-  const pdf = await getDocumentProxy(new Uint8Array(buffer))
-  const result = await extractText(pdf, { mergePages: false })
-  const pages = Array.isArray(result.text) ? result.text : [result.text]
-  return pages.map((page) => page.replace(/\s+/g, ' ').trim())
+  const read = (async () => {
+    const pdf = await getDocumentProxy(new Uint8Array(buffer))
+    if (pdf.numPages > MAX_PDF_PAGES) throw new TooManyPagesError()
+    const result = await extractText(pdf, { mergePages: false })
+    const pages = Array.isArray(result.text) ? result.text : [result.text]
+    return pages.map((page) => page.replace(/\s+/g, ' ').trim())
+  })()
+  let timer: NodeJS.Timeout | undefined
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('PDF took too long to read')), PDF_READ_MS)
+  })
+  try {
+    return await Promise.race([read, late])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// The files of a source that was set aside or failed: nothing of it is kept
+// beyond its name and why (an ID card or a medical report uploaded by mistake
+// must not stay on disk).
+export function discardSourceFiles(sourceId: string): void {
+  const uploads = path.join(DATA_DIRECTORY, 'uploads')
+  for (const name of [`${sourceId}.txt`, `${sourceId}.original.pdf`]) fs.rmSync(path.join(uploads, name), { force: true })
+  getDb().prepare('UPDATE sources SET stored_path = NULL, char_count = 0 WHERE id = ?').run(sourceId)
+}
+
+// Once a day: files of sources set aside or failed, and files no source
+// points at (older uploads kept a PDF before knowing it could be read).
+// Files younger than an hour are left, in case one is being written.
+export function sweepUploads(): { discarded: number; orphans: number } {
+  const uploads = path.join(DATA_DIRECTORY, 'uploads')
+  if (!fs.existsSync(uploads)) return { discarded: 0, orphans: 0 }
+  const db = getDb()
+  const setAside = db.prepare("SELECT id FROM sources WHERE status IN ('rejected', 'failed') AND stored_path IS NOT NULL").all() as { id: string }[]
+  for (const { id } of setAside) discardSourceFiles(id)
+  const known = new Set((db.prepare('SELECT id FROM sources').all() as { id: string }[]).map((row) => row.id))
+  let orphans = 0
+  for (const name of fs.readdirSync(uploads)) {
+    const file = path.join(uploads, name)
+    if (known.has(name.split('.')[0]) || Date.now() - fs.statSync(file).mtimeMs < 60 * 60 * 1000) continue
+    fs.rmSync(file, { force: true })
+    orphans++
+  }
+  return { discarded: setAside.length, orphans }
 }
 
 function stripHtml(html: string): string {
@@ -72,26 +124,16 @@ export async function createFileSource(
 
   const id = newId('src')
   const extension = path.extname(originalName).toLowerCase()
-  const isPdf = file.type === 'application/pdf' || extension === '.pdf'
-  const isText = ['.txt', '.md', '.markdown'].includes(extension) || file.type.startsWith('text/')
   const textName = `${id}.txt`
   const storedPath = path.join(DATA_DIRECTORY, 'uploads', textName)
+  const failed = (detail: string): SourceCreated => ({ id, name: originalName, type: 'cv', status: 'failed', detail })
 
-  if (!isPdf && !isText) {
-    return {
-      id,
-      name: originalName,
-      type: 'cv',
-      status: 'failed',
-      detail: serverText().onlyPdfOrText,
-    }
-  }
-
-  fs.mkdirSync(path.dirname(storedPath), { recursive: true })
+  if (file.size > MAX_PDF_BYTES) return failed(serverText().fileTooLarge)
   const buffer = Buffer.from(await file.arrayBuffer())
-  if (isPdf) {
-    fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.original.pdf`), buffer)
-  }
+  // What it is comes from its bytes; the name and the browser's type only claim it.
+  const isPdf = documentKind(buffer) === 'pdf'
+  const isText = !isPdf && ['.txt', '.md', '.markdown'].includes(extension) && buffer.length <= MAX_TEXT_BYTES && isPlainText(buffer)
+  if (!isPdf && !isText) return failed(serverText().onlyPdfOrText)
 
   let content = ''
   try {
@@ -101,7 +143,8 @@ export async function createFileSource(
     } else {
       content = buffer.toString('utf8')
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof TooManyPagesError) return failed(serverText().fileTooLarge)
     return {
       id,
       name: originalName,
@@ -122,6 +165,9 @@ export async function createFileSource(
     }
   }
 
+  // Only now, read and long enough, is anything of it kept.
+  fs.mkdirSync(path.dirname(storedPath), { recursive: true })
+  if (isPdf) fs.writeFileSync(path.join(DATA_DIRECTORY, 'uploads', `${id}.original.pdf`), buffer)
   fs.writeFileSync(storedPath, content, 'utf8')
 
   // What a file is comes from its content, not from the field it was dropped into.
@@ -157,19 +203,11 @@ export async function createWebsiteSource(candidateId: string, url: string): Pro
 
   let content = ''
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15_000)
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Amble/0.1 (source ingestion)' },
-    })
-    clearTimeout(timeout)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const contentType = response.headers.get('content-type') ?? ''
-    if (!contentType.includes('text/html') && !contentType.startsWith('text/')) {
-      throw new Error(`unsupported content type: ${contentType}`)
-    }
-    content = stripHtml(await response.text())
+    // Only https: a site given without it, or on http, is asked for over https.
+    const secure = /^https?:\/\//i.test(url) ? url.replace(/^http:/i, 'https:') : `https://${url}`
+    const response = await safeFetchText(secure, { headers: { 'User-Agent': 'Amble/0.1 (source ingestion)' }, timeoutMs: 15_000 })
+    if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`)
+    content = stripHtml(response.body)
   } catch (error) {
     insertSource({
       id,
@@ -355,6 +393,7 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
     const classification = await classifySourceContent({ candidateId, content })
     if (!classification.isProfessional) {
       updateSourceStatus(source.id, 'rejected', classification.reason)
+      discardSourceFiles(source.id)
       throw new SourceRejectedError(source.name, classification.reason)
     }
     if (classification.type !== 'other' && classification.type !== resolvedType) {

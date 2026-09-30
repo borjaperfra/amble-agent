@@ -124,7 +124,8 @@ async function fillField(page: Page, index: number, answer: PreparedAnswer, valu
     const input = field.locator('input[type=file]').first()
     if ((await input.count()) === 0) return false
     if (answer.kind === 'resume' && files.cv) {
-      await input.setInputFiles({ name: files.cvName ?? 'CV.pdf', mimeType: 'application/pdf', buffer: fs.readFileSync(files.cv) })
+      const mimeType = files.cv.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'
+      await input.setInputFiles({ name: files.cvName ?? 'CV.pdf', mimeType, buffer: fs.readFileSync(files.cv) })
       return true
     }
     if (answer.kind === 'cover_letter' && files.letter) {
