@@ -26,9 +26,55 @@ const SAME_PLACE: string[][] = [
   ['united kingdom', 'uk', 'u k', 'great britain', 'england'],
 ]
 
+// A country excluded is also every place in it that offers write without the
+// country: "Massachusetts - Boston", "Wichita, KS" under "USA", "Princeton".
+// States and cities only, and none that shares its name with a place in Europe
+// (no Georgia, Cambridge, Birmingham or Portland).
+const US_STATES = [
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'hawaii',
+  'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts',
+  'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey',
+  'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania',
+  'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'washington',
+  'west virginia', 'wisconsin', 'wyoming', 'district of columbia',
+]
+const US_CITIES = [
+  'nyc', 'new york city', 'brooklyn', 'manhattan', 'jersey city', 'san francisco', 'bay area', 'palo alto', 'mountain view',
+  'menlo park', 'sunnyvale', 'santa clara', 'san jose', 'san mateo', 'foster city', 'redwood city', 'oakland', 'los angeles',
+  'san diego', 'sacramento', 'seattle', 'redmond', 'austin', 'dallas', 'houston', 'boston', 'chicago', 'denver', 'boulder',
+  'atlanta', 'miami', 'philadelphia', 'pittsburgh', 'phoenix', 'salt lake city', 'raleigh', 'charlotte', 'nashville',
+  'detroit', 'minneapolis', 'st louis', 'kansas city', 'indianapolis', 'baltimore', 'las vegas', 'orlando', 'tampa',
+  'washington dc', 'washington d c',
+]
+
 export function placeTerms(term: string): string[] {
   const group = SAME_PLACE.find((names) => names.includes(term))
+  if (group === SAME_PLACE[0]) return [...group, ...US_STATES, ...US_CITIES]
   return group ?? [term]
+}
+
+// The towns of a city's area, for an office a candidate accepts in that city:
+// Paterna is Valencia's, as far as a commute goes.
+const CITY_AREAS: Record<string, string[]> = {
+  valencia: [
+    'valencia', 'paterna', 'burjassot', 'mislata', 'manises', 'alboraya', 'alboraia', 'godella', 'quart de poblet',
+    'xirivella', 'chirivella', 'picanya', 'torrent', 'alaquas', 'aldaia', 'alfafar', 'catarroja', 'moncada', 'massamagrell',
+    'rocafort', 'betera', 'puzol', 'pucol', 'sedavi', 'benetusser', 'paiporta',
+  ],
+  madrid: [
+    'madrid', 'alcobendas', 'las rozas', 'pozuelo', 'pozuelo de alarcon', 'boadilla del monte', 'majadahonda',
+    'san sebastian de los reyes', 'tres cantos', 'getafe', 'leganes', 'alcorcon', 'mostoles', 'fuenlabrada', 'coslada',
+    'san fernando de henares', 'rivas vaciamadrid', 'alcala de henares', 'torrejon de ardoz',
+  ],
+  barcelona: [
+    'barcelona', 'l hospitalet', 'hospitalet de llobregat', 'sant cugat', 'sant cugat del valles', 'badalona', 'cornella',
+    'el prat', 'prat de llobregat', 'esplugues', 'sant joan despi', 'sant boi', 'viladecans', 'castelldefels', 'terrassa',
+    'sabadell', 'mataro', 'granollers', 'rubi', 'cerdanyola',
+  ],
+}
+
+export function cityAreaTerms(term: string): string[] {
+  return CITY_AREAS[term] ?? [term]
 }
 
 // Regions and countries outside Europe. A remote offer located in one of
@@ -114,6 +160,18 @@ export function placeOutsideEurope(place: string): boolean {
   return OUTSIDE_EUROPE_AREAS.some((term) => names(place, term)) || OUTSIDE_EUROPE_CITIES.some((term) => names(place, term))
 }
 
+// A place that also opens the role to a wider region ("United States or
+// Europe", "US & EMEA") is never only the excluded place.
+const WIDER_REGIONS = ['europe', 'european', 'emea', 'eu', 'eea', 'anywhere', 'worldwide', 'global', 'international']
+
 export function placeMatches(place: string, term: string): boolean {
-  return placeTerms(term).some((form) => names(place, form))
+  const forms = placeTerms(term)
+  if (!forms.some((form) => names(place, form))) return false
+  return !WIDER_REGIONS.some((open) => !forms.includes(open) && names(place, open))
+}
+
+// "USA - Houston (+6)": Workday lists the first of several places and only
+// counts the rest. Where those are is not known.
+export function hasUnlistedPlaces(location: string | null): boolean {
+  return /\(\+\d+\)/.test(location ?? '')
 }

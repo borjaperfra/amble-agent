@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { listCapabilities, listCapabilityEvidenceIds, listClaims, listEvidence } from '../db/repo'
+import { getLatestIntent, getLatestOfferTriage, listCapabilities, listCapabilityEvidenceIds, listClaims, listEvidence } from '../db/repo'
 import { isUnverifiedAssisted } from '../pipeline/attribution'
 import { getListeningProfile, type ListeningItem } from '../pipeline/listening'
 
@@ -34,12 +34,48 @@ export interface MatchingProfile {
 const LANGUAGE_CLAIM = /\b(languages?|idiomas?|speaker|native|nativo|nativa|fluent|fluido|fluida|bilingual|biling[uü]e)\b/i
 const PROGRAMMING = /\bprogramming\b|\bprogramaci[oó]n\b/i
 
+// What they said they look for, confirmed, as rules: for someone whose
+// rules have not been learned from sample offers yet (a new account), it is
+// all there is. Where they want to work and what they will not consider rule
+// offers out; what they asked to be paid is the floor; the rest weighs. Once a
+// triage has taught amble their rules, those stand instead.
+const INTENT_KINDS: Record<string, { kind: MatchingRule['kind']; lead: string }> = {
+  Location: { kind: 'hard_filter', lead: 'Where they said they want to work' },
+  'Not interested in': { kind: 'hard_filter', lead: 'What they said they will not consider' },
+  Compensation: { kind: 'compensation', lead: 'What they said they want to be paid' },
+  Role: { kind: 'strong', lead: 'The roles they said they want' },
+  Space: { kind: 'strong', lead: 'The areas they said they want' },
+  Company: { kind: 'strong', lead: 'The companies they said they want' },
+  Ownership: { kind: 'strong', lead: 'The ownership they said they want' },
+  Other: { kind: 'strong', lead: 'Also said' },
+}
+
+export function intentRules(candidateId: string): MatchingRule[] {
+  if (getLatestOfferTriage(candidateId)) return []
+  const intent = getLatestIntent(candidateId)
+  if (!intent?.confirmed_at || (intent.valid_until && Date.parse(intent.valid_until) < Date.now())) return []
+  let groups: { label: string; values: string[] }[] = []
+  try {
+    groups = JSON.parse(intent.groups) as typeof groups
+  } catch {
+    return []
+  }
+  return groups.flatMap((group) => {
+    const known = INTENT_KINDS[group.label]
+    const values = (group.values ?? []).map((value) => value.trim()).filter(Boolean)
+    if (!known || values.length === 0) return []
+    return [{ id: `intent_${group.label.toLowerCase().replace(/[^a-z]+/g, '_')}`, label: values.join(', '), statement: `${known.lead}: ${values.join('; ')}.`, kind: known.kind }]
+  })
+}
+
 export function buildMatchingProfile(candidateId: string): MatchingProfile {
   const listening = getListeningProfile(candidateId)
   const rules: MatchingRule[] = [
     ...listening.revealed.rules.wontConsider.map((item) => ({ ...item, kind: 'hard_filter' as const })),
     ...listening.revealed.rules.money.map((item) => ({ ...item, kind: 'compensation' as const })),
     ...listening.revealed.rules.weighs.map((item) => ({ ...item, kind: 'strong' as const })),
+    // After the rules they confirmed one by one: those are newer.
+    ...intentRules(candidateId),
   ]
 
   const evidenceById = new Map(listEvidence(candidateId).map((item) => [item.id, item]))

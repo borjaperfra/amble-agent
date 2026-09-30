@@ -3,7 +3,7 @@ import { getRoleQuery, insertRoleQuery } from '../db/matching'
 import type { OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import { normaliseTitle } from '../sourcing/text'
-import { EUROPE, placeMatches, placeOf, remoteOutsideEurope } from './places'
+import { cityAreaTerms, EUROPE, hasUnlistedPlaces, placeMatches, placeOf, remoteOutsideEurope } from './places'
 import type { MatchingProfile } from './profile'
 
 // The role query turns the profile into a free, deterministic prefilter: most
@@ -98,7 +98,7 @@ Output:
 - requireRemote: true only if a confirmed hard filter demands remote work. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.
 - homeCountry: the ISO 3166-1 alpha-2 code of the country the candidate lives in, only if the experience states it (a city or country). Null if unclear.
 - seniority: the levels from ["junior", "mid_level", "senior", "staff", "c_level"] this person's experience makes credible to apply for. Usually one to three adjacent levels.
-- salaryFloor: the gross yearly salary below which this person says no, only if a confirmed rule states it as a figure: {"amount": the full number (75000, not 75), "currency": ISO 4217 code, "ruleId": the id of the rule that states it}. When the rules give several figures, the one they call the real floor. Null if no rule states a floor.
+- salaryFloor: the gross yearly salary below which this person says no, only if a confirmed rule states it as a figure: {"amount": the full number (75000, not 75), "currency": ISO 4217 code, "ruleId": the id of the rule that states it}. When the rules give several figures, the one they call the real floor. Rules are listed newest first: when two rules state different floors, the newer one (listed first) is the floor, whatever the older one calls itself; the person changed their mind. Null if no rule states a floor.
 - languages: ISO 639-1 codes of the languages this person can work in, only as LANGUAGES states them. Empty if it says nothing.
 
 Only confirmed rules are given to you; do not invent constraints they do not state.
@@ -153,6 +153,57 @@ function containsTerm(text: string, term: string): boolean {
   return ` ${text} `.includes(` ${term} `)
 }
 
+// A title term in the forms titles write it: plural or singular of its last
+// word ("events" for "event", "communication" for "communications"), and the
+// person who does it ("marketer", "marketeer" for "marketing"). Recall only:
+// every form names the same work.
+function termForms(term: string): string[] {
+  const forms = new Set([term, `${term}s`, `${term}es`])
+  if (term.endsWith('s') && term.length > 4) forms.add(term.slice(0, -1))
+  if (term.endsWith('ing') && term.length > 6) {
+    const stem = term.slice(0, -3)
+    for (const suffix of ['er', 'ers', 'eer', 'eers']) forms.add(`${stem}${suffix}`)
+  }
+  return [...forms]
+}
+
+function includesTerm(title: string, term: string): boolean {
+  return termForms(term).some((form) => containsTerm(title, form))
+}
+
+// The same excluded word in the other languages of the region searched: an
+// excluded "engineer" is also an "Ingeniero/a".
+const SAME_WORD: Record<string, string[]> = {
+  engineer: ['ingeniero', 'ingeniera', 'ingenieur', 'ingenieurin', 'ingegnere', 'engenheiro', 'engenheira'],
+  developer: ['desarrollador', 'desarrolladora', 'entwickler', 'entwicklerin', 'developpeur', 'developpeuse', 'desenvolvedor', 'sviluppatore'],
+  architect: ['arquitecto', 'arquitecta', 'architekt', 'architektin', 'architecte'],
+}
+
+function excludedForms(term: string): string[] {
+  return [term, ...(SAME_WORD[term] ?? [])]
+}
+
+// Words of a place or of a pool of applicants, not of the work: "Comunidad
+// Valenciana" is a region, the community of "Join our Talent Community" is no
+// role. A title that still names a role without them ("Growth Marketing
+// Manager (Talent Pool)") is still read; one that names a role in the pool
+// ("Talent Community Manager") keeps it.
+const NOT_ROLE_WORDS =
+  /\b(comunidad (valenciana|de madrid|autonoma|foral)|valencian community|community of madrid|intelligence community|talent (community|pool|network)(?! (manager|lead|specialist|coordinator|partner|director|head|owner|program)))\b/g
+
+// "Developer Relations Engineer", "Product Marketing Engineer": the excluded
+// word is the noun of a role family the candidate does, named in full just
+// before it, in the raw title (no comma or dash between). The excluded word
+// then says how technical that role is, which the model weighs against the
+// candidate's rules; a filter on words must not decide it.
+function excludedWordIsRoleNoun(rawTitle: string, include: string, excluded: string): boolean {
+  if (!include.includes(' ')) return false
+  const words = (text: string) => text.split(' ').map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s-]+')
+  return new RegExp(`(^|[^a-z0-9])${words(include)}\\s+(\\S+\\s+)?${words(excluded)}s?($|[^a-z0-9])`).test(
+    rawTitle.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''),
+  )
+}
+
 function locationSegments(location: string | null): string[] {
   if (!location) return []
   return location
@@ -190,6 +241,15 @@ const BELOW_LEVEL_TERMS = [
   'practicas',
   'tirocinio',
   'alternance',
+  'beca',
+  'becas',
+  'estagio',
+  'estagiario',
+  'estagiaria',
+  'stagiair',
+  'volontar',
+  'volontariat',
+  'minijob',
 ]
 
 // "Stage" is French for internship, but "early stage" is a company, not a level.
@@ -210,8 +270,15 @@ function belowLevel(rawTitle: string, title: string): string | null {
 
 export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location' | 'workplace'>, query: RoleQuery): PrefilterResult {
   const title = normaliseTitle(opportunity.title)
-  if (!query.titleInclude.some((term) => containsTerm(title, term))) return { pass: false, reason: 'title' }
-  const excluded = query.titleExclude.find((term) => containsTerm(title, term))
+  const roleWords = title.replace(NOT_ROLE_WORDS, ' ').replace(/\s+/g, ' ').trim()
+  const included = query.titleInclude.filter((term) => includesTerm(roleWords, term))
+  if (included.length === 0) return { pass: false, reason: 'title' }
+  const excluded = query.titleExclude.find(
+    (term) =>
+      excludedForms(term).some((form) => containsTerm(title, form)) &&
+      // A level is never a role's noun: "Community Intern" stays out.
+      (BELOW_LEVEL_TERMS.includes(term) || !included.some((include) => excludedWordIsRoleNoun(opportunity.title, include, term))),
+  )
   if (excluded) return { pass: false, reason: `title:${excluded}` }
 
   // Domain rule: when the candidate's credible levels start above junior, a
@@ -222,10 +289,17 @@ export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location'
   }
 
   const segments = locationSegments(opportunity.location)
+  // Listed places only: "Remote - India" is one place, not "Remote" and
+  // "India"; so are "USA - Wichita, KS" and "Massachusetts - Boston".
+  const listed = (opportunity.location ?? '').split(/[·;|/•]/).filter((item) => item.trim())
+  // Places a board counts but does not name ("(+6)") are unknown, and the
+  // unknown never excludes.
+  const unlisted = hasUnlistedPlaces(opportunity.location)
   // "Remote - US" is one place, the US: the way of working is not a place.
-  const places = segments.map(placeOf).filter((place): place is string => place !== null)
+  const places = listed.map(placeOf).filter((place): place is string => place !== null)
   // Out only if every listed place is excluded: one acceptable place keeps it.
   if (
+    !unlisted &&
     places.length > 0 &&
     query.locationExclude.length > 0 &&
     places.every((place) => query.locationExclude.some((term) => placeMatches(place, term)))
@@ -239,14 +313,14 @@ export function prefilter(opportunity: Pick<OpportunityRow, 'title' | 'location'
   // must be so tied: a bare "Remote" among them leaves it to the model. Only
   // for Europe, the region the rule knows.
   const remote = opportunity.workplace === 'remote' || segments.some((segment) => /\b(remote|remoto)\b/.test(segment))
-  // Listed places only: "Remote - India" is one place, not "Remote" and "India".
-  const listed = (opportunity.location ?? '').split(/[·;|/•]/).filter((item) => item.trim())
-  if (remote && query.homeCountry && EUROPE.includes(query.homeCountry) && listed.length > 0 && listed.every(remoteOutsideEurope)) {
+  if (!unlisted && remote && query.homeCountry && EUROPE.includes(query.homeCountry) && listed.length > 0 && listed.every(remoteOutsideEurope)) {
     return { pass: false, reason: 'region' }
   }
 
   if (query.requireRemote && (opportunity.workplace === 'onsite' || opportunity.workplace === 'hybrid')) {
-    const inAllowedOffice = segments.some((segment) => query.officeAllowed.some((term) => containsTerm(segment, term)))
+    const inAllowedOffice = segments.some((segment) =>
+      query.officeAllowed.some((term) => cityAreaTerms(term).some((town) => containsTerm(segment, town))),
+    )
     if (!inAllowedOffice) return { pass: false, reason: 'workplace' }
   }
 

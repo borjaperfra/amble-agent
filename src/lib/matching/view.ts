@@ -8,6 +8,7 @@ import { candidateById, listCapabilities, listConfirmedPreferences } from '../db
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { LANGUAGE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey } from './run'
+import { intentRules } from './profile'
 
 // What the opportunities screen shows. Only assessments made against the
 // current profile and assessor version: after a preference changes, older
@@ -188,7 +189,10 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const candidate = candidateById(candidateId)
   const matches = collapseRoles(listMatchesForKey(candidate.id, currentMatchKey(candidate.id)))
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
-  const ruleLabels = new Map(listConfirmedPreferences(candidate.id).map((row) => [row.id, row.label ?? row.statement]))
+  const ruleLabels = new Map([
+    ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.statement]),
+    ...intentRules(candidate.id).map((rule): [string, string] => [rule.id, rule.label]),
+  ])
   const decisions = listDecisions(candidate.id)
 
   const found: FoundOpportunity[] = []
