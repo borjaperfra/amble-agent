@@ -507,6 +507,16 @@ const LISTED: DirectoryEntry[] = [
   hires('Technica Electronics', 'technica-electronics.com', 'recruitee:technicaelectronics'),
   hires('Parser', 'parserdigital.com', 'bamboohr:parser'),
 
+  // ── Found via techeurope.io, 2026-09-30 ──────────────────────────────────
+  // San Francisco speech AI company; its engineering hub is in Barcelona.
+  spain('SLNG', 'slng.ai', 'teamtailor:careers.slng.ai'),
+  hires('Nscale', 'nscale.com', 'greenhouse:nscaleoperationsukltd'),
+  hires('Polar', 'polar.sh', 'ashby:polar'),
+  hires('Viktor', 'viktor.com', 'ashby:viktor'),
+  hires('RobCo', 'rob.co', 'ashby:robco'),
+  hires('fal', 'fal.ai', 'ashby:fal-ai'),
+  hires('Dwelly', 'dwelly.group', 'greenhouse:dwelly'),
+
   // ── Salary in every offer (getmanfred/companies-with-public-salary) ──────
   spain('EdPuzzle', 'edpuzzle.com', 'lever:edpuzzle'),
   spain('Keepler', 'keepler.io'),
