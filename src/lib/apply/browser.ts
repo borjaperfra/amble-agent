@@ -60,14 +60,14 @@ async function closeSession(key: string) {
 }
 
 // The browser for one form: a Chrome of our own, or one in the cloud.
-async function openBrowser(candidateId: string): Promise<{ browser: Browser; cloudId: string | null; liveUrl: string | null }> {
+async function openBrowser(candidateId: string): Promise<{ browser: Browser; cloudId: string | null; liveUrl: string | null; minutes: number }> {
   // Loaded only when a form is filled: where there is no browser, never.
   const { chromium } = await import('playwright-core')
-  if (!CLOUD) return { browser: await chromium.launch({ executablePath: CHROME, headless: !HEADED }), cloudId: null, liveUrl: null }
+  if (!CLOUD) return { browser: await chromium.launch({ executablePath: CHROME, headless: !HEADED }), cloudId: null, liveUrl: null, minutes: SESSION_MINUTES }
   const cloud = await createCloudSession(SESSION_MINUTES, candidateId)
   try {
     const browser = await chromium.connectOverCDP(cloud.connectUrl, { timeout: NAVIGATION_MS })
-    return { browser, cloudId: cloud.id, liveUrl: await liveViewOf(cloud.id) }
+    return { browser, cloudId: cloud.id, liveUrl: await liveViewOf(cloud.id), minutes: cloud.minutes }
   } catch (error) {
     await releaseCloudSession(cloud.id)
     throw error
@@ -192,7 +192,7 @@ export async function fillApplication(candidateId: string, opportunityId: string
 
   const key = sessionKey(candidateId, opportunityId)
   await closeSession(key)
-  const { browser, cloudId, liveUrl } = await openBrowser(candidateId)
+  const { browser, cloudId, liveUrl, minutes } = await openBrowser(candidateId)
   try {
     const context = CLOUD ? (browser.contexts()[0] ?? (await browser.newContext())) : null
     const page = context ? (context.pages()[0] ?? (await context.newPage())) : await browser.newPage({ viewport: HEADED ? null : { width: 1180, height: 900 }, locale: 'en-US' })
@@ -230,7 +230,7 @@ export async function fillApplication(candidateId: string, opportunityId: string
     fs.mkdirSync(path.dirname(shot), { recursive: true })
     await page.screenshot({ path: shot, fullPage: true })
     const captcha = (await page.locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .grecaptcha-badge').count()) > 0
-    const session: Session = { browser, page, expires: Date.now() + SESSION_MINUTES * 60_000, state: 'open', cloudId, liveUrl }
+    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl }
     sessions.set(key, session)
     if (WINDOW) watchWindow(candidateId, opportunityId, session, prepared.answers.filter((answer) => left.includes(answer.label)), via)
     return { status: 'filled', filled, left, captcha, window: WINDOW, live: Boolean(liveUrl), retried }

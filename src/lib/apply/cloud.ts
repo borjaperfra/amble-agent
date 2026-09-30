@@ -21,9 +21,26 @@ function headers(): Record<string, string> {
 export interface CloudSession {
   id: string
   connectUrl: string
+  // How long it was given: the plan may allow less than asked.
+  minutes: number
 }
 
+// The free plan's sessions last at most this long.
+const SHORTEST_PLAN_MINUTES = 15
+
 export async function createCloudSession(minutes: number, candidateId: string): Promise<CloudSession> {
+  try {
+    return await requestSession(minutes, candidateId)
+  } catch (error) {
+    // A plan that does not allow that long: as long as the free one does.
+    if (minutes > SHORTEST_PLAN_MINUTES && error instanceof SessionRefused) return requestSession(SHORTEST_PLAN_MINUTES, candidateId)
+    throw error
+  }
+}
+
+class SessionRefused extends Error {}
+
+async function requestSession(minutes: number, candidateId: string): Promise<CloudSession> {
   const response = await fetch(`${API}/sessions`, {
     method: 'POST',
     headers: headers(),
@@ -42,9 +59,12 @@ export async function createCloudSession(minutes: number, candidateId: string): 
     }),
     signal: AbortSignal.timeout(20_000),
   })
-  if (!response.ok) throw new Error(`Browserbase session: HTTP ${response.status} ${(await response.text()).slice(0, 200)}`)
+  if (!response.ok) {
+    const message = `Browserbase session: HTTP ${response.status} ${(await response.text()).slice(0, 200)}`
+    throw response.status >= 400 && response.status < 500 && response.status !== 401 ? new SessionRefused(message) : new Error(message)
+  }
   const session = (await response.json()) as { id: string; connectUrl: string }
-  return { id: session.id, connectUrl: session.connectUrl }
+  return { id: session.id, connectUrl: session.connectUrl, minutes }
 }
 
 // The interactive view of the session, without Browserbase's bar.
