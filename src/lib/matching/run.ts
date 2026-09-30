@@ -34,6 +34,16 @@ const FIRST_READ_DAYS = 14
 // what is left waits for it.
 const PASS_BUDGET_MS = 3.5 * 60 * 60 * 1000
 
+// The server is being stopped (a deploy): no new model call starts, those in
+// flight finish, and what is left is read by the pass resumed after it.
+declare global {
+  var __ambleStopping: boolean | undefined
+}
+export const stopping = () => globalThis.__ambleStopping === true
+export function stopStartingReads(): void {
+  globalThis.__ambleStopping = true
+}
+
 export interface MatchingStats {
   profileHash: string
   open: number
@@ -134,7 +144,8 @@ export async function runMatching(options: {
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
       for (let postings = queue.shift(); postings; postings = queue.shift()) {
-        if (options.deadline !== undefined && Date.now() > options.deadline) {
+        // Past the pass's time, or the server is stopping: what is left waits.
+        if ((options.deadline !== undefined && Date.now() > options.deadline) || stopping()) {
           stats.outOfTime += 1 + queue.length
           queue.length = 0
           break
@@ -311,7 +322,9 @@ export type CandidatePass = { candidateId: string } & ({ stats: MatchingStats } 
 // the same time, taking turns at the model's shared limit, so no one waits for
 // the people before them. One person's failure does not stop the others.
 //
-export async function runListening(options: { limit?: number } = {}): Promise<{ sourcing: SourcingStats; matching: CandidatePass[] }> {
+// `until`: when this pass must stop starting reads (a pass resumed after a
+// restart stops when the next one is due).
+export async function runListening(options: { limit?: number; until?: number } = {}): Promise<{ sourcing: SourcingStats; matching: CandidatePass[] }> {
   // Boards pinned in the directory since the last pass start being read now.
   const known = new Map(listCompanies().map((company) => [company.name_norm, company.status]))
   const pinnedNew = DIRECTORY.filter((entry) => entry.board && known.get(normaliseName(entry.name)) !== 'watching')
@@ -326,7 +339,7 @@ export async function runListening(options: { limit?: number } = {}): Promise<{ 
   for (const search of infojobs) record.run('infojobs', search.candidateId, now(), 0)
 
   const open = listOpenOpportunities()
-  const deadline = Date.now() + PASS_BUDGET_MS
+  const deadline = Math.min(Date.now() + PASS_BUDGET_MS, options.until ?? Infinity)
   // Someone whose first read is still running is left to it.
   const matching = await Promise.all(
     listListeningCandidateIds().filter((candidateId) => !firstReads.running.has(candidateId)).map(async (candidateId): Promise<CandidatePass> => {

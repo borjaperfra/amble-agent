@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { backupToday } from './db/backup'
 import { DATA_DIRECTORY } from './db/db'
-import { rereadsInFlight, runListening } from './matching/run'
+import { rereadsInFlight, runListening, stopping, stopStartingReads } from './matching/run'
 import { sweepUploads } from './pipeline/sources'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
@@ -50,24 +50,77 @@ async function lockForPass(): Promise<boolean> {
   }
 }
 
-async function pass(day: string) {
-  if (!(await lockForPass())) {
-    log(day, `==== ${new Date().toISOString()} another pass is running; nothing done`)
+// What the schedule has done, on disk: a restart (a deploy) must neither
+// lose a pass half done nor run the day's round twice.
+const STATE_PATH = path.join(DATA_DIRECTORY, 'schedule-state.json')
+
+interface ScheduleState {
+  passes: Record<string, { startedAt: string; finishedAt?: string }>
+  roundDay?: string
+}
+
+function readState(): ScheduleState {
+  try {
+    return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')) as ScheduleState
+  } catch {
+    return { passes: {} }
+  }
+}
+
+function writeState(change: (state: ScheduleState) => void): void {
+  const state = readState()
+  change(state)
+  // Only the last few days are worth keeping.
+  const keys = Object.keys(state.passes).sort()
+  for (const key of keys.slice(0, Math.max(0, keys.length - 12))) delete state.passes[key]
+  fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 1))
+}
+
+// A pass still worth resuming this long after its slot began; past it, the
+// next one is close.
+const RESUME_WITHIN_MINUTES = 210
+
+let running = false
+
+// Slots already told another pass holds the lock: said once, tried each minute.
+const busyTold = new Set<string>()
+
+async function pass(day: string, slot: string, until: number) {
+  running = true
+  const locked = await lockForPass()
+  running = false
+  if (!locked) {
+    if (!busyTold.has(slot)) log(day, `==== ${new Date().toISOString()} another pass is running; ${slot} waits for it`)
+    busyTold.add(slot)
     return
   }
-  log(day, `==== ${new Date().toISOString()}`)
+  running = true
+  const resumed = Boolean(readState().passes[slot])
+  writeState((state) => {
+    state.passes[slot] = { startedAt: state.passes[slot]?.startedAt ?? new Date().toISOString() }
+  })
+  log(day, `==== ${new Date().toISOString()}${resumed ? ` (resuming ${slot}, cut short by a restart)` : ''}`)
+  let done = true
   try {
     // The first pass of the day copies the database before writing to it.
     const copy = backupToday()
     if (copy) log(day, `backup: ${copy}`)
     // And, once a day too, drops what was set aside of what people uploaded.
     if (copy) log(day, `uploads: ${JSON.stringify(sweepUploads())}`)
-    log(day, JSON.stringify(await runListening(), null, 2))
+    log(day, JSON.stringify(await runListening({ until }), null, 2))
+    // Stopped by a restart: the pass after it picks up where this one was.
+    if (stopping()) {
+      done = false
+      log(day, 'stopped for a restart; to be resumed')
+      return
+    }
     // What this pass found that deserves a message, at the pace allowed.
     log(day, `offers: ${JSON.stringify(await sendDueOffers())}`)
   } catch (error) {
     log(day, `pass failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)
   } finally {
+    running = false
+    if (done) writeState((state) => void (state.passes[slot] = { ...state.passes[slot], finishedAt: new Date().toISOString() }))
     releaseLock()
   }
 }
@@ -76,14 +129,37 @@ declare global {
   var __ambleSchedule: NodeJS.Timeout | undefined
 }
 
+// The slot now due (08, 12, 16 or 20 today), how long since it began, and
+// when the next one begins.
+function currentSlot(now: Date): { day: string; slot: string; minutesIn: number; until: number } | null {
+  const { day, hour, minute } = madrid(now)
+  const slotHour = [...HOURS].reverse().find((candidate) => candidate <= hour)
+  if (slotHour === undefined) return null
+  const nextHour = HOURS.find((candidate) => candidate > slotHour) ?? 24
+  return {
+    day,
+    slot: `${day}T${String(slotHour).padStart(2, '0')}`,
+    minutesIn: (hour - slotHour) * 60 + minute,
+    until: now.getTime() + ((nextHour - hour) * 60 - minute) * 60_000,
+  }
+}
+
 export function startListeningSchedule(): void {
   if (globalThis.__ambleSchedule) return
-  let lastSlot: string | null = null
-  let lastFollowupDay: string | null = null
-  globalThis.__ambleSchedule = setInterval(() => {
-    const { day, hour, minute } = madrid(new Date())
-    if (hour === FOLLOWUP_HOUR && lastFollowupDay !== day) {
-      lastFollowupDay = day
+  // The only server: a lock found when it starts was left by the one before it.
+  releaseLock()
+  // Told to stop (a deploy): no new reads, the lock let go; the next server resumes.
+  process.once('SIGTERM', () => {
+    stopStartingReads()
+    releaseLock()
+    console.log('[listen] stopping: no new reads; the next server resumes the pass')
+  })
+  const tick = () => {
+    const now = new Date()
+    const { day, hour } = madrid(now)
+    const state = readState()
+    if (hour === FOLLOWUP_HOUR && state.roundDay !== day) {
+      writeState((next) => void (next.roundDay = day))
       // In this order, one after another: an interview question only goes to
       // someone nothing else was sent to that day.
       void (async () => {
@@ -99,11 +175,16 @@ export function startListeningSchedule(): void {
         }
       })()
     }
-    const slot = `${day}T${hour}`
-    // Within the first minutes of a slot, once: a restart at 08:02 still runs it.
-    if (!HOURS.includes(hour) || minute > 5 || slot === lastSlot) return
-    lastSlot = slot
-    void pass(day)
-  }, TICK_MS)
+    // The slot's pass, if it has not finished: at its hour, or resumed after a
+    // restart while there is still time for it.
+    const due = currentSlot(now)
+    if (!due || running || stopping() || due.minutesIn > RESUME_WITHIN_MINUTES) return
+    // A slot missed while the server was down is made up too.
+    if (state.passes[due.slot]?.finishedAt) return
+    void pass(due.day, due.slot, due.until)
+  }
+  globalThis.__ambleSchedule = setInterval(tick, TICK_MS)
   globalThis.__ambleSchedule.unref?.()
+  // Right away too: a pass cut short by the restart resumes now, not in a minute.
+  setTimeout(tick, 5_000).unref?.()
 }
