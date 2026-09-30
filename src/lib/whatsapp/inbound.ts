@@ -8,7 +8,7 @@ import { runAction } from './actions'
 import { answerInterviewQuestion, pendingInterviewQuestion } from './interview'
 import { leaveReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
-import { answerMessage } from './agent'
+import { answerMessage, languageOf } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
@@ -160,6 +160,8 @@ async function answerWords(
   chat: { config: ZernioConfig; conversationId: string; messageId: string | null },
 ): Promise<void> {
   let text = message
+  // What they wrote, before any note of amble's is added to it.
+  const language = languageOf(message)
   // Right after a "doesn't fit", amble waits to hear why; the agent tells
   // the reason from anything else they write.
   const awaited = awaitedReason(candidate.id)
@@ -201,11 +203,13 @@ async function answerWords(
   // The line saying it is on its way goes only if the answer is slow, and
   // always before the answer, never after it.
   let holding: Promise<unknown> | null = null
+  // In the language of their message, as the answer will be.
+  const holdLine = dictionaries[language ?? candidateLocale(candidate)].whatsapp.thinking
   const holdTimer = setTimeout(() => {
-    holding = reply(w.thinking).catch(() => undefined)
+    holding = reply(holdLine).catch(() => undefined)
   }, HOLD_AFTER_MS)
   // The agent reads the conversation so far, then this message joins it.
-  const answer = await answerMessage(candidate.id, text).catch(() => null)
+  const answer = await answerMessage(candidate.id, text, language).catch(() => null)
   clearTimeout(holdTimer)
   clearInterval(typingTimer)
   if (holding) await holding
@@ -230,7 +234,7 @@ async function answerWords(
   // only when it would change something.
   if (answer.action?.type === 'pause_search' || answer.action?.type === 'resume_search') {
     const pause = answer.action.type === 'pause_search'
-    if (pause !== isSearchPaused(candidate.id)) buttons = proposePause(candidate.id, pause)
+    if (pause !== isSearchPaused(candidate.id)) buttons = proposePause(candidate.id, pause, answer.action.type === 'pause_search' ? answer.action.checkIn : null)
   } else if (answer.action) {
     // What it decided to do: prepare an application (offered with buttons),
     // or keep the news they gave about one.
@@ -281,6 +285,14 @@ function overLimit(candidateId: string): boolean {
   return count(60 * 60 * 1000) >= PER_HOUR || count(24 * 60 * 60 * 1000) >= PER_DAY
 }
 
+// A reading kept at a set length can end mid-word: said up to its last
+// whole sentence, when it has one.
+function wholeSentences(text: string): string {
+  if (/[.!?…)»"”]\s*$/.test(text)) return text
+  const end = Math.max(text.lastIndexOf('. '), text.lastIndexOf('; '))
+  return end > 0 ? `${text.slice(0, end)}.` : `${text}…`
+}
+
 // The verdict on an offer they brought, as a message: what it is for them
 // and why, or why not; with the buttons when it is worth their time.
 function presentVerdict(verdict: SharedVerdict, w: (typeof dictionaries)['es']['whatsapp']): { text: string; buttons?: { title: string; payload: string }[] } {
@@ -292,7 +304,7 @@ function presentVerdict(verdict: SharedVerdict, w: (typeof dictionaries)['es']['
       explanation.roleFit.fit === 'wrong_role' || explanation.roleFit.fit === 'below_level'
         ? explanation.roleFit.reason
         : (failed?.note || failed?.quote || explanation.roleFit.reason)
-    return { text: [head, '', w.sharedNo, why].filter(Boolean).join('\n') }
+    return { text: [head, '', w.sharedNo, wholeSentences(why)].filter(Boolean).join('\n') }
   }
   const lines = [
     head,

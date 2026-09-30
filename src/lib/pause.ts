@@ -1,3 +1,4 @@
+import { getDb } from './db/db'
 import { isSearchPaused, setSearchPaused } from './db/repo'
 import { requestReread } from './matching/run'
 import { dropPastReminders } from './whatsapp/reminders'
@@ -9,14 +10,18 @@ import { dropPastReminders } from './whatsapp/reminders'
 
 export { isSearchPaused }
 
-export function pauseSearch(candidateId: string): boolean {
-  return setSearchPaused(candidateId, true)
+// `checkOn`: for a pause for a while, the day to ask whether to start again.
+export function pauseSearch(candidateId: string, checkOn: string | null = null): boolean {
+  const changed = setSearchPaused(candidateId, true)
+  getDb().prepare('UPDATE candidates SET pause_check_on = ? WHERE id = ?').run(checkOn, candidateId)
+  return changed
 }
 
 // Running again: what came in lately is read at once, not at the next pass,
 // and a reminder whose day went by is not sent late.
 export function resumeSearch(candidateId: string): boolean {
   const changed = setSearchPaused(candidateId, false)
+  getDb().prepare('UPDATE candidates SET pause_check_on = NULL WHERE id = ?').run(candidateId)
   if (changed) {
     dropPastReminders(candidateId)
     requestReread(candidateId)

@@ -1,8 +1,12 @@
 import { candidateById, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
+import { getDb } from '../db/db'
 import { isSearchPaused, pauseSearch, resumeSearch } from '../pause'
+import { logMessage } from './conversation'
+import { linkOf, windowOpen } from './link'
 import { awaitingOf, setAwaiting } from './offers'
+import { sendMessage, zernioConfig } from './zernio'
 
 // Pausing the search on WhatsApp, or resuming it: the agent proposes it when
 // they say so, and only a yes on its buttons does it. Each proposal has its
@@ -12,9 +16,10 @@ const HOURS_TO_ANSWER = 24
 
 type Reply = (text: string, buttons?: { title: string; payload: string }[]) => Promise<unknown>
 
-export function proposePause(candidateId: string, pause: boolean): { title: string; payload: string }[] {
+// `checkIn`: for a pause for a while, the day to ask whether to start again.
+export function proposePause(candidateId: string, pause: boolean, checkIn: string | null = null): { title: string; payload: string }[] {
   const id = newId('pau').slice(4, 12)
-  setAwaiting(candidateId, { kind: 'pause', id, pause, until: new Date(Date.now() + HOURS_TO_ANSWER * 60 * 60 * 1000).toISOString() })
+  setAwaiting(candidateId, { kind: 'pause', id, pause, checkIn, until: new Date(Date.now() + HOURS_TO_ANSWER * 60 * 60 * 1000).toISOString() })
   const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
   const labels = pause ? w.pauseButtons : w.resumeButtons
   return [
@@ -45,7 +50,36 @@ export async function answerPause(candidateId: string, tap: PauseTap, reply: Rep
     await reply(awaiting.pause ? w.pauseKept : w.resumeKept)
     return
   }
-  if (awaiting.pause) pauseSearch(candidateId)
+  if (awaiting.pause) pauseSearch(candidateId, awaiting.checkIn ?? null)
   else resumeSearch(candidateId)
-  await reply(awaiting.pause ? w.paused : w.resumed)
+  await reply(awaiting.pause ? (awaiting.checkIn ? w.pausedUntil(awaiting.checkIn) : w.paused) : w.resumed)
+}
+
+// A pause for a while, over: asked once whether to start again, with the
+// buttons to do it. Whatever they answer, it is not asked again.
+export async function sendPauseCheckIns(): Promise<{ asked: number; skipped: number }> {
+  const stats = { asked: 0, skipped: 0 }
+  const config = zernioConfig()
+  if (!config) return stats
+  const due = getDb()
+    .prepare('SELECT id FROM candidates WHERE search_paused_at IS NOT NULL AND pause_check_on IS NOT NULL AND pause_check_on <= ?')
+    .all(new Date().toISOString().slice(0, 10)) as { id: string }[]
+  for (const { id } of due) {
+    const link = linkOf(id)
+    const open = link ? windowOpen(link) : false
+    getDb().prepare('UPDATE candidates SET pause_check_on = NULL WHERE id = ?').run(id)
+    if (!link?.conversation_id || (!open && config.sandbox)) {
+      stats.skipped++
+      continue
+    }
+    const text = dictionaries[candidateLocale(candidateById(id))].whatsapp.pauseCheckIn
+    try {
+      await sendMessage(config, { conversationId: link.conversation_id, text, buttons: proposePause(id, false), utility: !open, idempotencyKey: `pausecheck:${id}:${new Date().toISOString().slice(0, 10)}` })
+      logMessage(id, 'out', text)
+      stats.asked++
+    } catch {
+      stats.skipped++
+    }
+  }
+  return stats
 }

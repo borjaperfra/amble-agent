@@ -12,7 +12,7 @@ import { buildMatchingProfile } from '../matching/profile'
 import { currentMatchKey } from '../matching/run'
 import { storedRoleQuery } from '../matching/role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
-import { estimateLine, estimateRange } from '../salary/format'
+import { estimateRange, estimateSource } from '../salary/format'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen, type WhatsAppLink } from './link'
 import { reviewForSending, type Pitch } from './review'
@@ -98,8 +98,14 @@ const PLACES_SHOWN = 3
 export function offerText(match: Listed, pitch: Pitch | null, d: (typeof dictionaries)['es']): string {
   const w = d.whatsapp
   const explanation = JSON.parse(match.explanation) as Explanation
-  // As published; otherwise the table's estimate, said to be one, with its source.
-  const salary = publishedSalary(match) ?? (match.estimate ? estimateLine(match.estimate, d.salaryEstimate) : null)
+  // Always a line on pay: as published; otherwise the table's estimate, said
+  // to be one, with its source; otherwise that it is not published.
+  const published = publishedSalary(match)
+  const salary = published
+    ? w.salaryPublished(published)
+    : match.estimate
+      ? w.salaryEstimated(estimateRange(match.estimate), estimateSource(match.estimate, d.salaryEstimate))
+      : w.salaryUnknown
   const places = (match.location ?? '').split(' · ').filter(Boolean)
   const shownPlaces = places.length > PLACES_SHOWN ? `${places.slice(0, PLACES_SHOWN).join(' · ')}…` : places.join(' · ')
   const where = [shownPlaces, match.workplace ? (w.workplace[match.workplace as keyof typeof w.workplace] ?? null) : null].filter(Boolean).join(' · ')
@@ -228,7 +234,7 @@ export type Awaiting =
   | { kind: 'preference'; id?: string; preference: ProposedPreference; until: string }
   // Pausing the search, or resuming it, proposed by the agent on their word
   // and waiting for a yes on its own buttons.
-  | { kind: 'pause'; id: string; pause: boolean; until: string }
+  | { kind: 'pause'; id: string; pause: boolean; until: string; checkIn?: string | null }
 
 export interface ProposedPreference {
   kind: 'hard_filter' | 'compensation' | 'strong'
@@ -288,9 +294,9 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     const pitch = stored?.pitch ? (JSON.parse(stored.pitch) as Pitch) : null
     const caveat = pitch ? pitch.caveat : (explanation.considerAlso?.text ?? null)
     const lines = [
-      caveat ? `${w.considerAlso}: ${caveat}` : null,
-      explanation.unknowns.length > 0 ? `\n${w.unknowns}:\n${explanation.unknowns.slice(0, 3).map((unknown) => `• ${unknown}`).join('\n')}` : null,
-      `\n${appUrl(candidateId, '/opportunities?tab=new')}`,
+      caveat ? `*${w.considerAlso}*\n${caveat}` : null,
+      explanation.unknowns.length > 0 ? `\n*${w.unknowns}*\n${explanation.unknowns.slice(0, 3).map((unknown) => `• ${unknown}`).join('\n')}` : null,
+      `\n${w.inApp}: ${appUrl(candidateId, '/opportunities?tab=new')}`,
     ].filter(Boolean)
     await reply(lines.join('\n'), [
       { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
@@ -316,15 +322,22 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     await reply(w.applyWorking)
     try {
       const prepared = await prepareApplication(candidateId, match.opportunity_id)
+      // How to send it, in a line of its own (the reasoning is in the app),
+      // and what to lead with.
       const emphasise = prepared.advice.emphasise.slice(0, 3).map((point) => `• ${point}`)
+      const summary = [
+        `${w.applyReady} ${w.applyChannel[prepared.advice.channel] ?? ''}`.trim(),
+        ...(emphasise.length > 0 ? ['', w.applyLead, ...emphasise] : []),
+        '',
+      ]
       // With a browser in the cloud, amble can fill the company's own form.
       if (cloudBrowserConfigured() && canFillForm(match.opportunity_id)) {
-        await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.fillOffer].filter(Boolean).join('\n'), [
+        await reply([...summary, w.fillOffer].join('\n'), [
           { title: w.fillButtons.yes, payload: `af:${match.id}:yes` },
           { title: w.fillButtons.no, payload: `af:${match.id}:no` },
         ])
       } else {
-        await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.applyFinish(appUrl(candidateId, '/opportunities?tab=wanted'))].filter(Boolean).join('\n'))
+        await reply([...summary, w.applyFinish(appUrl(candidateId, '/opportunities?tab=wanted'))].join('\n'))
       }
     } catch {
       await reply(w.applyFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
@@ -351,7 +364,7 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     }
     // Filled from WhatsApp only in a browser in the cloud, never on the server.
     if (!cloudBrowserConfigured()) {
-      await reply(w.fillFailed(wanted))
+      await reply(w.fillUnavailable(wanted))
       return
     }
     await reply(w.fillWorking)

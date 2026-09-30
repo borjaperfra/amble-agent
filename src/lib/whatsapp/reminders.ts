@@ -30,6 +30,15 @@ export function pendingReminders(candidateId: string): { on: string; message: st
   ).slice(0, 5)
 }
 
+// One waiting to go today: the day's other questions give way to it.
+export function reminderDueToday(candidateId: string): boolean {
+  return Boolean(
+    getDb()
+      .prepare('SELECT 1 FROM whatsapp_reminders WHERE candidate_id = ? AND sent_at IS NULL AND due_on <= ?')
+      .get(candidateId, new Date().toISOString().slice(0, 10)),
+  )
+}
+
 export async function sendDueReminders(): Promise<{ sent: number; skipped: number }> {
   const stats = { sent: 0, skipped: 0 }
   const config = zernioConfig()

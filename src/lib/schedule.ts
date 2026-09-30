@@ -9,6 +9,7 @@ import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
 import { sendDueInterviewQuestions } from './whatsapp/interview'
 import { sendDueReminders } from './whatsapp/reminders'
+import { sendPauseCheckIns } from './whatsapp/pause'
 
 // Scheduled listening inside the server, for hosting where there is no task
 // scheduler: the same four passes a day as the Windows task (08, 12, 16 and
@@ -177,6 +178,7 @@ export function startListeningSchedule(): void {
           ['followups', sendDueFollowups],
           ['reminders', sendDueReminders],
           ['interview', sendDueInterviewQuestions],
+          ['pause check-ins', sendPauseCheckIns],
         ]
         for (const [name, round] of rounds) {
           await round()

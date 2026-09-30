@@ -4,6 +4,7 @@ import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen } from './link'
+import { reminderDueToday } from './reminders'
 import { sendMessage, zernioConfig, ZernioError } from './zernio'
 
 // The only thing amble writes about on WhatsApp: a week after someone sends an
@@ -127,6 +128,9 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
     const link = linkOf(candidateId)
     // Paused: amble does not write first until they resume it.
     if (!link?.conversation_id || isSearchPaused(candidateId) || askedToday(candidateId)) continue
+    // A reminder due today (the eve of an interview, a deadline) goes instead:
+    // one message from amble in the morning, not two.
+    if (reminderDueToday(candidateId)) continue
     const due = nextDue(candidateId)
     if (!due) continue
     const open = windowOpen(link)
@@ -137,10 +141,12 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
       continue
     }
     const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
+    // The second time says how long it has been, not the same question again.
+    const text = due.round > 1 ? w.askAgain(due.title, due.company) : w.ask(due.title, due.company)
     try {
       await sendMessage(config, {
         conversationId: link.conversation_id,
-        text: w.ask(due.title, due.company),
+        text,
         buttons: ANSWERS.map((answer) => ({ title: w.answers[answer], payload: payload(due.opportunity_id, due.round, answer) })),
         utility: !open,
         idempotencyKey: `fu:${candidateId}:${due.opportunity_id}:${due.round}`,
@@ -148,7 +154,7 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
       getDb()
         .prepare('INSERT INTO application_followups (candidate_id, opportunity_id, round, asked_at) VALUES (?, ?, ?, ?)')
         .run(candidateId, due.opportunity_id, due.round, now())
-      logMessage(candidateId, 'out', w.ask(due.title, due.company))
+      logMessage(candidateId, 'out', text)
       stats.asked++
     } catch (error) {
       stats.skipped.push({ candidateId, reason: error instanceof ZernioError ? `${error.status} ${error.code ?? ''} ${error.message}` : String(error) })
