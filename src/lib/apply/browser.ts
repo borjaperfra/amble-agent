@@ -6,6 +6,8 @@ import { DATA_DIRECTORY, getDb } from '../db/db'
 import { setProgress } from '../db/matching'
 import { applicationCv, questionKey, saveAnswer, savedAnswers } from './answers'
 import { getPreparedApplication, type PreparedAnswer } from './prepare'
+import { cloudBrowserConfigured, createCloudSession, liveViewOf, releaseCloudSession } from './cloud'
+import { applyStrategy, holds, learn, MAX_TRIES, strategiesFor, type Files } from './reflect'
 
 // Filling an application form from a browser amble opens, and sending it only
 // when the candidate says so. The page stays open between the two, for a
@@ -16,15 +18,19 @@ import { getPreparedApplication, type PreparedAnswer } from './prepare'
 
 // Where the candidate is at their computer (development, for now), the form
 // opens in a window they see: amble fills what it knows and they finish it
-// and send it there. On a server, it is filled out of sight and they approve
-// a picture of it.
-const HEADED = process.env.AMBLE_BROWSER_HEADED === '1' || (process.env.NODE_ENV !== 'production' && process.env.AMBLE_BROWSER_HEADED !== '0')
+// and send it there. On a server with a cloud browser, the same happens in
+// its live view, shown in amble's page. On a server without one, it is
+// filled out of sight and they approve a picture of it.
+const CLOUD = cloudBrowserConfigured()
+const HEADED = !CLOUD && (process.env.AMBLE_BROWSER_HEADED === '1' || (process.env.NODE_ENV !== 'production' && process.env.AMBLE_BROWSER_HEADED !== '0'))
+// A window they finish themselves: on their screen, or in the live view.
+const WINDOW = HEADED || CLOUD
 // A rehearsal, for development: fills what it can but attaches no file (a
 // form may upload one the moment it is attached) and does not wait for every
 // required answer. Sending is refused.
 const DRY = process.env.AMBLE_FILL_DRY === '1'
 // A window they finish by hand gets longer than a form waiting for a yes.
-const SESSION_MINUTES = HEADED ? 45 : 20
+const SESSION_MINUTES = WINDOW ? 45 : 20
 const NAVIGATION_MS = 45_000
 const SUBMIT_WAIT_MS = 25_000
 
@@ -34,6 +40,9 @@ interface Session {
   expires: number
   // A window the candidate finishes: whether they sent it or closed it.
   state: 'open' | 'sent' | 'closed'
+  // In the cloud: the session to end, and its live view (never sent anywhere).
+  cloudId: string | null
+  liveUrl: string | null
 }
 
 declare global {
@@ -47,6 +56,22 @@ async function closeSession(key: string) {
   const session = sessions.get(key)
   sessions.delete(key)
   await session?.browser.close().catch(() => undefined)
+  if (session?.cloudId) await releaseCloudSession(session.cloudId)
+}
+
+// The browser for one form: a Chrome of our own, or one in the cloud.
+async function openBrowser(candidateId: string): Promise<{ browser: Browser; cloudId: string | null; liveUrl: string | null }> {
+  // Loaded only when a form is filled: where there is no browser, never.
+  const { chromium } = await import('playwright-core')
+  if (!CLOUD) return { browser: await chromium.launch({ executablePath: CHROME, headless: !HEADED }), cloudId: null, liveUrl: null }
+  const cloud = await createCloudSession(SESSION_MINUTES, candidateId)
+  try {
+    const browser = await chromium.connectOverCDP(cloud.connectUrl, { timeout: NAVIGATION_MS })
+    return { browser, cloudId: cloud.id, liveUrl: await liveViewOf(cloud.id) }
+  } catch (error) {
+    await releaseCloudSession(cloud.id)
+    throw error
+  }
 }
 
 // Forms left open are closed after a while, whatever happened to them.
@@ -55,7 +80,7 @@ setInterval(() => {
 }, 60_000).unref?.()
 
 export type FillResult =
-  | { status: 'filled'; filled: string[]; left: string[]; captcha: boolean; window: boolean }
+  | { status: 'filled'; filled: string[]; left: string[]; captcha: boolean; window: boolean; live: boolean; retried: number }
   | { status: 'missing'; missing: string[] }
   | { status: 'unavailable'; reason: string }
 
@@ -80,9 +105,6 @@ export function screenshotPath(candidateId: string, opportunityId: string, momen
 // Where each answer's field sits among the marked ones.
 const indexOfField = new WeakMap<PreparedAnswer, number>()
 const fieldIndex = (answer: PreparedAnswer) => indexOfField.get(answer) ?? -1
-
-const YES = /^(yes|si|sí|true)$/i
-const NO = /^(no|false)$/i
 
 // The value each field gets, from what is known; null when nothing is.
 function valueFor(answer: PreparedAnswer, saved: Record<string, string>): string | null {
@@ -117,76 +139,6 @@ async function markFields(page: Page, labels: string[]): Promise<boolean[]> {
   return page.evaluate(`(${MARK_FIELDS})(${JSON.stringify(labels)})`) as Promise<boolean[]>
 }
 
-async function fillField(page: Page, index: number, answer: PreparedAnswer, value: string | null, files: { cv: string | null; cvName: string | null; letter: Buffer | null }): Promise<boolean> {
-  const field = page.locator(`[data-amble-field="${index}"]`)
-  if (answer.kind === 'resume' || answer.kind === 'cover_letter' || answer.kind === 'file') {
-    if (DRY) return false
-    const input = field.locator('input[type=file]').first()
-    if ((await input.count()) === 0) return false
-    if (answer.kind === 'resume' && files.cv) {
-      const mimeType = files.cv.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'
-      await input.setInputFiles({ name: files.cvName ?? 'CV.pdf', mimeType, buffer: fs.readFileSync(files.cv) })
-      return true
-    }
-    if (answer.kind === 'cover_letter' && files.letter) {
-      await input.setInputFiles({ name: 'Cover letter.pdf', mimeType: 'application/pdf', buffer: files.letter })
-      return true
-    }
-    return false
-  }
-  if (value === null) return false
-
-  if (answer.kind === 'yes_no') {
-    const wanted = YES.test(value) ? /^(yes|sí|si)$/i : NO.test(value) ? /^no$/i : null
-    if (!wanted) return false
-    const button = field.getByRole('button', { name: wanted }).first()
-    if ((await button.count()) > 0) {
-      await button.click()
-      return true
-    }
-    const radio = field.getByRole('radio', { name: wanted }).first()
-    if ((await radio.count()) > 0) {
-      await radio.check()
-      return true
-    }
-    return false
-  }
-
-  if (answer.kind === 'choice') {
-    const select = field.locator('select').first()
-    if ((await select.count()) > 0) {
-      await select.selectOption({ label: value })
-      return true
-    }
-    const option = field.getByRole('radio', { name: value }).or(field.getByRole('checkbox', { name: value })).first()
-    if ((await option.count()) > 0) {
-      await option.check()
-      return true
-    }
-    const combo = field.locator('[role=combobox], input').first()
-    if ((await combo.count()) > 0) {
-      await combo.fill(value)
-      await page.keyboard.press('Enter')
-      return true
-    }
-    return false
-  }
-
-  const text = field.locator('textarea, input:not([type=file]):not([type=hidden]):not([type=radio]):not([type=checkbox])').first()
-  if ((await text.count()) === 0) return false
-  await text.fill(value)
-  // A search box with suggestions ("Start typing…" for a location): the value
-  // counts only once one of its suggestions is chosen.
-  const suggests = (await text.getAttribute('role')) === 'combobox' || (await text.getAttribute('aria-autocomplete')) !== null
-  if (suggests) {
-    const option = page.getByRole('option').first()
-    await option.waitFor({ state: 'visible', timeout: 5000 }).catch(() => undefined)
-    if ((await option.count()) > 0) await option.click()
-    else await page.keyboard.press('Enter')
-  }
-  return true
-}
-
 // The message as a one-page letter, for forms that take it as a file.
 async function letterPdf(browser: Browser, message: string): Promise<Buffer | null> {
   if (HEADED) return null
@@ -202,19 +154,31 @@ async function letterPdf(browser: Browser, message: string): Promise<Buffer | nu
   }
 }
 
-export async function fillApplication(candidateId: string, opportunityId: string): Promise<FillResult> {
-  const prepared = getPreparedApplication(candidateId, opportunityId)
-  if (!prepared) return { status: 'unavailable', reason: 'not_prepared' }
-  const offer = getDb()
+function offerOf(opportunityId: string): OfferRow | undefined {
+  return getDb()
     .prepare(
       `SELECT s.source, s.external_id, s.url, c.ats_token, o.title FROM opportunity_sources s
        JOIN opportunities o ON o.id = s.opportunity_id JOIN companies c ON c.id = o.company_id
        WHERE s.opportunity_id = ? AND s.closed_at IS NULL ORDER BY s.last_seen_at DESC LIMIT 1`,
     )
     .get(opportunityId) as OfferRow | undefined
+}
+
+// Whether amble knows how to reach this offer's form.
+export function canFillForm(opportunityId: string): boolean {
+  const offer = offerOf(opportunityId)
+  return Boolean(offer && applyUrl(offer))
+}
+
+// `via`: where they asked for it. Asked on WhatsApp, they are told there
+// when the page says it was sent.
+export async function fillApplication(candidateId: string, opportunityId: string, via: 'app' | 'whatsapp' = 'app'): Promise<FillResult> {
+  const prepared = getPreparedApplication(candidateId, opportunityId)
+  if (!prepared) return { status: 'unavailable', reason: 'not_prepared' }
+  const offer = offerOf(opportunityId)
   const url = offer ? applyUrl(offer) : null
   if (!url) return { status: 'unavailable', reason: 'unknown_form' }
-  if (!fs.existsSync(CHROME)) return { status: 'unavailable', reason: 'no_browser' }
+  if (!CLOUD && !fs.existsSync(CHROME)) return { status: 'unavailable', reason: 'no_browser' }
 
   const saved = savedAnswers(candidateId)
   const cv = applicationCv(candidateId)
@@ -224,54 +188,76 @@ export async function fillApplication(candidateId: string, opportunityId: string
     .filter((answer) => (answer.kind === 'resume' ? !cv : answer.kind === 'cover_letter' ? !prepared.message : valueFor(answer, saved) === null))
     .map((answer) => answer.label)
   // In a window they finish it themselves; out of sight nothing may be missing.
-  if (missing.length > 0 && !DRY && !HEADED) return { status: 'missing', missing }
+  if (missing.length > 0 && !DRY && !WINDOW) return { status: 'missing', missing }
 
   const key = sessionKey(candidateId, opportunityId)
   await closeSession(key)
-  // Loaded only when a form is filled: where there is no browser, never.
-  const { chromium } = await import('playwright-core')
-  const browser = await chromium.launch({ executablePath: CHROME, headless: !HEADED })
+  const { browser, cloudId, liveUrl } = await openBrowser(candidateId)
   try {
-    const page = await browser.newPage({ viewport: HEADED ? null : { width: 1180, height: 900 }, locale: 'en-US' })
+    const context = CLOUD ? (browser.contexts()[0] ?? (await browser.newContext())) : null
+    const page = context ? (context.pages()[0] ?? (await context.newPage())) : await browser.newPage({ viewport: HEADED ? null : { width: 1180, height: 900 }, locale: 'en-US' })
     await page.goto(url, { waitUntil: 'networkidle', timeout: NAVIGATION_MS })
-    const letter = prepared.message && prepared.answers.some((answer) => answer.kind === 'cover_letter') ? await letterPdf(browser, prepared.message) : null
+    const letter = prepared.message && prepared.answers.some((answer) => answer.kind === 'cover_letter') ? await letterPdf(browser, prepared.message).catch(() => null) : null
 
     const found = await markFields(page, prepared.answers.map((answer) => answer.label))
     prepared.answers.forEach((answer, index) => indexOfField.set(answer, index))
+    const files: Files = { cv: cv?.path ?? null, cvName: cv?.filename ?? null, letter }
+    const ats = offer?.source ?? 'unknown'
     const filled: string[] = []
     const left: string[] = []
+    let retried = 0
     for (const [index, answer] of prepared.answers.entries()) {
-      const done =
-        found[index] &&
-        (await fillField(page, index, answer, valueFor(answer, saved), { cv: cv?.path ?? null, cvName: cv?.filename ?? null, letter }).catch(() => false))
-      ;(done ? filled : left).push(answer.label)
+      if (!found[index] || (DRY && (answer.kind === 'resume' || answer.kind === 'cover_letter' || answer.kind === 'file'))) {
+        left.push(answer.label)
+        continue
+      }
+      const value = valueFor(answer, saved)
+      // Try, look again, and try another way while it did not take.
+      let held = false
+      for (const [attempt, strategy] of strategiesFor(ats, answer).slice(0, MAX_TRIES).entries()) {
+        const applied = await applyStrategy(page, index, answer, value, files, strategy).catch(() => false)
+        if (!applied) continue
+        // Uploads and suggestion boxes settle before the field is read back.
+        await page.waitForTimeout(answer.kind === 'resume' || answer.kind === 'cover_letter' ? 1500 : 250)
+        held = await holds(page, index, answer, value, files)
+        learn(ats, answer, strategy, held)
+        if (attempt > 0) retried++
+        if (held) break
+      }
+      ;(held ? filled : left).push(answer.label)
     }
-    // Uploads settle before the picture is taken.
-    await page.waitForTimeout(1500)
     const shot = screenshotPath(candidateId, opportunityId, 'filled')
     fs.mkdirSync(path.dirname(shot), { recursive: true })
     await page.screenshot({ path: shot, fullPage: true })
     const captcha = (await page.locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .grecaptcha-badge').count()) > 0
-    const session: Session = { browser, page, expires: Date.now() + SESSION_MINUTES * 60_000, state: 'open' }
+    const session: Session = { browser, page, expires: Date.now() + SESSION_MINUTES * 60_000, state: 'open', cloudId, liveUrl }
     sessions.set(key, session)
-    if (HEADED) watchWindow(candidateId, opportunityId, session, prepared.answers.filter((answer) => left.includes(answer.label)))
-    return { status: 'filled', filled, left, captcha, window: HEADED }
+    if (WINDOW) watchWindow(candidateId, opportunityId, session, prepared.answers.filter((answer) => left.includes(answer.label)), via)
+    return { status: 'filled', filled, left, captcha, window: WINDOW, live: Boolean(liveUrl), retried }
   } catch (error) {
     await browser.close().catch(() => undefined)
+    if (cloudId) await releaseCloudSession(cloudId)
     throw error
   }
+}
+
+// The live view of a form open in the cloud, for the signed-in candidate's page.
+export function liveViewFor(candidateId: string, opportunityId: string): string | null {
+  const session = sessions.get(sessionKey(candidateId, opportunityId))
+  return session && session.state === 'open' && session.expires > Date.now() ? session.liveUrl : null
 }
 
 // While they finish the form in the window: what they type in the fields left
 // to them is kept for the next form, and when the page says it was sent the
 // offer is marked as sent. Closing the window without sending ends it.
-function watchWindow(candidateId: string, opportunityId: string, session: Session, left: PreparedAnswer[]) {
+function watchWindow(candidateId: string, opportunityId: string, session: Session, left: PreparedAnswer[], via: 'app' | 'whatsapp') {
   const { page } = session
   const timer = setInterval(async () => {
     if (page.isClosed()) {
       clearInterval(timer)
       if (session.state === 'open') session.state = 'closed'
       await session.browser.close().catch(() => undefined)
+      if (session.cloudId) await releaseCloudSession(session.cloudId)
       return
     }
     try {
@@ -280,7 +266,11 @@ function watchWindow(candidateId: string, opportunityId: string, session: Sessio
         clearInterval(timer)
         session.state = 'sent'
         setProgress(candidateId, [opportunityId], 'applied')
-        setTimeout(() => void session.browser.close().catch(() => undefined), 4000)
+        if (via === 'whatsapp') void import('../whatsapp/sent').then((module) => module.tellSent(candidateId, opportunityId)).catch(() => undefined)
+        setTimeout(() => {
+          void session.browser.close().catch(() => undefined)
+          if (session.cloudId) void releaseCloudSession(session.cloudId)
+        }, 4000)
         return
       }
       // What they typed where amble left the field to them.

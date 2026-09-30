@@ -1,3 +1,5 @@
+import { canFillForm, fillApplication } from '../apply/browser'
+import { cloudBrowserConfigured } from '../apply/cloud'
 import { prepareApplication } from '../apply/prepare'
 import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
@@ -183,13 +185,19 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
 
 // ── What they answer ──────────────────────────────────────────────────────
 
-export type OfferTap = { kind: 'offer'; matchId: string; answer: 'interested' | 'not_fit' | 'more' } | { kind: 'apply'; matchId: string; answer: 'yes' | 'no' }
+export type OfferTap =
+  | { kind: 'offer'; matchId: string; answer: 'interested' | 'not_fit' | 'more' }
+  | { kind: 'apply'; matchId: string; answer: 'yes' | 'no' }
+  // Fill the prepared application in the company's own form, in the cloud.
+  | { kind: 'fill'; matchId: string; answer: 'yes' | 'no' }
 
 export function parseOfferPayload(value: string | null): OfferTap | null {
   const offer = value?.match(/^of:([\w-]+):(interested|not_fit|more)$/)
   if (offer) return { kind: 'offer', matchId: offer[1], answer: offer[2] as 'interested' | 'not_fit' | 'more' }
   const apply = value?.match(/^ap:([\w-]+):(yes|no)$/)
   if (apply) return { kind: 'apply', matchId: apply[1], answer: apply[2] as 'yes' | 'no' }
+  const fill = value?.match(/^af:([w-]+):(yes|no)$/)
+  if (fill) return { kind: 'fill', matchId: fill[1], answer: fill[2] as 'yes' | 'no' }
   return null
 }
 
@@ -275,9 +283,35 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     try {
       const prepared = await prepareApplication(candidateId, match.opportunity_id)
       const emphasise = prepared.advice.emphasise.slice(0, 3).map((point) => `• ${point}`)
-      await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.applyFinish(appUrl(candidateId, '/opportunities?tab=wanted'))].filter(Boolean).join('\n'))
+      // With a browser in the cloud, amble can fill the company's own form.
+      if (cloudBrowserConfigured() && canFillForm(match.opportunity_id)) {
+        await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.fillOffer].filter(Boolean).join('\n'), [
+          { title: w.fillButtons.yes, payload: `af:${match.id}:yes` },
+          { title: w.fillButtons.no, payload: `af:${match.id}:no` },
+        ])
+      } else {
+        await reply([w.applyReady, prepared.advice.channelWhy, ...emphasise, '', w.applyFinish(appUrl(candidateId, '/opportunities?tab=wanted'))].filter(Boolean).join('\n'))
+      }
     } catch {
       await reply(w.applyFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
+    }
+  }
+  if (tap.kind === 'fill' && tap.answer === 'no') {
+    await reply(w.applyLater(appUrl(candidateId, '/opportunities?tab=wanted')))
+    return
+  }
+  if (tap.kind === 'fill' && tap.answer === 'yes') {
+    await reply(w.fillWorking)
+    try {
+      const result = await fillApplication(candidateId, match.opportunity_id, 'whatsapp')
+      if (result.status !== 'filled' || !result.live) {
+        await reply(w.fillFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
+        return
+      }
+      const live = appUrl(candidateId, `/apply/live?o=${encodeURIComponent(match.opportunity_id)}`)
+      await reply([w.fillDone(result.filled.length, result.left, live), result.captcha ? w.fillCaptcha : null].filter(Boolean).join('\n\n'))
+    } catch {
+      await reply(w.fillFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
     }
   }
 }

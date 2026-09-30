@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Symbol from '@/components/Symbol'
+import LiveForm from '@/components/flows/LiveForm'
 import { useT } from '@/components/I18nProvider'
 import type { PreparedAnswer, PreparedApplication } from '@/lib/apply/prepare'
 import styles from '@/app/opportunities/application.module.css'
@@ -143,7 +144,7 @@ function Fold({ id, title, summary, children }: { id: string; title: string; sum
 type Stage =
   | { step: 'review' }
   | { step: 'filling' }
-  | { step: 'window'; left: string[] }
+  | { step: 'window'; left: string[]; live: boolean }
   | { step: 'closed' }
   | { step: 'filled'; left: string[]; captcha: boolean; shot: number }
   | { step: 'sending' }
@@ -212,12 +213,14 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
         left?: string[]
         captcha?: boolean
         window?: boolean
+        live?: boolean
         missing?: string[]
         reason?: string
       }
       if (result.status === 'filled' && result.window) {
-        setStage({ step: 'window', left: result.left ?? [] })
-        watch()
+        setStage({ step: 'window', left: result.left ?? [], live: Boolean(result.live) })
+        // In the cloud the live view looks for itself.
+        if (!result.live) watch()
       } else if (result.status === 'filled') setStage({ step: 'filled', left: result.left ?? [], captcha: Boolean(result.captcha), shot: ++shots.current })
       else {
         setProblem(result.status === 'missing' ? a.stillMissing((result.missing ?? []).join(' · ')) : a.cannotFill)
@@ -265,6 +268,10 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
         <span>{stage.step === 'filling' ? a.filling : a.sending(company)}</span>
       </div>
     )
+  }
+
+  if (stage.step === 'window' && stage.live) {
+    return <LiveForm opportunityId={opportunityId} company={company} left={stage.left} onSent={onSent} onClosed={() => setStage({ step: 'closed' })} />
   }
 
   if (stage.step === 'window') {

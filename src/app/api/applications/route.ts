@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { NextResponse } from 'next/server'
 import { saveAnswer } from '@/lib/apply/answers'
-import { applicationState, cancelApplication, fillApplication, screenshotPath, submitApplication } from '@/lib/apply/browser'
+import { applicationState, cancelApplication, fillApplication, liveViewFor, screenshotPath, submitApplication } from '@/lib/apply/browser'
 import { NotWantedError, prepareApplication } from '@/lib/apply/prepare'
 import { forCandidate } from '@/lib/auth/request'
 import { setProgress } from '@/lib/db/matching'
@@ -17,6 +17,7 @@ export const maxDuration = 300
 // POST { action: 'fill', opportunityId }              -> fill the form in a browser amble opens; a screenshot to review
 // POST { action: 'submit', opportunityId, confirm }   -> send it, only when the candidate says so
 // POST { action: 'cancel', opportunityId }            -> close the form without sending
+// POST { action: 'live', opportunityId }              -> the live view of the form open in the cloud
 // GET  ?screenshot=filled|sent&opportunityId=...      -> the picture of the form
 
 // Filling needs a prepared draft, which exists only for an offer the candidate
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
         return NextResponse.json(result)
       }
       if (action === 'status') return NextResponse.json({ state: applicationState(candidate.id, opportunityId) })
+      // The live view of their own form in the cloud: only ever to them.
+      if (action === 'live') return NextResponse.json({ url: liveViewFor(candidate.id, opportunityId) })
       if (action === 'cancel') {
         await cancelApplication(candidate.id, opportunityId)
         return NextResponse.json({ ok: true })

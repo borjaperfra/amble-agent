@@ -660,6 +660,20 @@ function migrate(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS intake_events_by_candidate ON intake_events (candidate_id, kind, created_at);
   `)
 
+  // What filling forms has taught, for everyone: per ATS and kind of field,
+  // how often each way of filling it held (src/lib/apply/reflect.ts).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS form_lessons (
+      ats TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      strategy TEXT NOT NULL,
+      worked INTEGER NOT NULL DEFAULT 0,
+      failed INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (ats, kind, strategy)
+    );
+  `)
+
   // Answers given before decisions had their own table lived on assessments.
   // Carried over once, the latest per offer; a later decision is never replaced.
   db.exec(`
