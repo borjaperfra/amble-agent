@@ -18,6 +18,9 @@ import type { ShownEstimate } from '@/lib/salary/estimate'
 import styles from '@/app/opportunities/opportunities.module.css'
 
 type Response = 'interested' | 'not_for_me' | 'wanted_anyway'
+
+// Offers answered here before the Rep asks to carry on on WhatsApp.
+const HANDOFF_AFTER = 5
 type Progress = 'applied' | 'dropped' | null
 export type Tab = 'new' | 'wanted' | 'sent' | 'aside'
 const TABS: Tab[] = ['new', 'wanted', 'sent', 'aside']
@@ -173,6 +176,12 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
         )}
 
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.panel} key={tab}>
+          {/* After the first few answers, the rest comes on WhatsApp. */}
+          {tab === 'new' && view.whatsapp.available && !view.whatsapp.linked && view.decided >= HANDOFF_AFTER && (
+            <div className={styles.handoff}>
+              <WhatsAppConnect linked={false} />
+            </div>
+          )}
           {tab === 'new' &&
             (newDeck.length === 0 ? (
               <div className={styles.empty}>

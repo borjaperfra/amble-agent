@@ -1002,3 +1002,8 @@
   text-underline-offset: 4px;
   text-decoration-color: var(--border);
 }
+
+/* Carrying on on WhatsApp, above the next offer. */
+.handoff {
+  margin-bottom: 8px;
+}

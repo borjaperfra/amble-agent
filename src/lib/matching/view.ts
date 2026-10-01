@@ -140,6 +140,9 @@ export interface OpportunitiesView {
   applicant: { cv: string | null; answers: Record<string, string>; canFill: boolean }
   // Whether amble can ask them on WhatsApp how applications are going.
   whatsapp: { available: boolean; linked: boolean }
+  // How many offers they have answered: after the first few, the Rep asks
+  // to carry on on WhatsApp.
+  decided: number
   // Nothing of theirs to show: why, in numbers, from what was read.
   drought: Drought | null
 }
@@ -418,6 +421,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     dropped: wantedAll.filter((item) => item.progress === 'dropped'),
     applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id), canFill: canFillForms() },
     whatsapp: { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null },
+    decided: decisions.size,
     drought: fits.length + maybe.length === 0 && withheld === 0 ? droughtOf(candidate.id, discarded) : null,
   }
 }
