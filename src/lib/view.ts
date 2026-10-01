@@ -1,3 +1,4 @@
+import { intentRows, type IntentRow } from './intent-order'
 import {
   getDistinctiveProfile,
   getLatestIntent,
@@ -221,10 +222,21 @@ function declaredItems(intent: ReturnType<typeof getLatestIntent>, profile: List
   return items.length > 0 ? [...new Set(items)] : profile.declared.items
 }
 
+// What they said, confirmed, as rows (pay, where, role always among them).
+function declaredRows(intent: ReturnType<typeof getLatestIntent>): IntentRow[] {
+  if (!intent?.confirmed_at) return []
+  try {
+    return intentRows(JSON.parse(intent.groups) as IntentRow[])
+  } catch {
+    return []
+  }
+}
+
 export function getListeningViewModel(candidateId: string): {
   evidenceCount: number
   capabilitiesCount: number
   listeningFor: string[]
+  declaredRows: IntentRow[]
   hasIntent: boolean
   intentConfirmed: boolean
   revealed: ListeningProfile['revealed']
@@ -242,6 +254,7 @@ export function getListeningViewModel(candidateId: string): {
     evidenceCount: listEvidence(candidate.id).length,
     capabilitiesCount: listCapabilities(candidate.id).length,
     listeningFor: declaredItems(intent, profile, dictionaries[candidateLocale(candidate)].listening),
+    declaredRows: declaredRows(intent),
     hasIntent: Boolean(intent),
     intentConfirmed: profile.declared.confirmed,
     revealed: profile.revealed,

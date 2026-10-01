@@ -44,7 +44,7 @@
 }
 
 .reveal {
-  padding-top: 40px;
+  padding-top: 8px;
   animation: enter var(--motion-slow) var(--ease-standard) both;
 }
 
@@ -53,17 +53,24 @@
   font-size: var(--heading-lg);
   font-weight: 400;
   letter-spacing: -0.015em;
-  margin-top: 32px;
+  line-height: 1.2;
+  margin-top: 12px;
+}
+
+.revealSub {
+  margin-top: 8px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
 }
 
 .groups {
-  margin-top: 56px;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
 }
 
 .group {
-  padding: 28px 0;
+  padding: 14px 0;
   border-top: 1px solid var(--border-soft);
   animation: enter var(--motion-slow) var(--ease-standard) both;
 }
@@ -74,7 +81,7 @@
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-tertiary);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .values {
@@ -91,7 +98,7 @@
 }
 
 .confirm {
-  margin-top: 80px;
+  margin-top: 28px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -201,4 +208,41 @@
 .current {
   margin-top: 8px;
   font-size: var(--text-body-sm);
+}
+
+/* A row to complete here: the question, a field and Add on one line. */
+.fill {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fillLabel {
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.fillRow {
+  display: flex;
+  gap: 8px;
+}
+
+.fillInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.fillRow :global(.btn) {
+  height: 44px;
+  padding: 0 16px;
 }

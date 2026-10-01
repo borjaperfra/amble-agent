@@ -147,7 +147,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 36px;
+  margin-top: 24px;
 }
 
 .forTitle {
@@ -163,13 +163,25 @@
   color: var(--moss-soft);
 }
 
+/* Centred, under the title: each group with its name over what it holds. */
 .groups {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 32px 48px;
-  margin-top: 40px;
-  text-align: left;
+  gap: 20px 40px;
+  margin-top: 20px;
+  text-align: center;
+  justify-items: center;
+}
+
+.groups .condition {
+  justify-content: center;
+}
+
+.unsaid {
+  color: var(--moss-soft);
+  font-style: italic;
+  opacity: 0.85;
 }
 
 .group {

@@ -9,7 +9,6 @@ import Symbol from '@/components/Symbol'
 import EnvelopePile from '@/components/EnvelopePile'
 import type { PileEnvelope } from '@/lib/view'
 import Tumbleweed from '@/components/Tumbleweed'
-import WhatsAppConnect from '@/components/flows/WhatsAppConnect'
 import { useSearchPause } from '@/components/flows/useSearchPause'
 import { useVisibleInterval } from '@/components/flows/useVisibleInterval'
 import { useI18n } from '@/components/I18nProvider'
@@ -30,6 +29,7 @@ interface ListeningVm {
   evidenceCount: number
   capabilitiesCount: number
   listeningFor: string[]
+  declaredRows: { label: string; values: string[] }[]
   hasIntent: boolean
   intentConfirmed: boolean
   revealed: {
@@ -322,12 +322,6 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 {rolls > 0 && <Tumbleweed key={rolls} />}
               </div>
 
-              {vm.whatsapp.available && !vm.whatsapp.linked && (
-                <div className={styles.whatsapp}>
-                  <WhatsAppConnect linked={false} />
-                </div>
-              )}
-
               <div className={styles.for}>
                 <h2 className={styles.forTitle}>{t.listening.attentiveTo}</h2>
                 {learned > 0 && <p className={styles.learnedNote}>{mixed ? t.listening.learnedMarked : t.listening.learnedNote}</p>}
@@ -354,13 +348,25 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                         ))}
                       </Group>
                     )}
-                    {vm.listeningFor.length > 0 && (
-                      <Group title={t.listening.groups.declared}>
-                        {vm.listeningFor.map((item) => (
-                          <Condition key={item} label={item} marked={false} />
-                        ))}
-                      </Group>
-                    )}
+                    {/* What they said, by what it is about: pay, where and role
+                        always, said or not, so what is missing shows. */}
+                    {vm.declaredRows.length > 0
+                      ? vm.declaredRows.map((row) => (
+                          <Group key={row.label} title={(t.intent.labels as Record<string, string>)[row.label] ?? row.label}>
+                            {row.values.length > 0 ? (
+                              row.values.map((value) => <Condition key={value} label={value} marked={false} />)
+                            ) : (
+                              <li className={`${styles.condition} ${styles.unsaid}`}>{t.listening.unsaid}</li>
+                            )}
+                          </Group>
+                        ))
+                      : vm.listeningFor.length > 0 && (
+                          <Group title={t.listening.groups.declared}>
+                            {vm.listeningFor.map((item) => (
+                              <Condition key={item} label={item} marked={false} />
+                            ))}
+                          </Group>
+                        )}
                   </div>
                 ) : (
                   <p className={styles.nothing}>{vm.hasIntent ? t.listening.confirmIntent : t.listening.nothingYet}</p>
