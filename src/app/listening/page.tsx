@@ -16,7 +16,8 @@ function offerTitles(ids: string[]): Record<string, Record<number, string>> {
   const titles: Record<string, Record<number, string>> = {}
   for (const id of ids) {
     const preference = getRevealedPreference(id)
-    if (!preference) continue
+    // A rule said in conversation came from no sample offers.
+    if (!preference?.triage_id) continue
     let probes = byTriage.get(preference.triage_id)
     if (!probes) {
       probes = Object.fromEntries(listOfferProbes(preference.triage_id).map((probe) => [probe.idx + 1, probe.title]))

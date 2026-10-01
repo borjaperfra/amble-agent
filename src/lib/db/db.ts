@@ -261,10 +261,11 @@ function createDb(): DatabaseSync {
       UNIQUE (triage_id, idx)
     );
 
+    -- A rule they stated in conversation (WhatsApp) has no triage behind it.
     CREATE TABLE IF NOT EXISTS revealed_preferences (
       id TEXT PRIMARY KEY,
       candidate_id TEXT NOT NULL REFERENCES candidates(id),
-      triage_id TEXT NOT NULL REFERENCES offer_triages(id),
+      triage_id TEXT REFERENCES offer_triages(id),
       kind TEXT NOT NULL,
       statement TEXT NOT NULL,
       declared TEXT,
@@ -586,7 +587,35 @@ function addColumn(db: DatabaseSync, table: string, column: string, definition: 
   return true
 }
 
+// A table rebuilt from its own definition with one change to it: SQLite
+// cannot drop a NOT NULL in place. Its rows, columns added since and the
+// order of those columns all carry over; its indexes are made again below.
+function rebuildTable(db: DatabaseSync, table: string, from: string, to: string): void {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { sql: string } | undefined
+  if (!row || !row.sql.includes(from)) return
+  const definition = row.sql.replace(from, to).replace(/^CREATE TABLE\s+(?:"?\w+"?)/i, `CREATE TABLE ${table}_rebuilt`)
+  db.exec('PRAGMA foreign_keys = OFF;')
+  try {
+    db.exec('BEGIN')
+    try {
+      db.exec(definition)
+      db.exec(`INSERT INTO ${table}_rebuilt SELECT * FROM ${table}`)
+      db.exec(`DROP TABLE ${table}`)
+      db.exec(`ALTER TABLE ${table}_rebuilt RENAME TO ${table}`)
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;')
+  }
+}
+
 function migrate(db: DatabaseSync): void {
+  // A rule they state on WhatsApp is theirs without a triage behind it.
+  rebuildTable(db, 'revealed_preferences', 'triage_id TEXT NOT NULL REFERENCES', 'triage_id TEXT REFERENCES')
+
   // Which voice and language what the person reads on their profile was
   // written in (a capability's name and reason, an uncertainty's description):
   // rows from before are rewritten once (src/lib/career/explanations.ts).

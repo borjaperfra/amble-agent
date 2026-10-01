@@ -12,7 +12,7 @@ import { answerMessage, languageOf } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
-import { appUrl, awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settleAwaitedReason } from './offers'
+import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settleAwaitedReason } from './offers'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
 import { isMaliciousLink } from '../net/reputation'
@@ -116,7 +116,7 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   const preferenceTap = parsePreferencePayload(interactiveId)
   if (preferenceTap) {
     logMessage(candidate.id, 'in', text)
-    await answerPreference(candidate.id, preferenceTap, reply, appUrl)
+    await answerPreference(candidate.id, preferenceTap, reply)
     return
   }
   const pauseTap = parsePausePayload(interactiveId)

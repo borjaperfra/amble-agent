@@ -890,7 +890,8 @@ export interface OfferProbeRow {
 export interface RevealedPreferenceRow {
   id: string
   candidate_id: string
-  triage_id: string
+  // Null for a rule they stated in conversation, with no triage behind it.
+  triage_id: string | null
   kind: string
   statement: string
   label: string | null
@@ -1084,7 +1085,7 @@ export function setRevealedPreferenceWording(id: string, statement: string, word
 // later re-analysis (which only replaces 'proposed' rows).
 export function insertCandidatePreference(row: {
   candidateId: string
-  triageId: string
+  triageId: string | null
   kind: string
   statement: string
   label: string | null

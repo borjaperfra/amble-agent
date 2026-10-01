@@ -241,6 +241,8 @@ export interface ProposedPreference {
   label: string
   statement: string
   replaces: string | null
+  // Whether it rules offers out or only weighs is theirs to say: two buttons.
+  either?: boolean
 }
 
 export function awaitingOf(candidateId: string): Awaiting | null {
