@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Newsreader } from 'next/font/google'
 import { I18nProvider } from '@/components/I18nProvider'
 import FeedbackButton from '@/components/FeedbackButton'
+import { OwnerProvider } from '@/components/OwnerProvider'
 import TabEye from '@/components/TabEye'
 import { currentCandidate } from '@/lib/auth/session'
 import { isSearchPaused } from '@/lib/pause'
@@ -42,9 +43,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang={locale} className={`${inter.variable} ${newsreader.variable}`}>
       <body>
         <I18nProvider locale={locale}>
-          <TabEye paused={paused} />
-          {signedIn && <FeedbackButton />}
-          {children}
+          <OwnerProvider owner={candidate?.role === 'owner'}>
+            <TabEye paused={paused} />
+            {signedIn && <FeedbackButton />}
+            {children}
+          </OwnerProvider>
         </I18nProvider>
       </body>
     </html>

@@ -1,0 +1,492 @@
+.page {
+  max-width: var(--map-max);
+  margin: 0 auto;
+  padding: 40px var(--page-pad) 120px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Counts ---------- */
+
+.stats {
+  margin: 24px 0 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.stat {
+  padding: 14px 16px 14px 0;
+}
+
+.stat + .stat {
+  padding-left: 16px;
+  border-left: 1px solid var(--border-soft);
+}
+
+.statValue {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--heading-md);
+  line-height: 1.2;
+}
+
+.statLabel {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-tertiary);
+}
+
+/* ---------- Tabs ---------- */
+
+.tabs {
+  margin-top: 32px;
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  min-height: 44px;
+  padding: 0;
+  margin-bottom: -1px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--ink-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tabActive {
+  color: var(--ink);
+  border-bottom-color: var(--moss);
+}
+
+.tabCount {
+  margin-left: 6px;
+  font-size: 13px;
+  color: var(--ink-tertiary);
+}
+
+/* ---------- Tools above a list ---------- */
+
+.tools {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.search {
+  flex: 1 1 240px;
+  height: 44px;
+  padding: 0 14px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.search:focus {
+  border-color: var(--ink-tertiary);
+  outline: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 12px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--ink-tertiary);
+}
+
+.chipActive {
+  color: var(--ink);
+  background: var(--moss-wash);
+  border-color: var(--moss-soft);
+}
+
+.note {
+  margin-top: 24px;
+  color: var(--ink-secondary);
+  line-height: 1.6;
+}
+
+.hint {
+  margin-top: 6px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.hint code {
+  font-size: 13px;
+}
+
+/* ---------- Waitlist ---------- */
+
+.table {
+  margin-top: 16px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body-sm);
+}
+
+.table th {
+  padding: 10px 8px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 10px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.table tr.picked td {
+  background: var(--moss-wash);
+}
+
+.checkCell {
+  width: 36px;
+}
+
+.check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--moss);
+  cursor: pointer;
+}
+
+.email {
+  font-size: var(--text-body);
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 12px;
+  color: var(--slate);
+  background: var(--slate-soft);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+.status {
+  color: var(--ink-secondary);
+}
+
+.statusJoined {
+  color: var(--moss-dark);
+}
+
+.error {
+  display: block;
+  font-size: 12px;
+  color: var(--clay);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.actions .textAction,
+.actions a {
+  min-height: 36px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.textAction {
+  padding: 0;
+  font-family: var(--font-ui);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+}
+
+.textAction:hover {
+  color: var(--ink);
+}
+
+.actions a {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The selection, and what to do with it, stays in view. */
+.bar {
+  position: sticky;
+  bottom: 16px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 2px rgba(37, 37, 31, 0.04),
+    0 8px 24px rgba(37, 37, 31, 0.06);
+}
+
+.barText {
+  flex: 1 1 auto;
+  color: var(--ink-secondary);
+}
+
+.barButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.confirm {
+  flex-basis: 100%;
+}
+
+.confirmTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+}
+
+.confirmLead {
+  margin-top: 4px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.message {
+  margin-top: 16px;
+  color: var(--ink-secondary);
+}
+
+/* ---------- Feedback ---------- */
+
+.feed {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  padding: 16px 18px 8px;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.seen {
+  opacity: 0.65;
+}
+
+.itemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.dots {
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.kind {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.kindBlocking {
+  color: var(--clay);
+}
+
+.summary {
+  margin-top: 8px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.text {
+  margin-top: 6px;
+  line-height: 1.6;
+  white-space: pre-line;
+  color: var(--ink-secondary);
+}
+
+.meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+  color: var(--ink-tertiary);
+}
+
+.meta a {
+  color: var(--ink-secondary);
+}
+
+.flag {
+  font-size: 12px;
+  color: var(--clay);
+}
+
+/* ---------- One person ---------- */
+
+.back {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.facts {
+  margin: 20px 0 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 24px;
+  font-size: var(--text-body-sm);
+}
+
+.facts dt {
+  color: var(--ink-tertiary);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.section {
+  margin-top: 40px;
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+  font-weight: 400;
+}
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat:nth-child(3) {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .stat:nth-child(n + 3) {
+    border-top: 1px solid var(--border-soft);
+  }
+
+  /* The table becomes one block per person. */
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    position: relative;
+    padding: 12px 0 12px 36px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .table td {
+    padding: 2px 0;
+    border: none;
+  }
+
+  /* Date and language on one line. */
+  .table td.muted {
+    display: inline-block;
+    width: auto;
+    margin-right: 12px;
+    font-size: 13px;
+  }
+
+  .table td.checkCell {
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: auto;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+
+  .facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .facts dd {
+    margin-bottom: 8px;
+  }
+}

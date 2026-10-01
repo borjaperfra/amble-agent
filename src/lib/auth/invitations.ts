@@ -20,7 +20,7 @@ export interface InvitationRow {
 
 // Accounts the beta takes, if a limit is set. When it is reached, an
 // invitation no longer opens the door: its holder joins the waitlist.
-function betaCapacity(): number | null {
+export function betaCapacity(): number | null {
   const value = Number(process.env.AMBLE_BETA_CAPACITY)
   return Number.isInteger(value) && value > 0 ? value : null
 }

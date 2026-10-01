@@ -812,6 +812,31 @@ function migrate(db: DatabaseSync): void {
     );
   `)
 
+  // The owner's admin (src/lib/admin): who on the site's waitlist was let in,
+  // with which invitation and whether the email went (the waitlist itself
+  // lives in the site's database, read only); and how much each piece of
+  // feedback matters, read once.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS waitlist_invites (
+      email TEXT PRIMARY KEY,
+      invitation_id TEXT NOT NULL REFERENCES invitations(id),
+      locale TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      sent_at TEXT,
+      send_error TEXT
+    );
+    CREATE TABLE IF NOT EXISTS feedback_triage (
+      feedback_id TEXT PRIMARY KEY REFERENCES feedback(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      importance INTEGER NOT NULL,
+      summary TEXT NOT NULL,
+      suspicious INTEGER NOT NULL DEFAULT 0,
+      version TEXT NOT NULL,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL
+    );
+  `)
+
   // Lookups every pass and every screen makes, which otherwise read whole
   // tables: an offer's sightings, a person's assessments for their current
   // profile, the postings judged in one model run, a person's model runs.
