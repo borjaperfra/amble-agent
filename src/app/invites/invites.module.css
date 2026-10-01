@@ -32,19 +32,33 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 72px;
-  padding: 12px 0;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border-soft);
 }
 
 .name {
   font-size: var(--text-body);
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .used .name {
   color: var(--ink-tertiary);
+}
+
+/* Used: ticked and done with, nothing left to press. */
+.used .state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-tertiary);
+}
+
+.tick {
+  color: var(--moss-dark);
+  font-weight: 600;
 }
 
 .state {
@@ -60,8 +74,9 @@
 }
 
 .actions :global(.btn) {
-  height: 44px;
-  padding: 0 16px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: var(--text-body-sm);
   white-space: nowrap;
 }
 
@@ -69,6 +84,8 @@
   .page {
     padding-top: 16px;
   }
+
+  
 
   .title {
     margin-top: 24px;

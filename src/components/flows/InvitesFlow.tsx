@@ -56,7 +56,12 @@ export default function InvitesFlow({ invites }: { invites: Invite[] }) {
             <li key={invite.id} className={invite.accepted ? `${styles.row} ${styles.used}` : styles.row}>
               <span className={styles.name}>{t.invites.item(index + 1)}</span>
               {invite.accepted ? (
-                <span className={styles.state}>{t.invites.accepted}</span>
+                <span className={styles.state} aria-disabled="true">
+                  <span className={styles.tick} aria-hidden="true">
+                    ✓
+                  </span>
+                  {t.invites.accepted}
+                </span>
               ) : (
                 <span className={styles.actions}>
                   {canShare && (

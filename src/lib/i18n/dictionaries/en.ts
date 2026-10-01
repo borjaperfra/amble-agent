@@ -232,6 +232,12 @@ export const en = {
     // WhatsApp not linked yet.
     gapsConnect: 'Connect WhatsApp and I’ll ask you there.',
     gapsConnectAction: 'Connect WhatsApp →',
+    // Near the top of the map: how much is still unknown, and where to answer it.
+    gapsSummary: (count: number) => `There ${count === 1 ? 'is 1 thing' : `are ${count} things`} I don’t know about you yet.`,
+    gapsHow: 'You can tell me on WhatsApp or answer here.',
+    gapsHowLinked: 'I’ll ask you on WhatsApp, or answer here.',
+    gapsSee: 'See which ↓',
+    answerHere: 'Answer here →',
     nextStep: 'Next step',
     next: {
       sources: { title: 'Share your CV', lead: 'With your CV or profile your Rep starts to understand what you do.', action: 'Add my CV →' },
@@ -247,7 +253,9 @@ export const en = {
         ? `This map is private: only you can see it. It comes from ${evidence} ${evidence === 1 ? 'piece' : 'pieces'} of evidence in ${sources} ${sources === 1 ? 'source' : 'sources'}, and you can open each one.`
         : 'This map is private: only you can see it.',
     pieces: (count: number) => `${count} ${count === 1 ? 'piece' : 'pieces'} of evidence`,
-    view: 'View →',
+    view: 'View evidence →',
+    showMore: 'Show more',
+    showLess: 'Show less',
   },
   evidence: {
     fromSource: (origin: string, excerpt: string) => `From ${origin}: “${excerpt}”`,
@@ -397,7 +405,7 @@ export const en = {
       count === 0
         ? 'You’ve used all your invitations.'
         : `${count === 1 ? 'You have 1 invitation left' : `You have ${count} invitations left`}. Each link creates one account and works once.`,
-    copy: 'Copy link',
+    copy: 'Copy',
     copied: 'Copied',
     share: 'Share',
     // What goes with the link when they share it from their phone.

@@ -50,22 +50,16 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
     <>
       <Header />
       <main className={styles.page}>
-        {next.kind !== 'done' && (
-          <section className={next.kind === 'whatsapp' ? styles.nextPlain : styles.next} aria-labelledby="next-step">
+        {next.kind !== 'done' && next.kind !== 'whatsapp' && (
+          <section className={styles.next} aria-labelledby="next-step">
             <p id="next-step" className="kicker">
               {t.map.nextStep}
             </p>
-            {next.kind === 'whatsapp' ? (
-              <WhatsAppConnect linked={false} />
-            ) : (
-              <>
-                <h2 className={styles.nextTitle}>{t.map.next[next.kind].title}</h2>
-                <p className={styles.nextLead}>{t.map.next[next.kind].lead}</p>
-                <Link href={NEXT_HREF[next.kind]} className="btn">
-                  {t.map.next[next.kind].action}
-                </Link>
-              </>
-            )}
+            <h2 className={styles.nextTitle}>{t.map.next[next.kind].title}</h2>
+            <p className={styles.nextLead}>{t.map.next[next.kind].lead}</p>
+            <Link href={NEXT_HREF[next.kind]} className="btn">
+              {t.map.next[next.kind].action}
+            </Link>
           </section>
         )}
 
@@ -102,6 +96,47 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
           </p>
           <p className={styles.updated}>{vm.updated}</p>
         </section>
+
+        {vm.distinctive && vm.distinctive.length >= 2 && (
+          <section className={styles.distinctive} aria-labelledby="distinctive">
+            <p id="distinctive" className="kicker" style={{ marginBottom: 16 }}>
+              {t.map.distinctive}
+            </p>
+            <p className={styles.distinctiveLine}>
+              {vm.distinctive.map((name, index) => (
+                <span key={name} style={{ display: 'block' }}>
+                  {index > 0 && (
+                    <span className={styles.distinctiveCross} aria-hidden="true">
+                      ×
+                    </span>
+                  )}
+                  {index > 0 && <span className="visually-hidden">{t.map.combinedWith}</span>}
+                  {name}
+                </span>
+              ))}
+            </p>
+          </section>
+        )}
+
+        {vm.distinctive === null && hasContent && (
+          <section className={styles.distinctive} aria-labelledby="distinctive-empty">
+            <p id="distinctive-empty" className="kicker" style={{ marginBottom: 12 }}>
+              {t.map.distinctive}
+            </p>
+            <p className={styles.headline} style={{ textAlign: 'center' }}>
+              {t.map.distinctiveEmpty}
+            </p>
+          </section>
+        )}
+
+        {/* How much is still unknown, near the top: tapping it goes to them. */}
+        {vm.gaps.length > 0 && (
+          <a href="#gaps" className={styles.gapsSummary}>
+            <span className={styles.gapsSummaryLine}>{t.map.gapsSummary(Math.min(vm.gaps.length, GAPS_SHOWN))}</span>
+            <span className={styles.gapsSummaryHow}>{whatsapp.linked ? t.map.gapsHowLinked : t.map.gapsHow}</span>
+            <span className={styles.gapsSummaryAction}>{t.map.gapsSee}</span>
+          </a>
+        )}
 
         <section className={styles.section} aria-labelledby="demonstrates">
           <p id="demonstrates" className={`kicker ${styles.sectionKicker}`}>
@@ -149,40 +184,8 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
           )}
         </section>
 
-        {vm.distinctive && vm.distinctive.length >= 2 && (
-          <section className={styles.distinctive} aria-labelledby="distinctive">
-            <p id="distinctive" className="kicker" style={{ marginBottom: 40 }}>
-              {t.map.distinctive}
-            </p>
-            <p className={styles.distinctiveLine}>
-              {vm.distinctive.map((name, index) => (
-                <span key={name} style={{ display: 'block' }}>
-                  {index > 0 && (
-                    <span className={styles.distinctiveCross} aria-hidden="true">
-                      ×
-                    </span>
-                  )}
-                  {index > 0 && <span className="visually-hidden">{t.map.combinedWith}</span>}
-                  {name}
-                </span>
-              ))}
-            </p>
-          </section>
-        )}
-
-        {vm.distinctive === null && hasContent && (
-          <section className={styles.distinctive} aria-labelledby="distinctive-empty">
-            <p id="distinctive-empty" className="kicker" style={{ marginBottom: 20 }}>
-              {t.map.distinctive}
-            </p>
-            <p className={styles.headline} style={{ textAlign: 'center' }}>
-              {t.map.distinctiveEmpty}
-            </p>
-          </section>
-        )}
-
         {vm.gaps.length > 0 && (
-          <section className={styles.section} aria-labelledby="gaps">
+          <section className={`${styles.section} ${styles.gapsSection}`} aria-labelledby="gaps">
             <p id="gaps" className={`kicker ${styles.sectionKicker}`}>
               {t.map.gaps}
             </p>
@@ -194,20 +197,20 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
                 </article>
               ))}
             </div>
+            {/* Answered here: the questions on what is still unknown. Only once
+                the setup is done (before, its own questions come first). */}
+            {(next.kind === 'whatsapp' || next.kind === 'done') && (
+              <Link href="/onboarding/interview" className={`btn btn-quiet ${styles.answerHere}`}>
+                {t.map.answerHere}
+              </Link>
+            )}
             {whatsapp.linked ? (
               <p className={styles.gapsNote}>{t.map.gapsLater}</p>
             ) : (
               whatsapp.available && (
                 <div className={styles.gapsConnect}>
                   <p className={styles.gapsNote}>{t.map.gapsConnect}</p>
-                  {/* Already offered as the next step at the top: taken there, not twice. */}
-                  {next.kind === 'whatsapp' ? (
-                    <a href="#next-step" className="text-btn">
-                      {t.map.gapsConnectAction}
-                    </a>
-                  ) : (
-                    <WhatsAppConnect linked={false} compact />
-                  )}
+                  <WhatsAppConnect linked={false} compact />
                 </div>
               )
             )}

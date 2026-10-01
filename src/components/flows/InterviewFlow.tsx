@@ -130,7 +130,7 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
         }
       />
       <main className={styles.page}>
-        <p className={styles.counter}>{t.interview.step(Math.min(step, steps), steps)}</p>
+        {steps > 0 && <p className={styles.counter}>{t.interview.step(Math.min(step, steps), steps)}</p>}
 
         {phase === 'loading' && !error && (
           <div className={styles.stage} role="status">

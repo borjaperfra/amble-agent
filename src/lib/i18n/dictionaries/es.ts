@@ -235,6 +235,12 @@ export const es: Dictionary = {
     // WhatsApp not linked yet.
     gapsConnect: 'Conecta WhatsApp y te lo pregunto por ahí.',
     gapsConnectAction: 'Conectar WhatsApp →',
+    // Near the top of the map: how much is still unknown, and where to answer it.
+    gapsSummary: (count: number) => `Hay ${count} ${count === 1 ? 'cosa' : 'cosas'} que aún no sé de ti.`,
+    gapsHow: 'Puedes contármelo por WhatsApp o responder por aquí.',
+    gapsHowLinked: 'Te lo iré preguntando por WhatsApp, o responde por aquí.',
+    gapsSee: 'Ver cuáles ↓',
+    answerHere: 'Responder aquí →',
     nextStep: 'Siguiente paso',
     next: {
       sources: { title: 'Comparte tu CV', lead: 'Con tu CV o tu perfil tu Rep empieza a entender lo que haces.', action: 'Añadir mi CV →' },
@@ -249,7 +255,9 @@ export const es: Dictionary = {
         ? `Este mapa es privado: solo tú puedes verlo. Sale de ${evidence} ${evidence === 1 ? 'evidencia' : 'evidencias'} de ${sources} ${sources === 1 ? 'fuente' : 'fuentes'}, y puedes abrir cada una.`
         : 'Este mapa es privado: solo tú puedes verlo.',
     pieces: (count: number) => `${count} ${count === 1 ? 'evidencia' : 'evidencias'}`,
-    view: 'Ver →',
+    view: 'Ver evidencias →',
+    showMore: 'Ver más',
+    showLess: 'Ver menos',
   },
   evidence: {
     fromSource: (origin: string, excerpt: string) => `De ${origin}: «${excerpt}»`,
@@ -397,7 +405,7 @@ export const es: Dictionary = {
       count === 0
         ? 'Ya has usado todas tus invitaciones.'
         : `${count === 1 ? 'Te queda 1 invitación' : `Te quedan ${count} invitaciones`}. Cada enlace crea una cuenta y solo sirve una vez.`,
-    copy: 'Copiar enlace',
+    copy: 'Copiar',
     copied: 'Copiado',
     share: 'Compartir',
     // What goes with the link when they share it from their phone.

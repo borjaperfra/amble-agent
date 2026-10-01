@@ -40,7 +40,7 @@
 }
 
 .section {
-  margin-top: 96px;
+  margin-top: 56px;
 }
 
 .sectionKicker {
@@ -53,8 +53,8 @@
 }
 
 .distinctive {
-  margin-top: 112px;
-  padding: 88px 0;
+  margin-top: 48px;
+  padding: 40px 0;
   border-top: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
   display: flex;
@@ -175,7 +175,7 @@
 }
 
 .privacy {
-  margin-top: 64px;
+  margin-top: 40px;
   font-size: var(--text-body-sm);
   color: var(--ink-tertiary);
 }
@@ -186,15 +186,15 @@
   }
 
   .distinctive {
-    padding: 64px 0;
+    padding: 28px 0;
   }
 
   .section {
-    margin-top: 72px;
+    margin-top: 40px;
   }
 
   .distinctive {
-    margin-top: 80px;
+    margin-top: 32px;
   }
 }
 
@@ -345,4 +345,50 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+}
+
+/* Near the top: how much is still unknown, one tap from it. */
+.gapsSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 32px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--paper-light);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color var(--motion-fast) ease;
+}
+
+.gapsSummary:hover {
+  border-color: var(--moss);
+}
+
+.gapsSummaryLine {
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
+.gapsSummaryHow {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.gapsSummaryAction {
+  margin-top: 6px;
+  font-size: var(--text-body-sm);
+  color: var(--moss-dark);
+  font-weight: 500;
+}
+
+.gapsSection {
+  scroll-margin-top: 96px;
+}
+
+.answerHere {
+  align-self: flex-start;
+  margin-top: 20px;
 }
