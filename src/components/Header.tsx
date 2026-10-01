@@ -7,9 +7,11 @@ import { useI18n } from './I18nProvider'
 import { postJson } from './api'
 import { OPEN_FEEDBACK } from './FeedbackButton'
 import Symbol from './Symbol'
+import { useIsOwner } from './OwnerProvider'
+import { adminDictionaries } from '@/lib/i18n/dictionaries/admin'
 import styles from './Header.module.css'
 
-const navRoutes = ['/me', '/me/intent', '/me/data', '/me/triage', '/listening', '/opportunities', '/invites']
+const navRoutes = ['/me', '/me/intent', '/me/data', '/me/triage', '/listening', '/opportunities', '/invites', '/admin']
 
 interface HeaderProps {
   right?: React.ReactNode
@@ -28,6 +30,7 @@ export default function Header({ right, language = true, nav = true }: HeaderPro
   const { locale, t } = useI18n()
   const [switching, setSwitching] = useState(false)
   const [open, setOpen] = useState(false)
+  const owner = useIsOwner()
   const showNav = nav && navRoutes.includes(pathname)
 
   const navItems = [
@@ -36,6 +39,8 @@ export default function Header({ right, language = true, nav = true }: HeaderPro
     { href: '/opportunities', label: t.opportunities.nav },
     { href: '/invites', label: t.invites.nav },
     { href: '/me/data', label: t.header.data },
+    // Only the owner has an admin.
+    ...(owner ? [{ href: '/admin', label: adminDictionaries[locale].nav }] : []),
   ]
 
   // A page change closes it; so does Escape. Open, it is the whole screen:
