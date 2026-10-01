@@ -177,8 +177,8 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
             (newDeck.length === 0 ? (
               <div className={styles.empty}>
                 <Symbol size={96} watch breathe={!paused} label={paused ? t.listening.pause.status : t.listening.label} />
-                <p className={styles.emptyLine}>{paused ? t.listening.pause.title : t.opportunities.empty}</p>
-                <p className={styles.emptyLead}>{paused ? t.listening.pause.line : t.opportunities.emptyLead}</p>
+                <p className={styles.emptyLine}>{paused ? t.listening.pause.title : view.withheld > 0 ? t.opportunities.emptyMore : t.opportunities.empty}</p>
+                <p className={styles.emptyLead}>{paused ? t.listening.pause.line : view.withheld > 0 ? t.opportunities.emptyMoreLead : t.opportunities.emptyLead}</p>
                 {!paused && view.drought && <DroughtNote drought={view.drought} t={t.drought} />}
               </div>
             ) : (

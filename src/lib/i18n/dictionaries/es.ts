@@ -636,6 +636,9 @@ export const es: Dictionary = {
     title: 'Lo que he encontrado',
     empty: 'Nada que merezca interrumpirte por ahora.',
     emptyLead: 'Sigo escuchando.',
+    // Found more, not given yet: they come a few at a time.
+    emptyMore: 'Ya has visto las de hoy.',
+    emptyMoreLead: 'Tengo más guardadas. Te las iré enseñando poco a poco, las que mejor encajen primero.',
     worthHearing: 'He encontrado algo que merece la pena escuchar.',
     whyShowing: 'Por qué te lo enseño',
     considerAlso: 'Una cosa a tener en cuenta',

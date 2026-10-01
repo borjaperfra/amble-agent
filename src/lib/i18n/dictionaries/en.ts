@@ -640,6 +640,9 @@ export const en = {
     title: 'What I found',
     empty: 'Nothing worth bothering you with yet.',
     emptyLead: 'I’m still listening.',
+    // Found more, not given yet: they come a few at a time.
+    emptyMore: 'You’ve seen today’s.',
+    emptyMoreLead: 'I have more set aside. I’ll show them to you little by little, the best fits first.',
     worthHearing: 'I found something worth hearing.',
     whyShowing: 'Why I’m showing you this',
     considerAlso: 'One thing to consider',

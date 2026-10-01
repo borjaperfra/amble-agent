@@ -615,6 +615,17 @@ function rebuildTable(db: DatabaseSync, table: string, from: string, to: string)
 function migrate(db: DatabaseSync): void {
   // A rule they state on WhatsApp is theirs without a triage behind it.
   rebuildTable(db, 'revealed_preferences', 'triage_id TEXT NOT NULL REFERENCES', 'triage_id TEXT REFERENCES')
+  // The offers given to each person so far, a few at a time
+  // (src/lib/matching/release.ts).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS offer_releases (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      opportunity_id TEXT NOT NULL,
+      released_at TEXT NOT NULL,
+      PRIMARY KEY (candidate_id, opportunity_id)
+    );
+    CREATE INDEX IF NOT EXISTS offer_releases_by_time ON offer_releases (candidate_id, released_at);
+  `)
 
   // Which voice and language what the person reads on their profile was
   // written in (a capability's name and reason, an uncertainty's description):

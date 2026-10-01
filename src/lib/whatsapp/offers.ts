@@ -1,3 +1,4 @@
+import { releaseDue } from '../matching/release'
 import { canFillForm, fillApplication } from '../apply/browser'
 import { cloudBrowserConfigured } from '../apply/cloud'
 import { getPreparedApplication, prepareApplication } from '../apply/prepare'
@@ -66,6 +67,8 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
       (row) => row.opportunity_id,
     ),
   )
+  // Only what has been given to them: the same few a day as on the screens.
+  const released = releaseDue(candidateId)
   const seenRoles = new Set<string>()
   const picked: (MatchRow & MatchListing)[] = []
   for (const match of listMatchesForKey(candidateId, currentMatchKey(candidateId))) {
@@ -74,6 +77,7 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
     if (seenRoles.has(role)) continue
     seenRoles.add(role)
     if (match.verdict !== 'show' || match.closed_at || match.response || considered.has(match.id) || decided.has(match.opportunity_id)) continue
+    if (!released.has(match.opportunity_id)) continue
     const explanation = JSON.parse(match.explanation) as Explanation
     if (explanation.roleFit.fit !== 'fits') continue
     picked.push(match)

@@ -13,6 +13,7 @@ import { buildMatchingProfile } from './profile'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { intentRules } from './profile'
+import { releaseDue } from './release'
 
 // What the opportunities screen shows: assessments made against the current
 // profile and assessor version. After a preference changes, an offer not yet
@@ -127,6 +128,8 @@ export interface OpportunitiesView {
   discarded: DiscardedOpportunity[]
   // Shown, open and not yet answered: what makes Listening say "I found something".
   unseen: number
+  // Found but not given to them yet: a few reach them each day (release.ts).
+  withheld: number
   week: WeekLedger
   // What they said they want: still to send, sent, and no longer followed.
   wanted: WantedOpportunity[]
@@ -292,6 +295,16 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const estimates = estimatesFor(matches.map((match) => match.opportunity_id))
   const floor = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))?.salaryFloor ?? null
 
+  // A few at a time: what is not released yet waits, unless they answered
+  // it or amble already sent it on WhatsApp.
+  const released = releaseDue(candidate.id)
+  const sentOnWhatsapp = new Set(
+    (getDb().prepare('SELECT opportunity_id FROM offer_sends WHERE candidate_id = ? AND sent_at IS NOT NULL').all(candidate.id) as unknown as { opportunity_id: string }[]).map(
+      (row) => row.opportunity_id,
+    ),
+  )
+  let withheld = 0
+
   const found: FoundOpportunity[] = []
   const discarded: DiscardedOpportunity[] = []
   const since = Date.now() - WEEK_MS
@@ -311,6 +324,10 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     if (thisWeek) read++
 
     if (match.verdict === 'show') {
+      if (!released.has(match.opportunity_id) && !decision && !match.response && !sentOnWhatsapp.has(match.opportunity_id)) {
+        if (!match.closed_at && !stale) withheld++
+        continue
+      }
       if (!wanted) found.push({
         id: match.id,
         company: match.company_name,
@@ -394,12 +411,13 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     maybe,
     discarded,
     unseen: fits.filter((item) => !item.closed && !item.stale && item.response === null).length,
+    withheld,
     week: { read, worth: week.filter((entry) => entry.status === 'found').length, entries },
     wanted: wantedAll.filter((item) => item.progress === null),
     sent: wantedAll.filter((item) => item.progress === 'applied'),
     dropped: wantedAll.filter((item) => item.progress === 'dropped'),
     applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id), canFill: canFillForms() },
     whatsapp: { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null },
-    drought: fits.length + maybe.length === 0 ? droughtOf(candidate.id, discarded) : null,
+    drought: fits.length + maybe.length === 0 && withheld === 0 ? droughtOf(candidate.id, discarded) : null,
   }
 }
