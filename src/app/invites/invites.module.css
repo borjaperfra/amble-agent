@@ -33,24 +33,18 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 56px;
+  min-height: 72px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border-soft);
 }
 
-.link {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-body-sm);
-  color: var(--ink-secondary);
-  user-select: all;
+.name {
+  font-size: var(--text-body);
+  color: var(--ink);
 }
 
-.used {
+.used .name {
   color: var(--ink-tertiary);
-  text-decoration: line-through;
-  user-select: none;
 }
 
 .state {
@@ -59,11 +53,16 @@
   white-space: nowrap;
 }
 
-.row :global(.text-btn) {
+.actions {
+  display: flex;
+  gap: 8px;
   flex: none;
+}
+
+.actions :global(.btn) {
+  height: 44px;
+  padding: 0 16px;
   white-space: nowrap;
-  color: var(--moss-dark);
-  font-weight: 500;
 }
 
 @media (max-width: 640px) {

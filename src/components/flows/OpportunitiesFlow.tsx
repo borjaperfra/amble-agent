@@ -415,13 +415,21 @@ function useDecisionBar(active: boolean) {
   return { cardRef, actionsRef, shown }
 }
 
+// A role posted in twenty cities names three and says how many more: the
+// list is not what decides it.
+function fewPlaces(location: string | null, more: (count: number) => string): string | null {
+  if (!location) return null
+  const places = location.split(' · ')
+  return places.length <= 3 ? location : `${places.slice(0, 3).join(' · ')} ${more(places.length - 3)}`
+}
+
 function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
   const [leaving, setLeaving] = useState(false)
   const t = useT()
   const [asking, setAsking] = useState(false)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const meta = [item.company, item.location, item.workplace].filter(Boolean).join(' · ')
+  const meta = [item.company, fewPlaces(item.location, t.opportunities.morePlaces), item.workplace].filter(Boolean).join(' · ')
   const { cardRef, actionsRef, shown: barShown } = useDecisionBar(item.response === null && !asking && !leaving)
 
   async function answer(response: Response, withReason?: string) {
@@ -499,7 +507,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
           <button type="button" className="btn" onClick={() => void answer('interested')}>
             {t.opportunities.interested}
           </button>
-          <button type="button" className="text-btn" onClick={() => setAsking(true)}>
+          <button type="button" className="btn btn-quiet" onClick={() => setAsking(true)}>
             {t.opportunities.notForMe}
           </button>
         </div>
@@ -513,7 +521,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
             <button type="button" className="btn" onClick={() => void answer('interested')}>
               {t.opportunities.interested}
             </button>
-            <button type="button" className={`text-btn ${styles.decisionBarOther}`} onClick={() => setAsking(true)}>
+            <button type="button" className="btn btn-quiet" onClick={() => setAsking(true)}>
               {t.opportunities.notForMe}
             </button>
           </div>,
@@ -598,7 +606,7 @@ function WantedCard({
   const [error, setError] = useState<string | null>(null)
   // What was just done here, so it can be shown before the screen reloads.
   const [moment, setMoment] = useState<'stamped' | 'striking' | 'folding' | null>(null)
-  const meta = [item.company, item.location, item.workplace].filter(Boolean).join(' · ')
+  const meta = [item.company, fewPlaces(item.location, t.opportunities.morePlaces), item.workplace].filter(Boolean).join(' · ')
   const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(new Date(item.since))
   const applied = item.progress === 'applied' || moment === 'stamped' || (moment === 'folding' && item.progress === null)
   const calm = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches

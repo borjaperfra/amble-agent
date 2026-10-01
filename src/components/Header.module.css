@@ -182,12 +182,32 @@
     transform: translateY(-6px) rotate(-45deg);
   }
 
+  /* Open, the menu is the whole screen, opaque, above everything else on
+     the page (the decision bar, the feedback button): nothing of the page
+     shows through to be mistaken for part of it. */
+  .headerOpen {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
+    backdrop-filter: none;
+  }
+
+  .headerOpen .inner {
+    width: 100%;
+  }
+
   .menu {
     display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border-top: 1px solid var(--border-soft);
-    border-bottom: 1px solid var(--border-soft);
     background: var(--paper);
-    padding: 8px var(--page-pad) 16px;
+    padding: 8px var(--page-pad) calc(24px + env(safe-area-inset-bottom));
   }
 
   .menu nav {

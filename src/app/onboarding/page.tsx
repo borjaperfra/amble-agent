@@ -14,6 +14,8 @@ export default async function OnboardingPage() {
     type: source.type,
     status: source.status,
     detail: source.status_detail,
+    // Uploaded, not an address: which place on the screen it fills.
+    file: source.original_filename !== null,
   }))
   return <OnboardingFlow initialSources={sources} />
 }

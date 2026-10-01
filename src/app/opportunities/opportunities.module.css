@@ -37,8 +37,8 @@
 /* ── One opportunity ───────────────────────────────────────────────── */
 
 .card {
-  margin-top: 40px;
-  padding-top: 32px;
+  margin-top: 4px;
+  padding-top: 20px;
   border-top: 1px solid var(--border-soft);
   display: flex;
   flex-direction: column;
@@ -163,10 +163,12 @@
     height: 48px;
   }
 
-  .decisionBarOther {
-    flex: none;
-    min-height: 48px;
-    padding: 0 4px;
+}
+
+/* The note after an answer stays above the bar, not under it. */
+@media (max-width: 640px) {
+  :global(body[data-decision-bar]) .notice {
+    bottom: calc(88px + env(safe-area-inset-bottom));
   }
 }
 
@@ -254,8 +256,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 20px;
+  gap: 12px;
   margin-top: 8px;
+}
+
+/* Both answers side by side, the same size: neither is the small print. */
+.actions > :global(.btn) {
+  flex: 1 1 0;
+  min-width: 140px;
 }
 
 .learn {

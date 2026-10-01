@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getDocumentProxy } from 'unpdf'
 import { inkRuns, splitByInk, type InkRun, type PageItem } from './pdf-ink'
-import { DATA_DIRECTORY, getDb } from '../db/db'
+import { DATA_DIRECTORY, getDb, inTransaction } from '../db/db'
 import { documentKind, isPlainText } from '../files'
 import { safeFetchText } from '../net/safe-fetch'
 import { cleanText, injectionSignals, withoutInjections } from '../untrusted'
@@ -119,6 +119,23 @@ export function discardSourceFiles(sourceId: string): void {
   const uploads = path.join(DATA_DIRECTORY, 'uploads')
   for (const name of [`${sourceId}.txt`, `${sourceId}.original.pdf`]) fs.rmSync(path.join(uploads, name), { force: true })
   getDb().prepare('UPDATE sources SET stored_path = NULL, char_count = 0 WHERE id = ?').run(sourceId)
+}
+
+// Taken back while setting up (the wrong file, a typo in a handle): the
+// source, its files and what was taken from it go. Only before it is read
+// into their map: by then evidence and capabilities rest on it.
+export function removeSource(candidateId: string, sourceId: string): boolean {
+  const db = getDb()
+  const source = db.prepare('SELECT id, status FROM sources WHERE id = ? AND candidate_id = ?').get(sourceId, candidateId) as { id: string; status: string } | undefined
+  if (!source || source.status === 'processed') return false
+  const used = db.prepare('SELECT 1 FROM evidence WHERE source_id = ? OR claim_id IN (SELECT id FROM claims WHERE source_id = ?) LIMIT 1').get(sourceId, sourceId)
+  if (used) return false
+  discardSourceFiles(sourceId)
+  inTransaction(() => {
+    db.prepare('DELETE FROM claims WHERE source_id = ?').run(sourceId)
+    db.prepare('DELETE FROM sources WHERE id = ?').run(sourceId)
+  })
+  return true
 }
 
 // Once a day: files of sources set aside or failed, and files no source

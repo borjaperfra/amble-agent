@@ -151,6 +151,35 @@
   font-weight: 600;
 }
 
+/* Takes back a source added by mistake: a finger-sized target. */
+.remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.remove:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--paper-light);
+}
+
+.rowConnected .rowIdentifier {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
 .enter {
   animation: arrive var(--motion-slow) var(--ease-standard) both;
 }

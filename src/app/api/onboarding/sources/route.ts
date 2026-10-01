@@ -7,6 +7,7 @@ import {
   createLinkedInSource,
   createWebsiteSource,
   MAX_PDF_BYTES,
+  removeSource,
   type SourceCreated,
 } from '@/lib/pipeline/sources'
 import { serverText } from '@/lib/i18n/candidate'
@@ -25,6 +26,8 @@ function sourcesOf(candidate: CandidateRow) {
     type: source.type,
     status: source.status,
     detail: source.status_detail,
+    // Uploaded, not an address: which place on the screen it fills.
+    file: source.original_filename !== null,
   }))
   return NextResponse.json(sources)
 }
@@ -75,4 +78,14 @@ async function addSource(request: Request, candidate: CandidateRow) {
   } catch (error) {
     return failure('source', error)
   }
+}
+
+// DELETE ?id=<source> -> taken back while setting up (the wrong file, a typo).
+// Not once it has been read into their map.
+export async function DELETE(request: Request) {
+  return forCandidate(request, (candidate) => {
+    const id = new URL(request.url).searchParams.get('id') ?? ''
+    if (!removeSource(candidate.id, id)) return NextResponse.json({ error: 'not_removable' }, { status: 409 })
+    return sourcesOf(candidate)
+  })
 }

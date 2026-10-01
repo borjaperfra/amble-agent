@@ -49,7 +49,7 @@ export const en = {
   },
   onboarding: {
     title: 'Let’s build your Rep.',
-    body: 'Start with what already exists.\nI read it while you tell me what you’re looking for.',
+    body: 'Let’s start with what you already have. Upload your docs and I’ll read them while you tell me what you’re looking for.',
     cvUploadLabel: 'Upload your CV as PDF or text',
     cvAddLabel: 'Add your CV as a PDF or text file',
     cv: 'CV',
@@ -58,7 +58,10 @@ export const en = {
     read: 'read',
     githubPlaceholder: 'username',
     githubLabel: 'GitHub username or profile URL',
-    linkedinHint: 'Upload your profile’s PDF above. On LinkedIn: More → Save to PDF.',
+    linkedinHint: 'Upload your profile’s PDF. On LinkedIn: More → Save to PDF.',
+    linkedinUploadLabel: 'Upload your LinkedIn profile’s PDF',
+    remove: (name: string) => `Remove ${name}`,
+    removeFailed: 'I couldn’t remove it. Try again.',
     linkedinPlaceholder: 'Profile URL',
     linkedinLabel: 'LinkedIn profile URL',
     website: 'Website',
@@ -378,7 +381,7 @@ export const en = {
   },
   welcome: {
     title: 'Hi. I’m your Rep.',
-    lead: 'I’m an artificial intelligence agent that looks for work with you. What is sent in your name is your call. Two things before we start.',
+    lead: 'I’m an artificial intelligence agent that looks for work with you. Two things before we start.',
     nameLabel: 'What should I call you?',
     languageLabel: 'Which language shall we use?',
     continue: 'Continue',
@@ -396,6 +399,10 @@ export const en = {
         : `${count === 1 ? 'You have 1 invitation left' : `You have ${count} invitations left`}. Each link creates one account and works once.`,
     copy: 'Copy link',
     copied: 'Copied',
+    share: 'Share',
+    // What goes with the link when they share it from their phone.
+    shareText: 'I’m inviting you to amble: an AI agent that looks for work with you and only shows you what fits.',
+    item: (n: number) => `Invitation ${n}`,
     accepted: 'Accepted',
     available: 'Not used yet',
   },
@@ -422,7 +429,7 @@ export const en = {
     // What they send to link it. The code is what matters; the rest is theirs.
     linkMessage: (code: string) => `Hi amble, it’s me: ${code}`,
     linked: (name: string | null) =>
-      `Done${name ? `, ${name}` : ''}. I’ll only write to you here when something deserves your attention: offers that truly fit and how your applications are going. And ask me anything about your search. I’m amble’s AI agent: what is sent in your name is your call.`,
+      `Done${name ? `, ${name}` : ''}. I’ll only write to you here when something deserves your attention: offers that truly fit and how your applications are going. And ask me anything about your search. I’m amble’s AI agent.`,
     unknown: 'Hi, I’m amble’s AI agent. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
@@ -644,6 +651,7 @@ export const en = {
     emptyMore: 'You’ve seen today’s.',
     emptyMoreLead: 'I have more set aside. I’ll show them to you little by little, the best fits first.',
     worthHearing: 'I found something worth hearing.',
+    morePlaces: (count: number) => `and ${count} more`,
     whyShowing: 'Why I’m showing you this',
     considerAlso: 'One thing to consider',
     unknowns: 'What I don’t know',

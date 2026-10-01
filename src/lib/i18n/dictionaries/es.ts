@@ -50,7 +50,7 @@ export const es: Dictionary = {
   },
   onboarding: {
     title: 'Vamos a construir tu Rep.',
-    body: 'Empecemos por lo que ya existe.\nLo leo mientras me cuentas qué buscas.',
+    body: 'Empecemos por la información que ya tienes. Sube tus docs y los leo mientras me cuentas qué buscas.',
     cvUploadLabel: 'Sube tu CV en PDF o texto',
     cvAddLabel: 'Añade tu CV como archivo PDF o de texto',
     cv: 'CV',
@@ -60,7 +60,10 @@ export const es: Dictionary = {
     githubPlaceholder: 'usuario',
     githubLabel: 'Usuario o URL de perfil de GitHub',
     linkedinPlaceholder: 'URL del perfil',
-    linkedinHint: 'Sube arriba el PDF de tu perfil. En LinkedIn: Más → Guardar en PDF.',
+    linkedinHint: 'Sube el PDF de tu perfil. En LinkedIn: Más → Guardar en PDF.',
+    linkedinUploadLabel: 'Sube el PDF de tu perfil de LinkedIn',
+    remove: (name: string) => `Quitar ${name}`,
+    removeFailed: 'No he podido quitarlo. Vuelve a probar.',
     linkedinLabel: 'URL del perfil de LinkedIn',
     website: 'Web',
     websiteLabel: 'URL de tu web personal',
@@ -378,7 +381,7 @@ export const es: Dictionary = {
   },
   welcome: {
     title: 'Hola. Soy tu Rep.',
-    lead: 'Soy un agente de inteligencia artificial que busca trabajo contigo. Lo que se envíe en tu nombre lo decides tú. Dos cosas antes de empezar.',
+    lead: 'Soy un agente de inteligencia artificial que busca trabajo contigo. Dos cosas antes de empezar.',
     nameLabel: '¿Cómo te llamo?',
     languageLabel: '¿En qué idioma hablamos?',
     continue: 'Seguir',
@@ -396,6 +399,10 @@ export const es: Dictionary = {
         : `${count === 1 ? 'Te queda 1 invitación' : `Te quedan ${count} invitaciones`}. Cada enlace crea una cuenta y solo sirve una vez.`,
     copy: 'Copiar enlace',
     copied: 'Copiado',
+    share: 'Compartir',
+    // What goes with the link when they share it from their phone.
+    shareText: 'Te invito a amble: un agente de IA que busca trabajo contigo y solo te enseña lo que encaja.',
+    item: (n: number) => `Invitación ${n}`,
     accepted: 'Aceptada',
     available: 'Sin usar',
   },
@@ -422,7 +429,7 @@ export const es: Dictionary = {
     // What they send to link it. The code is what matters; the rest is theirs.
     linkMessage: (code: string) => `Hola, amble. Soy yo: ${code}`,
     linked: (name: string | null) =>
-      `Hecho${name ? `, ${name}` : ''}. Por aquí te escribiré solo cuando algo merezca tu atención: ofertas que encajan de verdad y cómo van tus candidaturas. Y pregúntame lo que quieras sobre tu búsqueda. Soy el agente de IA de amble: lo que se envíe en tu nombre lo decides tú.`,
+      `Hecho${name ? `, ${name}` : ''}. Por aquí te escribiré solo cuando algo merezca tu atención: ofertas que encajan de verdad y cómo van tus candidaturas. Y pregúntame lo que quieras sobre tu búsqueda. Soy el agente de IA de amble.`,
     unknown: 'Hola, soy el agente de IA de amble. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
@@ -640,6 +647,7 @@ export const es: Dictionary = {
     emptyMore: 'Ya has visto las de hoy.',
     emptyMoreLead: 'Tengo más guardadas. Te las iré enseñando poco a poco, las que mejor encajen primero.',
     worthHearing: 'He encontrado algo que merece la pena escuchar.',
+    morePlaces: (count: number) => `y ${count} más`,
     whyShowing: 'Por qué te lo enseño',
     considerAlso: 'Una cosa a tener en cuenta',
     unknowns: 'Lo que no sé',

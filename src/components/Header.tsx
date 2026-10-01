@@ -38,14 +38,20 @@ export default function Header({ right, language = true, nav = true }: HeaderPro
     { href: '/me/data', label: t.header.data },
   ]
 
-  // A page change closes it; so does Escape.
+  // A page change closes it; so does Escape. Open, it is the whole screen:
+  // the page behind it does not scroll.
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = overflow
+    }
   }, [open])
 
   async function signOut() {
@@ -75,7 +81,7 @@ export default function Header({ right, language = true, nav = true }: HeaderPro
   )
 
   return (
-    <header className={styles.header}>
+    <header className={open ? `${styles.header} ${styles.headerOpen}` : styles.header}>
       <div className={styles.inner}>
         <Link href="/" className={styles.wordmark} aria-label="amble">
           <Symbol size={26} />
