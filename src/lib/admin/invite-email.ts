@@ -24,7 +24,7 @@ const copy: Record<Locale, (link: string) => Letter & { subject: string }> = {
     fallback: 'Si el botón no funciona, copia este enlace en el navegador:',
     outro: [
       'Entras con tu email, respondes unas pocas preguntas y amble se pone a buscar. Te avisará en cuanto encuentre las primeras ofertas que encajen contigo.',
-      'Es una beta y lo que me cuentes la cambia. Para darme feedback: en la app, el botón «Feedback» (abajo a la derecha, o en el menú); o, si conectas WhatsApp, escríbele a amble por ahí y me llega. También puedes responder a este email: lo leo yo.',
+      'Es una beta y seguro que tiene muchos errores. Por eso te pido que me ayudes a mejorarla. Para darme feedback: en la app, el botón «Feedback» (abajo a la derecha, o en el menú); o, si conectas WhatsApp, escríbele a amble por ahí y me llega. También puedes responder a este email: lo leo yo.',
       'Tus datos personales solo se usan para encontrar las ofertas que encajan contigo: no los vendemos ni los usamos para nada más, y los tratamos conforme al RGPD. Desde la app, en «Tus datos», puedes descargarlos o borrar tu cuenta cuando quieras. Todo el detalle en amble.fyi/es/privacy.',
       'El enlace es solo para ti.',
     ],
@@ -44,7 +44,7 @@ const copy: Record<Locale, (link: string) => Letter & { subject: string }> = {
     fallback: 'If the button doesn’t work, paste this link into your browser:',
     outro: [
       'You sign in with your email, answer a few questions and amble starts looking. It’ll let you know as soon as it finds the first offers that fit you.',
-      'It’s a beta, and what you tell me changes it. To give feedback: in the app, the “Feedback” button (bottom right, or in the menu); or, once you connect WhatsApp, write to amble there and it reaches me. You can also reply to this email: I read every one.',
+      'It’s a beta and it surely has plenty of bugs. That’s why I’m asking you to help me make it better. To give feedback: in the app, the “Feedback” button (bottom right, or in the menu); or, once you connect WhatsApp, write to amble there and it reaches me. You can also reply to this email: I read every one.',
       'Your personal data is only used to find the offers that fit you: we don’t sell it or use it for anything else, and we handle it under the GDPR. In the app, under “Your data”, you can download it or delete your account at any time. The details are at amble.fyi/privacy.',
       'The link is just for you.',
     ],
