@@ -94,6 +94,54 @@ export async function sendMessage(
   return { messageId: result.data?.messageId ?? null }
 }
 
+// An approved template to their number: what opens the conversation again
+// once the 24 hours are over. Its variables, in order.
+export async function sendTemplateMessage(
+  config: ZernioConfig,
+  params: { phone: string; name: string; language: string; values: string[]; idempotencyKey?: string },
+): Promise<void> {
+  await call(
+    config,
+    'POST',
+    '/inbox/conversations',
+    {
+      accountId: config.accountId,
+      participantId: params.phone.replace(/\D/g, ''),
+      templateName: params.name,
+      templateLanguage: params.language,
+      templateParams: params.values,
+    },
+    params.idempotencyKey,
+  )
+}
+
+export interface TemplateDefinition {
+  name: string
+  language: string
+  category: 'UTILITY' | 'MARKETING'
+  body: string
+  example: string[]
+  buttons: string[]
+}
+
+// Submitted to Meta for review (up to 24 hours).
+export async function createTemplate(config: ZernioConfig, template: TemplateDefinition): Promise<unknown> {
+  return call(config, 'POST', '/whatsapp/templates', {
+    accountId: config.accountId,
+    name: template.name,
+    category: template.category,
+    language: template.language,
+    components: [
+      { type: 'body', text: template.body, example: { body_text: [template.example] } },
+      { type: 'buttons', buttons: template.buttons.map((text) => ({ type: 'quick_reply', text })) },
+    ],
+  })
+}
+
+export async function listTemplates(config: ZernioConfig): Promise<unknown> {
+  return call(config, 'GET', `/whatsapp/templates?accountId=${encodeURIComponent(config.accountId)}`)
+}
+
 // Seen: the blue ticks on what they sent.
 export async function markRead(config: ZernioConfig, conversationId: string): Promise<void> {
   await call(config, 'POST', `/inbox/conversations/${encodeURIComponent(conversationId)}/read`, { accountId: config.accountId })

@@ -1,3 +1,4 @@
+import { sendTemplate, templatesEnabled } from './templates'
 import { getDb } from '../db/db'
 import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
@@ -144,6 +145,23 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
     // The second time says how long it has been, not the same question again.
     const text = due.round > 1 ? w.askAgain(due.title, due.company) : w.ask(due.title, due.company)
     try {
+      // Past the 24 hours, the approved template asks it, its buttons in the
+      // template's order (replied, nothing yet, a no).
+      if (!open && templatesEnabled()) {
+        await sendTemplate(
+          config,
+          link,
+          'followup',
+          [due.title, due.company],
+          [payload(due.opportunity_id, due.round, 'called'), payload(due.opportunity_id, due.round, 'nothing'), payload(due.opportunity_id, due.round, 'rejected')],
+          `tpl-fu:${candidateId}:${due.opportunity_id}:${due.round}`,
+        )
+        getDb()
+          .prepare('INSERT INTO application_followups (candidate_id, opportunity_id, round, asked_at) VALUES (?, ?, ?, ?)')
+          .run(candidateId, due.opportunity_id, due.round, now())
+        stats.asked++
+        continue
+      }
       await sendMessage(config, {
         conversationId: link.conversation_id,
         text,

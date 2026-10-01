@@ -531,6 +531,8 @@ export const es: Dictionary = {
     pauseExpiredPaused: 'Eso ya no lo tengo pendiente. La búsqueda sigue en pausa; si quieres reactivarla, dímelo.',
     pauseExpiredRunning: 'Eso ya no lo tengo pendiente. Sigo buscando; si quieres pausarla, dímelo.',
     tapExpired: 'Eso ya no lo tengo a mano. Dime qué necesitas y lo miramos.',
+    // "Ahora no" on a template.
+    templateNotNow: 'Vale, sin problema. Aquí estoy cuando quieras.',
     alreadyApplied: 'Esa ya la tienes enviada. Si te dicen algo, cuéntamelo.',
     fillNeedsPrepare: 'Antes tengo que prepararla. ¿Lo hago?',
     fillMissing: (missing: string[], url: string) =>

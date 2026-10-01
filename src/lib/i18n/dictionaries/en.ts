@@ -534,6 +534,8 @@ export const en = {
     pauseExpiredPaused: 'I no longer have that pending. The search is still paused; if you want to resume it, tell me.',
     pauseExpiredRunning: 'I no longer have that pending. I’m still searching; if you want to pause it, tell me.',
     tapExpired: 'I no longer have that at hand. Tell me what you need and we’ll look at it.',
+    // "Not now" on a template.
+    templateNotNow: 'OK, no problem. I’m here whenever you want.',
     alreadyApplied: 'You’ve already sent that one. If they get back to you, tell me.',
     fillNeedsPrepare: 'I need to prepare it first. Shall I?',
     fillMissing: (missing: string[], url: string) =>

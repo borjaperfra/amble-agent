@@ -5,14 +5,15 @@ import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { MAX_AUDIO_BYTES, transcribe } from '../model/transcribe'
 import { runAction } from './actions'
-import { answerInterviewQuestion, pendingInterviewQuestion } from './interview'
-import { leaveReminder } from './reminders'
+import { answerInterviewQuestion, pendingInterviewQuestion, sendTeasedQuestion } from './interview'
+import { leaveReminder, sendTeasedReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
 import { answerMessage, languageOf } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
-import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settleAwaitedReason } from './offers'
+import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settleAwaitedReason, showTeasedOffer } from './offers'
+import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
 import { isMaliciousLink } from '../net/reputation'
@@ -38,7 +39,8 @@ interface InboundEvent {
     attachments?: unknown[]
     sender: { id: string; phoneNumber?: string | null; businessScopedUserId?: string }
   }
-  metadata?: { interactiveId?: string } | null
+  // buttonPayload: a tap on a template's button (a plain button reply, not an interactive one).
+  metadata?: { interactiveId?: string; buttonPayload?: string } | null
 }
 
 // Where to start, said to a number amble does not know: once in a while,
@@ -62,7 +64,7 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   const phone = (message.sender.phoneNumber ?? `+${message.sender.id}`).replace(/[^\d+]/g, '')
   const userId = message.sender.businessScopedUserId ?? null
   const text = typeof message.text === 'string' ? message.text.trim() : ''
-  const interactiveId = event.metadata?.interactiveId ?? null
+  let interactiveId = event.metadata?.interactiveId ?? null
 
   // Each reply its own key: one event can be answered in several messages.
   let replies = 0
@@ -98,6 +100,29 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   if (!candidate) return
   replyTo = candidate.id
   const w = dictionaries[candidateLocale(candidate)].whatsapp
+
+  // A template's button: what it stands for. "Not now" is acknowledged; the
+  // offer, the reminder or the question it announced follows the tap; the
+  // rest answer as the ordinary message's buttons would.
+  const fromTemplate = templateTap(candidate.id, event.metadata?.buttonPayload ?? null, text)
+  if (fromTemplate !== null) {
+    if (fromTemplate === '') {
+      logMessage(candidate.id, 'in', text)
+      await reply(w.templateNotNow)
+      return
+    }
+    if (fromTemplate.startsWith('tpl:of:') || fromTemplate.startsWith('tpl:rem:') || fromTemplate === 'tpl:question') {
+      logMessage(candidate.id, 'in', text)
+      const shown = fromTemplate.startsWith('tpl:of:')
+        ? await showTeasedOffer(candidate.id, fromTemplate.slice('tpl:of:'.length))
+        : fromTemplate.startsWith('tpl:rem:')
+          ? await sendTeasedReminder(candidate.id, fromTemplate.slice('tpl:rem:'.length))
+          : await sendTeasedQuestion(candidate.id)
+      if (!shown) await reply(w.tapExpired)
+      return
+    }
+    interactiveId = fromTemplate
+  }
 
   const offerTap = parseOfferPayload(interactiveId)
   if (offerTap) {

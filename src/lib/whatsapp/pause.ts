@@ -1,3 +1,4 @@
+import { sendTemplate, templatesEnabled } from './templates'
 import { candidateById, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
@@ -62,9 +63,9 @@ export async function sendPauseCheckIns(): Promise<{ asked: number; skipped: num
   const config = zernioConfig()
   if (!config) return stats
   const due = getDb()
-    .prepare('SELECT id FROM candidates WHERE search_paused_at IS NOT NULL AND pause_check_on IS NOT NULL AND pause_check_on <= ?')
-    .all(new Date().toISOString().slice(0, 10)) as { id: string }[]
-  for (const { id } of due) {
+    .prepare('SELECT id, pause_check_on FROM candidates WHERE search_paused_at IS NOT NULL AND pause_check_on IS NOT NULL AND pause_check_on <= ?')
+    .all(new Date().toISOString().slice(0, 10)) as { id: string; pause_check_on: string }[]
+  for (const { id, pause_check_on: checkOn } of due) {
     const link = linkOf(id)
     const open = link ? windowOpen(link) : false
     getDb().prepare('UPDATE candidates SET pause_check_on = NULL WHERE id = ?').run(id)
@@ -74,6 +75,14 @@ export async function sendPauseCheckIns(): Promise<{ asked: number; skipped: num
     }
     const text = dictionaries[candidateLocale(candidateById(id))].whatsapp.pauseCheckIn
     try {
+      if (!open && templatesEnabled()) {
+        const locale = candidateLocale(candidateById(id))
+        const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'Europe/Madrid' }).format(new Date(`${checkOn}T12:00:00Z`))
+        const buttons = proposePause(id, false)
+        await sendTemplate(config, link, 'pause', [date], buttons.map((button) => button.payload), `tpl-pause:${id}:${checkOn}`)
+        stats.asked++
+        continue
+      }
       await sendMessage(config, { conversationId: link.conversation_id, text, buttons: proposePause(id, false), utility: !open, idempotencyKey: `pausecheck:${id}:${new Date().toISOString().slice(0, 10)}` })
       logMessage(id, 'out', text)
       stats.asked++

@@ -17,6 +17,7 @@ import { estimateRange, estimateSource } from '../salary/format'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen, type WhatsAppLink } from './link'
 import { reviewForSending, type Pitch } from './review'
+import { sendTemplate, templatesEnabled } from './templates'
 import { sendMessage, zernioConfig, type ZernioConfig } from './zernio'
 
 // Offers on WhatsApp: only what the first reading found to be their kind of
@@ -146,6 +147,21 @@ async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, 
   logMessage(link.candidate_id, 'out', body)
 }
 
+// "Enséñamela" on the offer's template: the offer itself, as reviewed when
+// the template went out. False when it is no longer there to show.
+export async function showTeasedOffer(candidateId: string, matchId: string): Promise<boolean> {
+  const config = zernioConfig()
+  const link = linkOf(candidateId)
+  if (!config || !link?.conversation_id) return false
+  const match = listMatchesForKey(candidateId, currentMatchKey(candidateId)).find((row) => row.id === matchId)
+  if (!match || match.closed_at) return false
+  const sent = getDb().prepare('SELECT pitch FROM offer_sends WHERE candidate_id = ? AND match_id = ?').get(candidateId, matchId) as { pitch: string | null } | undefined
+  const floor = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))?.salaryFloor ?? null
+  const estimate = publishedSalary(match) ? null : shownEstimate(estimatesFor([match.opportunity_id]).get(match.opportunity_id), floor)
+  await sendOne(config, link, { ...match, estimate }, sent?.pitch ? (JSON.parse(sent.pitch) as Pitch) : null)
+  return true
+}
+
 export interface OfferStats {
   sent: number
   held: number
@@ -169,9 +185,10 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
     const link = linkOf(candidateId)
     // Paused: nothing goes out until they resume it.
     if (!link?.conversation_id || isSearchPaused(candidateId) || !paceAllows(candidateId)) continue
-    // Outside the 24 hours an offer needs an approved template; the shared
-    // test number has none, and the real number's is still to be made.
-    if (!windowOpen(link)) {
+    // Outside the 24 hours an offer goes as the approved template that asks
+    // first; the shared test number has none.
+    const open = windowOpen(link)
+    if (!open && (!templatesEnabled() || config.sandbox)) {
       stats.skipped.push({ candidateId, reason: 'window closed: an offer needs a template' })
       continue
     }
@@ -201,7 +218,12 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
           stats.held++
           continue
         }
-        await sendOne(config, link, match, review.pitch)
+        if (open) await sendOne(config, link, match, review.pitch)
+        else {
+          await sendTemplate(config, link, 'offer', [match.title, match.company_name], [`tpl:of:${match.id}`, null], `tpl-of:${match.id}`)
+          // Counted for the pace now; the whole offer follows their tap.
+          getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), candidateId, match.id)
+        }
         stats.sent++
         break
       } catch (error) {

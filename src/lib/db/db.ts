@@ -636,6 +636,8 @@ function migrate(db: DatabaseSync): void {
   // What the agent waits for on WhatsApp next (why an offer does not fit, a
   // yes to a change): one thing at a time, as JSON.
   addColumn(db, 'whatsapp_links', 'awaiting', 'TEXT')
+  // What the last template's buttons stand for, until tapped (whatsapp/templates.ts).
+  addColumn(db, 'whatsapp_links', 'template_taps', 'TEXT')
   // The offer's message as the second reading wrote it for them.
   addColumn(db, 'offer_sends', 'pitch', 'TEXT')
 

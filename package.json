@@ -12,6 +12,7 @@
     "sourcing": "tsx --env-file-if-exists=.env.local scripts/sourcing.ts",
     "listen": "tsx --env-file-if-exists=.env.local scripts/sourcing.ts listen",
     "auth": "tsx --env-file-if-exists=.env.local scripts/auth.ts",
+    "whatsapp:templates": "tsx scripts/whatsapp-templates.ts",
     "resolve-boards": "tsx --env-file-if-exists=.env.local scripts/resolve-boards.ts",
     "verify-board": "tsx scripts/verify-board.ts"
   },

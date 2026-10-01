@@ -1,3 +1,4 @@
+import { sendTemplate, templatesEnabled } from './templates'
 import { getDb } from '../db/db'
 import { candidateById, getTurn, isSearchPaused, now } from '../db/repo'
 import { refreshDetectedLocale } from '../i18n/candidate'
@@ -65,6 +66,13 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
       continue
     }
     try {
+      if (!open && templatesEnabled()) {
+        await sendTemplate(config, link, 'question', [], ['tpl:question', null], `tpl-iq:${candidateId}:${new Date().toISOString().slice(0, 10)}`)
+        // Counted as asked, so it is not asked again for a while.
+        db.prepare('INSERT INTO whatsapp_questions (candidate_id, turn_id, asked_at) VALUES (?, ?, ?)').run(candidateId, `template:${now()}`, now())
+        stats.asked++
+        continue
+      }
       const next = await planNextQuestion(candidateId, { setup: false })
       if (next.action !== 'ASK' || !next.turnId || !next.question) continue
       const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
@@ -78,4 +86,18 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
     }
   }
   return stats
+}
+
+// "Dime" on the question's template: the question itself.
+export async function sendTeasedQuestion(candidateId: string): Promise<boolean> {
+  const config = zernioConfig()
+  const link = linkOf(candidateId)
+  if (!config || !link?.conversation_id) return false
+  const next = await planNextQuestion(candidateId, { setup: false })
+  if (next.action !== 'ASK' || !next.turnId || !next.question) return false
+  const text = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.interviewQuestion(next.question)
+  await sendMessage(config, { conversationId: link.conversation_id, text, idempotencyKey: `iq:${next.turnId}` })
+  getDb().prepare('INSERT INTO whatsapp_questions (candidate_id, turn_id, asked_at) VALUES (?, ?, ?)').run(candidateId, next.turnId, now())
+  logMessage(candidateId, 'out', text)
+  return true
 }
