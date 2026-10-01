@@ -196,6 +196,11 @@ export interface ModelRunRow {
   ok: number
   error: string | null
   raw_output: string | null
+  // What the provider counted, when it says (usage in its reply).
+  prompt_tokens?: number | null
+  cached_tokens?: number | null
+  completion_tokens?: number | null
+  reasoning_tokens?: number | null
   created_at: string
 }
 
@@ -752,8 +757,9 @@ export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
   try {
     getDb()
       .prepare(
-        `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO model_runs (id, candidate_id, task, task_version, provider, model_id, base_url, prompt_chars, output_chars, latency_ms, ok, error, raw_output,
+           prompt_tokens, cached_tokens, completion_tokens, reasoning_tokens, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         row.id,
         row.candidate_id,
@@ -768,6 +774,10 @@ export function insertModelRun(row: Omit<ModelRunRow, 'created_at'>): void {
         row.ok,
         row.error,
         row.raw_output,
+        row.prompt_tokens ?? null,
+        row.cached_tokens ?? null,
+        row.completion_tokens ?? null,
+        row.reasoning_tokens ?? null,
         now(),
       )
   } catch {

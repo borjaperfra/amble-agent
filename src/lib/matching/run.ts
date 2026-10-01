@@ -13,6 +13,7 @@ import { theirStackConfigured, type TheirStackQuery } from '../sourcing/theirsta
 import { ASSESS_VERSION, assessOpportunity, type Explanation, type Gate } from './assess'
 import { FACTS_VERSION, hasStoredFacts, offerFacts, offerFactsEnabled, preGate, preGatesCanApply, worthReadingFacts } from './facts'
 import { buildMatchingProfile } from './profile'
+import { carryOver, recordSnapshot, snapshotOf, type CarryStats } from './carry'
 import { EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeMatches, placeOf, placeOutsideEurope } from './places'
 import { prefilter, roleQueryFor, titleRank, type RoleQuery } from './role-query'
 import { estimatesFor } from '../salary/estimate'
@@ -57,6 +58,9 @@ export interface MatchingStats {
   sharedAssessments: number
   // Roles set aside on the offer's facts, without the assessor (facts.ts).
   preGated: number
+  // Earlier judgments that still stand with this profile, kept without a
+  // model call (carry.ts).
+  carried: number
   verdicts: Record<MatchVerdict, number>
   waiting: number
   // Roles left for the next pass because this one ran out of time.
@@ -67,6 +71,22 @@ export interface MatchingStats {
 // An assessment belongs to a profile and to a version of the assessor.
 export function currentMatchKey(candidateId: string): string {
   return `${buildMatchingProfile(candidateId).hash}:${ASSESS_VERSION}`
+}
+
+// Records what this profile's key is made with, and carries over to it what
+// still stands of the earlier judgments: those are not read again.
+function carryToCurrent(candidateId: string, matchKey: string, profile: ReturnType<typeof buildMatchingProfile>, query: RoleQuery): CarryStats {
+  const snapshot = snapshotOf(candidateId, profile, query)
+  recordSnapshot(candidateId, matchKey, snapshot)
+  return carryOver(candidateId, matchKey, snapshot, query)
+}
+
+// Right after their rules change: what still stands is on the screen under
+// the new rules at once, before the re-read (which may wait for a pass).
+export async function carryOverFor(candidateId: string): Promise<CarryStats> {
+  const profile = buildMatchingProfile(candidateId)
+  const query = await roleQueryFor(candidateId, profile)
+  return carryToCurrent(candidateId, `${profile.hash}:${ASSESS_VERSION}`, profile, query)
 }
 
 // The first posting's text, or any other city's of the same role.
@@ -144,6 +164,7 @@ export async function runMatching(options: {
   const profile = buildMatchingProfile(candidate.id)
   const query = await roleQueryFor(candidate.id, profile)
   const matchKey = `${profile.hash}:${ASSESS_VERSION}`
+  const carried = carryToCurrent(candidate.id, matchKey, profile, query)
   const assessed = assessedOpportunityIds(candidate.id, matchKey)
 
   const stats: MatchingStats = {
@@ -155,6 +176,7 @@ export async function runMatching(options: {
     assessedNow: 0,
     sharedAssessments: 0,
     preGated: 0,
+    carried: carried.carried,
     verdicts: { show: 0, hold: 0, discarded: 0 },
     waiting: 0,
     outOfTime: 0,
@@ -585,6 +607,14 @@ async function reread(candidateId: string): Promise<void> {
   rereads.running.add(candidateId)
   let locked = false
   try {
+    // What still stands is carried at once; only the rest waits for the read.
+    if (listCapabilities(candidateId).length > 0) {
+      const carried = await carryOverFor(candidateId).catch((error) => {
+        console.error(`[listen] carrying over for ${candidateId} failed:`, error)
+        return null
+      })
+      if (carried) console.log(`[listen] carried over for ${candidateId}: ${JSON.stringify(carried)}`)
+    }
     const giveUpAt = Date.now() + REREAD_WAIT_MAX_MS
     // Their first read, or a pass, may be running: it goes first.
     while (firstReads.running.has(candidateId) || !(locked = takeLock())) {

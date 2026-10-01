@@ -169,7 +169,7 @@ async function callWhenFree(
   system: string,
   user: string,
   temperature: number,
-): Promise<{ content: string; latencyMs: number }> {
+): Promise<{ content: string; latencyMs: number; usage: Usage }> {
   const deadline = Date.now() + RETRY_BUDGET_MS[background ? 'background' : 'interactive']
   for (let retry = 0; ; retry++) {
     const pool = await acquireSlot(background)
@@ -206,6 +206,34 @@ OUTPUT LANGUAGE: write every human-readable value (sentences, names, labels, que
 interface ChatCompletionResponse {
   choices?: { message?: { content?: string } }[]
   error?: { message?: string }
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    // OpenAI's shape (what Helmcode returns) and DeepSeek's own.
+    prompt_tokens_details?: { cached_tokens?: number }
+    prompt_cache_hit_tokens?: number
+    completion_tokens_details?: { reasoning_tokens?: number }
+  }
+}
+
+// What the provider counted for one call; null where it says nothing.
+export interface Usage {
+  promptTokens: number | null
+  cachedTokens: number | null
+  completionTokens: number | null
+  reasoningTokens: number | null
+}
+
+const count = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null)
+
+function usageOf(body: ChatCompletionResponse | null): Usage {
+  const usage = body?.usage
+  return {
+    promptTokens: count(usage?.prompt_tokens),
+    cachedTokens: count(usage?.prompt_tokens_details?.cached_tokens) ?? count(usage?.prompt_cache_hit_tokens),
+    completionTokens: count(usage?.completion_tokens),
+    reasoningTokens: count(usage?.completion_tokens_details?.reasoning_tokens),
+  }
 }
 
 function stripCodeFences(text: string): string {
@@ -238,7 +266,7 @@ async function callChatCompletion(
   system: string,
   user: string,
   temperature: number,
-): Promise<{ content: string; latencyMs: number }> {
+): Promise<{ content: string; latencyMs: number; usage: Usage }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 120_000)
   const startedAt = Date.now()
@@ -273,7 +301,7 @@ async function callChatCompletion(
     if (typeof content !== 'string' || content.length === 0) {
       throw new ModelError('The model returned an empty response.')
     }
-    return { content, latencyMs }
+    return { content, latencyMs, usage: usageOf(body) }
   } catch (error) {
     if (error instanceof ModelError) throw error
     if (error instanceof Error && error.name === 'AbortError') {
@@ -308,7 +336,7 @@ export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): P
         : `${user}
 
 IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unknown issue'}. Respond again with JSON that strictly satisfies the schema.`
-    const record = (outcome: { content: string | null; latencyMs: number | null; error: string | null }) =>
+    const record = (outcome: { content: string | null; latencyMs: number | null; error: string | null; usage?: Usage }) =>
       insertModelRun({
         id: runId,
         candidate_id: candidateId,
@@ -323,8 +351,12 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
         ok: outcome.error === null ? 1 : 0,
         error: outcome.error,
         raw_output: outcome.content?.slice(0, 8000) ?? null,
+        prompt_tokens: outcome.usage?.promptTokens ?? null,
+        cached_tokens: outcome.usage?.cachedTokens ?? null,
+        completion_tokens: outcome.usage?.completionTokens ?? null,
+        reasoning_tokens: outcome.usage?.reasoningTokens ?? null,
       })
-    let reply: { content: string; latencyMs: number }
+    let reply: { content: string; latencyMs: number; usage: Usage }
     try {
       reply = await callWhenFree(options.background ?? false, config.baseUrl, config.modelId, system, attemptUser, temperature)
     } catch (error) {
@@ -333,13 +365,13 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
       record({ content: null, latencyMs: null, error: modelError.message })
       throw modelError
     }
-    const { content, latencyMs } = reply
+    const { content, latencyMs, usage } = reply
     let parsed: unknown
     try {
       parsed = JSON.parse(stripCodeFences(content))
     } catch {
       // Invalid JSON deserves the retry.
-      record({ content, latencyMs, error: 'Invalid JSON in model response' })
+      record({ content, latencyMs, usage, error: 'Invalid JSON in model response' })
       lastError = new ModelError('The model returned invalid JSON.', { detail: 'json_parse' })
       continue
     }
@@ -349,16 +381,16 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
     } catch (error) {
       // A shape so far off that reading it failed.
       const modelError = new ModelError('The model response could not be read.', { detail: error instanceof Error ? error.message : undefined })
-      record({ content, latencyMs, error: modelError.message })
+      record({ content, latencyMs, usage, error: modelError.message })
       throw modelError
     }
     if (!validated.success) {
       const issues = formatSchemaIssues(validated.error.issues)
-      record({ content, latencyMs, error: `Schema validation failed: ${issues}` })
+      record({ content, latencyMs, usage, error: `Schema validation failed: ${issues}` })
       lastError = new ModelError('The model response did not match the expected schema.', { detail: issues })
       continue
     }
-    record({ content, latencyMs, error: null })
+    record({ content, latencyMs, usage, error: null })
     return { data: validated.data, modelRunId: runId, latencyMs }
   }
 

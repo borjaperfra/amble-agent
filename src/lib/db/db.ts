@@ -736,6 +736,28 @@ function migrate(db: DatabaseSync): void {
     );
   `)
 
+  // An assessment carried over to a new profile without a model call: the
+  // key it was copied from and why it still holds (src/lib/matching/carry.ts).
+  addColumn(db, 'opportunity_matches', 'carried_from', 'TEXT')
+  addColumn(db, 'opportunity_matches', 'carried_reason', 'TEXT')
+  // What each profile an assessment belongs to was, rules and query as the
+  // assessor used them: what a change of rules is compared with.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS matching_snapshots (
+      candidate_id TEXT NOT NULL,
+      match_key TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (candidate_id, match_key)
+    );
+  `)
+  // What the provider counted for each call: tokens in, of them read from its
+  // prompt cache, tokens out and of them reasoning. Null when it says nothing.
+  addColumn(db, 'model_runs', 'prompt_tokens', 'INTEGER')
+  addColumn(db, 'model_runs', 'cached_tokens', 'INTEGER')
+  addColumn(db, 'model_runs', 'completion_tokens', 'INTEGER')
+  addColumn(db, 'model_runs', 'reasoning_tokens', 'INTEGER')
+
   // What filling forms has taught, for everyone: per ATS and kind of field,
   // how often each way of filling it held (src/lib/apply/reflect.ts).
   db.exec(`

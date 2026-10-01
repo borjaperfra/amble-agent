@@ -26,6 +26,10 @@ export interface MatchRow {
   response: string | null
   response_reason: string | null
   responded_at: string | null
+  // Carried over from an earlier profile's judgment without a model call
+  // (matching/carry.ts): that judgment's key, and why it still stands.
+  carried_from: string | null
+  carried_reason: string | null
 }
 
 export function getRoleQuery(candidateId: string, profileHash: string): RoleQueryRow | undefined {

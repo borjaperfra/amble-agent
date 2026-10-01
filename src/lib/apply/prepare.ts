@@ -249,7 +249,13 @@ async function prepare(candidateId: string, opportunityId: string): Promise<Prep
     // Two languages in one answer: the advice in theirs, the rest in the posting's.
     language: null,
     system: systemPrompt(LANGUAGE_NAME[locale]),
-    user: `POSTING:\n${JSON.stringify(
+    // What is theirs first and the offer last: the same person's part is the
+    // same words on every call, which the provider reads from its cache.
+    user: `CAPABILITIES:\n${JSON.stringify(profile.capabilities, null, 1)}\n\nEVIDENCE:\n${JSON.stringify(
+      evidence.map((item) => ({ id: item.id, statement: item.statement, source: item.source_type, confirmed: item.candidate_confirmed === 1 })),
+      null,
+      1,
+    )}\n\nEXPERIENCE:\n${profile.experience.map((line) => `- ${line}`).join('\n') || '(none)'}\n\nPOSTING:\n${JSON.stringify(
       { company: offer.company, title: offer.title, location: offer.location, description: (offer.description ?? '').slice(0, MAX_DESCRIPTION_CHARS) },
       null,
       1,
@@ -262,11 +268,7 @@ async function prepare(candidateId: string, opportunityId: string): Promise<Prep
       })),
       null,
       1,
-    )}\n\nCAPABILITIES:\n${JSON.stringify(profile.capabilities, null, 1)}\n\nEVIDENCE:\n${JSON.stringify(
-      evidence.map((item) => ({ id: item.id, statement: item.statement, source: item.source_type, confirmed: item.candidate_confirmed === 1 })),
-      null,
-      1,
-    )}\n\nEXPERIENCE:\n${profile.experience.map((line) => `- ${line}`).join('\n') || '(none)'}`,
+    )}`,
     schema: prepareSchema,
     temperature: 0.4,
   })
