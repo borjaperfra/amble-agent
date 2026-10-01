@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { getRoleQuery, insertRoleQuery } from '../db/matching'
 import type { OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
+import { amountsIn } from './assess'
 import { normaliseTitle } from '../sourcing/text'
 import { cityAreaTerms, EUROPE, hasUnlistedPlaces, placeMatches, placeOf, remoteOutsideEurope } from './places'
 import type { MatchingProfile } from './profile'
@@ -15,7 +16,7 @@ import type { MatchingProfile } from './profile'
 // passes to the model, which can read the description.
 
 // Part of the stored query's key: a new version of the prompt means a new query.
-const ROLE_QUERY_VERSION = 'v5'
+const ROLE_QUERY_VERSION = 'v6'
 
 export const SENIORITY_LEVELS = ['junior', 'mid_level', 'senior', 'staff', 'c_level'] as const
 export type Seniority = (typeof SENIORITY_LEVELS)[number]
@@ -89,7 +90,7 @@ function salaryFloorOf(value: unknown): RoleQuery['salaryFloor'] {
   return { amount: Math.round(amount), currency, ruleId }
 }
 
-const SYSTEM_PROMPT = `You are Amble's role-query designer, version 5. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
+const SYSTEM_PROMPT = `You are Amble's role-query designer, version 6. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
 
 Output:
 - titleInclude: 8 to 30 short lowercase words or phrases; a posting passes only if its title contains one, and they are read in the order you list them, so list first the titles of the roles a confirmed rule says they want. When a confirmed rule names the roles they want, cover those roles and their close variants, not every family their past makes credible (someone who moved from engineering to developer relations and asks for developer relations does not want "software engineer" or "backend" titles). Otherwise cover every role family this person could credibly do, in English and in the candidate's own language (e.g. "marketing", "community", "developer relations", "devrel", "developer advocate", "growth", "content", "brand"). Recall matters more than precision here: a later stage reads each survivor carefully.
@@ -98,7 +99,7 @@ Output:
 - requireRemote: true only if a confirmed hard filter demands remote work, including a filter that accepts office days only in some places ("Madrid, or remote from Spain", "on-site in Barcelona or fully remote"): that is requireRemote true with those places in officeAllowed. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.
 - homeCountry: the ISO 3166-1 alpha-2 code of the country the candidate lives in, only if the experience states it (a city or country). Null if unclear.
 - seniority: the levels from ["junior", "mid_level", "senior", "staff", "c_level"] this person's experience makes credible to apply for. Usually one to three adjacent levels.
-- salaryFloor: the gross yearly salary below which this person says no, only if a confirmed rule states it as a figure: {"amount": the full number (75000, not 75), "currency": ISO 4217 code, "ruleId": the id of the rule that states it}. When the rules give several figures, the one they call the real floor. Rules are listed newest first: when two rules state different floors, the newer one (listed first) is the floor, whatever the older one calls itself; the person changed their mind. Null if no rule states a floor.
+- salaryFloor: the gross yearly salary below which this person says no to a role as it is usually offered, only if a confirmed rule states it as a figure: {"amount": the full number (75000, not 75), "currency": ISO 4217 code, "ruleId": the id of the rule that states the floor itself}. A figure tied to a condition is not the floor, even when it mentions the floor in passing: pay asked in exchange for equity, a bonus or some other trade-off, a figure from an offer they turned down or accepted, a figure that did not change their answer ("not even with 130K"). Cite the rule that states the floor on its own terms, not one that only compares something to it. Rules are listed newest first: only when two rules each state the floor itself with different figures is the newer one (listed first) the floor; the person changed their mind. Null if no rule states a floor.
 - languages: ISO 639-1 codes of the languages this person can work in, only as LANGUAGES states them. Empty if it says nothing.
 
 Only confirmed rules are given to you; do not invent constraints they do not state.
@@ -139,7 +140,6 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
   const hardFilterIds = new Set(profile.rules.filter((rule) => rule.kind === 'hard_filter').map((rule) => rule.id))
   const locationJustified = data.locationRuleIds.some((id) => hardFilterIds.has(id))
   const remoteJustified = data.remoteRuleIds.some((id) => hardFilterIds.has(id))
-  const ruleIds = new Set(profile.rules.map((rule) => rule.id))
   const query: RoleQuery = {
     titleInclude: data.titleInclude,
     titleExclude: data.titleExclude.filter((term) => !data.titleInclude.includes(term)),
@@ -148,12 +148,20 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
     officeAllowed: remoteJustified ? data.officeAllowed : [],
     homeCountry: data.homeCountry,
     seniority: data.seniority,
-    // A floor stands only on a confirmed rule the candidate stated.
-    salaryFloor: data.salaryFloor && ruleIds.has(data.salaryFloor.ruleId) ? data.salaryFloor : null,
+    salaryFloor: floorOf(data.salaryFloor, profile),
     languages: profile.languageClaims.length > 0 ? data.languages : [],
   }
   insertRoleQuery(candidateId, key, query, modelRunId)
   return query
+}
+
+// A floor stands only on a confirmed rule the candidate stated, and only with
+// a figure that rule states: never a number the model worked out.
+function floorOf(floor: RoleQuery['salaryFloor'], profile: MatchingProfile): RoleQuery['salaryFloor'] {
+  if (!floor) return null
+  const rule = profile.rules.find((candidate) => candidate.id === floor.ruleId)
+  if (!rule || !amountsIn(rule.statement).some((figure) => Math.abs(figure - floor.amount) < 1)) return null
+  return floor
 }
 
 function containsTerm(text: string, term: string): boolean {
