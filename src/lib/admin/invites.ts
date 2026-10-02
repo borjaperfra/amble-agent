@@ -150,8 +150,9 @@ export class InviteRefused extends Error {
 
 // mode 'email': a letter each, never a second one for the same invitation.
 // mode 'link': only the link, for the owner to send themselves.
-// Only addresses on the waitlist count, with the language they signed up in;
-// who already has an account is skipped.
+// Only addresses on the waitlist count; who already has an account is skipped.
+// The letter goes in Spanish, with a line in English: most signed up on the
+// site's English page whatever language they speak (the beta is in Spain).
 export async function inviteFromWaitlist(emails: string[], mode: 'email' | 'link'): Promise<InviteOutcome[]> {
   const wanted = new Set(emails.map(normalize))
   if (wanted.size === 0) throw new InviteRefused('none')
@@ -187,7 +188,7 @@ export async function inviteFromWaitlist(emails: string[], mode: 'email' | 'link
       continue
     }
     try {
-      await sendInviteEmail({ to: entry.email, locale: entry.locale, link, idempotencyKey: `waitlist-invite-${invitation.id}` })
+      await sendInviteEmail({ to: entry.email, locale: 'es', link, idempotencyKey: `waitlist-invite-${invitation.id}` })
       getDb().prepare('UPDATE waitlist_invites SET sent_at = ?, send_error = NULL WHERE email = ?').run(now(), entry.normalized)
       outcomes.push({ email: entry.email, result: 'sent', link })
     } catch (error) {

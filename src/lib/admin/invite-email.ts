@@ -27,6 +27,7 @@ const copy: Record<Locale, (link: string) => Letter & { subject: string }> = {
       'Es una beta y seguro que tiene muchos errores. Por eso te pido que me ayudes a mejorarla. Para darme feedback: en la app, el botón «Feedback» (abajo a la derecha, o en el menú); o, si conectas WhatsApp, escríbele a amble por ahí y me llega. También puedes responder a este email: lo leo yo.',
       'Tus datos personales solo se usan para encontrar las ofertas que encajan contigo: no los vendemos ni los usamos para nada más, y los tratamos conforme al RGPD. Desde la app, en «Tus datos», puedes descargarlos o borrar tu cuenta cuando quieras. Todo el detalle en amble.fyi/es/privacy.',
       'El enlace es solo para ti.',
+      'Prefer English? Switch to it at the top of any page in amble.',
     ],
     signature: ['Gracias por estar desde el principio,', 'Borja'],
     footer: 'Recibes este email porque te apuntaste a la lista de espera de amble en amble.fyi.',
