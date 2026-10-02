@@ -43,6 +43,8 @@ interface InboundEvent {
   }
   // buttonPayload: a tap on a template's button (a plain button reply, not an interactive one).
   metadata?: { interactiveId?: string; buttonPayload?: string } | null
+  // The number it reached: production's, or the shared sandbox staging uses.
+  account?: { id?: string; accountId?: string } | null
 }
 
 // Where to start, said to a number amble does not know: once in a while,
@@ -61,6 +63,10 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   if (!message || message.platform !== 'whatsapp' || message.direction !== 'incoming' || typeof message.conversationId !== 'string' || !message.sender) return
   const config = zernioConfig()
   if (!config) return
+  // Zernio's webhooks get every account's messages: production and staging
+  // each answer only what reached their own number.
+  const reached = event.account?.accountId ?? event.account?.id
+  if (reached && reached !== config.accountId) return
 
   // WhatsApp's own id for the person, when it comes; the number otherwise.
   const phone = (message.sender.phoneNumber ?? `+${message.sender.id}`).replace(/[^\d+]/g, '')
