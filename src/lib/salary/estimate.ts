@@ -247,5 +247,9 @@ export interface ShownEstimate {
 export function shownEstimate(estimate: SalaryEstimate | null | undefined, floor: { amount: number; currency: string } | null): ShownEstimate | null {
   if (!estimate) return null
   const { min, max, source, year, url, role, experience, place } = estimate
-  return { min, max, source, year, url, role, experience, place, belowFloor: floor && belowFloor(estimate, floor) ? floor.amount : null }
+  // An offer that does not say its level gets the middle of the table, which
+  // may not be theirs: a "below your floor" on that guess would put them off
+  // an offer for a figure nobody stated.
+  const guessed = estimate.key?.levelFrom === 'default'
+  return { min, max, source, year, url, role, experience, place, belowFloor: floor && !guessed && belowFloor(estimate, floor) ? floor.amount : null }
 }

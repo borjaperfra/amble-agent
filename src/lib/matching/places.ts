@@ -77,6 +77,23 @@ export function cityAreaTerms(term: string): string[] {
   return CITY_AREAS[term] ?? [term]
 }
 
+// The cities that place an offer in someone's own country, for ordering: a
+// posting in Barcelona is in Spain for someone in Valencia, even when the
+// listing never says "Spain".
+const COUNTRY_CITIES: Record<string, string[]> = {
+  ES: [
+    ...CITY_AREAS.valencia, ...CITY_AREAS.madrid, ...CITY_AREAS.barcelona,
+    'sevilla', 'seville', 'malaga', 'bilbao', 'zaragoza', 'alicante', 'murcia', 'palma', 'palma de mallorca', 'las palmas',
+    'santa cruz de tenerife', 'valladolid', 'vigo', 'a coruna', 'la coruna', 'gijon', 'oviedo', 'granada', 'cordoba',
+    'san sebastian', 'donostia', 'vitoria', 'pamplona', 'santander', 'castellon', 'elche', 'cadiz', 'salamanca', 'leon',
+    'tarragona', 'girona', 'lleida', 'logrono', 'burgos', 'almeria', 'huelva', 'jaen', 'badajoz', 'caceres', 'toledo',
+  ],
+}
+
+export function countryCityTerms(code: string): string[] {
+  return COUNTRY_CITIES[code] ?? []
+}
+
 // Regions and countries outside Europe. A remote offer located in one of
 // these is remote from there.
 const OUTSIDE_EUROPE_AREAS = [

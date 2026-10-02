@@ -10,8 +10,8 @@ import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
-import { currentMatchKey } from '../matching/run'
-import { storedRoleQuery } from '../matching/role-query'
+import { currentMatchKey, placeFit } from '../matching/run'
+import { storedRoleQuery, type RoleQuery } from '../matching/role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { estimateRange, estimateSource } from '../salary/format'
 import { logMessage } from './conversation'
@@ -57,10 +57,11 @@ function paceAllows(candidateId: string): boolean {
 }
 
 // What the first reading found to be their kind of role, open, unanswered,
-// never read a second time: offers that publish a salary first, then those
-// whose estimated pay reaches their floor, then those with nothing known,
-// then those estimated below it; then newest.
-function candidatesToSend(candidateId: string, floor: { amount: number; currency: string } | null): Listed[] {
+// never read a second time: nearest first (their city or country, then open
+// to them, then elsewhere in Europe, then outside it); within that, offers
+// that publish a salary, then those whose estimated pay reaches their floor,
+// then those with nothing known, then those estimated below it; then newest.
+function candidatesToSend(candidateId: string, floor: { amount: number; currency: string } | null, query: RoleQuery | null): Listed[] {
   const db = getDb()
   const considered = new Set(
     (db.prepare('SELECT match_id FROM offer_sends WHERE candidate_id = ?').all(candidateId) as unknown as { match_id: string }[]).map((row) => row.match_id),
@@ -91,7 +92,8 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
     estimate: publishedSalary(match) ? null : shownEstimate(estimates.get(match.opportunity_id), floor),
   }))
   const rank = (match: Listed) => payRank({ salary: publishedSalary(match), estimate: match.estimate })
-  return listed.sort((a, b) => rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
+  const near = (match: Listed) => (query ? placeFit(match.location, query) : 1)
+  return listed.sort((a, b) => near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
 }
 
 function publishedSalary(match: MatchListing): string | null {
@@ -195,9 +197,10 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
       continue
     }
     const profile = buildMatchingProfile(candidateId)
-    const floor = storedRoleQuery(candidateId, profile)?.salaryFloor ?? null
+    const query = storedRoleQuery(candidateId, profile)
+    const floor = query?.salaryFloor ?? null
     let reviews = 0
-    for (const match of candidatesToSend(candidateId, floor)) {
+    for (const match of candidatesToSend(candidateId, floor, query)) {
       if (reviews >= REVIEWS_PER_RUN) break
       reviews++
       try {

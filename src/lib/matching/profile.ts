@@ -31,7 +31,10 @@ export interface MatchingProfile {
 }
 
 // Claims that talk about spoken languages, not programming ones.
-const LANGUAGE_CLAIM = /\b(languages?|idiomas?|speaker|native|nativo|nativa|fluent|fluido|fluida|bilingual|biling[uü]e)\b/i
+// A language named ("inglés profesional", "español y valenciano") or a level
+// ("B2/C1") says it as well as the word "idioma" does.
+const LANGUAGE_CLAIM =
+  /\b(languages?|idiomas?|lenguas?|speakers?|native|nativ[oa]s?|mother tongue|lengua materna|fluent|fluid[oa]s?|bilingual|biling[uü]es?|english|ingl[eé]s|spanish|espa[nñ]ol|castellano|catalan|catal[aá]n|valenciano|basque|euskera|galician|gallego|french|franc[eé]s|german|alem[aá]n|italian|italiano|portuguese|portugu[eé]s|dutch|neerland[eé]s|[ABC][12])\b/i
 const PROGRAMMING = /\bprogramming\b|\bprogramaci[oó]n\b/i
 
 // What they said they look for, confirmed, as rules: for someone whose

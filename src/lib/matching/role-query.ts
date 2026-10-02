@@ -16,7 +16,7 @@ import type { MatchingProfile } from './profile'
 // passes to the model, which can read the description.
 
 // Part of the stored query's key: a new version of the prompt means a new query.
-const ROLE_QUERY_VERSION = 'v6'
+const ROLE_QUERY_VERSION = 'v7'
 
 export const SENIORITY_LEVELS = ['junior', 'mid_level', 'senior', 'staff', 'c_level'] as const
 export type Seniority = (typeof SENIORITY_LEVELS)[number]
@@ -90,10 +90,10 @@ function salaryFloorOf(value: unknown): RoleQuery['salaryFloor'] {
   return { amount: Math.round(amount), currency, ruleId }
 }
 
-const SYSTEM_PROMPT = `You are Amble's role-query designer, version 6. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
+const SYSTEM_PROMPT = `You are Amble's role-query designer, version 7. You turn a candidate's profile into a cheap job-title prefilter applied to thousands of postings before any expensive reading. Postings are mostly written in English.
 
 Output:
-- titleInclude: 8 to 30 short lowercase words or phrases; a posting passes only if its title contains one, and they are read in the order you list them, so list first the titles of the roles a confirmed rule says they want. When a confirmed rule names the roles they want, cover those roles and their close variants, not every family their past makes credible (someone who moved from engineering to developer relations and asks for developer relations does not want "software engineer" or "backend" titles). Otherwise cover every role family this person could credibly do, in English and in the candidate's own language (e.g. "marketing", "community", "developer relations", "devrel", "developer advocate", "growth", "content", "brand"). Recall matters more than precision here: a later stage reads each survivor carefully.
+- titleInclude: 8 to 30 short lowercase words or phrases; a posting passes only if its title contains one, and they are read in the order you list them, so list first the titles of the roles a confirmed rule says they want. When a confirmed rule names the roles they want, cover those roles, their close variants and the generic titles postings use for the same job (a backend engineer's job is also posted as "software engineer", "software developer", "full stack", "developer", "ingeniero de software", "desarrollador", "programador", or by the main language or stack they work in, such as "node" or "python developer"; a product marketer's as "marketing manager"), but not every family their past makes credible (someone who moved from engineering to developer relations and asks for developer relations does not want "software engineer" or "backend" titles). Otherwise cover every role family this person could credibly do, in English and in the candidate's own language (e.g. "marketing", "community", "developer relations", "devrel", "developer advocate", "growth", "content", "brand"). Recall matters more than precision here: a later stage reads each survivor carefully.
 - titleExclude: lowercase words or phrases that make a title clearly wrong for this person even if it matched (e.g. "engineer", "intern", "account executive", "recruiter"). Never exclude a family the person could do.
 - locationExclude: places where this person cannot take the job AT ALL, even remotely, because a confirmed hard filter rules the place out (e.g. a filter against US-based roles gives "united states", "usa", "us only", "new york", "san francisco"...). Never list a place only because working there would mean office days: that is what requireRemote and officeAllowed are for, and a remote job listed under that place must still pass. Empty if no hard filter is about location. locationRuleIds: the ids of the hard filters that justify it.
 - requireRemote: true only if a confirmed hard filter demands remote work, including a filter that accepts office days only in some places ("Madrid, or remote from Spain", "on-site in Barcelona or fully remote"): that is requireRemote true with those places in officeAllowed. officeAllowed: lowercase places where that filter still accepts some office days (empty if none). remoteRuleIds: the ids of the hard filters that justify it.

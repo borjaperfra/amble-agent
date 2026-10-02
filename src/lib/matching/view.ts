@@ -8,7 +8,7 @@ import { candidateById, listCapabilities, listConfirmedPreferences } from '../db
 import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
-import { currentMatchKey, lastReadStats } from './run'
+import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
@@ -296,7 +296,8 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   // What the table says the roles that publish no salary pay, and the floor
   // it is compared with (from the query already designed for their profile).
   const estimates = estimatesFor(matches.map((match) => match.opportunity_id))
-  const floor = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))?.salaryFloor ?? null
+  const roleQuery = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))
+  const floor = roleQuery?.salaryFloor ?? null
 
   // A few at a time: what is not released yet waits, unless they answered
   // it or amble already sent it on WhatsApp.
@@ -400,12 +401,19 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
 
   const wantedAll = wantedOpportunities(candidate.id, floor)
 
-  // Unanswered first; within that, offers that publish a salary (the candidate
-  // asked for them first), then those whose estimate reaches their floor,
-  // then those with nothing known, then those estimated below it; then
-  // newest, as the query already orders.
+  // Unanswered first; within that, where it is: their city or country, then
+  // what is open to them, then elsewhere in Europe, then only outside it. A
+  // published salary used to come first, and the offers that publish one are
+  // mostly American: the top of the screen filled with them. Within the same
+  // place, offers that publish a salary, then those whose estimate reaches
+  // their floor, then those with nothing known, then those estimated below
+  // it; then newest, as the query already orders.
+  const near = (item: FoundOpportunity) => (roleQuery ? placeFit(item.location, roleQuery) : 1)
   const byAnswered = (a: FoundOpportunity, b: FoundOpportunity) =>
-    Number(a.response !== null) - Number(b.response !== null) || Number(a.stale) - Number(b.stale) || payRank(b) - payRank(a)
+    Number(a.response !== null) - Number(b.response !== null) ||
+    Number(a.stale) - Number(b.stale) ||
+    near(a) - near(b) ||
+    payRank(b) - payRank(a)
   const fits = found.filter((item) => item.fit === 'fits').sort(byAnswered)
   const maybe = found.filter((item) => item.fit !== 'fits').sort(byAnswered)
 

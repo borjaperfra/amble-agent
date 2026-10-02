@@ -14,7 +14,7 @@ import { ASSESS_VERSION, assessOpportunity, type Explanation, type Gate } from '
 import { FACTS_VERSION, hasStoredFacts, offerFacts, offerFactsEnabled, preGate, preGatesCanApply, worthReadingFacts } from './facts'
 import { buildMatchingProfile } from './profile'
 import { carryOver, recordSnapshot, snapshotOf, type CarryStats } from './carry'
-import { EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeMatches, placeOf, placeOutsideEurope } from './places'
+import { countryCityTerms, EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeMatches, placeOf, placeOutsideEurope } from './places'
 import { prefilter, roleQueryFor, titleRank, type RoleQuery } from './role-query'
 import { estimatesFor } from '../salary/estimate'
 
@@ -101,13 +101,22 @@ const HOME_NAMES: Record<string, string> = { ES: 'spain', PT: 'portugal', FR: 'f
 // How near an offer's places are to where the candidate can work, lower
 // nearer: 0 their office city or country, 1 open or not named, 2 elsewhere in
 // Europe, 3 only outside it.
-function placeFit(location: string | null, query: RoleQuery): number {
+export function placeFit(location: string | null, query: RoleQuery): number {
   const places = (location ?? '')
     .split(/[·;|/•]/)
     .map(placeOf)
     .filter((place): place is string => place !== null)
   const home = query.homeCountry ? HOME_NAMES[query.homeCountry] : undefined
-  if (places.some((place) => query.officeAllowed.some((city) => placeMatches(place, city)) || (home !== undefined && placeMatches(place, home)))) return 0
+  const homeCities = query.homeCountry ? countryCityTerms(query.homeCountry) : []
+  if (
+    places.some(
+      (place) =>
+        query.officeAllowed.some((city) => placeMatches(place, city)) ||
+        (home !== undefined && placeMatches(place, home)) ||
+        homeCities.some((city) => placeMatches(place, city)),
+    )
+  )
+    return 0
   if (places.length === 0 || hasUnlistedPlaces(location) || places.some(placeIsOpenRegion)) return 1
   return places.every(placeOutsideEurope) ? 3 : 2
 }

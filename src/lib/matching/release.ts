@@ -2,7 +2,9 @@ import { getDb, inTransaction, prepared } from '../db/db'
 import { listDecisions, listMatchesForKey } from '../db/matching'
 import { now } from '../db/repo'
 import type { Explanation } from './assess'
-import { currentMatchKey } from './run'
+import { buildMatchingProfile } from './profile'
+import { storedRoleQuery } from './role-query'
+import { currentMatchKey, placeFit } from './run'
 
 // How offers reach a person: a few at a time, never all the reader found.
 // Thirty offers on the first visit read as a list to sift, not as a Rep that
@@ -10,8 +12,10 @@ import { currentMatchKey } from './run'
 // every 24 hours. What is released is the same on the screens and on
 // WhatsApp, which sends only from it.
 //
-// Best first: their role before an adjacent one, then what was published in
-// the last FRESH_DAYS, then what publishes a salary, then the newest. An
+// Best first: their role before an adjacent one, then where it is (their city
+// or country, then open to them, then elsewhere in Europe, then outside it),
+// then what was published in the last FRESH_DAYS, then what publishes a
+// salary, then the newest. An
 // offer they answered, or one amble already sent them, stays theirs to see
 // whether it was released or not.
 
@@ -23,6 +27,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 interface Waiting {
   opportunityId: string
   fits: boolean
+  near: number
   fresh: boolean
   salary: boolean
   publishedAt: string
@@ -46,6 +51,7 @@ export function releaseDue(candidateId: string): Set<string> {
   const room = !first || first >= dayAgo ? FIRST_RELEASE - released.size : PER_DAY - (lastDay ?? 0)
   if (room <= 0) return released
 
+  const query = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))
   const decisions = listDecisions(candidateId)
   const sent = new Set(
     (db.prepare("SELECT opportunity_id FROM offer_sends WHERE candidate_id = ? AND sent_at IS NOT NULL").all(candidateId) as unknown as { opportunity_id: string }[]).map(
@@ -68,6 +74,7 @@ export function releaseDue(candidateId: string): Set<string> {
     waiting.push({
       opportunityId: match.opportunity_id,
       fits: explanation.roleFit.fit === 'fits',
+      near: query ? placeFit(match.location, query) : 1,
       fresh: at >= freshSince,
       salary: Boolean(match.salary_raw || match.salary_min || match.salary_max),
       publishedAt: at,
@@ -75,7 +82,7 @@ export function releaseDue(candidateId: string): Set<string> {
   }
   waiting.sort(
     (a, b) =>
-      Number(b.fits) - Number(a.fits) || Number(b.fresh) - Number(a.fresh) || Number(b.salary) - Number(a.salary) || b.publishedAt.localeCompare(a.publishedAt),
+      Number(b.fits) - Number(a.fits) || a.near - b.near || Number(b.fresh) - Number(a.fresh) || Number(b.salary) - Number(a.salary) || b.publishedAt.localeCompare(a.publishedAt),
   )
 
   const chosen = waiting.slice(0, room)
