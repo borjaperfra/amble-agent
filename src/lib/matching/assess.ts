@@ -4,7 +4,7 @@ import type { OpenOpportunity, OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import { UNTRUSTED_RULE } from '../untrusted'
 import type { MatchingProfile } from './profile'
-import { cityAreaTerms, countryOf, EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeOf, placeOutsideEurope } from './places'
+import { cityAreaTerms, countryOf, EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeOf, placeOutsideEurope, placesNamedIn } from './places'
 import type { RoleQuery } from './role-query'
 
 // Judging one offer (PRODUCT_SPEC §17, §24): hard filters first, then the
@@ -192,6 +192,28 @@ export function openToEurope(text: string): boolean {
     if (WHERE_YOU_WORK.test(before)) return true
   }
   return false
+}
+
+// "Remote - GB", "Fully remote (UK)", "remote within the US", "remote from
+// Germany": the words, when every country they name is another than home.
+// A dash only with a space before it: "remote-friendly" and "remote-first" tie nothing.
+const REMOTE_TIED = /\b(?:fully\s+|100%\s+)?remote(?:ly)?(?:\s+[-–—]\s*|\s*[:(]\s*|\s(?:in|from|within|based in)\s+)(?:the\s+)?([A-Za-z][A-Za-z .,&]{1,40})/gi
+// Short forms a country takes after "Remote -" that the place names do not
+// carry ("gb" alone would be a gigabyte anywhere else).
+const TIED_SHORT: Record<string, string> = { gb: 'GB', uk: 'GB', us: 'US', usa: 'US' }
+
+function remoteTiedElsewhere(text: string, home: string): string | null {
+  for (const match of text.matchAll(REMOTE_TIED)) {
+    const fragment = match[1]
+    const named = placesNamedIn(fragment)
+    if (named.europe || named.anywhere) return null
+    const countries = new Set(named.countries)
+    for (const word of fragment.toLowerCase().split(/[^a-z]+/)) if (TIED_SHORT[word]) countries.add(TIED_SHORT[word])
+    if (countries.size === 0) continue
+    if (countries.has(home)) return null
+    return match[0].trim()
+  }
+  return null
 }
 
 // Words that say, somewhere in the posting, that the work can be remote.
@@ -453,8 +475,8 @@ export async function assessOpportunity(params: {
     query.homeCountry !== null &&
     EUROPE.includes(query.homeCountry) &&
     listedPlaces.length > 0 &&
-    // Places counted but not named ("(+6)") may be anywhere.
-    !hasUnlistedPlaces(opportunity.location) &&
+    // Places counted but not named ("USA - Houston (+6)") are taken to be
+    // like the ones named: a posting open to Europe says so in its text.
     listedPlaces.every(placeOutsideEurope) &&
     !openToEurope(haystack)
   if (remoteElsewhere) {
@@ -481,6 +503,14 @@ export async function assessOpportunity(params: {
     !openToEurope(haystack)
   if (remoteCountries) {
     gates.push({ ruleId: REMOTE_COUNTRIES_GATE, result: 'unknown', quote: opportunity.location, note: 'remote from a list of countries that does not include theirs' })
+  }
+
+  // Remote, and the text ties it to countries none of which is theirs, where
+  // the listing only says "Remote" ("Fully Remote - GB", "remote within the
+  // US"). Set aside like the others.
+  const tied = !failed && !remoteUnconfirmed && !remoteElsewhere && !remoteCountries && query.homeCountry !== null ? remoteTiedElsewhere(postingText, query.homeCountry) : null
+  if (tied && !openToEurope(haystack)) {
+    gates.push({ ruleId: REMOTE_COUNTRIES_GATE, result: 'unknown', quote: tied, note: 'remote only from a country that is not theirs' })
   }
   // Another profession or a role below the candidate's level is never shown.
   const wrongRole = data.roleFit.fit === 'wrong_role' || data.roleFit.fit === 'below_level'
