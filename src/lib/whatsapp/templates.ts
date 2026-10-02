@@ -19,7 +19,10 @@ import { sendTemplateMessage, type TemplateDefinition, type ZernioConfig } from 
 export type TemplateKind = 'offer' | 'followup' | 'reminder' | 'question' | 'pause'
 
 const NAMES: Record<TemplateKind, string> = {
-  offer: 'amble_oferta',
+  // amble_oferta ("he encontrado una oferta… ¿te la enseño?") read to Meta as
+  // a job scam from a new number: Meta locked the account the day it went in.
+  // This one only tells them their own search has news.
+  offer: 'amble_novedades',
   followup: 'amble_seguimiento',
   reminder: 'amble_recordatorio',
   question: 'amble_pregunta',
@@ -30,9 +33,9 @@ const NAMES: Record<TemplateKind, string> = {
 const COPY: Record<Locale, Record<TemplateKind, { body: string; example: string[]; buttons: string[] }>> = {
   es: {
     offer: {
-      body: 'Hola {{1}}, he encontrado una oferta que encaja con lo que buscas: {{2}} en {{3}}. ¿Te la enseño?',
-      example: ['Laura', 'Head of Marketing', 'Factorial'],
-      buttons: ['Enséñamela', 'Ahora no'],
+      body: 'Hola {{1}}, hay novedades en tu búsqueda de amble. ¿Te las cuento?',
+      example: ['Laura'],
+      buttons: ['Cuéntame', 'Ahora no'],
     },
     followup: {
       body: 'Hola {{1}}, hace unos días enviaste tu candidatura a {{2}} en {{3}}. ¿Te han dicho algo?',
@@ -57,9 +60,9 @@ const COPY: Record<Locale, Record<TemplateKind, { body: string; example: string[
   },
   en: {
     offer: {
-      body: 'Hi {{1}}, I found an offer that fits what you’re looking for: {{2}} at {{3}}. Shall I show it to you?',
-      example: ['Laura', 'Head of Marketing', 'Factorial'],
-      buttons: ['Show me', 'Not now'],
+      body: 'Hi {{1}}, there’s news in your amble search. Shall I tell you?',
+      example: ['Laura'],
+      buttons: ['Tell me', 'Not now'],
     },
     followup: {
       body: 'Hi {{1}}, a few days ago you applied for {{2}} at {{3}}. Have you heard anything?',

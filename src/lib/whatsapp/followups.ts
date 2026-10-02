@@ -1,3 +1,4 @@
+import { wroteFirstRecently } from './proactive'
 import { sendTemplate, templatesEnabled } from './templates'
 import { getDb } from '../db/db'
 import { candidateById, isSearchPaused, now } from '../db/repo'
@@ -128,7 +129,7 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
   for (const { candidate_id: candidateId } of candidates) {
     const link = linkOf(candidateId)
     // Paused: amble does not write first until they resume it.
-    if (!link?.conversation_id || isSearchPaused(candidateId) || askedToday(candidateId)) continue
+    if (!link?.conversation_id || isSearchPaused(candidateId) || askedToday(candidateId) || wroteFirstRecently(candidateId)) continue
     // A reminder due today (the eve of an interview, a deadline) goes instead:
     // one message from amble in the morning, not two.
     if (reminderDueToday(candidateId)) continue

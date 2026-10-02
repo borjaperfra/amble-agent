@@ -5,9 +5,10 @@ import { refreshDetectedLocale } from '../i18n/candidate'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { refreshDerivedProfile } from '../pipeline/graph'
-import { planNextQuestion, takeAnswer } from '../pipeline/interview'
+import { planNextQuestion, SETUP_QUESTIONS, takeAnswer } from '../pipeline/interview'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen } from './link'
+import { wroteFirstRecently } from './proactive'
 import { sendMessage, zernioConfig } from './zernio'
 
 // The interview goes on after the setup, on WhatsApp: one question at a
@@ -45,6 +46,22 @@ function wroteToday(candidateId: string): boolean {
   )
 }
 
+function setupOver(candidateId: string): boolean {
+  const db = getDb()
+  if (db.prepare("SELECT 1 FROM interviews WHERE candidate_id = ? AND status = 'completed'").get(candidateId)) return true
+  const candidate = db.prepare('SELECT setup_at FROM candidates WHERE id = ?').get(candidateId) as { setup_at: string | null } | undefined
+  const turns = db
+    .prepare(
+      `SELECT MAX(COALESCE(t.answered_at, t.created_at)) AS at, COUNT(t.answer) AS answered
+       FROM interview_turns t JOIN interviews i ON i.id = t.interview_id WHERE i.candidate_id = ?`,
+    )
+    .get(candidateId) as { at: string | null; answered: number }
+  // Set up through the welcome, or (an account from before it) the setup's
+  // questions answered.
+  if (!candidate?.setup_at && turns.answered < SETUP_QUESTIONS) return false
+  return !turns.at || Date.now() - Date.parse(turns.at) >= DAY_MS
+}
+
 export async function sendDueInterviewQuestions(): Promise<{ asked: number; skipped: number }> {
   const stats = { asked: 0, skipped: 0 }
   const config = zernioConfig()
@@ -55,9 +72,9 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
     const link = linkOf(candidateId)
     // Paused: amble does not write first until they resume it.
     if (!link?.conversation_id || isSearchPaused(candidateId)) continue
-    // The setup's questions first, in the web; one waiting here is enough.
-    const setupDone = db.prepare("SELECT 1 FROM interviews WHERE candidate_id = ? AND status = 'completed'").get(candidateId)
-    if (!setupDone || pendingInterviewQuestion(candidateId) || wroteToday(candidateId)) continue
+    // The setup's questions first, in the web. A question they left open there
+    // a day ago is not a setup still going on: it is the next one to ask here.
+    if (!setupOver(candidateId) || pendingInterviewQuestion(candidateId) || wroteToday(candidateId) || wroteFirstRecently(candidateId)) continue
     const last = db.prepare('SELECT MAX(asked_at) AS at FROM whatsapp_questions WHERE candidate_id = ?').get(candidateId) as { at: string | null }
     if (last.at && Date.now() - Date.parse(last.at) < DAYS_APART * DAY_MS) continue
     const open = windowOpen(link)

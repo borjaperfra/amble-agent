@@ -16,6 +16,7 @@ import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../sal
 import { estimateRange, estimateSource } from '../salary/format'
 import { logMessage } from './conversation'
 import { linkOf, windowOpen, type WhatsAppLink } from './link'
+import { wroteFirstRecently } from './proactive'
 import { reviewForSending, type Pitch } from './review'
 import { sendTemplate, templatesEnabled } from './templates'
 import { sendMessage, zernioConfig, type ZernioConfig } from './zernio'
@@ -23,11 +24,12 @@ import { sendMessage, zernioConfig, type ZernioConfig } from './zernio'
 // Offers on WhatsApp: only what the first reading found to be their kind of
 // role, and only after a second reading finds nothing that would let them
 // down. No quota: what goes out is decided by fit. Only a pace, so they never
-// arrive in a burst: at most two a day, hours apart, and only at a decent
-// hour. Each comes with three answers; what they say is kept exactly as in
+// arrive in a burst: at most one a day, and only on a day amble has not
+// written first already (proactive.ts), at a decent hour. The rest waits in
+// the app. Each comes with three answers; what they say is kept exactly as in
 // the app, and a "no" asks why, so the Rep learns from it.
 
-const PER_DAY = 2
+const PER_DAY = 1
 const HOURS_APART = 3
 const SEND_FROM_HOUR = 9
 const SEND_UNTIL_HOUR = 21
@@ -147,7 +149,7 @@ async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, 
   logMessage(link.candidate_id, 'out', body)
 }
 
-// "Enséñamela" on the offer's template: the offer itself, as reviewed when
+// "Cuéntame" on the offer's template: the offer itself, as reviewed when
 // the template went out. False when it is no longer there to show.
 export async function showTeasedOffer(candidateId: string, matchId: string): Promise<boolean> {
   const config = zernioConfig()
@@ -184,7 +186,7 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
   for (const candidateId of ids) {
     const link = linkOf(candidateId)
     // Paused: nothing goes out until they resume it.
-    if (!link?.conversation_id || isSearchPaused(candidateId) || !paceAllows(candidateId)) continue
+    if (!link?.conversation_id || isSearchPaused(candidateId) || !paceAllows(candidateId) || wroteFirstRecently(candidateId)) continue
     // Outside the 24 hours an offer goes as the approved template that asks
     // first; the shared test number has none.
     const open = windowOpen(link)
@@ -220,7 +222,7 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
         }
         if (open) await sendOne(config, link, match, review.pitch)
         else {
-          await sendTemplate(config, link, 'offer', [match.title, match.company_name], [`tpl:of:${match.id}`, null], `tpl-of:${match.id}`)
+          await sendTemplate(config, link, 'offer', [], [`tpl:of:${match.id}`, null], `tpl-of:${match.id}`)
           // Counted for the pace now; the whole offer follows their tap.
           getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), candidateId, match.id)
         }
