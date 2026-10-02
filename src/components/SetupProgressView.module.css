@@ -30,6 +30,25 @@
   transition: width 900ms var(--ease-standard);
 }
 
+/* While nothing found shows yet: a line, and a tumbleweed rolling along it
+   now and then. Tall enough for its hops; cut at the sides, where it comes
+   and goes. */
+.horizon {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  height: 64px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* On paper the tumbleweed takes the deeper moss: the soft one is for the
+   listening screen's moss background. */
+.horizon > span {
+  color: var(--moss);
+}
+
 .block {
   width: 100%;
   margin-top: 12px;

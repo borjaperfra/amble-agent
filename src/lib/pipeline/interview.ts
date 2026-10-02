@@ -210,14 +210,6 @@ export function pendingQuestion(candidateId: string): NextQuestion | null {
   return pending ? asTurn(pending) : null
 }
 
-// The first read judges offers against the profile as it is when it runs.
-// An answer that moves a capability changes the profile's fingerprint, and
-// every verdict made before it is no longer shown: started while the setup
-// questions wait, the first read would be spent on offers they never see.
-// So it starts once the answers are in; after this long without them, it
-// starts anyway.
-export const FIRST_READ_WAITS_MS = 10 * 60 * 1000
-
 export function hasUnansweredQuestion(candidateId: string): boolean {
   return Boolean(
     getDb()
@@ -231,6 +223,20 @@ export function hasUnansweredQuestion(candidateId: string): boolean {
 
 export function startFirstReadSoon(candidateId: string): void {
   void import('../matching/run').then(({ startFirstRead }) => startFirstRead(candidateId)).catch(() => undefined)
+}
+
+// The first read starts while the setup's questions are answered: their
+// answers then come after its first judgments. Later answers (an interview
+// question on WhatsApp, days on) wait for the next pass, as any change does.
+const SETUP_READ_MS = 15 * 60 * 1000
+
+function firstReadJustRan(candidateId: string): boolean {
+  const first = getDb().prepare('SELECT MIN(created_at) AS at FROM opportunity_matches WHERE candidate_id = ?').get(candidateId) as { at: string | null }
+  return first.at !== null && Date.now() - Date.parse(first.at) < SETUP_READ_MS
+}
+
+function rereadSoon(candidateId: string): void {
+  void import('../matching/run').then(({ requestReread }) => requestReread(candidateId)).catch(() => undefined)
 }
 
 declare global {
@@ -260,8 +266,13 @@ export function takeAnswer(
       const left = (answersInLine.get(candidateId) ?? 1) - 1
       if (left > 0) answersInLine.set(candidateId, left)
       else answersInLine.delete(candidateId)
-      // Every question answered and taken in: the first read, if it has not run.
-      if (left <= 0 && !hasUnansweredQuestion(candidateId)) startFirstReadSoon(candidateId)
+      // Every question answered and taken in: the first read, if it has not
+      // run; if it started while they answered the setup's questions, read
+      // again with what they said.
+      if (left <= 0 && !hasUnansweredQuestion(candidateId)) {
+        if (firstReadJustRan(candidateId)) rereadSoon(candidateId)
+        else startFirstReadSoon(candidateId)
+      }
     }
   })
 }

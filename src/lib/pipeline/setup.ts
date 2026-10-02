@@ -1,7 +1,7 @@
 import { candidateById, listCapabilities, listClaims, listEvidence, listUnprocessedSources } from '../db/repo'
 import { candidateLocale, withLocale } from '../i18n/candidate'
 import { assessCapabilities, claimsToEvidence, refreshDerivedProfile } from './graph'
-import { FIRST_READ_WAITS_MS, hasUnansweredQuestion, prepareSetupQuestions, startFirstReadSoon } from './interview'
+import { prepareSetupQuestions, startFirstReadSoon } from './interview'
 import { processSource, SourceRejectedError } from './sources'
 
 // Reading what someone shared, in the background, while they tell the Rep
@@ -79,13 +79,11 @@ async function run(candidateId: string, progress: SetupProgress): Promise<void> 
     await prepareSetupQuestions(candidateId)
     progress.stage = 'done'
 
-    // Now that it knows what they can do, the first read for offers can start
-    // (it waits for this), if they already said what they are looking for;
-    // with questions waiting, once their answers are in (interview.ts), or
-    // judged before them, its verdicts are left behind by the profile they
-    // change. If they leave the questions for later, it starts anyway.
-    if (!hasUnansweredQuestion(candidateId)) startFirstReadSoon(candidateId)
-    else setTimeout(() => startFirstReadSoon(candidateId), FIRST_READ_WAITS_MS).unref?.()
+    // Now that it knows what they can do, the first read for offers starts,
+    // while they answer the questions: the first offers reach them a minute
+    // sooner. What it judges stays on the screen when their answers change
+    // the profile, and is read again with them (interview.ts).
+    startFirstReadSoon(candidateId)
 
     // The map's summary: after, with nobody waiting for it.
     await refreshDerivedProfile(candidateId).catch(() => undefined)

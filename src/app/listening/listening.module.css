@@ -112,6 +112,14 @@
   cursor: default;
 }
 
+/* Why nothing has come in yet: the paper card, risen under the pause. */
+.drought {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  animation: rise var(--motion-arrive) var(--ease-standard) both;
+}
+
 /* On moss the primary button turns to paper. */
 .seeIt {
   margin-top: 28px;

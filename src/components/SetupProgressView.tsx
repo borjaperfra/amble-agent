@@ -1,6 +1,8 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import StatusDot from '@/components/StatusDot'
+import Tumbleweed from '@/components/Tumbleweed'
 import { useT } from '@/components/I18nProvider'
 import type { SetupProgress } from '@/lib/pipeline/setup'
 import styles from './SetupProgressView.module.css'
@@ -19,9 +21,32 @@ function share(progress: SetupProgress): number {
   return 1
 }
 
+// While nothing found is on screen yet, a tumbleweed rolls by every few
+// seconds, to kick while they wait: the same one as the listening screen's.
+const FIRST_ROLL_MS = 2500
+// About how long one crossing takes, so the next never starts before it ends.
+const ROLL_MS = 9000
+const ROLL_EVERY_MS = [2500, 6000] as const
+
 export default function SetupProgressView({ progress }: { progress: SetupProgress }) {
   const p = useT().setup
   const label = progress.stage === 'reading' ? p.reading : progress.stage === 'weighing' ? p.weighing : p.questions
+  const quiet = progress.found.length === 0 && progress.capabilities.length === 0 && progress.stage !== 'done'
+  const [rolls, setRolls] = useState(0)
+
+  useEffect(() => {
+    if (!quiet || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let id = 0
+    const next = (ms: number) => {
+      id = window.setTimeout(() => {
+        setRolls((count) => count + 1)
+        const [min, max] = ROLL_EVERY_MS
+        next(ROLL_MS + min + Math.random() * (max - min))
+      }, ms)
+    }
+    next(FIRST_ROLL_MS)
+    return () => window.clearTimeout(id)
+  }, [quiet])
   return (
     <section className={styles.wrap} role="status" aria-live="polite">
       <StatusDot />
@@ -29,6 +54,12 @@ export default function SetupProgressView({ progress }: { progress: SetupProgres
       <div className={styles.bar} aria-hidden="true">
         <span style={{ width: `${Math.round(share(progress) * 100)}%` }} />
       </div>
+
+      {quiet && (
+        <div className={styles.horizon} aria-hidden="true">
+          {rolls > 0 && <Tumbleweed key={rolls} />}
+        </div>
+      )}
 
       {progress.found.length > 0 && (
         <div className={styles.block}>

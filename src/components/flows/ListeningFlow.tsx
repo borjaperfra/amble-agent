@@ -59,10 +59,11 @@ const activationMs = 2600
 const SEEN_KEY = 'amble-listening-seen'
 // A tumbleweed crosses the horizon now and then while nothing comes in.
 const FIRST_ROLL_MS = 6000
-const FIRST_READ_REFRESH_MS = 15_000
+const FIRST_READ_REFRESH_MS = 5000
 // About how long one crossing takes, so the next never starts before it ends.
 const ROLL_MS = 9000
 const ROLL_EVERY_MS = [40_000, 90_000] as const
+const DROUGHT_AFTER_MS = 5000
 
 const FLOOR = /salario m[ií]nimo|minimum salary|suelo|floor/i
 const isFloor = (label: string) => FLOOR.test(label)
@@ -201,6 +202,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   const [fromSetup, setFromSetup] = useState(false)
   const [headline, setHeadline] = useState(0)
   const [rolls, setRolls] = useState(0)
+  const [droughtShown, setDroughtShown] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const forcedPile = process.env.NODE_ENV !== 'production' && searchParams.has('envelopes')
@@ -246,6 +248,13 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   // While the first read (or a re-read) runs, the page looks again now and
   // then, while it is on screen.
   useVisibleInterval(() => router.refresh(), FIRST_READ_REFRESH_MS, reading)
+
+  // Why nothing has come in yet: a moment after the page opens, not at once.
+  useEffect(() => {
+    if (arriving || !vm.drought) return
+    const id = window.setTimeout(() => setDroughtShown(true), DROUGHT_AFTER_MS)
+    return () => window.clearTimeout(id)
+  }, [arriving, vm.drought])
 
   // Now and then, while nothing new has come in, a tumbleweed rolls across.
   // In development, ?tumbleweed brings it out whatever there is, to play with.
@@ -314,6 +323,15 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 <button type="button" className={styles.pauseToggle} onClick={toggleSearch} disabled={switching}>
                   {t.listening.pause.pause}
                 </button>
+              )}
+
+              {/* Nothing of theirs yet: why, from what was read. Up here, under
+                  the line that says it is still listening, a moment after the
+                  page opens: read as the answer to that line, not as a footnote. */}
+              {droughtShown && !paused && !reading && vm.drought && (
+                <div className={styles.drought}>
+                  <DroughtNote drought={vm.drought} t={t.drought} />
+                </div>
               )}
 
               {/* The horizon: the offers in their hands, or now and then something rolling by. */}
@@ -419,9 +437,6 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 <p className={styles.weekEmpty}>{paused ? t.listening.pause.line : vm.firstReading ? t.listening.weekFirstReading : t.listening.weekEmpty}</p>
               )}
             </section>
-
-            {/* Nothing of theirs yet: why, from what was read. */}
-            {!paused && !reading && vm.drought && <DroughtNote drought={vm.drought} t={t.drought} />}
 
             <p className={styles.rep}>
               <span className={styles.repLabel}>{t.common.yourRep}</span>

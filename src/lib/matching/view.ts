@@ -15,6 +15,9 @@ import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../sal
 import { intentRules } from './profile'
 import { releaseDue } from './release'
 
+// The first read starts while the setup's questions are answered (setup.ts).
+const SETUP_READ_MS = 15 * 60 * 1000
+
 // What the opportunities screen shows: assessments made against the current
 // profile and assessor version. After a preference changes, an offer not yet
 // judged again keeps its earlier verdict, marked as such (`stale`): hidden,
@@ -400,6 +403,8 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     .map((entry) => ({ id: entry.id, company: entry.company, title: entry.title, status: entry.status, reason: entry.reason }))
 
   const wantedAll = wantedOpportunities(candidate.id, floor)
+  const firstJudged = (getDb().prepare('SELECT MIN(created_at) AS at FROM opportunity_matches WHERE candidate_id = ?').get(candidate.id) as { at: string | null }).at
+  const setupRead = firstJudged !== null && Date.now() - Date.parse(firstJudged) < SETUP_READ_MS
 
   // Unanswered first; within that, where it is: their city or country, then
   // what is open to them, then elsewhere in Europe, then only outside it. A
@@ -421,7 +426,9 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     found: fits,
     maybe,
     discarded,
-    unseen: fits.filter((item) => !item.closed && !item.stale && item.response === null).length,
+    // Their very first offers, judged while they answered the setup's
+    // questions and not yet read again with the answers, are still new to them.
+    unseen: fits.filter((item) => !item.closed && (!item.stale || setupRead) && item.response === null).length,
     withheld,
     week: { read, worth: week.filter((entry) => entry.status === 'found').length, entries },
     wanted: wantedAll.filter((item) => item.progress === null),

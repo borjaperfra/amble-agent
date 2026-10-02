@@ -24,6 +24,22 @@ export const PER_DAY = 3
 const FRESH_DAYS = 7
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// The first read starts while the setup's questions are answered (setup.ts),
+// and their answers change the profile: for that first while, what it judged
+// before them can be given too, or the first offers would wait for the re-read.
+const SETUP_READ_MS = 15 * 60 * 1000
+
+function setupReadMatches(candidateId: string): ReturnType<typeof listMatchesForKey> {
+  const db = getDb()
+  const first = (db.prepare('SELECT MIN(created_at) AS at FROM opportunity_matches WHERE candidate_id = ?').get(candidateId) as { at: string | null }).at
+  if (!first || Date.now() - Date.parse(first) >= SETUP_READ_MS) return []
+  const current = currentMatchKey(candidateId)
+  const keys = db.prepare('SELECT DISTINCT profile_hash FROM opportunity_matches WHERE candidate_id = ? AND profile_hash != ?').all(candidateId, current) as unknown as {
+    profile_hash: string
+  }[]
+  return keys.flatMap((row) => listMatchesForKey(candidateId, row.profile_hash))
+}
+
 interface Waiting {
   opportunityId: string
   fits: boolean
@@ -62,7 +78,12 @@ export function releaseDue(candidateId: string): Set<string> {
   const freshSince = new Date(Date.now() - FRESH_DAYS * DAY_MS).toISOString()
   const seenRoles = new Set<string>()
   const waiting: Waiting[] = []
-  for (const match of listMatchesForKey(candidateId, currentMatchKey(candidateId))) {
+  const listed = new Set<string>()
+  for (const match of [...listMatchesForKey(candidateId, currentMatchKey(candidateId)), ...setupReadMatches(candidateId)]) {
+    // Judged under the current profile and the one before it: the current
+    // judgment decides, whatever it was.
+    if (listed.has(match.opportunity_id)) continue
+    listed.add(match.opportunity_id)
     // One role posted in several cities is one offer.
     const role = match.model_run_id ?? match.id
     if (seenRoles.has(role)) continue
