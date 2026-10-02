@@ -479,7 +479,7 @@ export const es: Dictionary = {
     inApp: 'En la app',
     offerButtons: { interested: 'Me interesa', notFit: 'No encaja', more: 'Cuéntame más' },
     applyButtons: { yes: 'Sí, prepárala', no: 'Ahora no' },
-    fillOffer: '¿Te la relleno en el formulario de la empresa? La revisas tú y la envías tú.',
+    fillOffer: '¿Te la relleno en el formulario de la empresa? Te enseño cómo queda y solo la envío si me dices que sí.',
     fillButtons: { yes: 'Sí, rellénala', no: 'Luego' },
     fillWorking: 'Voy. Abro el formulario y lo relleno; tardo un par de minutos.',
     fillDone: (filled: number, left: string[], url: string) =>
@@ -488,6 +488,18 @@ export const es: Dictionary = {
     fillFailed: (url: string) => `No he podido abrir el formulario ahora. Tienes las respuestas preparadas en ${url}.`,
     fillUnavailable: (url: string) => `Desde WhatsApp no puedo rellenar el formulario de la empresa. Tienes las respuestas y tu CV en ${url}: cópialas en la oferta y envíala tú.`,
     fillSent: (company: string) => `Enviada${company ? ` a ${company}` : ''}. La sigo por ti: en unos días te pregunto cómo va.`,
+    // The filled form, as a picture, waiting for their yes.
+    fillReady: 'La tengo rellena. Así queda: ¿la envío?',
+    sendButtons: { yes: 'Envíala', look: 'La reviso yo', no: 'No la envíes' },
+    sendWorking: 'La envío.',
+    sendLook: (url: string) => `Aquí la tienes abierta: ${url}. Si cambias algo, envíala desde ahí.`,
+    sendCancelled: (url: string) => `Vale, no la envío. La tienes guardada en ${url}.`,
+    sendExpired: 'El formulario se cerró antes de enviarla. ¿Te lo relleno otra vez?',
+    sendBlocked: {
+      captcha: (url: string) => `El formulario me pide demostrar que no soy un robot. Esa la pasas tú, y la envías desde aquí: ${url}`,
+      rejected: (url: string) => `El formulario no la ha aceptado: algo no le cuadra. Mírala aquí: ${url}`,
+      unclear: (url: string) => `No sé si se ha enviado: el formulario no lo confirma. Mírala aquí: ${url}`,
+    },
     offerInterested: 'Apuntado. ¿Te preparo la candidatura?',
     offerNotFit: '¿Qué no te encaja? Con una frase me basta: aprendo de ello.',
     offerReasonThanks: 'Gracias. Lo tengo en cuenta para las próximas.',

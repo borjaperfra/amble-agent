@@ -94,6 +94,29 @@ export async function sendMessage(
   return { messageId: result.data?.messageId ?? null }
 }
 
+// A picture with the text and up to three reply buttons under it, inside an
+// open conversation: the picture is uploaded with the message, never left at
+// an address anyone could open (it may show their answers).
+export async function sendPicture(
+  config: ZernioConfig,
+  params: { conversationId: string; image: Buffer; filename: string; text: string; buttons?: Button[]; idempotencyKey?: string },
+): Promise<{ messageId: string | null }> {
+  const form = new FormData()
+  form.set('accountId', config.accountId)
+  form.set('message', params.text)
+  form.set('attachment', new Blob([new Uint8Array(params.image)], { type: params.filename.endsWith('.png') ? 'image/png' : 'image/jpeg' }), params.filename)
+  if (params.buttons?.length) form.set('buttons', JSON.stringify(params.buttons.slice(0, 3).map((button) => ({ type: 'postback', ...button }))))
+  const response = await fetch(`${API}/inbox/conversations/${encodeURIComponent(params.conversationId)}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${config.apiKey}`, ...(params.idempotencyKey ? { 'Idempotency-Key': params.idempotencyKey } : {}) },
+    body: form,
+    signal: AbortSignal.timeout(60_000),
+  })
+  const data = (await response.json().catch(() => null)) as { data?: { messageId?: string }; error?: string; code?: string } | null
+  if (!response.ok) throw new ZernioError(data?.error ?? `Zernio answered ${response.status}`, response.status, data?.code ?? null)
+  return { messageId: data?.data?.messageId ?? null }
+}
+
 // An approved template to their number: what opens the conversation again
 // once the 24 hours are over. Its variables, in order.
 export async function sendTemplateMessage(

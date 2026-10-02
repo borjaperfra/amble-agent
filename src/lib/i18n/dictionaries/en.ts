@@ -481,7 +481,7 @@ export const en = {
     inApp: 'In the app',
     offerButtons: { interested: 'Interested', notFit: 'Not a fit', more: 'Tell me more' },
     applyButtons: { yes: 'Yes, prepare it', no: 'Not now' },
-    fillOffer: 'Shall I fill it in on the company’s form? You check it and you send it.',
+    fillOffer: 'Shall I fill it in on the company’s form? I’ll show you how it looks and only send it if you say yes.',
     fillButtons: { yes: 'Yes, fill it in', no: 'Later' },
     fillWorking: 'On it. I’m opening the form and filling it in; a couple of minutes.',
     fillDone: (filled: number, left: string[], url: string) =>
@@ -490,6 +490,18 @@ export const en = {
     fillFailed: (url: string) => `I couldn’t open the form just now. Your answers are ready at ${url}.`,
     fillUnavailable: (url: string) => `I can’t fill in the company’s form from WhatsApp. Your answers and your CV are ready at ${url}: paste them into the offer and send it yourself.`,
     fillSent: (company: string) => `Sent${company ? ` to ${company}` : ''}. I’ll follow it for you: in a few days I’ll ask how it’s going.`,
+    // The filled form, as a picture, waiting for their yes.
+    fillReady: 'It’s filled in. This is how it looks: shall I send it?',
+    sendButtons: { yes: 'Send it', look: 'I’ll check it', no: 'Don’t send it' },
+    sendWorking: 'Sending it.',
+    sendLook: (url: string) => `Here it is, open: ${url}. If you change anything, send it from there.`,
+    sendCancelled: (url: string) => `OK, I won’t send it. It’s saved at ${url}.`,
+    sendExpired: 'The form closed before it was sent. Shall I fill it in again?',
+    sendBlocked: {
+      captcha: (url: string) => `The form wants proof I’m not a robot. That one is yours, and you send it from here: ${url}`,
+      rejected: (url: string) => `The form didn’t accept it: something doesn’t add up for it. Have a look here: ${url}`,
+      unclear: (url: string) => `I can’t tell whether it went: the form doesn’t confirm it. Have a look here: ${url}`,
+    },
     offerInterested: 'Noted. Shall I prepare the application?',
     offerNotFit: 'What doesn’t fit? A sentence is enough: I learn from it.',
     offerReasonThanks: 'Thanks. I’ll keep it in mind for the next ones.',

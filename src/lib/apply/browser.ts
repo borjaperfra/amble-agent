@@ -47,6 +47,9 @@ interface Session {
   // The form already said "thank you" before anything was sent (a form that
   // thanks you for your interest): then only the form gone means it was.
   thanksBefore: boolean
+  // amble is pressing send on their yes: what follows is told by whoever
+  // asked, not by the window's watcher.
+  amble: boolean
 }
 
 declare global {
@@ -117,6 +120,19 @@ function applyUrl(offer: OfferRow): string | null {
 
 export function screenshotPath(candidateId: string, opportunityId: string, moment: 'filled' | 'sent'): string {
   return path.join(DATA_DIRECTORY, 'applications', candidateId, `${opportunityId}-${moment}.png`)
+}
+
+// The filled form as a picture light enough for WhatsApp, for an ask made there.
+function picturePath(candidateId: string, opportunityId: string): string {
+  return path.join(DATA_DIRECTORY, 'applications', candidateId, `${opportunityId}-filled.jpg`)
+}
+
+export function filledPicture(candidateId: string, opportunityId: string): Buffer | null {
+  try {
+    return fs.readFileSync(picturePath(candidateId, opportunityId))
+  } catch {
+    return null
+  }
 }
 
 // Where each answer's field sits among the marked ones.
@@ -323,9 +339,10 @@ async function fill(candidateId: string, opportunityId: string, via: 'app' | 'wh
     const shot = screenshotPath(candidateId, opportunityId, 'filled')
     fs.mkdirSync(path.dirname(shot), { recursive: true })
     await page.screenshot({ path: shot, fullPage: true })
+    if (via === 'whatsapp') await page.screenshot({ path: picturePath(candidateId, opportunityId), type: 'jpeg', quality: 70, fullPage: true }).catch(() => undefined)
     const captcha = (await page.locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .grecaptcha-badge').count()) > 0
     const thanksBefore = SENT.test(await page.evaluate(() => document.body.innerText).catch(() => ''))
-    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl, thanksBefore }
+    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl, thanksBefore, amble: false }
     sessions.set(key, session)
     if (WINDOW) watchWindow(candidateId, opportunityId, session, prepared.answers.filter((answer) => left.includes(answer.label)), via)
     return { status: 'filled', filled, left, captcha, window: WINDOW, live: Boolean(liveUrl), retried }
@@ -355,6 +372,8 @@ function watchWindow(candidateId: string, opportunityId: string, session: Sessio
       if (session.cloudId) await releaseCloudSession(session.cloudId)
       return
     }
+    // amble is sending it: the one who asked says how it went.
+    if (session.amble) return
     try {
       if (await readsAsSent(page, session.thanksBefore)) {
         clearInterval(timer)
@@ -425,6 +444,10 @@ async function submit(candidateId: string, opportunityId: string, key: string): 
     return { status: 'expired' }
   }
   const { page } = session
+  session.amble = true
+  // Left open when it did not go and they can finish it in the live view;
+  // closed once it went, or when there is no window to finish it in.
+  let sent = false
   try {
     const submit = page.getByRole('button', { name: /submit( application)?|send application|apply/i }).last()
     if ((await submit.count()) === 0) return { status: 'blocked', reason: 'unclear' }
@@ -439,12 +462,16 @@ async function submit(candidateId: string, opportunityId: string, key: string): 
     ]).catch(() => 'unclear' as const)
     const shot = screenshotPath(candidateId, opportunityId, 'sent')
     await page.screenshot({ path: shot, fullPage: true }).catch(() => undefined)
-    if (outcome === 'sent') return { status: 'sent' }
+    if (outcome === 'sent') {
+      sent = true
+      return { status: 'sent' }
+    }
     // Still on the form with errors showing: the company's form said no.
     const errors = await page.locator('[role=alert], [class*=error i]').count()
     return { status: 'blocked', reason: outcome === 'captcha' ? 'captcha' : errors > 0 ? 'rejected' : 'unclear' }
   } finally {
-    await closeSession(key)
+    if (!sent && session.liveUrl) session.amble = false
+    else await closeSession(key)
   }
 }
 

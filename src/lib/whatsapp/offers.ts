@@ -1,10 +1,10 @@
 import { releaseDue } from '../matching/release'
-import { canFillForm, fillApplication } from '../apply/browser'
+import { applicationState, canFillForm, cancelApplication, fillApplication, filledPicture, submitApplication } from '../apply/browser'
 import { cloudBrowserConfigured } from '../apply/cloud'
 import { getPreparedApplication, prepareApplication } from '../apply/prepare'
 import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
-import { getMatch, listMatchesForKey, respondToMatch, type MatchListing, type MatchRow } from '../db/matching'
+import { getMatch, listMatchesForKey, respondToMatch, setProgress, type MatchListing, type MatchRow } from '../db/matching'
 import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
@@ -18,8 +18,9 @@ import { logMessage } from './conversation'
 import { linkOf, windowOpen, type WhatsAppLink } from './link'
 import { wroteFirstRecently } from './proactive'
 import { reviewForSending, type Pitch } from './review'
+import { tellSent } from './sent'
 import { sendTemplate, templatesEnabled } from './templates'
-import { sendMessage, zernioConfig, type ZernioConfig } from './zernio'
+import { sendMessage, sendPicture, zernioConfig, type ZernioConfig } from './zernio'
 
 // Offers on WhatsApp: only what the first reading found to be their kind of
 // role, and only after a second reading finds nothing that would let them
@@ -247,6 +248,8 @@ export type OfferTap =
   | { kind: 'apply'; matchId: string; answer: 'yes' | 'no' }
   // Fill the prepared application in the company's own form, in the cloud.
   | { kind: 'fill'; matchId: string; answer: 'yes' | 'no' }
+  // On the picture of the filled form.
+  | { kind: 'send'; matchId: string; answer: 'yes' | 'look' | 'no' }
 
 export function parseOfferPayload(value: string | null): OfferTap | null {
   const offer = value?.match(/^of:([\w-]+):(interested|not_fit|more)$/)
@@ -255,6 +258,8 @@ export function parseOfferPayload(value: string | null): OfferTap | null {
   if (apply) return { kind: 'apply', matchId: apply[1], answer: apply[2] as 'yes' | 'no' }
   const fill = value?.match(/^af:([\w-]+):(yes|no)$/)
   if (fill) return { kind: 'fill', matchId: fill[1], answer: fill[2] as 'yes' | 'no' }
+  const send = value?.match(/^as:([\w-]+):(yes|look|no)$/)
+  if (send) return { kind: 'send', matchId: send[1], answer: send[2] as 'yes' | 'look' | 'no' }
   return null
 }
 
@@ -412,10 +417,73 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
         return
       }
       const live = appUrl(candidateId, `/apply/live?o=${encodeURIComponent(match.opportunity_id)}`)
+      // Everything filled: a picture of how it looks, and it goes on their
+      // yes. A "not a robot" check, if the form asks for one when sending, is
+      // theirs then, in the live view. Anything left: theirs to finish there.
+      const picture = result.left.length === 0 ? filledPicture(candidateId, match.opportunity_id) : null
+      const config = zernioConfig()
+      const link = linkOf(candidateId)
+      if (picture && config && link?.conversation_id) {
+        await sendPicture(config, {
+          conversationId: link.conversation_id,
+          image: picture,
+          filename: 'formulario.jpg',
+          text: w.fillReady,
+          buttons: [
+            { title: w.sendButtons.yes, payload: `as:${match.id}:yes` },
+            { title: w.sendButtons.look, payload: `as:${match.id}:look` },
+            { title: w.sendButtons.no, payload: `as:${match.id}:no` },
+          ],
+          idempotencyKey: `fillready:${match.id}:${new Date().toISOString().slice(0, 16)}`,
+        })
+        logMessage(candidateId, 'out', w.fillReady)
+        return
+      }
       await reply([w.fillDone(result.filled.length, result.left, live), result.captcha ? w.fillCaptcha : null].filter(Boolean).join('\n\n'))
     } catch {
       await reply(w.fillFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
     }
+    return
+  }
+  // On the picture of the filled form: send it, look at it, or leave it.
+  if (tap.kind === 'send') {
+    const wanted = appUrl(candidateId, '/opportunities?tab=wanted')
+    const live = appUrl(candidateId, `/apply/live?o=${encodeURIComponent(match.opportunity_id)}`)
+    if (applied) {
+      await reply(w.alreadyApplied)
+      return
+    }
+    const refill = [
+      { title: w.fillButtons.yes, payload: `af:${match.id}:yes` },
+      { title: w.fillButtons.no, payload: `af:${match.id}:no` },
+    ]
+    if (tap.answer === 'no') {
+      await cancelApplication(candidateId, match.opportunity_id)
+      await reply(w.sendCancelled(wanted))
+      return
+    }
+    // The form closed meanwhile (left too long, or the server restarted).
+    if (applicationState(candidateId, match.opportunity_id) !== 'open') {
+      await reply(w.sendExpired, refill)
+      return
+    }
+    if (tap.answer === 'look') {
+      await reply(w.sendLook(live))
+      return
+    }
+    // Their tap on "Send it", under the picture of what goes: the yes it needs.
+    await reply(w.sendWorking)
+    const result = await submitApplication(candidateId, match.opportunity_id)
+    if (result.status === 'sent') {
+      setProgress(candidateId, [match.opportunity_id], 'applied')
+      await tellSent(candidateId, match.opportunity_id)
+      return
+    }
+    if (result.status === 'expired') {
+      await reply(w.sendExpired, refill)
+      return
+    }
+    await reply(w.sendBlocked[result.reason](live))
   }
 }
 
