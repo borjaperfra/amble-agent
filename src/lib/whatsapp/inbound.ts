@@ -16,6 +16,8 @@ import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settle
 import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
+import { answerProfile, parseProfilePayload, proposeCorrection, proposeLanguage, proposeName, takeNote } from './profile'
+import { documentName, isDocument, takeDocument, type SentAttachment } from './documents'
 import { isMaliciousLink } from '../net/reputation'
 import { allow } from './throttle'
 import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
@@ -150,6 +152,22 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
     await answerPause(candidate.id, pauseTap, reply)
     return
   }
+  const profileTap = parseProfilePayload(interactiveId)
+  if (profileTap) {
+    logMessage(candidate.id, 'in', text)
+    await answerProfile(candidate.id, profileTap, reply)
+    return
+  }
+
+  // A document (a new CV, their LinkedIn PDF) is read into their map,
+  // whatever words come with it.
+  const document = (message.attachments as SentAttachment[] | undefined)?.find(isDocument)
+  if (document) {
+    logMessage(candidate.id, 'in', text || `[${documentName(document)}]`)
+    void showTyping(config, message.conversationId).catch(() => undefined)
+    await takeDocument(candidate, document, config, reply)
+    return
+  }
 
   // A voice note is heard as what it says; a picture is not read yet.
   if (!text) {
@@ -260,6 +278,14 @@ async function answerWords(
   if (answer.action?.type === 'pause_search' || answer.action?.type === 'resume_search') {
     const pause = answer.action.type === 'pause_search'
     if (pause !== isSearchPaused(candidate.id)) buttons = proposePause(candidate.id, pause, answer.action.type === 'pause_search' ? answer.action.checkIn : null)
+  } else if (answer.action?.type === 'set_name') {
+    // A new name, or their language: proposed with its own buttons, and
+    // only when it would change something.
+    buttons = proposeName(candidate.id, answer.action.name)
+  } else if (answer.action?.type === 'set_language') {
+    buttons = proposeLanguage(candidate.id, answer.action.language)
+  } else if (answer.action?.type === 'profile_note' || answer.action?.type === 'profile_correction') {
+    // Their map: after the reply.
   } else if (answer.action) {
     // What it decided to do: prepare an application (offered with buttons),
     // or keep the news they gave about one.
@@ -271,6 +297,21 @@ async function answerWords(
   // Their answer to the interview question waiting on WhatsApp.
   const question = answer.answersInterview ? pendingInterviewQuestion(candidate.id) : null
   if (question) answerInterviewQuestion(candidate.id, question.turnId, text)
+  // What they told about their work, in their own words (what they wrote,
+  // not amble's note on it), taken into their map, unless it was that
+  // answer. A correction first shows what it would take off the map, with
+  // buttons; when nothing there is what they say is wrong, what they said
+  // is taken in as told.
+  if (!question && answer.action?.type === 'profile_note') takeNote(candidate.id, message)
+  if (!question && answer.action?.type === 'profile_correction') {
+    const proposal = await proposeCorrection(candidate.id, message, answer.action.what).then(
+      (found) => found ?? 'none',
+      () => null,
+    )
+    if (proposal === 'none') takeNote(candidate.id, message)
+    else if (proposal) await reply(proposal.text, proposal.buttons)
+    else await reply(w.agentFailed)
+  }
   // Only what the agent marks for the team (a problem, a suggestion, a sign
   // of distress), and not more than a few a day from one person.
   if (answer.forward && feedbackToday(candidate.id, 'whatsapp') < MAX_FORWARDS_A_DAY) {

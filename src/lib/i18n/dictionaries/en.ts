@@ -519,7 +519,7 @@ export const en = {
     applyLead: 'What I’d lead with:',
     applyFinish: (url: string) => `The answers and your CV are at ${url}. Check them, send it on the offer and mark it as sent.`,
     applyFailed: (url: string) => `I couldn’t prepare it now. You can ask me at ${url}.`,
-    textOnly: 'I can’t read pictures yet. Write it or send me a voice note.',
+    textOnly: 'I can’t read pictures yet. Write it or send me a voice note; if it’s your CV, send it to me as a PDF.',
     thinking: 'Let me look into it properly and I’ll get back to you.',
     sharedReading: 'Reading it now; I’ll tell you if it fits.',
     sharedFits: 'It fits you.',
@@ -552,6 +552,25 @@ export const en = {
     fillNeedsPrepare: 'I need to prepare it first. Shall I?',
     fillMissing: (missing: string[], url: string) =>
       `Before I fill it in I still need: ${missing.join(', ')}. Add it at ${url} and ask me again.`,
+    // Their map, changed from here: something they told, a correction, a document.
+    noteAdded: (items: string[], url: string) => `It’s on your map now:\n${items.map((item) => `• ${item}`).join('\n')}\n\nYou can see it at ${url}`,
+    noteNothing: 'I’ll keep it in mind, but it doesn’t change anything on your map.',
+    correctionPropose: (items: string[]) => `This would come off your map:\n${items.map((item) => `• ${item}`).join('\n')}\n\nShall I remove it?`,
+    correctionButtons: { yes: 'Yes, remove it', no: 'No, leave it' },
+    correctionDone: (url: string) => `Done: it’s off your map. You can see it at ${url}`,
+    profileButtons: { yes: 'Yes, change it', no: 'No' },
+    profileKept: 'OK, I’ll leave it as it was.',
+    nameSaved: (name: string) => `Done: from now on I’ll call you ${name}.`,
+    // Said in the language they just chose.
+    languageSaved: 'Done: from now on I’ll talk to you in English, here and in the app.',
+    documentReading: 'Reading it; I’ll tell you what it adds to your map.',
+    documentRead: (added: string[], url: string) =>
+      added.length > 0 ? `Read. It adds to your map: ${added.join(', ')}. You can see it at ${url}` : `Read. It adds detail to what your map already had. You can see it at ${url}`,
+    documentNothing: 'I read it, but found nothing about your experience to add to your map.',
+    documentSetAside: (reason: string) => `I haven’t used it. ${reason}`,
+    documentAlready: 'I already have that document on your map.',
+    documentUnreadable: 'I couldn’t open the file. Could you send it again, as a PDF?',
+    documentFailed: 'I couldn’t read it right now. Send it to me again in a while.',
   },
   setup: {
     reading: 'Reading what you shared…',
@@ -590,7 +609,9 @@ export const en = {
     linkedinExport: 'LinkedIn profile export: contact header, skills and pagination typical of the LinkedIn PDF.',
     noReasonGiven: 'No reason given.',
     notCovered: 'The answer did not cover this point.',
-    evidenceRetracted: 'When I asked you about it, what held this up did not stand, so I no longer count it. It stays in your record.',
+    evidenceRetracted: 'What held this up no longer stands, so I no longer count it. It stays in your record.',
+    toldOnWhatsApp: 'Told to your Rep on WhatsApp',
+    correctedOnWhatsApp: 'Corrected with your Rep on WhatsApp',
     assistedCeiling: (unverified: number, total: number) =>
       `For now it counts as some evidence: ${unverified} of ${total} pieces come from work you did with AI help and have not yet told me about.`,
     attributionUnknown: (capability: string, unverified: number, total: number) =>

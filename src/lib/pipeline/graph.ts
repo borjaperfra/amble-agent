@@ -175,7 +175,9 @@ export interface CapabilityAssessmentResult {
 
 export async function assessCapabilities(
   candidateId: string,
-  options?: { scopedEvidence?: EvidenceRow[] },
+  // keepSlugs: a map already weighed (a source added later) keeps its
+  // capabilities' ids, rather than gaining a second of each.
+  options?: { scopedEvidence?: EvidenceRow[]; keepSlugs?: boolean },
 ): Promise<CapabilityAssessmentResult> {
   const evidence = options?.scopedEvidence ?? listEvidence(candidateId)
   if (evidence.length === 0) {
@@ -185,6 +187,7 @@ export async function assessCapabilities(
   const { data } = await runAssessCapabilitiesTask({
     candidateId,
     evidence: toAssessmentInput(evidence),
+    existing: options?.keepSlugs ? listCapabilities(candidateId).map((capability) => ({ slug: capability.id, name: capability.name })) : undefined,
   })
 
   let evidenceLinked = 0

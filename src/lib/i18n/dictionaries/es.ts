@@ -516,7 +516,7 @@ export const es: Dictionary = {
     applyLead: 'Lo que pondría por delante:',
     applyFinish: (url: string) => `Las respuestas y tu CV están en ${url}. Revísalas, envíala en la oferta y márcala como enviada.`,
     applyFailed: (url: string) => `No he podido prepararla ahora. Puedes pedírmelo en ${url}.`,
-    textOnly: 'Por ahora no leo imágenes. Escríbemelo o mándame un audio.',
+    textOnly: 'Por ahora no leo imágenes. Escríbemelo o mándame un audio; y si es tu CV, mándamelo en PDF.',
     thinking: 'Déjame mirarlo bien y te cuento.',
     sharedReading: 'La leo y te digo si encaja contigo.',
     sharedFits: 'Encaja contigo.',
@@ -549,6 +549,25 @@ export const es: Dictionary = {
     fillNeedsPrepare: 'Antes tengo que prepararla. ¿Lo hago?',
     fillMissing: (missing: string[], url: string) =>
       `Antes de rellenarla me falta: ${missing.join(', ')}. Complétalo en ${url} y vuelve a pedírmelo.`,
+    // Their map, changed from here: something they told, a correction, a document.
+    noteAdded: (items: string[], url: string) => `Ya está en tu mapa:\n${items.map((item) => `• ${item}`).join('\n')}\n\nLo ves en ${url}`,
+    noteNothing: 'Lo tengo en cuenta, pero no cambia nada de tu mapa.',
+    correctionPropose: (items: string[]) => `Esto saldría de tu mapa:\n${items.map((item) => `• ${item}`).join('\n')}\n\n¿Lo quito?`,
+    correctionButtons: { yes: 'Sí, quítalo', no: 'No, déjalo' },
+    correctionDone: (url: string) => `Hecho: ya no está en tu mapa. Lo ves en ${url}`,
+    profileButtons: { yes: 'Sí, cámbialo', no: 'No' },
+    profileKept: 'Vale, lo dejo como estaba.',
+    nameSaved: (name: string) => `Hecho: a partir de ahora te llamo ${name}.`,
+    // Said in the language they just chose.
+    languageSaved: 'Hecho: a partir de ahora te hablo en español, aquí y en la app.',
+    documentReading: 'Lo leo y te digo qué añade a tu mapa.',
+    documentRead: (added: string[], url: string) =>
+      added.length > 0 ? `Leído. Suma a tu mapa: ${added.join(', ')}. Lo ves en ${url}` : `Leído. Da más detalle a lo que tu mapa ya tenía. Lo ves en ${url}`,
+    documentNothing: 'Lo he leído, pero no he encontrado nada sobre tu experiencia que añadir a tu mapa.',
+    documentSetAside: (reason: string) => `No lo he usado. ${reason}`,
+    documentAlready: 'Ese documento ya lo tengo en tu mapa.',
+    documentUnreadable: 'No he podido abrir el archivo. ¿Me lo mandas otra vez, en PDF?',
+    documentFailed: 'Ahora no he podido leerlo. Mándamelo otra vez en un rato.',
   },
   setup: {
     reading: 'Leyendo lo que has compartido…',
@@ -587,7 +606,9 @@ export const es: Dictionary = {
     linkedinExport: 'Exportación de perfil de LinkedIn: cabecera de contacto, aptitudes y paginación propias del PDF de LinkedIn.',
     noReasonGiven: 'Sin motivo indicado.',
     notCovered: 'La respuesta no cubrió este punto.',
-    evidenceRetracted: 'Cuando te pregunté por ello, lo que la sostenía no se mantuvo, así que ya no lo cuento. Sigue en tu registro.',
+    evidenceRetracted: 'Lo que la sostenía ya no se mantiene, así que ya no lo cuento. Sigue en tu registro.',
+    toldOnWhatsApp: 'Contado a tu Rep por WhatsApp',
+    correctedOnWhatsApp: 'Corregido con tu Rep por WhatsApp',
     assistedCeiling: (unverified: number, total: number) =>
       `Por ahora cuenta como algo de evidencia: ${unverified} de ${total} piezas salen de trabajo que hiciste con ayuda de IA y del que aún no me has hablado.`,
     attributionUnknown: (capability: string, unverified: number, total: number) =>

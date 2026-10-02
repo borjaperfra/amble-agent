@@ -1,7 +1,7 @@
-import { candidateById, listCapabilities, listClaims, listEvidence, listUnprocessedSources } from '../db/repo'
+import { candidateById, getSource, listCapabilities, listClaims, listEvidence, listUnprocessedSources } from '../db/repo'
 import { candidateLocale, withLocale } from '../i18n/candidate'
 import { assessCapabilities, claimsToEvidence, refreshDerivedProfile } from './graph'
-import { prepareSetupQuestions, startFirstReadSoon } from './interview'
+import { alongAnswers, prepareSetupQuestions, startFirstReadSoon } from './interview'
 import { processSource, SourceRejectedError } from './sources'
 
 // Reading what someone shared, in the background, while they tell the Rep
@@ -92,6 +92,45 @@ async function run(candidateId: string, progress: SetupProgress): Promise<void> 
     progress.error = error instanceof Error ? error.message : String(error)
     console.error('[setup] failed for', candidateId, progress.error)
   }
+}
+
+// A source added after the setup (a new CV sent on WhatsApp): read and
+// weighed into their map as the setup reads one, with what it added to say.
+// In line with answers being taken in, so the two never weigh one map at once.
+export type LaterRead =
+  | { status: 'read'; claims: number; added: string[]; raised: string[] }
+  | { status: 'rejected'; reason: string }
+
+const LEVELS = ['NO_EVIDENCE_YET', 'LIMITED_EVIDENCE', 'SOME_EVIDENCE', 'GOOD_EVIDENCE', 'STRONG_EVIDENCE']
+
+export function readLaterSource(candidateId: string, sourceId: string): Promise<LaterRead> {
+  return alongAnswers(candidateId, () =>
+    withLocale(candidateLocale(candidateById(candidateId)), async (): Promise<LaterRead> => {
+      const source = getSource(sourceId)
+      if (!source || source.candidate_id !== candidateId) throw new Error('source not found')
+      const before = new Map(listCapabilities(candidateId).map((capability) => [capability.id, capability.assessment]))
+      let claims = 0
+      try {
+        claims = (await processSource(source, candidateId)).claimsCount
+      } catch (error) {
+        if (error instanceof SourceRejectedError) return { status: 'rejected', reason: error.reason }
+        throw error
+      }
+      if (claims === 0) return { status: 'read', claims, added: [], raised: [] }
+      claimsToEvidence(candidateId)
+      await assessCapabilities(candidateId, { keepSlugs: true })
+      const after = listCapabilities(candidateId)
+      const level = (assessment: string | undefined) => LEVELS.indexOf(assessment ?? 'NO_EVIDENCE_YET')
+      // The map's summary: after, with nobody waiting for it.
+      void refreshDerivedProfile(candidateId).catch(() => undefined)
+      return {
+        status: 'read',
+        claims,
+        added: after.filter((capability) => !before.has(capability.id) && level(capability.assessment) > 0).map((capability) => capability.name),
+        raised: after.filter((capability) => before.has(capability.id) && level(capability.assessment) > level(before.get(capability.id))).map((capability) => capability.name),
+      }
+    }),
+  )
 }
 
 async function readAndWeigh(candidateId: string, progress: SetupProgress): Promise<void> {

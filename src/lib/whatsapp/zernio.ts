@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { safeFetchBytes, TooLargeError } from '../net/safe-fetch'
 
 // Zernio, the provider between amble and WhatsApp's Cloud API
 // (docs.zernio.com/platforms/whatsapp). The number sits in our own WhatsApp
@@ -228,6 +229,35 @@ export async function whatsappAccountStatus(config: ZernioConfig): Promise<Whats
     })),
   }
 }
+
+// A file someone sent (a document): fetched from Zernio's own media endpoint,
+// which needs our key, so only from there and from nowhere else the payload
+// might point. Over https, through the guarded fetch, bounded in time and in
+// bytes; a local stand-in over http (ZERNIO_API_URL, for tests) is reached
+// as it is, with the same bounds.
+// Null when it is not Zernio's, or not there; TooLargeError past maxBytes.
+export async function fetchMedia(config: ZernioConfig, url: string, maxBytes: number): Promise<Buffer | null> {
+  let target: URL
+  try {
+    target = new URL(url)
+  } catch {
+    return null
+  }
+  if (target.origin !== new URL(API).origin) return null
+  const headers = { Authorization: `Bearer ${config.apiKey}` }
+  if (new URL(API).protocol === 'https:') {
+    const response = await safeFetchBytes(target.toString(), { headers, timeoutMs: MEDIA_MS, maxBytes })
+    return response.status >= 200 && response.status < 300 ? response.body : null
+  }
+  const response = await fetch(target, { headers, redirect: 'error', signal: AbortSignal.timeout(MEDIA_MS) })
+  if (!response.ok) return null
+  if (Number(response.headers.get('content-length') ?? 0) > maxBytes) throw new TooLargeError()
+  const bytes = Buffer.from(await response.arrayBuffer())
+  if (bytes.length > maxBytes) throw new TooLargeError()
+  return bytes
+}
+
+const MEDIA_MS = 30_000
 
 // Seen: the blue ticks on what they sent.
 export async function markRead(config: ZernioConfig, conversationId: string): Promise<void> {

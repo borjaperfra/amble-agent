@@ -8,6 +8,7 @@ import { getMatch, listMatchesForKey, respondToMatch, setProgress, type MatchLis
 import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
+import type { Locale } from '../i18n/locale'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
 import { currentMatchKey, placeFit } from '../matching/run'
@@ -271,6 +272,15 @@ export type Awaiting =
   // Pausing the search, or resuming it, proposed by the agent on their word
   // and waiting for a yes on its own buttons.
   | { kind: 'pause'; id: string; pause: boolean; until: string; checkIn?: string | null }
+  // A change to their map or their account (profile.ts), on their word and
+  // waiting for a yes on its own buttons.
+  | { kind: 'profile'; id: string; change: ProfileChange; until: string }
+
+export type ProfileChange =
+  | { type: 'name'; name: string }
+  | { type: 'language'; locale: Locale }
+  // What their correction makes untrue, and their words.
+  | { type: 'retract'; items: { evidenceId: string; reason: string }[]; words: string }
 
 export interface ProposedPreference {
   kind: 'hard_filter' | 'compensation' | 'strong'

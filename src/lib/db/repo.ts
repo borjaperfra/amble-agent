@@ -59,6 +59,11 @@ export function setOwnerEmail(email: string): CandidateRow {
   return getOrCreateCandidate()
 }
 
+// A new name for the Rep to use, given by them (on WhatsApp, after the setup).
+export function setCandidateName(id: string, name: string): void {
+  getDb().prepare('UPDATE candidates SET name = ? WHERE id = ?').run(name, id)
+}
+
 export function setCandidateLocale(id: string, locale: string, source: 'chosen' | 'detected'): void {
   getDb().prepare('UPDATE candidates SET locale = ?, locale_source = ? WHERE id = ?').run(locale, source, id)
 }

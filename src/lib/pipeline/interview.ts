@@ -3,6 +3,7 @@ import {
   undoTurnAnswer,
   completeInterview,
   getOrCreateInterview,
+  getEvidence,
   getTurn,
   insertClaim,
   insertTurn,
@@ -15,6 +16,7 @@ import {
   listUncertainties,
   newId,
   parseJsonArray,
+  retractEvidence,
   uncertaintyExistsByDescription,
   updateUncertaintyStatus,
   upsertCapability,
@@ -55,6 +57,15 @@ function turnKind(turn: InterviewTurnRow): 'gap' | 'defence' {
   return turn.kind === 'defence' ? 'defence' : 'gap'
 }
 
+// What they told the Rep on WhatsApp without being asked (to add to their
+// map or correct it): kept as a turn, so it is taken in exactly as an answer
+// is, but never counted as a question asked.
+const NOTE = 'note'
+
+function asked(turns: InterviewTurnRow[]): InterviewTurnRow[] {
+  return turns.filter((turn) => turn.kind !== NOTE)
+}
+
 // Work for one person runs one piece at a time, on two lines: planning
 // questions, and taking answers in. On globalThis: pages and background work
 // are separate bundles in one process.
@@ -86,7 +97,7 @@ export function planNextQuestion(candidateId: string, options: { setup?: boolean
     const turns = listTurns(interview.id)
     const pending = turns.find((turn) => turn.answer === null && turn.question !== null)
     if (pending) return asTurn(pending)
-    if (setup && turns.length >= SETUP_QUESTIONS) {
+    if (setup && asked(turns).length >= SETUP_QUESTIONS) {
       completeInterview(interview.id)
       return { action: 'STOP', reason: serverText().interviewLongEnough }
     }
@@ -99,7 +110,7 @@ export function planNextQuestion(candidateId: string, options: { setup?: boolean
 export function prepareSetupQuestions(candidateId: string): Promise<void> {
   return inLine(`plan:${candidateId}`, async () => {
     const interview = getOrCreateInterview(candidateId)
-    while (listTurns(interview.id).length < SETUP_QUESTIONS) {
+    while (asked(listTurns(interview.id)).length < SETUP_QUESTIONS) {
       const planned = await planOne(candidateId, true)
       if (planned.action === 'STOP') break
     }
@@ -108,7 +119,9 @@ export function prepareSetupQuestions(candidateId: string): Promise<void> {
 
 async function planOne(candidateId: string, setup: boolean): Promise<NextQuestion> {
   const interview = getOrCreateInterview(candidateId)
-  const turns = listTurns(interview.id)
+  // Every turn keeps its place (idx); only questions count as asked.
+  const everyTurn = listTurns(interview.id)
+  const turns = asked(everyTurn)
   const answered = turns.filter((turn) => turn.answer !== null)
 
   if (answered.length >= MAX_QUESTIONS) {
@@ -123,7 +136,7 @@ async function planOne(candidateId: string, setup: boolean): Promise<NextQuestio
       const turn = insertTurn({
         id: newId('turn'),
         interview_id: interview.id,
-        idx: turns.length,
+        idx: everyTurn.length,
         question: defence.question,
         question_reason: defence.reason,
         target_capability_ids: JSON.stringify(defence.capabilityIds),
@@ -166,7 +179,7 @@ async function planOne(candidateId: string, setup: boolean): Promise<NextQuestio
 
   // Every question already asked, answered or not: one still waiting for its
   // answer is a topic taken, never to be asked again.
-  const recentTurns = turns.slice(-6).map((turn) => ({
+  const recentTurns = everyTurn.slice(-6).map((turn) => ({
     question: turn.question ?? '',
     answer: turn.answer === null ? '(asked, not answered yet: do not ask about this again)' : turn.answer.slice(0, 2000),
   }))
@@ -194,7 +207,7 @@ async function planOne(candidateId: string, setup: boolean): Promise<NextQuestio
   const turn = insertTurn({
     id: newId('turn'),
     interview_id: interview.id,
-    idx: turns.length,
+    idx: everyTurn.length,
     question: result.data.question ?? null,
     question_reason: result.data.reason,
     target_capability_ids: JSON.stringify(result.data.targetCapabilityIds),
@@ -277,6 +290,65 @@ export function takeAnswer(
   })
 }
 
+// What a note's turn tells the extraction: nothing was asked.
+const TOLD_REASON = 'Nothing was asked: they told their Rep this on WhatsApp, to add it to their profile. Extract only what they assert about themselves.'
+const CORRECTED_REASON =
+  "Nothing was asked: on WhatsApp they corrected their profile, and what they said was not true of them has been removed. Extract only what they now assert about themselves; what they deny, or say was someone else's, is not a claim about them."
+
+function noteTurn(candidateId: string, question: string, reason: string, capabilityIds: string[]): InterviewTurnRow {
+  const interview = getOrCreateInterview(candidateId)
+  return insertTurn({
+    id: newId('turn'),
+    interview_id: interview.id,
+    idx: listTurns(interview.id).length,
+    question,
+    question_reason: reason,
+    target_capability_ids: JSON.stringify(capabilityIds),
+    target_uncertainty_ids: '[]',
+    kind: NOTE,
+  })
+}
+
+// Something about their work they told the Rep on WhatsApp: taken in as an
+// answer is (the same extraction, nothing they did not say), on its own turn.
+export function takeToldNote(candidateId: string, words: string, then?: (result: IncorporatedAnswer) => Promise<void>): string {
+  const turn = noteTurn(candidateId, serverText().toldOnWhatsApp, TOLD_REASON, [])
+  takeAnswer(candidateId, turn.id, words, then)
+  return turn.id
+}
+
+// A correction they confirmed. What it makes untrue leaves their map at once
+// (retracted, never deleted: the record keeps what was believed and why it
+// stopped), and their words are then taken in as a note: the right version,
+// if they gave it, is added, and what rested on what went is weighed again.
+export function takeCorrection(
+  candidateId: string,
+  retract: { evidenceId: string; reason: string }[],
+  words: string,
+  then?: (result: IncorporatedAnswer) => Promise<void>,
+): { turnId: string; retracted: number } {
+  const wanted = new Set(retract.map((item) => item.evidenceId))
+  const capabilityIds = [...listCapabilityEvidenceIds(candidateId)].filter(([, ids]) => ids.some((id) => wanted.has(id))).map(([id]) => id)
+  const turn = noteTurn(candidateId, serverText().correctedOnWhatsApp, CORRECTED_REASON, capabilityIds)
+  let retracted = 0
+  for (const item of retract) {
+    const evidence = getEvidence(item.evidenceId)
+    if (!evidence || evidence.candidate_id !== candidateId || evidence.retracted_at !== null) continue
+    retractEvidence({ evidence, reason: item.reason, question: turn.question, answer: words, turnId: turn.id })
+    retracted++
+  }
+  // A capability with nothing left under it drops now, not after the reassessment.
+  reconcileCapabilities(candidateId)
+  takeAnswer(candidateId, turn.id, words, then)
+  return { turnId: turn.id, retracted }
+}
+
+// Other work on their map (a document read after the setup) waits in the
+// same line as answers being taken in: never two at once on one map.
+export function alongAnswers<T>(candidateId: string, work: () => Promise<T>): Promise<T> {
+  return inLine(`answers:${candidateId}`, work)
+}
+
 async function incorporateInLine(
   candidateId: string,
   turn: InterviewTurnRow,
@@ -352,6 +424,11 @@ async function incorporateAnswerInner(
   }
 
   const targetCapabilityIds = parseJsonArray(turn.target_capability_ids)
+  // A note that added nothing and touched nothing leaves the map as it was:
+  // it is no reason to weigh all of it again.
+  if (turn.kind === NOTE && evidenceIds.length === 0 && targetCapabilityIds.length === 0) {
+    return { claimsCreated, evidenceCreated: 0, resolvedUncertaintyIds: [], reassessedCapabilityIds: [], profileNeedsRefresh: false }
+  }
 
   const capabilities = listCapabilities(candidateId)
   const scopedSlugs = [...suggestedSlugs, ...targetCapabilityIds].filter((slug) =>

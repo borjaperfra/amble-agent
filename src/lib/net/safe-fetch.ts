@@ -160,29 +160,56 @@ function readBody(response: IncomingMessage, maxBytes: number): Promise<Buffer> 
   })
 }
 
-export async function safeFetchText(raw: string, options: Options = {}): Promise<SafeResponse> {
-  const settings = { ...DEFAULTS, ...options }
-  const signal = AbortSignal.timeout(settings.timeoutMs)
+// The response at the end of the redirects. A header that proves who we are
+// (Authorization) goes only to the origin it was meant for, never on to
+// where that origin redirects.
+async function follow(raw: string, headers: Record<string, string>, maxRedirects: number, signal: AbortSignal): Promise<{ url: string; status: number; contentType: string; response: IncomingMessage }> {
+  const origin = new URL(raw).origin
   let current = raw
-  for (let hop = 0; hop <= settings.maxRedirects; hop++) {
+  for (let hop = 0; hop <= maxRedirects; hop++) {
     const problem = urlProblem(current)
     if (problem) throw new BlockedUrlError(problem)
     if (await isMaliciousLink(current)) throw new BlockedUrlError('a link known to spread malware')
     const url = new URL(current)
-    const response = await request(url, settings.headers ?? {}, signal)
+    const sent = url.origin === origin ? headers : Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== 'authorization'))
+    const response = await request(url, sent, signal)
     const status = response.statusCode ?? 0
     if (status >= 300 && status < 400 && response.headers.location) {
       response.resume()
       current = new URL(response.headers.location, url).toString()
       continue
     }
-    const contentType = String(response.headers['content-type'] ?? '').toLowerCase()
-    if (status >= 200 && status < 300 && !settings.contentTypes.some((type) => contentType.startsWith(type))) {
-      response.destroy()
-      throw new BlockedUrlError(`unsupported content type: ${contentType || 'none'}`)
-    }
-    const body = await readBody(response, settings.maxBytes)
-    return { url: current, status, contentType, body: body.toString('utf8') }
+    return { url: current, status, contentType: String(response.headers['content-type'] ?? '').toLowerCase(), response }
   }
   throw new BlockedUrlError('too many redirects')
+}
+
+export async function safeFetchText(raw: string, options: Options = {}): Promise<SafeResponse> {
+  const settings = { ...DEFAULTS, ...options }
+  const signal = AbortSignal.timeout(settings.timeoutMs)
+  const { url, status, contentType, response } = await follow(raw, settings.headers ?? {}, settings.maxRedirects, signal)
+  if (status >= 200 && status < 300 && !settings.contentTypes.some((type) => contentType.startsWith(type))) {
+    response.destroy()
+    throw new BlockedUrlError(`unsupported content type: ${contentType || 'none'}`)
+  }
+  const body = await readBody(response, settings.maxBytes)
+  return { url, status, contentType, body: body.toString('utf8') }
+}
+
+export class TooLargeError extends Error {}
+
+// A file (a document someone sent), whole or not at all: past maxBytes it is
+// refused, not cut, since half a PDF is no PDF. What it is comes from its
+// bytes afterwards, so any content type is read.
+export async function safeFetchBytes(raw: string, options: Omit<Options, 'contentTypes'> = {}): Promise<{ url: string; status: number; contentType: string; body: Buffer }> {
+  const settings = { ...DEFAULTS, ...options }
+  const signal = AbortSignal.timeout(settings.timeoutMs)
+  const { url, status, contentType, response } = await follow(raw, settings.headers ?? {}, settings.maxRedirects, signal)
+  if (Number(response.headers['content-length'] ?? 0) > settings.maxBytes) {
+    response.destroy()
+    throw new TooLargeError()
+  }
+  const body = await readBody(response, settings.maxBytes + 1)
+  if (body.length > settings.maxBytes) throw new TooLargeError()
+  return { url, status, contentType, body }
 }
