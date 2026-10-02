@@ -724,6 +724,7 @@ export const en = {
     officeElsewhere: 'It asks for office days, and its office isn’t somewhere you’d go',
     wantedAnyway: 'I’d want this one',
     movedToWanted: 'Moved to You want these.',
+    handoffStay: 'Carry on here',
     tabs: { new: 'New', wanted: 'You want these', sent: 'Sent', aside: 'Set aside' },
     apply: {
       prepare: 'Prepare my application',

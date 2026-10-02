@@ -21,6 +21,7 @@ type Response = 'interested' | 'not_for_me' | 'wanted_anyway'
 
 // Offers answered here before the Rep asks to carry on on WhatsApp.
 const HANDOFF_AFTER = 5
+const HANDOFF_KEY = 'amble-whatsapp-handoff-stayed'
 type Progress = 'applied' | 'dropped' | null
 export type Tab = 'new' | 'wanted' | 'sent' | 'aside'
 const TABS: Tab[] = ['new', 'wanted', 'sent', 'aside']
@@ -60,6 +61,41 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   const [asideShown, setAsideShown] = useState(ASIDE_PAGE)
 
   const newDeck = [...pending(view.found), ...pending(view.maybe)]
+
+  // The WhatsApp offer, after the first few answers, until they choose to
+  // carry on here (remembered on this device).
+  const [stayed, setStayed] = useState(false)
+  useEffect(() => {
+    let remembered = false
+    try {
+      remembered = window.localStorage.getItem(HANDOFF_KEY) !== null
+    } catch {
+      // Without storage it is offered again on the next visit.
+    }
+    // Read after the first paint, which the server rendered without it.
+    const id = window.setTimeout(() => setStayed(remembered), 0)
+    return () => window.clearTimeout(id)
+  }, [])
+  const handoff = !stayed && view.whatsapp.available && !view.whatsapp.linked && view.decided >= HANDOFF_AFTER
+
+  // What replaced the card (the next one, the WhatsApp offer, the end of the
+  // pile) is read from its top: the page does not stay down where the last
+  // card's answers were.
+  const panelRef = useRef<HTMLDivElement>(null)
+  function toPanel() {
+    const panel = panelRef.current
+    if (panel && panel.getBoundingClientRect().top < 0) panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function stayHere() {
+    setStayed(true)
+    try {
+      window.localStorage.setItem(HANDOFF_KEY, '1')
+    } catch {
+      // Remembered for this visit only.
+    }
+    window.requestAnimationFrame(toPanel)
+  }
 
   async function reload() {
     // If it fails, the answer is saved anyway; the screen catches up on the next visit.
@@ -175,14 +211,19 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
           </ul>
         )}
 
-        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.panel} key={tab}>
-          {/* After the first few answers, the rest comes on WhatsApp. */}
-          {tab === 'new' && view.whatsapp.available && !view.whatsapp.linked && view.decided >= HANDOFF_AFTER && (
+        <div ref={panelRef} role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.panel} key={tab}>
+          {/* After the first few answers, the rest can come on WhatsApp: asked
+              once, where the next offer would be, so it is seen. */}
+          {tab === 'new' && handoff && (
             <div className={styles.handoff}>
               <WhatsAppConnect linked={false} />
+              <button type="button" className={`text-btn ${styles.handoffStay}`} onClick={stayHere}>
+                {t.opportunities.handoffStay}
+              </button>
             </div>
           )}
           {tab === 'new' &&
+            !handoff &&
             (newDeck.length === 0 ? (
               <div className={styles.empty}>
                 <Symbol size={96} watch breathe={!paused} label={paused ? t.listening.pause.status : t.listening.label} />
@@ -200,7 +241,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                     item={item}
                     onAnswered={(response) => {
                       setNotice({ text: response === 'interested' ? t.opportunities.movedToWanted : t.opportunities.savedNotForMe, key: '' })
-                      void reload()
+                      void reload().then(toPanel)
                     }}
                   />
                 )}

@@ -720,6 +720,7 @@ export const es: Dictionary = {
     officeElsewhere: 'Pide días de oficina, y su oficina no está donde aceptarías ir',
     wantedAnyway: 'Esta sí me interesa',
     movedToWanted: 'La he pasado a Te interesan.',
+    handoffStay: 'Seguir aquí',
     tabs: { new: 'Nuevas', wanted: 'Te interesan', sent: 'Enviadas', aside: 'Apartadas' },
     apply: {
       prepare: 'Prepárame la candidatura',
