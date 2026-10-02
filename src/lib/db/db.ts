@@ -839,6 +839,48 @@ function migrate(db: DatabaseSync): void {
     );
   `)
 
+  // The admin's health tab (src/lib/admin/health.ts): each scheduled pass in
+  // numbers (the log has it in full), each form filled or sent, and when each
+  // kind of alert last went out (src/lib/admin/alerts.ts), with the value it
+  // watches where it watches one.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS listening_passes (
+      slot TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      read INTEGER NOT NULL DEFAULT 0,
+      out_of_time INTEGER NOT NULL DEFAULT 0,
+      errors INTEGER NOT NULL DEFAULT 0,
+      candidates TEXT NOT NULL DEFAULT '[]',
+      error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS listening_passes_by_time ON listening_passes (started_at);
+    CREATE TABLE IF NOT EXISTS application_runs (
+      candidate_id TEXT NOT NULL,
+      opportunity_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      via TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      detail TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS application_runs_by_time ON application_runs (started_at);
+    CREATE TABLE IF NOT EXISTS health_alerts (
+      kind TEXT PRIMARY KEY,
+      sent_at TEXT,
+      value TEXT
+    );
+  `)
+  // What the health tab counts per day, from the index alone: a model run's
+  // tokens sit after its raw output, and a message's time after its body, so
+  // reading them from the table would read every output and every message.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS model_runs_usage ON model_runs (created_at, ok, candidate_id, prompt_tokens, cached_tokens, completion_tokens, error);
+    CREATE INDEX IF NOT EXISTS whatsapp_messages_by_time ON whatsapp_messages (created_at, direction);
+  `)
+
   // Lookups every pass and every screen makes, which otherwise read whole
   // tables: an offer's sightings, a person's assessments for their current
   // profile, the postings judged in one model run, a person's model runs.

@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { checkPassAlerts, checkWhatsAppStatus } from './admin/alerts'
 import { backupToday } from './db/backup'
-import { DATA_DIRECTORY } from './db/db'
-import { rereadsInFlight, runListening, stopping, stopStartingReads } from './matching/run'
+import { DATA_DIRECTORY, getDb } from './db/db'
+import { rereadsInFlight, runListening, stopping, stopStartingReads, type CandidatePass } from './matching/run'
 import { sweepUploads } from './pipeline/sources'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
@@ -81,6 +82,29 @@ function writeState(change: (state: ScheduleState) => void): void {
 // next one is close.
 const RESUME_WITHIN_MINUTES = 210
 
+// Each pass in numbers, for the admin's health tab: roles read (judged or set
+// aside on their facts), left for lack of time, and what failed, per person
+// and in all. The log keeps the rest.
+function recordPass(slot: string, startedAt: string, outcome: 'done' | 'stopped' | 'failed', matching: CandidatePass[], error: string | null) {
+  const people = matching.map((entry) =>
+    'stats' in entry
+      ? {
+          candidateId: entry.candidateId,
+          read: entry.stats.assessedNow + entry.stats.preGated,
+          outOfTime: entry.stats.outOfTime,
+          waiting: entry.stats.waiting,
+          errors: entry.stats.errors.length,
+          firstError: entry.stats.errors[0]?.message ?? null,
+        }
+      : { candidateId: entry.candidateId, read: 0, outOfTime: 0, waiting: 0, errors: 1, firstError: entry.error },
+  )
+  const sum = (key: 'read' | 'outOfTime' | 'errors') => people.reduce((total, person) => total + person[key], 0)
+  getDb()
+    .prepare('INSERT INTO listening_passes (slot, started_at, finished_at, outcome, read, out_of_time, errors, candidates, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(slot, startedAt, new Date().toISOString(), outcome, sum('read'), sum('outOfTime'), sum('errors') + (error ? 1 : 0), JSON.stringify(people), error?.slice(0, 1000) ?? null)
+  return { read: sum('read'), outOfTime: sum('outOfTime') }
+}
+
 let running = false
 
 // Slots already told another pass holds the lock: said once, tried each minute.
@@ -97,6 +121,9 @@ async function pass(day: string, slot: string, until: number) {
   }
   running = true
   let done = true
+  const startedAt = new Date().toISOString()
+  let matching: CandidatePass[] = []
+  let failure: string | null = null
   try {
     const resumed = Boolean(readState().passes[slot])
     writeState((state) => {
@@ -108,7 +135,9 @@ async function pass(day: string, slot: string, until: number) {
     if (copy) log(day, `backup: ${copy}`)
     // And, once a day too, drops what was set aside of what people uploaded.
     if (copy) log(day, `uploads: ${JSON.stringify(sweepUploads())}`)
-    log(day, JSON.stringify(await runListening({ until }), null, 2))
+    const result = await runListening({ until })
+    matching = result.matching
+    log(day, JSON.stringify(result, null, 2))
     // Stopped by a restart: the pass after it picks up where this one was.
     if (stopping()) {
       done = false
@@ -118,11 +147,21 @@ async function pass(day: string, slot: string, until: number) {
     // What this pass found that deserves a message, at the pace allowed.
     log(day, `offers: ${JSON.stringify(await sendDueOffers())}`)
   } catch (error) {
+    failure = error instanceof Error ? error.message : String(error)
     log(day, `pass failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)
   } finally {
     running = false
     releaseLock()
     if (done) writeState((state) => void (state.passes[slot] = { ...state.passes[slot], finishedAt: new Date().toISOString() }))
+    // A record or an alert that fails is logged; the pass is over either way.
+    safely('pass record', async () => {
+      const totals = recordPass(slot, startedAt, failure ? 'failed' : done ? 'done' : 'stopped', matching, failure)
+      // Stopped for a restart: what it left is the next server's, not a lack of time.
+      const alerts = await checkPassAlerts({ slot, outOfTime: done ? totals.outOfTime : 0, read: totals.read })
+      if (alerts.length > 0) log(day, `alerts: ${alerts.join(', ')}`)
+      const whatsapp = await checkWhatsAppStatus()
+      if (whatsapp?.changed) log(day, `whatsapp status: ${whatsapp.lastEvent}`)
+    })
   }
 }
 

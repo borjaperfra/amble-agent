@@ -50,6 +50,8 @@ interface Session {
   // amble is pressing send on their yes: what follows is told by whoever
   // asked, not by the window's watcher.
   amble: boolean
+  // Where they asked for it: kept with the record of the send.
+  via: 'app' | 'whatsapp'
 }
 
 declare global {
@@ -250,6 +252,47 @@ function openFormsOf(candidateId: string, except: string): number {
   return open + starting
 }
 
+// Each fill and each send, how it ended, for the admin's health tab. Its
+// record never changes what the candidate is told: a failed write is dropped,
+// and the result (or the error) goes back as it came.
+function recorded<T>(
+  run: { candidateId: string; opportunityId: string; kind: 'fill' | 'submit'; via: 'app' | 'whatsapp' },
+  work: () => Promise<T>,
+  outcomeOf: (result: T) => { outcome: string; detail: string | null },
+): Promise<T> {
+  const startedAt = new Date().toISOString()
+  const write = (outcome: string, detail: string | null) => {
+    try {
+      getDb()
+        .prepare('INSERT INTO application_runs (candidate_id, opportunity_id, kind, via, outcome, detail, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(run.candidateId, run.opportunityId, run.kind, run.via, outcome, detail?.slice(0, 500) ?? null, startedAt, new Date().toISOString())
+    } catch {
+      // Only the record is missing.
+    }
+  }
+  return work().then(
+    (result) => {
+      const { outcome, detail } = outcomeOf(result)
+      write(outcome, detail)
+      return result
+    },
+    (error: unknown) => {
+      write('error', error instanceof Error ? error.message : String(error))
+      throw error
+    },
+  )
+}
+
+function fillOutcome(result: FillResult): { outcome: string; detail: string | null } {
+  if (result.status === 'filled') return { outcome: result.captcha ? 'filled_captcha' : 'filled', detail: `${result.filled.length} filled, ${result.left.length} left` }
+  if (result.status === 'missing') return { outcome: 'missing', detail: `${result.missing.length} missing` }
+  return { outcome: 'unavailable', detail: result.reason }
+}
+
+function submitOutcome(result: SubmitResult): { outcome: string; detail: string | null } {
+  return result.status === 'blocked' ? { outcome: 'blocked', detail: result.reason } : { outcome: result.status, detail: null }
+}
+
 // `via`: where they asked for it. Asked on WhatsApp, they are told there
 // when the page says it was sent.
 export function fillApplication(candidateId: string, opportunityId: string, via: 'app' | 'whatsapp' = 'app'): Promise<FillResult> {
@@ -257,7 +300,7 @@ export function fillApplication(candidateId: string, opportunityId: string, via:
   const running = filling.get(key)
   if (running) return running
   if (openFormsOf(candidateId, key) >= MAX_OPEN_FORMS) return Promise.resolve({ status: 'unavailable', reason: 'too_many_open' })
-  const job = fill(candidateId, opportunityId, via).finally(() => filling.delete(key))
+  const job = recorded({ candidateId, opportunityId, kind: 'fill', via }, () => fill(candidateId, opportunityId, via), fillOutcome).finally(() => filling.delete(key))
   filling.set(key, job)
   return job
 }
@@ -342,7 +385,7 @@ async function fill(candidateId: string, opportunityId: string, via: 'app' | 'wh
     if (via === 'whatsapp') await page.screenshot({ path: picturePath(candidateId, opportunityId), type: 'jpeg', quality: 70, fullPage: true }).catch(() => undefined)
     const captcha = (await page.locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .grecaptcha-badge').count()) > 0
     const thanksBefore = SENT.test(await page.evaluate(() => document.body.innerText).catch(() => ''))
-    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl, thanksBefore, amble: false }
+    const session: Session = { browser, page, expires: Date.now() + minutes * 60_000, state: 'open', cloudId, liveUrl, thanksBefore, amble: false, via }
     sessions.set(key, session)
     if (WINDOW) watchWindow(candidateId, opportunityId, session, prepared.answers.filter((answer) => left.includes(answer.label)), via)
     return { status: 'filled', filled, left, captcha, window: WINDOW, live: Boolean(liveUrl), retried }
@@ -428,7 +471,10 @@ export function submitApplication(candidateId: string, opportunityId: string): P
   const key = sessionKey(candidateId, opportunityId)
   const running = submitting.get(key)
   if (running) return running
-  const job = submit(candidateId, opportunityId, key).finally(() => submitting.delete(key))
+  const via = sessions.get(key)?.via ?? 'app'
+  const job = recorded({ candidateId, opportunityId, kind: 'submit', via }, () => submit(candidateId, opportunityId, key), submitOutcome).finally(() =>
+    submitting.delete(key),
+  )
   submitting.set(key, job)
   return job
 }

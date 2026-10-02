@@ -6,13 +6,14 @@ import Header from '@/components/Header'
 import { useI18n } from '@/components/I18nProvider'
 import { postJson, requestJson } from '@/components/api'
 import AdminFeedbackList from '@/components/flows/AdminFeedbackList'
+import AdminHealth from '@/components/flows/AdminHealth'
 import type { AdminFeedbackItem, FeedbackKind } from '@/lib/admin/feedback-triage'
 import type { AdminWaitlistEntry, BetaSeats, InviteOutcome } from '@/lib/admin/invites'
 import type { AdminOverview, AdminWaitlistState } from '@/lib/admin/overview'
 import { adminDictionaries } from '@/lib/i18n/dictionaries/admin'
 import styles from '@/app/admin/admin.module.css'
 
-type Tab = 'waitlist' | 'feedback'
+type Tab = 'waitlist' | 'feedback' | 'health'
 type WaitlistFilter = 'all' | 'waiting' | 'invited' | 'joined'
 type FeedbackFilter = 'all' | 'unread' | FeedbackKind
 
@@ -98,6 +99,15 @@ export default function AdminFlow({ initial, initialTab }: { initial: AdminOverv
             {a.tabs.feedback}
             <span className={styles.tabCount}>{unread > 0 ? `${unread} / ${feedback.length}` : feedback.length}</span>
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'health'}
+            className={tab === 'health' ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+            onClick={() => showTab('health')}
+          >
+            {a.tabs.health}
+          </button>
         </div>
 
         {tab === 'waitlist' ? (
@@ -109,6 +119,8 @@ export default function AdminFlow({ initial, initialTab }: { initial: AdminOverv
               setSeats(nextSeats)
             }}
           />
+        ) : tab === 'health' ? (
+          <AdminHealth />
         ) : (
           <FeedbackTab
             items={feedback}

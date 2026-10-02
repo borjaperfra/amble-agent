@@ -422,9 +422,94 @@
   font-weight: 400;
 }
 
+/* ---------- Health ---------- */
+
+.subsection {
+  margin-top: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* A table of numbers keeps its columns on a phone: it scrolls inside its own
+   box, with the first column held in view, and the page never does. */
+.scroll {
+  margin-top: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body-sm);
+}
+
+.grid th {
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid td {
+  padding: 8px 10px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.grid th:first-child,
+.grid td:first-child {
+  position: sticky;
+  left: 0;
+  padding-left: 0;
+  background: var(--paper);
+}
+
+.grid .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.who {
+  max-width: 220px;
+  overflow-wrap: anywhere;
+}
+
+.who a {
+  color: var(--ink);
+}
+
+.cellNote {
+  display: block;
+  max-width: 280px;
+  font-size: 12px;
+  color: var(--ink-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.warn {
+  color: var(--clay);
+  font-weight: 500;
+}
+
 /* ---------- Phone ---------- */
 
 @media (max-width: 720px) {
+  /* Three tabs in a phone's width: closer, and a second row before any overflow. */
+  .tabs {
+    flex-wrap: wrap;
+    column-gap: 18px;
+  }
+
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

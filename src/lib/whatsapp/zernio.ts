@@ -165,6 +165,70 @@ export async function listTemplates(config: ZernioConfig): Promise<unknown> {
   return call(config, 'GET', `/whatsapp/templates?accountId=${encodeURIComponent(config.accountId)}`)
 }
 
+export interface WhatsAppAccountStatus {
+  displayName: string | null
+  nameStatus: string | null
+  lastReviewedName: string | null
+  // The last thing Meta said about the business (a review, a restriction).
+  lastEvent: string | null
+  messagingLimitTier: string | null
+  qualityRating: string | null
+  templates: { name: string; language: string | null; category: string | null; status: string | null }[]
+}
+
+// A field wherever the provider nests it (on the account, or under its
+// metadata), as text; only the fields named here ever leave this function.
+function field(source: unknown, key: string, depth = 0): string | null {
+  if (!source || typeof source !== 'object' || depth > 3) return null
+  const record = source as Record<string, unknown>
+  const value = record[key]
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const found = field(nested, key, depth + 1)
+      if (found !== null) return found
+    }
+  }
+  return null
+}
+
+function listOf(result: unknown, keys: string[]): unknown[] {
+  if (Array.isArray(result)) return result
+  for (const key of keys) {
+    const value = (result as Record<string, unknown> | null)?.[key]
+    if (Array.isArray(value)) return value
+  }
+  return []
+}
+
+// How the number stands with Meta, for the owner's health tab: its name and
+// whether it was approved, the business's last event, its sending tier and
+// quality, and each template's review.
+export async function whatsappAccountStatus(config: ZernioConfig): Promise<WhatsAppAccountStatus> {
+  const [accounts, templates] = await Promise.all([call<unknown>(config, 'GET', '/accounts?platform=whatsapp'), listTemplates(config)])
+  const listed = listOf(accounts, ['accounts', 'data'])
+  // Ours among them, by its id; else the only one there is.
+  const account =
+    listed.find((entry) => ['_id', 'id', 'accountId'].some((key) => String((entry as Record<string, unknown> | null)?.[key] ?? '') === config.accountId)) ??
+    listed[0] ??
+    null
+  const businessStatus = account && typeof account === 'object' ? (account as Record<string, unknown>).businessStatus : null
+  return {
+    displayName: field(account, 'displayName'),
+    nameStatus: field(account, 'nameStatus'),
+    lastReviewedName: field(account, 'lastReviewedName'),
+    lastEvent: field(businessStatus ?? account, 'lastEvent'),
+    messagingLimitTier: field(account, 'messagingLimitTier'),
+    qualityRating: field(account, 'qualityRating'),
+    templates: listOf(templates, ['data', 'templates']).map((template) => ({
+      name: field(template, 'name') ?? '?',
+      language: field(template, 'language'),
+      category: field(template, 'category'),
+      status: field(template, 'status'),
+    })),
+  }
+}
+
 // Seen: the blue ticks on what they sent.
 export async function markRead(config: ZernioConfig, conversationId: string): Promise<void> {
   await call(config, 'POST', `/inbox/conversations/${encodeURIComponent(conversationId)}/read`, { accountId: config.accountId })
