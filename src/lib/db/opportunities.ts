@@ -293,6 +293,13 @@ export interface OfferFactsRow {
   created_at: string
 }
 
+// One offer, with the name of its company: what a person is told it is.
+export function getOpportunityWithCompany(id: string): (OpportunityRow & { company_name: string }) | undefined {
+  return prepared('SELECT o.*, c.name AS company_name FROM opportunities o JOIN companies c ON c.id = o.company_id WHERE o.id = ?').get(id) as unknown as
+    | (OpportunityRow & { company_name: string })
+    | undefined
+}
+
 export function getOfferFacts(opportunityId: string): OfferFactsRow | undefined {
   return prepared('SELECT * FROM opportunity_facts WHERE opportunity_id = ?').get(opportunityId) as unknown as OfferFactsRow | undefined
 }

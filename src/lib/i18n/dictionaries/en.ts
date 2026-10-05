@@ -873,7 +873,9 @@ export const en = {
       notFor: 'Even if the offer doesn’t meet it, I don’t set it aside.',
     },
     // Where a rule came from, beside it.
-    sources: { said: 'you said it', triage: 'from your answers', chat: 'on WhatsApp', own: 'you wrote it' },
+    sources: { said: 'you said it', triage: 'from your answers', chat: 'on WhatsApp', own: 'you wrote it', offer: 'from an offer you turned down' },
+    // Under a rule proposed from an offer they turned down: their own words.
+    youSaid: (quote: string) => `You said: “${quote}”`,
     empty: 'Nothing yet.',
     add: 'Add',
     addLabel: (group: string) => `Add to “${group}”`,
@@ -889,7 +891,7 @@ export const en = {
     stale: 'You confirmed it over three months ago, and I don’t apply it until you tell me it still holds.',
     keep: 'Still holds',
     proposedTitle: 'To review',
-    proposedLead: 'What your answers to the sample offers suggest. I apply nothing until you say yes.',
+    proposedLead: 'What your answers suggest. I apply nothing until you say yes.',
     accept: 'Yes, apply it',
     reject: 'No',
     otherWays: 'You can also',

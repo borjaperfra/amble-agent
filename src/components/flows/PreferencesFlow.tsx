@@ -176,8 +176,12 @@ export default function PreferencesFlow({ initial }: { initial: RulesView }) {
             <ul className={styles.list} role="list">
               {rules.proposed.map((rule) => (
                 <li key={rule.id} className={styles.rule}>
-                  <span className={styles.ruleGroup}>{p.groups[rule.group]}</span>
+                  <span className={styles.ruleGroup}>
+                    {p.groups[rule.group]}
+                    {source(rule) && ` · ${source(rule)}`}
+                  </span>
                   <p className={styles.ruleText}>{rule.text}</p>
+                  {rule.quote && <p className={styles.staleNote}>{p.youSaid(rule.quote)}</p>}
                   <span className={styles.actions}>
                     <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => void act({ action: 'keep', id: rule.id })}>
                       {p.accept}

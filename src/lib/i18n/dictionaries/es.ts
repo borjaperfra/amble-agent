@@ -869,7 +869,9 @@ export const es: Dictionary = {
       notFor: 'Aunque la oferta no lo cumpla, no la aparto.',
     },
     // Where a rule came from, beside it.
-    sources: { said: 'lo dijiste', triage: 'de tus respuestas', chat: 'por WhatsApp', own: 'lo escribiste' },
+    sources: { said: 'lo dijiste', triage: 'de tus respuestas', chat: 'por WhatsApp', own: 'lo escribiste', offer: 'de una oferta que descartaste' },
+    // Under a rule proposed from an offer they turned down: their own words.
+    youSaid: (quote: string) => `Dijiste: «${quote}»`,
     empty: 'Nada todavía.',
     add: 'Añadir',
     addLabel: (group: string) => `Añadir a «${group}»`,
@@ -885,7 +887,7 @@ export const es: Dictionary = {
     stale: 'La confirmaste hace más de tres meses y no la aplico hasta que me digas que sigue valiendo.',
     keep: 'Sigue valiendo',
     proposedTitle: 'Por revisar',
-    proposedLead: 'Lo que tus respuestas a las ofertas de ejemplo sugieren. No aplico nada hasta que me digas que sí.',
+    proposedLead: 'Lo que tus respuestas sugieren. No aplico nada hasta que me digas que sí.',
     accept: 'Sí, aplícalo',
     reject: 'No',
     otherWays: 'También puedes',

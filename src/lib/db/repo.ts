@@ -1194,6 +1194,32 @@ export function replaceSaidPreferences(
   for (const row of rows) insert.run(newId('rpr'), candidateId, row.kind, row.statement, row.wording, row.label, row.group, ts, decidedAt, intentId)
 }
 
+// A rule proposed from what they said turning an offer down: waits, as
+// proposed, for their yes on /me/preferences. Their words are kept as the quote.
+export function insertProposedPreference(row: {
+  candidateId: string
+  kind: string
+  statement: string
+  label: string | null
+  quote: string
+  modelRunId: string | null
+  source: 'offer'
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, source)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, 'analysis', NULL, '[]', ?, 'proposed', ?, ?, ?)`,
+    )
+    .run(newId('rpr'), row.candidateId, row.kind, row.statement, row.statement, row.label, row.quote, row.modelRunId, now(), row.source)
+}
+
+// Proposals waiting for them that no triage owns (from an offer they turned down).
+export function listProposedPreferences(candidateId: string): RevealedPreferenceRow[] {
+  return getDb()
+    .prepare("SELECT * FROM revealed_preferences WHERE candidate_id = ? AND status = 'proposed' AND triage_id IS NULL ORDER BY created_at ASC")
+    .all(candidateId) as unknown as RevealedPreferenceRow[]
+}
+
 // They said it still holds: it counts from today again (listening.ts, isStale).
 export function renewRevealedPreference(id: string): void {
   getDb().prepare("UPDATE revealed_preferences SET decided_at = ? WHERE id = ? AND status = 'confirmed'").run(now(), id)
