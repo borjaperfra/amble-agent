@@ -16,6 +16,7 @@ import {
   updateSourceStatus,
   updateSourceType,
   type SourceRow,
+  replaceOlderCvs,
 } from '../db/repo'
 import { runExtractClaimsTask } from '../model/tasks'
 import { serverText } from '../i18n/candidate'
@@ -613,6 +614,12 @@ export async function processSource(source: SourceRow, candidateId: string): Pro
 
   const flagged = (getDb().prepare('SELECT flag FROM sources WHERE id = ?').get(source.id) as { flag: string | null } | undefined)?.flag
   updateSourceStatus(source.id, 'processed', flagged === 'machine_text' ? serverText().machineText : null)
+
+  // A newer CV replaces the one read before it (as read: the reader may have
+  // found it is a LinkedIn PDF, which replaces nothing). Only once it gave
+  // something: an empty read must not take the old one away.
+  const readAs = (getDb().prepare('SELECT type FROM sources WHERE id = ?').get(source.id) as { type: string } | undefined)?.type
+  if (readAs === 'cv' && claims.length > 0) inTransaction(() => replaceOlderCvs(candidateId, source.id, serverText().replacedByNewerCv))
 
   const discoveries = claims
     .filter((claim) => claim.claimType === 'experience' || claim.claimType === 'project')
