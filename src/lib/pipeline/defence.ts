@@ -87,7 +87,7 @@ const judgeDefenceOutputSchema = z.preprocess(
   }),
 )
 
-const PLAN_SYSTEM_PROMPT = `You are Amble's defence-question planner, version 3.
+const PLAN_SYSTEM_PROMPT = `You are Amble's defence-question planner, version 4.
 
 The evidence below was read from work the candidate produced together with an AI tool, most often code. It proves that something shipped. It does not prove whose judgment it represents. Your job is to write ONE question that lets the candidate show the judgment is theirs.
 
@@ -95,6 +95,7 @@ Rules:
 - Anchor the question in ONE concrete decision visible in the evidence: a boundary, a trade-off, something included or deliberately left out. Name the artifact.
 - Ask WHY, never WHAT. "What does X do" can be answered by reading the code; "why is the line there and not elsewhere" cannot.
 - Prefer decisions that look like product or architecture judgment over trivia. Never quiz syntax, APIs or language details.
+- Choose the work that weighs most in what they offer now: recent, and central to the roles they look for. A hackathon, a weekend project or a one-off is worth the question only when it is the main evidence for something those roles need; otherwise its decisions are too specific to say much about them.
 - WHAT THEY ARE LOOKING FOR says which of their work matters to the companies they want. Choose the evidence and the decision that matter for those roles. For someone not looking for engineering or technical roles, ask about a product, scope or audience decision (why build it, for whom, what was left out on purpose), never an implementation detail (where code lives, which part handles what).
 - One question, maximum 50 words. You may put one short sentence of context before it.
 - Tone: you are checking your own understanding, not examining the person. "I don't know" must feel like a normal answer.
@@ -156,7 +157,7 @@ export async function planDefenceQuestion(candidateId: string): Promise<DefenceP
   const { data } = await runStructuredTask({
     candidateId,
     task: 'plan_defence_question',
-    version: 'v4',
+    version: 'v5',
     system: PLAN_SYSTEM_PROMPT,
     user: `WHAT THEY ARE LOOKING FOR:\n${untrusted('intent', lookingFor(candidateId) || '(not said yet)')}\n\nASSISTED EVIDENCE AWAITING DEFENCE (${shown.length} of ${pending.length}):\n${untrusted('evidence', JSON.stringify(evidenceForPrompt(shown)))}`,
     schema: planDefenceOutputSchema,

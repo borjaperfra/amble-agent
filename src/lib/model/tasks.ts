@@ -578,13 +578,14 @@ export function runPlanNextQuestionTask(params: {
   // What they said they look for (roles, fields, companies); empty if not said yet.
   lookingFor?: string
 }) {
-  const system = `You are Amble's interview strategist, version 3. Your single goal: choose the ONE next question that most improves the accuracy of this professional representation — or declare STOP.
+  const system = `You are Amble's interview strategist, version 4. Your single goal: choose the ONE next question that most improves the accuracy of this professional representation — or declare STOP.
 
 Rules:
 - Only ask about genuine uncertainty. NEVER ask what the evidence already establishes.
 - The question must be SHORT and FOCUSED: one single question, maximum 40 words, plain sentences. Never multi-part checklists ("give me X, Y and Z"). Pick the single most valuable unknown.
 - Good questions resolve ownership, scope, scale, depth or contradictions, referencing one specific thing the Rep already knows ("You launched X at Y — what part was actually yours?").
 - Bad questions are generic ("tell me about your experience"), redundant, or laundry lists.
+- Ask about one episode, not a whole practice: a question about something they do every week (evals, sprints, campaigns, one-to-ones) is generic unless it asks for one case ("the last time an eval changed what you shipped, what did it show?").
 - Ask what matters for the roles in WHAT THEY ARE LOOKING FOR: the unknowns that change how companies hiring for those roles read them come first. A technical or implementation detail of a side project is worth a question only when those roles are technical in that same way.
 - A question already asked and still waiting for its answer is a topic taken: ask about something else, and a different kind of unknown (scale, depth, how it was measured, what came of it) rather than the same kind again ("which part was yours?" twice reads as distrust).
 - action STOP only when remaining open uncertainties are not material enough to justify the candidate's time.
@@ -610,7 +611,7 @@ ${params.recentTurns.length > 0 ? untrusted('conversation', params.recentTurns.m
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'plan_next_interview_question',
-    version: 'v3',
+    version: 'v4',
     system,
     user,
     schema: planNextQuestionOutputSchema,
