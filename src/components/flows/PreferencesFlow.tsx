@@ -142,6 +142,8 @@ function About({ about, hasPay, busy, onSave }: { about: RulesView['about']; has
 export default function PreferencesFlow({ initial }: { initial: RulesView }) {
   const t = useT()
   const p = t.preferences
+  const { locale } = useI18n()
+  const money = (amount: number, currency: string) => new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)
   const [rules, setRules] = useState(initial)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<'saved' | 'failed' | null>(null)
@@ -225,6 +227,10 @@ export default function PreferencesFlow({ initial }: { initial: RulesView }) {
                   {p.groups[group]}
                 </h2>
                 <p className={styles.hint}>{p.hints[group]}</p>
+                {/* Several rules about pay: which floor is applied, said where they can fix it. */}
+                {group === 'pay' && inGroup.filter((rule) => !rule.stale).length > 1 && rules.about.floor && (
+                  <p className={styles.staleNote}>{p.severalFloors(money(rules.about.floor.amount, rules.about.floor.currency))}</p>
+                )}
                 {inGroup.length > 0 ? (
                   <ul className={styles.list} role="list">
                     {inGroup.map((rule) => (

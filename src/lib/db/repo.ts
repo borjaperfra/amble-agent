@@ -400,10 +400,48 @@ export function insertClaim(row: Omit<ClaimRow, 'created_at'>): ClaimRow {
   return db.prepare('SELECT * FROM claims WHERE id = ?').get(row.id) as unknown as ClaimRow
 }
 
+// What their documents and answers said, without what a CV they replaced said.
 export function listClaims(candidateId: string): ClaimRow[] {
   return getDb()
-    .prepare('SELECT * FROM claims WHERE candidate_id = ? ORDER BY created_at ASC')
+    .prepare(
+      `SELECT * FROM claims WHERE candidate_id = ?
+         AND (source_id IS NULL OR source_id NOT IN (SELECT id FROM sources WHERE status = 'replaced'))
+       ORDER BY created_at ASC`,
+    )
     .all(candidateId) as unknown as ClaimRow[]
+}
+
+// A newer CV replaces the ones read before it: what was taken from them is
+// retracted (kept, with why, in retractions: append-only), and they no longer
+// count. Capabilities are weighed again after, by whoever read the new one.
+// The LinkedIn PDF, GitHub and their web are other sources, never replaced by a CV.
+export function replaceOlderCvs(candidateId: string, newSourceId: string, reason: string): string[] {
+  const added = (getDb().prepare('SELECT created_at FROM sources WHERE id = ?').get(newSourceId) as { created_at: string } | undefined)?.created_at
+  if (!added) return []
+  const db = getDb()
+  const older = db
+    // Only CVs read before this one was added: two shared at once are both kept.
+    .prepare("SELECT id FROM sources WHERE candidate_id = ? AND type = 'cv' AND status = 'processed' AND id != ? AND processed_at < ?")
+    .all(candidateId, newSourceId, added) as { id: string }[]
+  if (older.length === 0) return []
+  const evidenceOf = db.prepare(
+    `SELECT id, statement, epistemic_state FROM evidence
+     WHERE candidate_id = ? AND retracted_at IS NULL
+       AND (source_id = ? OR claim_id IN (SELECT id FROM claims WHERE source_id = ?))`,
+  )
+  const retract = db.prepare('UPDATE evidence SET retracted_at = ?, retracted_reason = ?, updated_at = ? WHERE id = ?')
+  const record = db.prepare(
+    'INSERT INTO retractions (id, candidate_id, evidence_id, statement, question, answer, reason, turn_id, previous_state, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)',
+  )
+  const ts = now()
+  for (const { id } of older) {
+    for (const item of evidenceOf.all(candidateId, id, id) as { id: string; statement: string; epistemic_state: string }[]) {
+      retract.run(ts, reason, ts, item.id)
+      record.run(newId('ret'), candidateId, item.id, item.statement, reason, item.epistemic_state, ts)
+    }
+    db.prepare("UPDATE sources SET status = 'replaced' WHERE id = ?").run(id)
+  }
+  return older.map((row) => row.id)
 }
 
 export function listClaimsWithoutEvidence(candidateId: string): ClaimRow[] {

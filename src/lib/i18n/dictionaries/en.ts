@@ -260,7 +260,7 @@ export const en = {
     outro: 'Tell your Rep what an offer needs to have for it to let you know.',
     setListening: 'Change what I’m looking for →',
     // Under the map: a newer CV or another document, read into it like the first.
-    addDocument: 'Upload a newer CV or another document →',
+    addDocument: 'Upload your updated CV (it replaces the old one) or another document →',
     privacy: (claims: number, evidence: number, sources: number) =>
       evidence > 0
         ? `This map is private: only you can see it. It comes from ${evidence} ${evidence === 1 ? 'piece' : 'pieces'} of evidence in ${sources} ${sources === 1 ? 'source' : 'sources'}, and you can open each one.`
@@ -608,6 +608,8 @@ export const en = {
     noReasonGiven: 'No reason given.',
     notCovered: 'The answer did not cover this point.',
     evidenceRetracted: 'What held this up no longer stands, so I no longer count it. It stays in your record.',
+    // Why what an older CV said no longer counts.
+    replacedByNewerCv: 'Replaced by a newer CV.',
     toldOnWhatsApp: 'Told to your Rep on WhatsApp',
     correctedOnWhatsApp: 'Corrected with your Rep on WhatsApp',
     assistedCeiling: (unverified: number, total: number) =>
@@ -890,6 +892,7 @@ export const en = {
     editLabel: (group: string) => `Change a rule in “${group}”`,
     stale: 'You confirmed it over three months ago, and I don’t apply it until you tell me it still holds.',
     keep: 'Still holds',
+    severalFloors: (floor: string) => `You have several pay rules. I apply ${floor} as the minimum, from the newest: remove the ones that no longer hold.`,
     proposedTitle: 'To review',
     proposedLead: 'What your answers suggest. I apply nothing until you say yes.',
     accept: 'Yes, apply it',

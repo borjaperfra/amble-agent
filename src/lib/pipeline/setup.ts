@@ -157,7 +157,8 @@ async function readAndWeigh(candidateId: string, progress: SetupProgress): Promi
 
   progress.stage = 'weighing'
   claimsToEvidence(candidateId)
-  await assessCapabilities(candidateId)
+  // A map already weighed (a CV added or replaced later) keeps its capabilities' ids.
+  await assessCapabilities(candidateId, { keepSlugs: listCapabilities(candidateId).length > 0 })
   // An answer that named no capability at all (a long read can come back with
   // fields missing, and each is then dropped), from evidence there is: asked
   // once more, or the questions and the first read would have nothing to go on.

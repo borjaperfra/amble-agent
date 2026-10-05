@@ -707,6 +707,12 @@ function migrate(db: DatabaseSync): void {
   // replaces it: kept, never applied.
   addColumn(db, 'revealed_preferences', 'source', 'TEXT')
   addColumn(db, 'revealed_preferences', 'intent_id', 'TEXT')
+  // Rules told on WhatsApp before the source was kept: theirs, with no sample
+  // offer and no quote behind them, as the chat wrote them (the triage's
+  // own "add", only through its API, nearly always cites offers). Shown as from WhatsApp, not
+  // as written by them. Once: afterwards every rule has its source.
+  db.exec(`UPDATE revealed_preferences SET source = 'chat'
+           WHERE source IS NULL AND origin = 'candidate' AND evidence_probe_ids = '[]' AND quote IS NULL AND original_statement IS NULL`)
 
   // What they say about themselves that decides offers, set on /me/preferences:
   // the country they live in (ISO 3166-1 alpha-2) and the languages they work

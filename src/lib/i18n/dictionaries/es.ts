@@ -262,7 +262,7 @@ export const es: Dictionary = {
     outro: 'Cuéntale a tu Rep qué tiene que tener una oferta para que te avise.',
     setListening: 'Cambiar lo que busco →',
     // Under the map: a newer CV or another document, read into it like the first.
-    addDocument: 'Sube un CV más reciente u otro documento →',
+    addDocument: 'Sube tu CV actualizado (sustituye al anterior) u otro documento →',
     privacy: (claims: number, evidence: number, sources: number) =>
       evidence > 0
         ? `Este mapa es privado: solo tú puedes verlo. Sale de ${evidence} ${evidence === 1 ? 'evidencia' : 'evidencias'} de ${sources} ${sources === 1 ? 'fuente' : 'fuentes'}, y puedes abrir cada una.`
@@ -605,6 +605,8 @@ export const es: Dictionary = {
     noReasonGiven: 'Sin motivo indicado.',
     notCovered: 'La respuesta no cubrió este punto.',
     evidenceRetracted: 'Lo que la sostenía ya no se mantiene, así que ya no lo cuento. Sigue en tu registro.',
+    // Why what an older CV said no longer counts.
+    replacedByNewerCv: 'Sustituido por un CV más reciente.',
     toldOnWhatsApp: 'Contado a tu Rep por WhatsApp',
     correctedOnWhatsApp: 'Corregido con tu Rep por WhatsApp',
     assistedCeiling: (unverified: number, total: number) =>
@@ -886,6 +888,7 @@ export const es: Dictionary = {
     editLabel: (group: string) => `Cambiar una regla de «${group}»`,
     stale: 'La confirmaste hace más de tres meses y no la aplico hasta que me digas que sigue valiendo.',
     keep: 'Sigue valiendo',
+    severalFloors: (floor: string) => `Tienes varias reglas de salario. Aplico como mínimo ${floor}, el de la más reciente: quita las que ya no valgan.`,
     proposedTitle: 'Por revisar',
     proposedLead: 'Lo que tus respuestas sugieren. No aplico nada hasta que me digas que sí.',
     accept: 'Sí, aplícalo',

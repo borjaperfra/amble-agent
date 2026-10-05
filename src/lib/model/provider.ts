@@ -72,6 +72,9 @@ interface KeyPool {
   // After a 429 no call starts on this key before this: the calls waiting
   // would all be refused too, and each refusal pushes its limit further away.
   pausedUntil: number
+  // Background work waits longer than that after a 429: when the key reopens,
+  // a person on the screen gets it first, and the read that filled it eases off.
+  backgroundPausedUntil: number
 }
 
 interface Slots {
@@ -88,7 +91,7 @@ declare global {
 // On globalThis: the scheduled pass and the pages are separate bundles in one
 // process, and they must count against the same limits.
 const slots = (globalThis.__ambleModelSlots ??= {
-  pools: modelKeys().map((key) => ({ key, active: 0, pausedUntil: 0 })),
+  pools: modelKeys().map((key) => ({ key, active: 0, pausedUntil: 0, backgroundPausedUntil: 0 })),
   interactive: [],
   background: [],
 })
@@ -98,7 +101,7 @@ function freePool(background: boolean, now: number): KeyPool | null {
   const limit = background ? MODEL_CONCURRENCY - INTERACTIVE_RESERVE : MODEL_CONCURRENCY
   let best: KeyPool | null = null
   for (const pool of slots.pools) {
-    if (pool.pausedUntil > now || pool.active >= limit) continue
+    if (pool.pausedUntil > now || pool.active >= limit || (background && (pool.backgroundPausedUntil ?? 0) > now)) continue
     if (!best || pool.active < best.active) best = pool
   }
   return best
@@ -115,7 +118,11 @@ function dispatch() {
   }
   // Calls waiting only on keys that are paused: look again when the first reopens.
   if (slots.interactive.length + slots.background.length > 0 && !slots.wake) {
-    const reopen = Math.min(...slots.pools.map((pool) => pool.pausedUntil).filter((until) => until > now))
+    const reopen = Math.min(
+      ...slots.pools
+        .flatMap((pool) => (slots.background.length > 0 ? [pool.pausedUntil, pool.backgroundPausedUntil ?? 0] : [pool.pausedUntil]))
+        .filter((until) => until > now),
+    )
     if (Number.isFinite(reopen)) {
       slots.wake = setTimeout(() => {
         slots.wake = undefined
@@ -142,7 +149,10 @@ function releaseSlot(pool: KeyPool) {
 // the slot given back, and try again, within a budget of time: a person on
 // the screen is told sooner than a listening pass gives up.
 const BUSY_STATUSES = new Set([429, 502, 503, 504])
-const BUSY_RETRIES = 4
+// A person on the screen tries more often within its minute; a read, fewer times over longer.
+const BUSY_RETRIES = { interactive: 8, background: 4 }
+// After a 429, how much longer background work stays off the key.
+const BACKGROUND_EXTRA_PAUSE_MS = 30_000
 const MAX_WAIT_MS = 60_000
 const RETRY_BUDGET_MS = { interactive: 60_000, background: 5 * 60_000 }
 
@@ -177,13 +187,14 @@ async function callWhenFree(
     try {
       return await callChatCompletion(baseUrl, pool.key, modelId, system, user, temperature)
     } catch (error) {
-      if (!isBusy(error) || retry >= BUSY_RETRIES) throw error
+      if (!isBusy(error) || retry >= BUSY_RETRIES[background ? 'background' : 'interactive']) throw error
       waitMs = busyWait(error, retry)
       if (Date.now() + waitMs > deadline) throw error
       // Rate-limited: that key waits; the call goes on at once on another key
       // with room, or when one reopens.
       if (error.status === 429) {
         pool.pausedUntil = Math.max(pool.pausedUntil, Date.now() + waitMs)
+        pool.backgroundPausedUntil = Math.max(pool.backgroundPausedUntil ?? 0, Date.now() + waitMs + BACKGROUND_EXTRA_PAUSE_MS)
         waitMs = 0
       }
     } finally {

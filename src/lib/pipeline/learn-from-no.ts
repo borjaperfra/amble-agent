@@ -39,6 +39,8 @@ export async function learnFromNo(candidateId: string, opportunityId: string, re
   const { data, modelRunId } = await runStructuredTask({
     candidateId: candidate.id,
     task: 'learn_from_no',
+    // After their answer is saved: nobody waits on it.
+    background: true,
     version: 'v1',
     system: SYSTEM_PROMPT,
     user: `THE OFFER: ${JSON.stringify({ company: offer.company_name, title: offer.title, location: offer.location, workplace: offer.workplace })}\n\nTHEIR REASON:\n${untrusted('reason', reason)}\n\nTHEIR RULES:\n${untrusted('rules', JSON.stringify(rules))}`,
