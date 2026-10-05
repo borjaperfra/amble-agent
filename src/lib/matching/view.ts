@@ -10,7 +10,7 @@ import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type M
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
-import { workplaceShown } from './facts'
+import { workplaceShown } from './workplace'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { releaseDue } from './release'
