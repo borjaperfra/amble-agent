@@ -6,6 +6,7 @@ import { UNTRUSTED_RULE } from '../untrusted'
 import type { MatchingProfile } from './profile'
 import { cityAreaTerms, countryOf, EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeOf, placeOutsideEurope, placesNamedIn } from './places'
 import type { RoleQuery } from './role-query'
+import { workplaceShown } from './workplace'
 
 // Judging one offer (PRODUCT_SPEC §17, §24): hard filters first, then the
 // explanation. "The explanation is the product": never a match percentage.
@@ -363,7 +364,11 @@ export async function assessOpportunity(params: {
   profile: MatchingProfile
   query: RoleQuery
 }): Promise<Assessment> {
-  const { opportunity, profile, query } = params
+  const { profile, query } = params
+  // How the role is done as the offer's own words say it, over the board's
+  // tag (facts.ts): a tag of "not hybrid" on a role asking for three office
+  // days a week set the gates below on the wrong footing.
+  const opportunity = { ...params.opportunity, workplace: workplaceShown(params.opportunity.id, params.opportunity.workplace) }
   const structuredSalary = opportunity.salary_min
     ? `${opportunity.salary_min}–${opportunity.salary_max ?? '?'} ${opportunity.salary_currency ?? ''}`
     : null

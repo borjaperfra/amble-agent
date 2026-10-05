@@ -5,6 +5,7 @@ import {
   getRevealedPreference,
   insertCandidatePreference,
   listConfirmedPreferences,
+  listProposedPreferences,
   listRevealedPreferences,
   LANGUAGE_LEVELS,
   renewRevealedPreference,
@@ -35,7 +36,9 @@ export interface RuleView {
   // The rule as they read it, and its short form.
   text: string
   label: string
-  // said | triage | chat | own | null (before it was kept).
+  // said | triage | chat | own | offer (from one they turned down) | null (before it was kept).
+  // For one from an offer they turned down: what they wrote.
+  quote: string | null
   source: string | null
   evidence: string | null
   triageId: string | null
@@ -78,6 +81,7 @@ function view(row: RevealedPreferenceRow, now: number): RuleView | null {
     label: shortLabel(row),
     // Rules written before their source was kept: from a triage when they came from its analysis.
     source: row.source ?? (row.origin === 'analysis' ? 'triage' : 'own'),
+    quote: row.source === 'offer' ? row.quote : null,
     evidence: row.evidence,
     triageId: row.triage_id,
     decidedAt: row.decided_at,
@@ -94,13 +98,13 @@ export function getRulesView(candidateId: string): RulesView {
     .map((row) => view(row, now))
     .filter((item): item is RuleView => item !== null)
   const triage = getLatestOfferTriage(candidate.id)
-  const proposed =
-    triage?.status === 'analysed'
-      ? listRevealedPreferences(triage.id)
-          .filter((row) => row.status === 'proposed')
-          .map((row) => view(row, now))
-          .filter((item): item is RuleView => item !== null)
-      : []
+  // What their latest triage suggests, and what an offer they turned down did.
+  const proposed = [
+    ...(triage?.status === 'analysed' ? listRevealedPreferences(triage.id).filter((row) => row.status === 'proposed') : []),
+    ...listProposedPreferences(candidate.id),
+  ]
+    .map((row) => view(row, now))
+    .filter((item): item is RuleView => item !== null)
   return { rules, proposed, about: aboutOf(candidate.id) }
 }
 

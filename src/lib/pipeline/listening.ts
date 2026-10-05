@@ -3,6 +3,7 @@ import {
   getLatestIntent,
   getLatestOfferTriage,
   listConfirmedPreferences,
+  listProposedPreferences,
   listRevealedPreferences,
   parseJsonArray,
   type RevealedPreferenceRow,
@@ -91,10 +92,10 @@ export function getListeningProfile(candidateId: string): ListeningProfile {
   }
 
   const latestTriage = getLatestOfferTriage(candidateId)
-  const pendingReview =
-    latestTriage && latestTriage.status === 'analysed'
-      ? listRevealedPreferences(latestTriage.id).filter((row) => row.status === 'proposed').length
-      : 0
+  // What waits for their yes: their triage's proposals and those from offers they turned down.
+  const fromTriage =
+    latestTriage && latestTriage.status === 'analysed' ? listRevealedPreferences(latestTriage.id).filter((row) => row.status === 'proposed').length : 0
+  const pendingReview = fromTriage + listProposedPreferences(candidateId).length
 
   return {
     declared: {

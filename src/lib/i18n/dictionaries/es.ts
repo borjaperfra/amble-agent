@@ -577,7 +577,7 @@ export const es: Dictionary = {
   },
   server: {
     inYourWords: 'En tus palabras',
-    onlyPdfOrText: 'Solo puedo leer PDF o archivos de texto. Si tu CV está en otro formato, guárdalo como PDF y súbelo.',
+    onlyPdfOrText: 'Solo puedo leer PDF, archivos de texto o JSON. Si tu CV está en otro formato, guárdalo como PDF y súbelo.',
     wordDocument: 'Es un documento de Word. Guárdalo como PDF (en Word: Archivo → Guardar como → PDF) y súbelo aquí.',
     fileTooLarge: 'Este archivo es demasiado grande para ser un CV. Prueba con el PDF que exportas desde Word o Google Docs.',
     tooManySources: 'Con lo que ya me has dado tengo bastante para conocerte.',
@@ -869,7 +869,9 @@ export const es: Dictionary = {
       notFor: 'Aunque la oferta no lo cumpla, no la aparto.',
     },
     // Where a rule came from, beside it.
-    sources: { said: 'lo dijiste', triage: 'de tus respuestas', chat: 'por WhatsApp', own: 'lo escribiste' },
+    sources: { said: 'lo dijiste', triage: 'de tus respuestas', chat: 'por WhatsApp', own: 'lo escribiste', offer: 'de una oferta que descartaste' },
+    // Under a rule proposed from an offer they turned down: their own words.
+    youSaid: (quote: string) => `Dijiste: «${quote}»`,
     empty: 'Nada todavía.',
     add: 'Añadir',
     addLabel: (group: string) => `Añadir a «${group}»`,
@@ -885,7 +887,7 @@ export const es: Dictionary = {
     stale: 'La confirmaste hace más de tres meses y no la aplico hasta que me digas que sigue valiendo.',
     keep: 'Sigue valiendo',
     proposedTitle: 'Por revisar',
-    proposedLead: 'Lo que tus respuestas a las ofertas de ejemplo sugieren. No aplico nada hasta que me digas que sí.',
+    proposedLead: 'Lo que tus respuestas sugieren. No aplico nada hasta que me digas que sí.',
     accept: 'Sí, aplícalo',
     reject: 'No',
     otherWays: 'También puedes',

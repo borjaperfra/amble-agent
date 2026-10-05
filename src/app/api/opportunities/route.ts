@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getMatch, respondAsApplied, respondToMatch, setProgress, type MatchProgress, type MatchResponse } from '@/lib/db/matching'
 import { forCandidate } from '@/lib/auth/request'
 import { getOpportunitiesView } from '@/lib/matching/view'
+import { learnFromNo } from '@/lib/pipeline/learn-from-no'
 
 export const runtime = 'nodejs'
 
@@ -48,6 +49,11 @@ function respond(body: Record<string, unknown>, candidateId: string) {
   }
   const reason = typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim().slice(0, 1000) : null
   respondToMatch(match.id, candidateId, response, reason)
+  // A reason that may hold for offers like it proposes a rule, after the
+  // answer is saved and without making them wait (learn-from-no.ts).
+  if (response === 'not_for_me' && reason) {
+    void learnFromNo(candidateId, match.opportunity_id, reason).catch((error) => console.error('[amble] learn from a no failed:', error instanceof Error ? error.message : error))
+  }
   return NextResponse.json({ ok: true })
 }
 
