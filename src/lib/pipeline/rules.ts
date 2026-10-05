@@ -60,6 +60,8 @@ export interface RulesView {
     languages: { code: string; level: LanguageLevel | null }[]
     languagesStated: boolean
     floor: { amount: number; currency: string } | null
+    // Countries beyond their region they asked for offers from.
+    openTo: string[]
   }
 }
 
@@ -119,6 +121,7 @@ function aboutOf(candidateId: string): RulesView['about'] {
     languages: languages ?? (query?.languages ?? []).map((code) => ({ code, level: null })),
     languagesStated: languages !== null,
     floor: query?.salaryFloor ? { amount: query.salaryFloor.amount, currency: query.salaryFloor.currency } : null,
+    openTo: profile.stated.openTo ?? [],
   }
 }
 
@@ -129,7 +132,7 @@ const isLanguage = (code: string) => /^[a-z]{2}$/.test(code) && LANGUAGE_NAMES.o
 
 // Where they live and the languages they work in, as they say them. An empty
 // country or list means: work it out again from what they shared.
-export function setAbout(candidateId: string, homeCountry: unknown, languages: unknown): void {
+export function setAbout(candidateId: string, homeCountry: unknown, languages: unknown, openTo?: unknown): void {
   const candidate = candidateById(candidateId)
   const country = typeof homeCountry === 'string' && COUNTRY.test(homeCountry.trim().toUpperCase()) ? homeCountry.trim().toUpperCase() : null
   const list = Array.isArray(languages)
@@ -139,7 +142,8 @@ export function setAbout(candidateId: string, homeCountry: unknown, languages: u
         .filter((item, index, all) => all.findIndex((other) => other.code === item.code) === index)
         .slice(0, 12)
     : []
-  setStatedAbout(candidate.id, { homeCountry: country, languages: list.length > 0 ? list : null })
+  const open = Array.isArray(openTo) ? [...new Set(openTo.filter((code): code is string => typeof code === 'string' && COUNTRY.test(code.trim().toUpperCase())).map((code) => code.trim().toUpperCase()))].slice(0, 5) : []
+  setStatedAbout(candidate.id, { homeCountry: country, languages: list.length > 0 ? list : null, openTo: open.length > 0 ? open : null })
 }
 
 function own(candidateId: string, id: string): RevealedPreferenceRow {

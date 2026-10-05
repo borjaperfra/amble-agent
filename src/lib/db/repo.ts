@@ -39,24 +39,38 @@ export const worksIn = (language: StatedLanguage) => LANGUAGE_LEVELS.indexOf(lan
 
 // What they said about where they live and the languages they speak; null
 // for what they have not said.
-export function getStatedAbout(candidateId: string): { homeCountry: string | null; languages: StatedLanguage[] | null } {
-  const row = getDb().prepare('SELECT home_country, languages FROM candidates WHERE id = ?').get(candidateId) as
-    | { home_country: string | null; languages: string | null }
-    | undefined
-  let languages: StatedLanguage[] | null = null
-  try {
-    const parsed = row?.languages ? (JSON.parse(row.languages) as StatedLanguage[]) : null
-    languages = Array.isArray(parsed) ? parsed.filter((item) => /^[a-z]{2}$/.test(item?.code ?? '') && LANGUAGE_LEVELS.includes(item.level)) : null
-  } catch {
-    languages = null
-  }
-  return { homeCountry: row?.home_country ?? null, languages }
+export interface StatedAbout {
+  homeCountry: string | null
+  languages: StatedLanguage[] | null
+  // Countries beyond their own region they want offers from (ISO 3166-1
+  // alpha-2: 'US'); null when they have not asked for any.
+  openTo: string[] | null
 }
 
-export function setStatedAbout(candidateId: string, about: { homeCountry: string | null; languages: StatedLanguage[] | null }): void {
+export function getStatedAbout(candidateId: string): StatedAbout {
+  const row = getDb().prepare('SELECT home_country, languages, open_countries FROM candidates WHERE id = ?').get(candidateId) as
+    | { home_country: string | null; languages: string | null; open_countries: string | null }
+    | undefined
+  const list = <T>(raw: string | null | undefined, keep: (item: T) => boolean): T[] | null => {
+    try {
+      const parsed = raw ? (JSON.parse(raw) as T[]) : null
+      const kept = Array.isArray(parsed) ? parsed.filter(keep) : []
+      return kept.length > 0 ? kept : null
+    } catch {
+      return null
+    }
+  }
+  return {
+    homeCountry: row?.home_country ?? null,
+    languages: list<StatedLanguage>(row?.languages, (item) => /^[a-z]{2}$/.test(item?.code ?? '') && LANGUAGE_LEVELS.includes(item.level)),
+    openTo: list<string>(row?.open_countries, (code) => /^[A-Z]{2}$/.test(code)),
+  }
+}
+
+export function setStatedAbout(candidateId: string, about: StatedAbout): void {
   getDb()
-    .prepare('UPDATE candidates SET home_country = ?, languages = ? WHERE id = ?')
-    .run(about.homeCountry, about.languages ? JSON.stringify(about.languages) : null, candidateId)
+    .prepare('UPDATE candidates SET home_country = ?, languages = ?, open_countries = ? WHERE id = ?')
+    .run(about.homeCountry, about.languages ? JSON.stringify(about.languages) : null, about.openTo?.length ? JSON.stringify(about.openTo) : null, candidateId)
 }
 
 export function isSearchPaused(candidateId: string): boolean {

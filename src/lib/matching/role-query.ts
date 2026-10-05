@@ -42,7 +42,13 @@ export interface RoleQuery {
   // Languages the candidate works in (ISO 639-1), from what they said about
   // themselves. Empty when unknown: then no offer is judged on language.
   languages: string[]
+  // Countries beyond their region they asked for offers from ('US'): searched,
+  // and remote offers tied to them are theirs too. Absent on queries stored before.
+  alsoCountries?: string[]
 }
+
+// What a query opens beyond the candidate's region.
+export const alsoCountriesOf = (query: RoleQuery): string[] => query.alsoCountries ?? []
 
 const roleQuerySchema = z.preprocess(
   (raw) => {
@@ -159,6 +165,7 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
       : profile.languageClaims.length > 0
         ? data.languages
         : [],
+    alsoCountries: profile.stated.openTo ?? [],
   }
   insertRoleQuery(candidateId, key, query, modelRunId)
   return query

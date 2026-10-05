@@ -714,6 +714,9 @@ function migrate(db: DatabaseSync): void {
   // query infers it from their experience and CV as before.
   addColumn(db, 'candidates', 'home_country', 'TEXT')
   addColumn(db, 'candidates', 'languages', 'TEXT')
+  // Countries beyond their region they asked for offers from (JSON ['US']):
+  // otherwise someone in Europe gets offers open to Europe only.
+  addColumn(db, 'candidates', 'open_countries', 'TEXT')
 
   // The directory (src/lib/sourcing/directory.ts): whether a company is built in
   // Spain or hires people there from elsewhere, and whether its offers carry a

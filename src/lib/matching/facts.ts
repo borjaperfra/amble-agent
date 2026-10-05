@@ -364,6 +364,8 @@ function mayInclude(texts: string[], query: RoleQuery): boolean {
   const named = merge(texts)
   const home = query.homeCountry as string
   if (named.countries.has(home) || named.anywhere || named.europeanCity) return true
+  // A country beyond their region they asked for offers from ("US").
+  if ((query.alsoCountries ?? []).some((code) => named.countries.has(code))) return true
   if (named.europe && EUROPE.includes(home)) return true
   return texts.some((text) => {
     const padded = ` ${normaliseTitle(text)} `

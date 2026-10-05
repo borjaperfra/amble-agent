@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { getStatedAbout, listCapabilities, listCapabilityEvidenceIds, listClaims, listEvidence, type StatedLanguage } from '../db/repo'
+import { getStatedAbout, listCapabilities, listCapabilityEvidenceIds, listClaims, listEvidence, type StatedAbout } from '../db/repo'
 import { isUnverifiedAssisted } from '../pipeline/attribution'
 import { getListeningProfile, type ListeningItem } from '../pipeline/listening'
 
@@ -29,7 +29,7 @@ export interface MatchingProfile {
   languageClaims: string[]
   // What they set themselves on /me/preferences: it wins over what the role
   // query would infer. Null where they have not said it.
-  stated: { homeCountry: string | null; languages: StatedLanguage[] | null }
+  stated: StatedAbout
   hash: string
 }
 
@@ -113,7 +113,7 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
         languageClaims,
         // Only once they set something: the fingerprint of everyone else, and
         // every assessment already made for them, stays as it was.
-        ...(stated.homeCountry || stated.languages ? { stated } : {}),
+        ...(stated.homeCountry || stated.languages || stated.openTo ? { stated } : {}),
       }),
     )
     .digest('hex')

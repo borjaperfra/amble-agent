@@ -33,7 +33,7 @@ export async function POST(request: Request) {
           keepRule(candidate.id, id)
           break
         case 'about':
-          setAbout(candidate.id, body.homeCountry, body.languages)
+          setAbout(candidate.id, body.homeCountry, body.languages, body.openTo)
           break
         case 'add':
           addRule(candidate.id, String(body.group ?? ''), text)

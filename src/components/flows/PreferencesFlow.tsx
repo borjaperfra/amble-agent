@@ -20,7 +20,7 @@ const COUNTRIES = ['ES', 'PT', 'FR', 'IT', 'DE', 'NL', 'BE', 'IE', 'GB', 'CH', '
 const LANGUAGES = ['es', 'en', 'ca', 'eu', 'gl', 'pt', 'fr', 'it', 'de', 'nl', 'pl', 'sv', 'da', 'no', 'fi', 'ro', 'el', 'ar', 'zh', 'ja']
 const LEVELS: LanguageLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'native']
 
-function About({ about, hasPay, busy, onSave }: { about: RulesView['about']; hasPay: boolean; busy: boolean; onSave: (homeCountry: string, languages: { code: string; level: LanguageLevel }[]) => void }) {
+function About({ about, hasPay, busy, onSave }: { about: RulesView['about']; hasPay: boolean; busy: boolean; onSave: (homeCountry: string, languages: { code: string; level: LanguageLevel }[], openTo: string[]) => void }) {
   const t = useT()
   const a = t.preferences.about
   const { locale } = useI18n()
@@ -35,10 +35,13 @@ function About({ about, hasPay, busy, onSave }: { about: RulesView['about']; has
   // Inferred languages come without a level: shown as B2, theirs to change.
   const [languages, setLanguages] = useState(about.languages.map((item) => ({ code: item.code, level: item.level ?? ('B2' as LanguageLevel) })))
   const [adding, setAdding] = useState('')
+  // Offers from the US too: someone in Europe gets offers open to Europe only.
+  const [usToo, setUsToo] = useState(about.openTo.includes('US'))
   const changed =
     home !== (about.homeCountry ?? '') ||
     !about.languagesStated ||
-    JSON.stringify(languages) !== JSON.stringify(about.languages.map((item) => ({ code: item.code, level: item.level ?? 'B2' })))
+    JSON.stringify(languages) !== JSON.stringify(about.languages.map((item) => ({ code: item.code, level: item.level ?? 'B2' }))) ||
+    usToo !== about.openTo.includes('US')
   const money = (amount: number, currency: string) =>
     new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)
 
@@ -116,12 +119,20 @@ function About({ about, hasPay, busy, onSave }: { about: RulesView['about']; has
       </div>
 
       <div className={styles.aboutRow}>
+        <label className={styles.check} htmlFor="about-us">
+          <input id="about-us" type="checkbox" checked={usToo} onChange={(event) => setUsToo(event.target.checked)} />
+          {a.usToo}
+        </label>
+        <p className={styles.hint}>{a.usTooNote}</p>
+      </div>
+
+      <div className={styles.aboutRow}>
         <p className={styles.aboutLabel}>{a.floor}</p>
         <p className={styles.floor}>{about.floor ? money(about.floor.amount, about.floor.currency) : hasPay ? a.floorPending : a.floorNone}</p>
         {about.floor && <p className={styles.hint}>{a.floorFrom}</p>}
       </div>
 
-      <button type="button" className="btn btn-quiet" disabled={busy || !changed} onClick={() => onSave(home, languages)}>
+      <button type="button" className="btn btn-quiet" disabled={busy || !changed} onClick={() => onSave(home, languages, usToo ? ['US'] : [])}>
         {a.save}
       </button>
     </section>
@@ -202,7 +213,7 @@ export default function PreferencesFlow({ initial }: { initial: RulesView }) {
           about={rules.about}
           hasPay={rules.rules.some((rule) => rule.group === 'pay' && !rule.stale)}
           busy={busy}
-          onSave={(homeCountry, languages) => void act({ action: 'about', homeCountry, languages })}
+          onSave={(homeCountry, languages, openTo) => void act({ action: 'about', homeCountry, languages, openTo })}
         />
 
         <div className={styles.groups}>

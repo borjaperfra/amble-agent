@@ -203,7 +203,8 @@ const REMOTE_TIED = /\b(?:fully\s+|100%\s+)?remote(?:ly)?(?:\s+[-–—]\s*|\s*[
 // carry ("gb" alone would be a gigabyte anywhere else).
 const TIED_SHORT: Record<string, string> = { gb: 'GB', uk: 'GB', us: 'US', usa: 'US' }
 
-function remoteTiedElsewhere(text: string, home: string): string | null {
+// `also`: countries beyond their region they asked for offers from.
+function remoteTiedElsewhere(text: string, home: string, also: string[]): string | null {
   for (const match of text.matchAll(REMOTE_TIED)) {
     const fragment = match[1]
     const named = placesNamedIn(fragment)
@@ -211,7 +212,7 @@ function remoteTiedElsewhere(text: string, home: string): string | null {
     const countries = new Set(named.countries)
     for (const word of fragment.toLowerCase().split(/[^a-z]+/)) if (TIED_SHORT[word]) countries.add(TIED_SHORT[word])
     if (countries.size === 0) continue
-    if (countries.has(home)) return null
+    if (countries.has(home) || also.some((code) => countries.has(code))) return null
     return match[0].trim()
   }
   return null
@@ -483,6 +484,8 @@ export async function assessOpportunity(params: {
     // Places counted but not named ("USA - Houston (+6)") are taken to be
     // like the ones named: a posting open to Europe says so in its text.
     listedPlaces.every(placeOutsideEurope) &&
+    // Unless those places are in a country they asked for offers from.
+    !(query.alsoCountries ?? []).some((code) => placesNamedIn(opportunity.location ?? '').countries.has(code)) &&
     !openToEurope(haystack)
   if (remoteElsewhere) {
     gates.push({ ruleId: REMOTE_ELSEWHERE_GATE, result: 'unknown', quote: opportunity.location, note: 'remote, but every place it names is outside Europe' })
@@ -504,6 +507,7 @@ export async function assessOpportunity(params: {
     countries.length > 0 &&
     !hasUnlistedPlaces(opportunity.location) &&
     !countries.includes(query.homeCountry) &&
+    !countries.some((code) => (query.alsoCountries ?? []).includes(code)) &&
     !listedPlaces.some(placeIsOpenRegion) &&
     !openToEurope(haystack)
   if (remoteCountries) {
@@ -513,7 +517,7 @@ export async function assessOpportunity(params: {
   // Remote, and the text ties it to countries none of which is theirs, where
   // the listing only says "Remote" ("Fully Remote - GB", "remote within the
   // US"). Set aside like the others.
-  const tied = !failed && !remoteUnconfirmed && !remoteElsewhere && !remoteCountries && query.homeCountry !== null ? remoteTiedElsewhere(postingText, query.homeCountry) : null
+  const tied = !failed && !remoteUnconfirmed && !remoteElsewhere && !remoteCountries && query.homeCountry !== null ? remoteTiedElsewhere(postingText, query.homeCountry, query.alsoCountries ?? []) : null
   if (tied && !openToEurope(haystack)) {
     gates.push({ ruleId: REMOTE_COUNTRIES_GATE, result: 'unknown', quote: tied, note: 'remote only from a country that is not theirs' })
   }
