@@ -580,7 +580,7 @@ export const en = {
   },
   server: {
     inYourWords: 'In your words',
-    onlyPdfOrText: 'I can only read PDFs or text files. If your CV is in another format, save it as a PDF and upload that.',
+    onlyPdfOrText: 'I can only read PDFs, text files or JSON. If your CV is in another format, save it as a PDF and upload that.',
     wordDocument: 'This is a Word document. Save it as a PDF (in Word: File → Save As → PDF) and upload that here.',
     fileTooLarge: 'This file is too big for a CV. Try the PDF you export from Word or Google Docs.',
     tooManySources: 'With what you’ve already given me I have plenty to get to know you.',

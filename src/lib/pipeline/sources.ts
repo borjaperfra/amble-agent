@@ -179,6 +179,42 @@ function stripHtml(html: string): string {
     .trim()
 }
 
+// A JSON CV as lines of text: "label: value", nested fields indented under
+// their name, list items marked. Null when it is not JSON. Field names stay as
+// written (position, startDate, highlights): the reader knows them.
+export function jsonAsText(buffer: Buffer): string | null {
+  let value: unknown
+  try {
+    value = JSON.parse(buffer.toString('utf8'))
+  } catch {
+    return null
+  }
+  if (!value || typeof value !== 'object') return null
+  const lines: string[] = []
+  const walk = (node: unknown, depth: number, label: string | null) => {
+    const pad = '  '.repeat(depth)
+    if (node === null || node === undefined || node === '') return
+    if (typeof node !== 'object') {
+      lines.push(`${pad}${label === '-' ? '- ' : label ? `${label}: ` : ''}${String(node)}`)
+      return
+    }
+    if (Array.isArray(node)) {
+      if (label) lines.push(`${pad}${label}:`)
+      for (const item of node) {
+        walk(item, depth + 1, typeof item === 'object' ? null : '-')
+        // Two jobs, two blocks: the next one does not read as more of the first.
+        if (item && typeof item === 'object') lines.push('')
+      }
+      return
+    }
+    if (label) lines.push(`${pad}${label}:`)
+    for (const [key, child] of Object.entries(node as Record<string, unknown>)) walk(child, label ? depth + 1 : depth, key)
+    if (depth <= 1) lines.push('')
+  }
+  walk(value, 0, null)
+  return cleanText(lines.join('\n').replace(/\n{3,}/g, '\n\n')).trim()
+}
+
 export async function createFileSource(
   candidateId: string,
   file: File,
@@ -211,10 +247,13 @@ export async function createFileSource(
   const kind = documentKind(buffer)
   const isPdf = kind === 'pdf'
   const isText = !isPdf && ['.txt', '.md', '.markdown'].includes(extension) && buffer.length <= MAX_TEXT_BYTES && isPlainText(buffer)
+  // A CV as JSON (JSON Resume, or what another tool exports): read as the
+  // text it holds, one field a line, so what is quoted from it reads as words.
+  const json = !isPdf && !isText && extension === '.json' && buffer.length <= MAX_TEXT_BYTES && isPlainText(buffer) ? jsonAsText(buffer) : null
   // A Word file (whatever it is called) is the most common CV there is:
   // what to do with it, rather than only what is not read.
   const isWord = kind === 'docx' || ['.doc', '.docx'].includes(extension)
-  if (!isPdf && !isText) return failed(isWord ? serverText().wordDocument : serverText().onlyPdfOrText)
+  if (!isPdf && !isText && json === null) return failed(isWord ? serverText().wordDocument : serverText().onlyPdfOrText)
 
   let content = ''
   let hidden = ''
@@ -224,7 +263,7 @@ export async function createFileSource(
       content = read.pages.map((page, index) => `[page ${index + 1}] ${page}`).join('\n\n')
       hidden = read.hidden
     } else {
-      content = cleanText(buffer.toString('utf8'))
+      content = json ?? cleanText(buffer.toString('utf8'))
     }
   } catch (error) {
     if (error instanceof TooManyPagesError) return failed(serverText().fileTooLarge)

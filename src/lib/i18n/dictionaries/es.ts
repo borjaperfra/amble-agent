@@ -577,7 +577,7 @@ export const es: Dictionary = {
   },
   server: {
     inYourWords: 'En tus palabras',
-    onlyPdfOrText: 'Solo puedo leer PDF o archivos de texto. Si tu CV está en otro formato, guárdalo como PDF y súbelo.',
+    onlyPdfOrText: 'Solo puedo leer PDF, archivos de texto o JSON. Si tu CV está en otro formato, guárdalo como PDF y súbelo.',
     wordDocument: 'Es un documento de Word. Guárdalo como PDF (en Word: Archivo → Guardar como → PDF) y súbelo aquí.',
     fileTooLarge: 'Este archivo es demasiado grande para ser un CV. Prueba con el PDF que exportas desde Word o Google Docs.',
     tooManySources: 'Con lo que ya me has dado tengo bastante para conocerte.',

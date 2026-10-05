@@ -157,7 +157,7 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.txt,.md,.doc,.docx"
+            accept=".pdf,.txt,.md,.json,.doc,.docx"
             className="visually-hidden"
             aria-label={t.onboarding.cvUploadLabel}
             onChange={(event) => {
