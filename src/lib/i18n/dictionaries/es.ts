@@ -261,6 +261,8 @@ export const es: Dictionary = {
     oneMore: 'Una cosa más',
     outro: 'Cuéntale a tu Rep qué tiene que tener una oferta para que te avise.',
     setListening: 'Cambiar lo que busco →',
+    // Under the map: a newer CV or another document, read into it like the first.
+    addDocument: 'Sube un CV más reciente u otro documento →',
     privacy: (claims: number, evidence: number, sources: number) =>
       evidence > 0
         ? `Este mapa es privado: solo tú puedes verlo. Sale de ${evidence} ${evidence === 1 ? 'evidencia' : 'evidencias'} de ${sources} ${sources === 1 ? 'fuente' : 'fuentes'}, y puedes abrir cada una.`

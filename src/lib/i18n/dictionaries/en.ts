@@ -259,6 +259,8 @@ export const en = {
     oneMore: 'One more thing',
     outro: 'Tell your Rep what an offer needs to have for it to let you know.',
     setListening: 'Change what I’m looking for →',
+    // Under the map: a newer CV or another document, read into it like the first.
+    addDocument: 'Upload a newer CV or another document →',
     privacy: (claims: number, evidence: number, sources: number) =>
       evidence > 0
         ? `This map is private: only you can see it. It comes from ${evidence} ${evidence === 1 ? 'piece' : 'pieces'} of evidence in ${sources} ${sources === 1 ? 'source' : 'sources'}, and you can open each one.`
