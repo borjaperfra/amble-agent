@@ -250,3 +250,11 @@
   font-family: var(--font-display);
   font-size: var(--text-body-lg);
 }
+
+/* A yes or no about them, on one line. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-body);
+}

@@ -918,6 +918,8 @@ export const en = {
       floorNone: 'None: you haven’t given me a figure.',
       floorPending: 'I work it out on the next read of offers.',
       floorFrom: 'It comes from your pay rule: change it below.',
+      usToo: 'I also want offers from the US',
+      usTooNote: 'Living in Europe, I show you offers open to Europe. Tick it if you would work for the US, remotely or moving there.',
       save: 'Save',
     },
   },

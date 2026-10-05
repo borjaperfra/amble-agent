@@ -15,7 +15,7 @@ import { FACTS_VERSION, hasStoredFacts, offerFacts, offerFactsEnabled, preGate, 
 import { buildMatchingProfile } from './profile'
 import { carryOver, recordSnapshot, snapshotOf, type CarryStats } from './carry'
 import { countryCityTerms, EUROPE, hasUnlistedPlaces, placeIsOpenRegion, placeMatches, placeOf, placeOutsideEurope } from './places'
-import { prefilter, roleQueryFor, titleRank, type RoleQuery } from './role-query'
+import { alsoCountriesOf, prefilter, roleQueryFor, titleRank, type RoleQuery } from './role-query'
 import { estimatesFor } from '../salary/estimate'
 
 // Each assessment is a model call. A run reads at most this many new roles
@@ -373,7 +373,8 @@ export function theirStackQueryFrom(query: RoleQuery): TheirStackQuery {
     workplaces: query.requireRemote ? ['remote'] : undefined,
     // Remote work is realistic within the candidate's region: Europe for
     // someone living in Europe, otherwise their own country.
-    countryCodes: query.homeCountry ? (EUROPE.includes(query.homeCountry) ? EUROPE : [query.homeCountry]) : undefined,
+    // And the countries beyond it they asked for ("US"), wherever they live.
+    countryCodes: query.homeCountry ? [...new Set([...(EUROPE.includes(query.homeCountry) ? EUROPE : [query.homeCountry]), ...alsoCountriesOf(query)])] : undefined,
     countryNot: countryNot.length > 0 ? countryNot : undefined,
     seniority: query.seniority.length > 0 ? query.seniority : undefined,
     // Domain rules: agencies re-post offers, and tiny outfits are mostly gigs.

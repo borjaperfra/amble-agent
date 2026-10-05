@@ -914,6 +914,8 @@ export const es: Dictionary = {
       floorNone: 'Ninguno: no me has dado una cifra.',
       floorPending: 'Lo calculo en la próxima lectura de ofertas.',
       floorFrom: 'Sale de tu regla de salario: cámbiala abajo.',
+      usToo: 'También quiero ofertas de EE. UU.',
+      usTooNote: 'Viviendo en Europa te enseño ofertas abiertas a Europa. Márcalo si trabajarías para EE. UU., en remoto o mudándote.',
       save: 'Guardar',
     },
   },
