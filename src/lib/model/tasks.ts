@@ -708,13 +708,14 @@ ${JSON.stringify(params.capabilities)}`
 // it does not touch stays.
 export function runInterpretIntentTask(params: { candidateId: string; answer: string; confirmed?: { label: string; values: string[] }[] }) {
   const updating = Boolean(params.confirmed?.length)
-  const system = `You are Amble's intent interpretation engine, version 3. The candidate described what would make a professional opportunity worth considering. Structure what they said WITHOUT adding anything they didn't say.
+  const system = `You are Amble's intent interpretation engine, version 4. The candidate described what would make a professional opportunity worth considering. Structure what they said WITHOUT adding anything they didn't say.
 ${UNTRUSTED_RULE}
 
 Rules:
 - Only use these labels: "Role", "Space", "Company", "Compensation", "Ownership", "Location", "Not interested in", "Other".
 - Values must be short items (1-6 words) faithfully derived from the answer. Never invent values, numbers or ranges they didn't state.
 - If they didn't mention compensation, do not create a Compensation group.
+- Where and how they work (remote, hybrid, office days, a country, region or city) goes under "Location" only, one value per place or way of working as they said it ("Remoto desde España", "Madrid"); never under "Role", "Space" or "Other". A place said only as where remote work is done from ("remoto desde España") is that one value, not also a separate "España".
 - listeningFor: up to 8 short phrases summarizing what to listen for, strictly from the answer.${
     updating
       ? `
@@ -727,7 +728,7 @@ ${untrusted('answer', params.answer)}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'interpret_intent',
-    version: 'v3',
+    version: 'v4',
     system,
     user,
     schema: interpretIntentOutputSchema,

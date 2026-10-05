@@ -890,6 +890,7 @@ export const en = {
     editLabel: (group: string) => `Change a rule in “${group}”`,
     stale: 'You confirmed it over three months ago, and I don’t apply it until you tell me it still holds.',
     keep: 'Still holds',
+    severalFloors: (floor: string) => `You have several pay rules. I apply ${floor} as the minimum, from the newest: remove the ones that no longer hold.`,
     proposedTitle: 'To review',
     proposedLead: 'What your answers suggest. I apply nothing until you say yes.',
     accept: 'Yes, apply it',

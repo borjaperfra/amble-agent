@@ -130,6 +130,8 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
   const { data, modelRunId } = await runStructuredTask({
     candidateId,
     task: 'design_role_query',
+    // Designed for a pass, never while someone waits (screens read the stored one).
+    background: true,
     version: ROLE_QUERY_VERSION,
     // Filter terms, not prose: they must match English postings whatever the
     // candidate's language.

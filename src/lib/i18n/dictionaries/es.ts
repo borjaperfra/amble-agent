@@ -886,6 +886,7 @@ export const es: Dictionary = {
     editLabel: (group: string) => `Cambiar una regla de «${group}»`,
     stale: 'La confirmaste hace más de tres meses y no la aplico hasta que me digas que sigue valiendo.',
     keep: 'Sigue valiendo',
+    severalFloors: (floor: string) => `Tienes varias reglas de salario. Aplico como mínimo ${floor}, el de la más reciente: quita las que ya no valgan.`,
     proposedTitle: 'Por revisar',
     proposedLead: 'Lo que tus respuestas sugieren. No aplico nada hasta que me digas que sí.',
     accept: 'Sí, aplícalo',
