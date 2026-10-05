@@ -31,6 +31,13 @@
   max-width: 22ch;
 }
 
+/* Coming back to change it: what happens to what they had. */
+.updateNote {
+  color: var(--ink-secondary);
+  font-size: var(--body);
+  max-width: 52ch;
+}
+
 .recorderArea {
   display: flex;
   justify-content: center;

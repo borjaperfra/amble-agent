@@ -28,8 +28,6 @@ interface ListeningItem {
 interface ListeningVm {
   evidenceCount: number
   capabilitiesCount: number
-  listeningFor: string[]
-  declaredRows: { label: string; values: string[] }[]
   hasIntent: boolean
   intentConfirmed: boolean
   revealed: {
@@ -90,11 +88,10 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   )
 }
 
-// Marks tell apart what was learned from what was said: only needed when both are listed.
-function Condition({ label, marked }: { label: string; marked: boolean }) {
+// A rule in its short form.
+function Condition({ label }: { label: string }) {
   return (
     <li className={styles.condition}>
-      {marked && <span className={styles.mark} aria-hidden="true" />}
       {label}
     </li>
   )
@@ -102,16 +99,15 @@ function Condition({ label, marked }: { label: string; marked: boolean }) {
 
 // A learned rule: its short form, and on a tap the whole rule and why amble
 // believes it, with the sample offers named by their title.
-function Learned({ item, marked, why, titles }: { item: ListeningItem; marked: boolean; why: string; titles: Record<number, string> }) {
+function Learned({ item, why, titles }: { item: ListeningItem; why: string; titles: Record<number, string> }) {
   const { locale } = useI18n()
   const whole = item.wording.trim() !== item.label.trim() ? item.wording : null
   const evidence = item.evidence ? nameOffers(item.evidence, titles, quoteTitle[locale]) : null
-  if (!whole && !evidence) return <Condition label={item.label} marked={marked} />
+  if (!whole && !evidence) return <Condition label={item.label} />
   return (
     <li>
       <details className={styles.learned}>
         <summary className={`${styles.condition} ${styles.learnedSummary}`}>
-          {marked && <span className={styles.mark} aria-hidden="true" />}
           <span>{item.label}</span>
         </summary>
         <div className={styles.learnedBody}>
@@ -210,8 +206,6 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
   // The minimum salary leads what is said about money: it is the one that decides.
   const money = [...vm.revealed.rules.money].sort((a, b) => Number(isFloor(b.label)) - Number(isFloor(a.label)))
   const learned = wontConsider.length + weighs.length + money.length
-  // Learned and declared side by side: only then do learned ones need a mark.
-  const mixed = learned > 0 && vm.listeningFor.length > 0
   const found = vm.unseenOpportunities > 0
   // Something new has come in: then the horizon holds the offers in their
   // hands (new, wanted and sent), not a tumbleweed. With nothing new, the ones
@@ -340,51 +334,33 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 {rolls > 0 && <Tumbleweed key={rolls} />}
               </div>
 
+              {/* Every rule the Rep applies, whatever it came from, in the
+                  groups of /me/preferences, where they are changed. */}
               <div className={styles.for}>
                 <h2 className={styles.forTitle}>{t.listening.attentiveTo}</h2>
-                {learned > 0 && <p className={styles.learnedNote}>{mixed ? t.listening.learnedMarked : t.listening.learnedNote}</p>}
-                {vm.listeningFor.length + learned > 0 ? (
+                {learned > 0 ? (
                   <div className={styles.groups}>
                     {wontConsider.length > 0 && (
-                      <Group title={t.listening.groups.must}>
+                      <Group title={t.preferences.groups.never}>
                         {wontConsider.map((item) => (
-                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
+                          <Learned key={item.id} item={item} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
                         ))}
                       </Group>
                     )}
                     {money.length > 0 && (
-                      <Group title={t.listening.groups.money}>
+                      <Group title={t.preferences.groups.pay}>
                         {money.map((item) => (
-                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
+                          <Learned key={item.id} item={item} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
                         ))}
                       </Group>
                     )}
                     {weighs.length > 0 && (
-                      <Group title={t.listening.groups.weighs}>
+                      <Group title={t.preferences.groups.weighs}>
                         {weighs.map((item) => (
-                          <Learned key={item.id} item={item} marked={mixed} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
+                          <Learned key={item.id} item={item} why={t.triage.why} titles={vm.offerTitles[item.id] ?? {}} />
                         ))}
                       </Group>
                     )}
-                    {/* What they said, by what it is about: pay, where and role
-                        always, said or not, so what is missing shows. */}
-                    {vm.declaredRows.length > 0
-                      ? vm.declaredRows.map((row) => (
-                          <Group key={row.label} title={(t.intent.labels as Record<string, string>)[row.label] ?? row.label}>
-                            {row.values.length > 0 ? (
-                              row.values.map((value) => <Condition key={value} label={value} marked={false} />)
-                            ) : (
-                              <li className={`${styles.condition} ${styles.unsaid}`}>{t.listening.unsaid}</li>
-                            )}
-                          </Group>
-                        ))
-                      : vm.listeningFor.length > 0 && (
-                          <Group title={t.listening.groups.declared}>
-                            {vm.listeningFor.map((item) => (
-                              <Condition key={item} label={item} marked={false} />
-                            ))}
-                          </Group>
-                        )}
                   </div>
                 ) : (
                   <p className={styles.nothing}>{vm.hasIntent ? t.listening.confirmIntent : t.listening.nothingYet}</p>
@@ -392,7 +368,7 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
 
                 {vm.revealed.notFilteringOn.length > 0 && (
                   <div className={styles.notFiltering}>
-                    <p className={styles.groupTitle}>{t.listening.groups.notFiltering}</p>
+                    <p className={styles.groupTitle}>{t.preferences.groups.notFor}</p>
                     <p className={styles.notFilteringItems}>
                       {vm.revealed.notFilteringOn.map((item) => item.label).join(' · ')}
                     </p>
@@ -400,10 +376,13 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
                 )}
 
                 <div className={styles.changes}>
-                  <Link href="/me/intent" className={styles.change}>
-                    {t.listening.changeIntent}
-                  </Link>
-                  <Link href="/me/triage" className={styles.change}>
+                  {/* Rules that went stale stop applying: said, not silent. */}
+                  {vm.revealed.staleCount > 0 && (
+                    <Link href="/me/preferences" className={styles.change}>
+                      {t.listening.staleRules(vm.revealed.staleCount)}
+                    </Link>
+                  )}
+                  <Link href={learned > 0 || !vm.hasIntent ? '/me/preferences' : '/me/intent'} className={styles.change}>
                     {vm.pendingReview > 0 ? t.listening.toReview(vm.pendingReview) : t.listening.changePreferences}
                   </Link>
                 </div>

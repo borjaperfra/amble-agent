@@ -1,4 +1,4 @@
-import { candidateById, decideRevealedPreference, getLatestOfferTriage, getRevealedPreference, insertCandidatePreference, newId } from '../db/repo'
+import { candidateById, decideRevealedPreference, getRevealedPreference, insertCandidatePreference, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { requestReread } from '../matching/run'
@@ -64,12 +64,14 @@ export async function answerPreference(candidateId: string, tap: PreferenceTap, 
   const kind = tap.answer === 'only' ? 'hard_filter' : tap.answer === 'prefer' ? 'strong' : awaiting.preference.kind
   insertCandidatePreference({
     candidateId,
-    triageId: getLatestOfferTriage(candidateId)?.id ?? null,
+    // Told in the chat: no triage behind it.
+    triageId: null,
     kind,
     statement: awaiting.preference.statement,
     label: awaiting.preference.label || null,
     evidenceProbeIds: [],
     quote: null,
+    source: 'chat',
   })
   if (awaiting.preference.replaces) decideRevealedPreference(awaiting.preference.replaces, 'rejected')
   // What was read lately is read again with the new rule, in the background.

@@ -698,6 +698,23 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'revealed_preferences', 'wording', 'TEXT')
   addColumn(db, 'revealed_preferences', 'evidence', 'TEXT')
 
+  // Every rule the Rep applies lives here, whatever it came from: what they
+  // said they look for (written here when they confirm it, `intent_id` the
+  // answer it came from), what their triage showed, what they told it on
+  // WhatsApp, what they wrote themselves. `source`: said | triage | chat |
+  // own; NULL on a rule written before it was kept (told apart by origin).
+  // A rule from what they said is 'superseded' when a newer answer of theirs
+  // replaces it: kept, never applied.
+  addColumn(db, 'revealed_preferences', 'source', 'TEXT')
+  addColumn(db, 'revealed_preferences', 'intent_id', 'TEXT')
+
+  // What they say about themselves that decides offers, set on /me/preferences:
+  // the country they live in (ISO 3166-1 alpha-2) and the languages they work
+  // in with their level (JSON [{code, level}]). NULL: not said, and the role
+  // query infers it from their experience and CV as before.
+  addColumn(db, 'candidates', 'home_country', 'TEXT')
+  addColumn(db, 'candidates', 'languages', 'TEXT')
+
   // The directory (src/lib/sourcing/directory.ts): whether a company is built in
   // Spain or hires people there from elsewhere, and whether its offers carry a
   // salary.

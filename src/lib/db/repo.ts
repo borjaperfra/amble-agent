@@ -27,6 +27,38 @@ export interface CandidateRow {
   created_at: string
 }
 
+// The levels a language is spoken at, lowest first. From B2 up someone can
+// work in it: a posting that requires it does not rule them out.
+export const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'native'] as const
+export type LanguageLevel = (typeof LANGUAGE_LEVELS)[number]
+export interface StatedLanguage {
+  code: string
+  level: LanguageLevel
+}
+export const worksIn = (language: StatedLanguage) => LANGUAGE_LEVELS.indexOf(language.level) >= LANGUAGE_LEVELS.indexOf('B2')
+
+// What they said about where they live and the languages they speak; null
+// for what they have not said.
+export function getStatedAbout(candidateId: string): { homeCountry: string | null; languages: StatedLanguage[] | null } {
+  const row = getDb().prepare('SELECT home_country, languages FROM candidates WHERE id = ?').get(candidateId) as
+    | { home_country: string | null; languages: string | null }
+    | undefined
+  let languages: StatedLanguage[] | null = null
+  try {
+    const parsed = row?.languages ? (JSON.parse(row.languages) as StatedLanguage[]) : null
+    languages = Array.isArray(parsed) ? parsed.filter((item) => /^[a-z]{2}$/.test(item?.code ?? '') && LANGUAGE_LEVELS.includes(item.level)) : null
+  } catch {
+    languages = null
+  }
+  return { homeCountry: row?.home_country ?? null, languages }
+}
+
+export function setStatedAbout(candidateId: string, about: { homeCountry: string | null; languages: StatedLanguage[] | null }): void {
+  getDb()
+    .prepare('UPDATE candidates SET home_country = ?, languages = ? WHERE id = ?')
+    .run(about.homeCountry, about.languages ? JSON.stringify(about.languages) : null, candidateId)
+}
+
 export function isSearchPaused(candidateId: string): boolean {
   const row = getDb().prepare('SELECT search_paused_at FROM candidates WHERE id = ?').get(candidateId) as { search_paused_at: string | null } | undefined
   return Boolean(row?.search_paused_at)
@@ -838,9 +870,19 @@ export function insertIntent(row: Omit<IntentRow, 'created_at' | 'confirmed_at' 
   return db.prepare('SELECT * FROM intent_profiles WHERE id = ?').get(row.id) as unknown as IntentRow
 }
 
+// The last one written, confirmed or not: the one on the screen being reviewed.
 export function getLatestIntent(candidateId: string): IntentRow | undefined {
   return getDb()
     .prepare('SELECT * FROM intent_profiles WHERE candidate_id = ? ORDER BY created_at DESC LIMIT 1')
+    .get(candidateId) as unknown as IntentRow | undefined
+}
+
+// The last one they confirmed: what the Rep listens for. An answer written
+// after it and not confirmed (left halfway, or still on the screen) changes
+// nothing until they confirm it.
+export function getCurrentIntent(candidateId: string): IntentRow | undefined {
+  return getDb()
+    .prepare('SELECT * FROM intent_profiles WHERE candidate_id = ? AND confirmed_at IS NOT NULL ORDER BY confirmed_at DESC LIMIT 1')
     .get(candidateId) as unknown as IntentRow | undefined
 }
 
@@ -916,6 +958,10 @@ export interface RevealedPreferenceRow {
   model_run_id: string | null
   created_at: string
   decided_at: string | null
+  // said | triage | chat | own; null on a rule written before it was kept.
+  source: string | null
+  // A rule from what they said: the answer (intent_profiles) it came from.
+  intent_id: string | null
 }
 
 export function insertOfferTriage(params: {
@@ -996,14 +1042,14 @@ export function replaceProposedPreferences(
   triageId: string,
   rows: Omit<
     RevealedPreferenceRow,
-    'id' | 'created_at' | 'decided_at' | 'status' | 'origin' | 'original_statement' | 'original_label' | 'revised_at' | 'wording'
+    'id' | 'created_at' | 'decided_at' | 'status' | 'origin' | 'original_statement' | 'original_label' | 'revised_at' | 'wording' | 'source' | 'intent_id'
   >[],
 ): RevealedPreferenceRow[] {
   const db = getDb()
   db.prepare("DELETE FROM revealed_preferences WHERE triage_id = ? AND status = 'proposed'").run(triageId)
   const insert = db.prepare(
-    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, evidence, declared, evidence_probe_ids, quote, status, model_run_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?)`,
+    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, evidence, declared, evidence_probe_ids, quote, status, model_run_id, created_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?, ?, 'triage')`,
   )
   const ts = now()
   for (const row of rows) {
@@ -1096,16 +1142,61 @@ export function insertCandidatePreference(row: {
   label: string | null
   evidenceProbeIds: string[]
   quote: string | null
+  // chat: told on WhatsApp; own: written by them on the screen.
+  source: 'chat' | 'own'
 }): RevealedPreferenceRow {
   const id = newId('rpr')
   const ts = now()
   getDb()
     .prepare(
-      `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, decided_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'candidate', NULL, ?, ?, 'confirmed', NULL, ?, ?)`,
+      `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, decided_at, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'candidate', NULL, ?, ?, 'confirmed', NULL, ?, ?, ?)`,
     )
-    .run(id, row.candidateId, row.triageId, row.kind, row.statement, row.statement, row.label, JSON.stringify(row.evidenceProbeIds), row.quote, ts, ts)
+    .run(id, row.candidateId, row.triageId, row.kind, row.statement, row.statement, row.label, JSON.stringify(row.evidenceProbeIds), row.quote, ts, ts, row.source)
   return getRevealedPreference(id) as RevealedPreferenceRow
+}
+
+// Whether the rules of this answer are written, and how many from what they
+// said apply now: read before writing, so that reading what the Rep listens
+// for writes nothing when nothing changed.
+export function saidPreferencesState(candidateId: string, intentId: string): { written: boolean; active: number } {
+  const db = getDb()
+  const written = Boolean(db.prepare('SELECT 1 FROM revealed_preferences WHERE candidate_id = ? AND intent_id = ? LIMIT 1').get(candidateId, intentId))
+  const active = db
+    .prepare("SELECT COUNT(*) AS n FROM revealed_preferences WHERE candidate_id = ? AND source = 'said' AND status IN ('confirmed', 'proposed')")
+    .get(candidateId) as { n: number }
+  return { written, active: Number(active.n) }
+}
+
+// The rules from what they said, for the answer they confirmed: written once
+// per answer, as confirmed, decided when they confirmed it. The ones from an
+// earlier answer are superseded (kept, not applied); a rule they said and
+// then dropped or rejected one by one stays as they left it.
+export function replaceSaidPreferences(
+  candidateId: string,
+  intentId: string,
+  decidedAt: string,
+  // `group`: what it is about, as they said it (Role, Location…), kept in `declared`.
+  rows: { kind: string; statement: string; label: string; wording: string; group: string }[],
+  // Confirmed again (with what they edited): its own rules are set aside too, and written anew.
+  again = false,
+): void {
+  const db = getDb()
+  if (!again && saidPreferencesState(candidateId, intentId).written) return
+  db.prepare(
+    "UPDATE revealed_preferences SET status = 'superseded' WHERE candidate_id = ? AND source = 'said' AND status IN ('confirmed', 'proposed')",
+  ).run(candidateId)
+  const insert = db.prepare(
+    `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, decided_at, source, intent_id)
+     VALUES (?, ?, NULL, ?, ?, ?, ?, 'candidate', ?, '[]', NULL, 'confirmed', NULL, ?, ?, 'said', ?)`,
+  )
+  const ts = now()
+  for (const row of rows) insert.run(newId('rpr'), candidateId, row.kind, row.statement, row.wording, row.label, row.group, ts, decidedAt, intentId)
+}
+
+// They said it still holds: it counts from today again (listening.ts, isStale).
+export function renewRevealedPreference(id: string): void {
+  getDb().prepare("UPDATE revealed_preferences SET decided_at = ? WHERE id = ? AND status = 'confirmed'").run(now(), id)
 }
 
 export function decideRevealedPreference(id: string, status: 'confirmed' | 'rejected'): void {

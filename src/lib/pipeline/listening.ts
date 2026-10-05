@@ -1,4 +1,5 @@
 import {
+  getCurrentIntent,
   getLatestIntent,
   getLatestOfferTriage,
   listConfirmedPreferences,
@@ -6,6 +7,7 @@ import {
   parseJsonArray,
   type RevealedPreferenceRow,
 } from '../db/repo'
+import { syncSaidRules } from './said-rules'
 
 // What the Rep listens for (PRODUCT_SPEC §15, §15.1, §16). This is the single
 // place that decides it; anything that filters opportunities reads it here.
@@ -27,6 +29,8 @@ export interface ListeningItem {
   // never reads these: the statement is its input.
   wording: string
   evidence: string | null
+  // Where it came from: said | triage | chat | own; null on a rule written before that was kept.
+  source: string | null
 }
 
 export interface ListeningProfile {
@@ -47,20 +51,23 @@ export interface ListeningProfile {
 
 // A label is a listening item; without one, the statement's first clause is
 // the most faithful short form available.
-function shortLabel(row: RevealedPreferenceRow): string {
+export function shortLabel(row: RevealedPreferenceRow): string {
   if (row.label) return row.label
   const clause = (row.wording ?? row.statement).split(/[:;.—]/)[0].trim()
   return clause.length > 70 ? `${clause.slice(0, 67).trimEnd()}…` : clause
 }
 
-function isStale(row: RevealedPreferenceRow, now: number): boolean {
+export function isStale(row: RevealedPreferenceRow, now: number): boolean {
   if (!row.decided_at) return true
   return now - Date.parse(row.decided_at) > REVEALED_VALID_DAYS * 24 * 60 * 60 * 1000
 }
 
 export function getListeningProfile(candidateId: string): ListeningProfile {
+  // What they said and confirmed is among the rules below (said-rules.ts).
+  syncSaidRules(candidateId)
   const now = Date.now()
-  const intent = getLatestIntent(candidateId)
+  // What they confirmed; before any, what they wrote (shown as not confirmed).
+  const intent = getCurrentIntent(candidateId) ?? getLatestIntent(candidateId)
 
   const wontConsider: ListeningItem[] = []
   const weighs: ListeningItem[] = []
@@ -76,7 +83,7 @@ export function getListeningProfile(candidateId: string): ListeningProfile {
       staleCount++
       continue
     }
-    const item = { id: row.id, label: shortLabel(row), statement: row.statement, wording: row.wording ?? row.statement, evidence: row.evidence }
+    const item = { id: row.id, label: shortLabel(row), statement: row.statement, wording: row.wording ?? row.statement, evidence: row.evidence, source: row.source }
     if (row.kind === 'hard_filter') wontConsider.push(item)
     else if (row.kind === 'strong') weighs.push(item)
     else if (row.kind === 'compensation') money.push(item)
