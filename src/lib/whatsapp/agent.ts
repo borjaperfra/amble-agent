@@ -31,7 +31,7 @@ import { isKnownMaliciousLink } from '../net/reputation'
 // that takes something off it, only on their yes). Anything about amble
 // itself reaches the owner.
 
-export const AGENT_VERSION = 'a10'
+export const AGENT_VERSION = 'a11'
 
 const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them on WhatsApp. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
@@ -51,7 +51,7 @@ WHAT YOU CAN DO, and nothing else:
 - Coach them on their career and search.
 You cannot browse the web, look up a company, or see anything outside what is below. You cannot send offers when asked (they come when one truly fits, at most a couple a day), close or remove an offer, read a picture, remove a document they shared, change their email, delete their account, or change anything else about their account: for those, say where in the app they can do it (their data, downloading it and deleting their account: yourData; their map: yourMap), or pass it to the team ("forward"). Never offer or promise to do anything that is not in this list.
 
-WHAT YOU KNOW about them is below: the name you call them by and their language, their professional map (capabilities, what is still uncertain), what you listen for, what you read for them this week and why most of it was set aside, the offers their message names (offersTheyMention, with what you made of each), the offers you sent them on WhatsApp, the offers they follow, and the recent conversation. Use only this.
+WHAT YOU KNOW about them is below: the name you call them by and their language, their professional map (capabilities, what is still uncertain), what you listen for, what you read for them this week and why most of it was set aside, the offers waiting for their answer in the app (whatYouReadForThem.inTheAppToAnswerList: company, title, where and why each was shown; for more than that, ask which one they mean), the offers their message names (offersTheyMention, with what you made of each), the offers you sent them on WhatsApp, the offers they follow, and the recent conversation. Use only this.
 - Their rules (listeningFor) are what they confirmed, some learned from how they answered sample offers amble wrote to learn what they want. The examples inside a rule (a role, a salary, a team) are those samples, never offers they were really made: do not cite them as such, and speak of a rule by what it asks for, not by how it was learned. When two rules disagree, the one they set later holds.
 - If rereadingWhatCameIn is true, what came in lately is being read again (after a change to their rules, or after they resumed the search): say that you are on it, never that you read nothing, and do not give a reason you do not know.
 - An offer they ask about that is not in offersTheyMention, the offers you sent or the ones they follow: you do not have it. Say so in a line and offer to read it if they paste it. If it does not answer their question (a detail an offer does not give, a company's policy), say plainly that you don't know, and suggest how they can find out. Never invent facts, numbers, companies or offers, and do not fill in what they did not say (the figure they accepted, a date, who called): ask, or leave it out.
@@ -238,11 +238,20 @@ function thisWeek(candidateId: string) {
     worthItThisWeek: view.week.worth,
     // Still to answer in the app: their kind of role, and adjacent ones.
     inTheAppToAnswer: { fits: view.found.filter((item) => item.response === null).length, adjacent: view.maybe.filter((item) => item.response === null).length },
+    // And which they are, briefly: asked about "the other 13", the answer
+    // was only a count. Detail for one comes when the message names it.
+    inTheAppToAnswerList: [...view.found, ...view.maybe]
+      .filter((item) => item.response === null)
+      .slice(0, APP_LIST)
+      .map((item) => ({ company: item.company, title: item.title, where: [item.location, item.workplace].filter(Boolean).join(' · ') || null, why: item.summary.slice(0, 220) })),
     setAsideByReason: Object.fromEntries(Object.entries(reasons).sort((a, b) => b[1] - a[1]).slice(0, 8)),
   }
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+// The offers waiting in the app, listed for the agent: enough to name them all
+// for most people, short enough to keep the conversation in reach.
+const APP_LIST = 20
 
 function norm(value: string): string {
   return ` ${value
