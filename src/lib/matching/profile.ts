@@ -40,6 +40,27 @@ const LANGUAGE_CLAIM =
   /\b(languages?|idiomas?|lenguas?|speakers?|native|nativ[oa]s?|mother tongue|lengua materna|fluent|fluid[oa]s?|bilingual|biling[uü]es?|english|ingl[eé]s|spanish|espa[nñ]ol|castellano|catalan|catal[aá]n|valenciano|basque|euskera|galician|gallego|french|franc[eé]s|german|alem[aá]n|italian|italiano|portuguese|portugu[eé]s|dutch|neerland[eé]s|[ABC][12])\b/i
 const PROGRAMMING = /\bprogramming\b|\bprogramaci[oó]n\b/i
 
+const YEAR = /\b(19[89]\d|20[0-4]\d)\b/g
+const ONGOING = /\b(present|current(ly)?|now|today|actualidad|actual(mente)?|hoy|presente)\b/i
+
+// The latest year a statement of experience names, "to present" being this
+// year; null when it names none.
+function latestYear(statement: string): number | null {
+  const years = [...statement.matchAll(YEAR)].map((match) => Number(match[1]))
+  if (ONGOING.test(statement)) years.push(new Date().getFullYear())
+  return years.length > 0 ? Math.max(...years) : null
+}
+
+// Dated statements newest first; undated ones after them, in the order read
+// (a statement about a role usually follows the one that dates it).
+export function byRecency(statements: string[]): string[] {
+  const dated = statements.map((statement, index) => ({ statement, index, year: latestYear(statement) }))
+  return [
+    ...dated.filter((item) => item.year !== null).sort((a, b) => (b.year as number) - (a.year as number) || a.index - b.index),
+    ...dated.filter((item) => item.year === null),
+  ].map((item) => item.statement)
+}
+
 export function buildMatchingProfile(candidateId: string): MatchingProfile {
   const listening = getListeningProfile(candidateId)
   // Every rule they confirmed, whatever it came from (what they said, their
@@ -67,10 +88,9 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
     .sort((a, b) => a.id.localeCompare(b.id))
 
   const claims = listClaims(candidateId)
-  const experience = claims
-    .filter((claim) => claim.claim_type === 'experience')
-    .slice(0, 30)
-    .map((claim) => claim.statement)
+  // Most recent first, before the cut: in the order they were read, a long
+  // CV left its latest roles out, and early work weighed as much as today's.
+  const experience = byRecency(claims.filter((claim) => claim.claim_type === 'experience').map((claim) => claim.statement)).slice(0, 30)
 
   const languageClaims = claims
     .filter((claim) => claim.claim_type === 'skill' && LANGUAGE_CLAIM.test(claim.statement) && !PROGRAMMING.test(claim.statement))

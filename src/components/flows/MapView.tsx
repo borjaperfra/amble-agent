@@ -233,6 +233,12 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
             </>
           )}
           <p className={styles.privacy}>{t.map.privacy(vm.counts.claims, vm.counts.evidence, vm.counts.sources)}</p>
+          {/* A newer CV, or what they did not share the first time: always one tap away. */}
+          {vm.counts.sources > 0 && (
+            <Link href="/onboarding" className="text-btn">
+              {t.map.addDocument}
+            </Link>
+          )}
         </section>
       </main>
 

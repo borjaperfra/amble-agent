@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getMatch, respondToMatch, setProgress, type MatchProgress, type MatchResponse } from '@/lib/db/matching'
+import { getMatch, respondAsApplied, respondToMatch, setProgress, type MatchProgress, type MatchResponse } from '@/lib/db/matching'
 import { forCandidate } from '@/lib/auth/request'
 import { getOpportunitiesView } from '@/lib/matching/view'
 
@@ -11,6 +11,7 @@ const PROGRESS: (MatchProgress | null)[] = ['applied', 'dropped', null]
 // GET                                               -> what the Rep found and what it set aside
 // POST { matchId, response, reason? }               -> the candidate's answer
 //   response: 'interested' | 'not_for_me'  (on something shown)
+//             'already_applied'            (on something shown: they sent it on their own)
 //             'wanted_anyway'              (overruling a discard)
 // POST { opportunityIds, progress }                 -> how far they took an offer they wanted
 //   progress: 'applied' | 'dropped' | null (taken back)
@@ -31,8 +32,14 @@ function respond(body: Record<string, unknown>, candidateId: string) {
   if (!match || match.candidate_id !== candidateId) {
     return NextResponse.json({ error: 'Match not found.' }, { status: 404 })
   }
+  // Already sent on their own: wanted and applied at once, on something shown.
+  if (body.response === 'already_applied') {
+    if (match.verdict !== 'show') return NextResponse.json({ error: 'That response does not apply to this offer.' }, { status: 409 })
+    respondAsApplied(match.id, candidateId)
+    return NextResponse.json({ ok: true })
+  }
   if (!RESPONSES.includes(body.response as MatchResponse)) {
-    return NextResponse.json({ error: `response must be one of: ${RESPONSES.join(', ')}.` }, { status: 400 })
+    return NextResponse.json({ error: `response must be one of: ${RESPONSES.join(', ')}, already_applied.` }, { status: 400 })
   }
   const response = body.response as MatchResponse
   // Overruling only makes sense on a discard; answering only on something shown.

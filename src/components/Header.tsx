@@ -113,6 +113,12 @@ export default function Header({ right, language = true, nav = true }: HeaderPro
         )}
         <div className={styles.right}>
           {right}
+          {/* The public page: someone with an account goes straight in. */}
+          {pathname === '/' && (
+            <Link href="/login" className={styles.language}>
+              {t.header.signIn}
+            </Link>
+          )}
           {showNav && (
             <button type="button" className={`${styles.language} ${styles.wideOnly}`} onClick={() => void signOut()}>
               {t.login.signOut}

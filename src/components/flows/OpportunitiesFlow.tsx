@@ -17,7 +17,7 @@ import { estimateRange, estimateSource } from '@/lib/salary/format'
 import type { ShownEstimate } from '@/lib/salary/estimate'
 import styles from '@/app/opportunities/opportunities.module.css'
 
-type Response = 'interested' | 'not_for_me' | 'wanted_anyway'
+type Response = 'interested' | 'not_for_me' | 'wanted_anyway' | 'already_applied'
 
 // Offers answered here before the Rep asks to carry on on WhatsApp.
 const HANDOFF_AFTER = 5
@@ -240,7 +240,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                   <FoundCard
                     item={item}
                     onAnswered={(response) => {
-                      setNotice({ text: response === 'interested' ? t.opportunities.movedToWanted : t.opportunities.savedNotForMe, key: '' })
+                      setNotice({ text: response === 'interested' ? t.opportunities.movedToWanted : response === 'already_applied' ? t.opportunities.movedToSent : t.opportunities.savedNotForMe, key: '' })
                       void reload().then(toPanel)
                     }}
                   />
@@ -473,6 +473,9 @@ function fewPlaces(location: string | null, more: (count: number) => string): st
   return places.length <= 3 ? location : `${places.slice(0, 3).join(' · ')} ${more(places.length - 3)}`
 }
 
+// Words for having sent it already: "ya apliqué", "ya la he enviado", "already applied".
+const SOUNDS_APPLIED = /\bya\b.{0,25}\b(apliqu|aplicad|envi[eé]|enviad|me (he )?inscrib|postul)|\balready\b.{0,15}\b(applied|sent|apply)/i
+
 function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
   const [leaving, setLeaving] = useState(false)
   const t = useT()
@@ -560,6 +563,10 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
           <button type="button" className="btn btn-quiet" onClick={() => setAsking(true)}>
             {t.opportunities.notForMe}
           </button>
+          {/* Sent already, on their own: not a no, and not one to send. */}
+          <button type="button" className="text-btn" onClick={() => void answer('already_applied')}>
+            {t.opportunities.alreadyApplied}
+          </button>
         </div>
       )}
 
@@ -592,6 +599,12 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
             onChange={(event) => setReason(event.target.value)}
             autoFocus
           />
+          {/* "Ya la he enviado por otro lado" is not a reason to learn a no from. */}
+          {SOUNDS_APPLIED.test(reason) && (
+            <button type="button" className="text-btn" onClick={() => void answer('already_applied')}>
+              {t.opportunities.soundsApplied}
+            </button>
+          )}
           <div className={styles.actions}>
             <button type="button" className="btn" onClick={() => void answer('not_for_me', reason)}>
               {t.opportunities.learnSend}

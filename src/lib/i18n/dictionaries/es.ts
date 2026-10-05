@@ -32,6 +32,8 @@ export const es: Dictionary = {
     switchTo: 'English',
     switchToLabel: 'Switch to English',
     data: 'Tus datos',
+    // On the public page: for someone who already has an account.
+    signIn: 'Entrar',
     openMenu: 'Abrir el menú',
     closeMenu: 'Cerrar el menú',
   },
@@ -40,6 +42,7 @@ export const es: Dictionary = {
     heroLine2: 'sí.',
     heroSub: 'Conoce a tu Rep profesional.',
     cta: 'Conoce a tu Rep →',
+    haveAccount: '¿Ya tienes cuenta? Entra',
     movementsLabel: 'Qué hace amble',
     movements: [
       { title: 'Te conoce.', body: 'No solo dónde has trabajado.\nLo que de verdad has hecho.' },
@@ -258,6 +261,8 @@ export const es: Dictionary = {
     oneMore: 'Una cosa más',
     outro: 'Cuéntale a tu Rep qué tiene que tener una oferta para que te avise.',
     setListening: 'Cambiar lo que busco →',
+    // Under the map: a newer CV or another document, read into it like the first.
+    addDocument: 'Sube un CV más reciente u otro documento →',
     privacy: (claims: number, evidence: number, sources: number) =>
       evidence > 0
         ? `Este mapa es privado: solo tú puedes verlo. Sale de ${evidence} ${evidence === 1 ? 'evidencia' : 'evidencias'} de ${sources} ${sources === 1 ? 'fuente' : 'fuentes'}, y puedes abrir cada una.`
@@ -736,6 +741,11 @@ export const es: Dictionary = {
     officeElsewhere: 'Pide días de oficina, y su oficina no está donde aceptarías ir',
     wantedAnyway: 'Esta sí me interesa',
     movedToWanted: 'La he pasado a Te interesan.',
+    // A new offer they had already sent on their own.
+    alreadyApplied: 'Ya la he enviado',
+    movedToSent: 'Apuntada como enviada.',
+    // They wrote, while turning it down, that they already applied.
+    soundsApplied: '¿Ya la enviaste? Márcala como enviada en vez de descartarla.',
     handoffStay: 'Seguir aquí',
     tabs: { new: 'Nuevas', wanted: 'Te interesan', sent: 'Enviadas', aside: 'Apartadas' },
     apply: {

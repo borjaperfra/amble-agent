@@ -71,6 +71,27 @@ const CITY_AREAS: Record<string, string[]> = {
     'el prat', 'prat de llobregat', 'esplugues', 'sant joan despi', 'sant boi', 'viladecans', 'castelldefels', 'terrassa',
     'sabadell', 'mataro', 'granollers', 'rubi', 'cerdanyola',
   ],
+  // Regions people name instead of a city ("Madrid o Asturias"): the region
+  // and the cities offers write. Offers rarely say the region.
+  asturias: ['asturias', 'oviedo', 'gijon', 'aviles', 'siero', 'langreo', 'mieres'],
+  cantabria: ['cantabria', 'santander', 'torrelavega'],
+  'pais vasco': ['pais vasco', 'euskadi', 'basque country', 'bilbao', 'san sebastian', 'donostia', 'vitoria', 'gasteiz', 'barakaldo', 'getxo'],
+  euskadi: ['pais vasco', 'euskadi', 'basque country', 'bilbao', 'san sebastian', 'donostia', 'vitoria', 'gasteiz', 'barakaldo', 'getxo'],
+  navarra: ['navarra', 'pamplona', 'iruna'],
+  galicia: ['galicia', 'a coruna', 'la coruna', 'vigo', 'santiago de compostela', 'ourense', 'lugo', 'pontevedra', 'ferrol'],
+  'castilla y leon': ['castilla y leon', 'valladolid', 'leon', 'burgos', 'salamanca', 'segovia', 'palencia', 'zamora', 'soria', 'avila'],
+  aragon: ['aragon', 'zaragoza', 'huesca', 'teruel'],
+  'la rioja': ['la rioja', 'logrono'],
+  cataluna: ['cataluna', 'catalunya', 'catalonia', 'barcelona', 'girona', 'lleida', 'tarragona', 'reus', 'sabadell', 'terrassa'],
+  catalunya: ['cataluna', 'catalunya', 'catalonia', 'barcelona', 'girona', 'lleida', 'tarragona', 'reus', 'sabadell', 'terrassa'],
+  'comunidad valenciana': ['comunidad valenciana', 'comunitat valenciana', 'valencia', 'alicante', 'castellon', 'elche'],
+  'comunidad de madrid': ['comunidad de madrid', 'madrid', 'alcobendas', 'las rozas', 'pozuelo', 'tres cantos', 'getafe', 'alcala de henares'],
+  andalucia: ['andalucia', 'andalusia', 'sevilla', 'seville', 'malaga', 'granada', 'cordoba', 'cadiz', 'almeria', 'huelva', 'jaen', 'jerez'],
+  murcia: ['murcia', 'cartagena'],
+  'castilla la mancha': ['castilla la mancha', 'toledo', 'albacete', 'ciudad real', 'guadalajara', 'cuenca'],
+  extremadura: ['extremadura', 'badajoz', 'caceres', 'merida'],
+  canarias: ['canarias', 'canary islands', 'las palmas', 'santa cruz de tenerife', 'tenerife', 'gran canaria'],
+  baleares: ['baleares', 'illes balears', 'balearic islands', 'palma', 'palma de mallorca', 'mallorca', 'ibiza', 'menorca'],
 }
 
 export function cityAreaTerms(term: string): string[] {

@@ -13,7 +13,7 @@ import { keyOf, type OfferKey } from './map'
 // computed again only when the table or the rules change (the version).
 
 // The rules in map.ts and here: a change to them recomputes every estimate.
-const RULES_VERSION = 4
+const RULES_VERSION = 5
 export const ESTIMATE_VERSION = `${BANDS_VERSION}.${RULES_VERSION}`
 
 export interface SalaryEstimate {
@@ -36,7 +36,9 @@ export interface SalaryEstimate {
 
 // Why there is none: the offer publishes its pay (in its fields or in its
 // text), or the table has no row for its role, level or place.
-export type NoEstimate = 'published' | 'in_text' | 'role' | 'place' | 'source' | 'level'
+// 'abroad': a company based elsewhere that hires here pays by its own scale, not by
+// this market's: OpenAI's roles in Spain came out at half what they pay.
+export type NoEstimate = 'published' | 'in_text' | 'role' | 'place' | 'source' | 'level' | 'abroad'
 
 interface Stored {
   v: string
@@ -128,6 +130,7 @@ export function estimateOffer(offer: EstimableOffer): Stored {
   const v = ESTIMATE_VERSION
   if (offer.salary_raw || offer.salary_min || offer.salary_max) return { v, estimate: null, none: 'published' }
   if (salaryInText(offer.description)) return { v, estimate: null, none: 'in_text' }
+  if (offer.company_segment === 'hires-spain') return { v, estimate: null, none: 'abroad' }
   const key = keyOf({
     title: offer.title,
     location: offer.location,

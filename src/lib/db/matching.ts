@@ -178,6 +178,15 @@ export function listDecisions(candidateId: string): Map<string, DecisionRow> {
 
 // How far the candidate took offers they wanted: applied, or no longer
 // following. Null takes it back. Only on offers they said they wanted.
+// A new offer they had already applied to on their own: wanted, and sent,
+// in one step (and the same role in its other cities with it).
+export function respondAsApplied(matchId: string, candidateId: string): void {
+  inTransaction(() => {
+    respondToMatch(matchId, candidateId, 'interested', null)
+    setProgress(candidateId, roleMatches(matchId, candidateId).map((match) => match.opportunity_id), 'applied')
+  })
+}
+
 export function setProgress(candidateId: string, opportunityIds: string[], progress: MatchProgress | null): number {
   const update = getDb().prepare(
     `UPDATE opportunity_decisions SET progress = ?, progress_at = ?

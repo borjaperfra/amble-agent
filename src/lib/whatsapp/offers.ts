@@ -11,6 +11,7 @@ import { dictionaries } from '../i18n/dictionaries'
 import type { Locale } from '../i18n/locale'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
+import { workplaceShown } from '../matching/facts'
 import { currentMatchKey, placeFit } from '../matching/run'
 import { storedRoleQuery, type RoleQuery } from '../matching/role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
@@ -119,7 +120,9 @@ export function offerText(match: Listed, pitch: Pitch | null, d: (typeof diction
       : w.salaryUnknown
   const places = (match.location ?? '').split(' · ').filter(Boolean)
   const shownPlaces = places.length > PLACES_SHOWN ? `${places.slice(0, PLACES_SHOWN).join(' · ')}…` : places.join(' · ')
-  const where = [shownPlaces, match.workplace ? (w.workplace[match.workplace as keyof typeof w.workplace] ?? null) : null].filter(Boolean).join(' · ')
+  // How it is done as the offer says it, over the board's tag (facts.ts).
+  const workplace = workplaceShown(match.opportunity_id, match.workplace)
+  const where = [shownPlaces, workplace ? (w.workplace[workplace as keyof typeof w.workplace] ?? null) : null].filter(Boolean).join(' · ')
   return [
     `*${match.title}*`,
     `${match.company_name}${where ? ` · ${where}` : ''}`,

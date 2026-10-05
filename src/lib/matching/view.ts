@@ -10,6 +10,7 @@ import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type M
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
+import { workplaceShown } from './facts'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { releaseDue } from './release'
@@ -216,7 +217,7 @@ function wantedOpportunities(candidateId: string, floor: Floor): WantedOpportuni
       company: row.company_name,
       title: row.title,
       location: row.location,
-      workplace: row.workplace,
+      workplace: workplaceShown(row.opportunity_id, row.workplace),
       salary: salaryText(row),
       estimate: salaryText(row) ? null : shownEstimate(estimates.get(row.opportunity_id), floor),
       url: row.url,
@@ -338,7 +339,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
         company: match.company_name,
         title: match.title,
         location: match.location,
-        workplace: match.workplace,
+        workplace: workplaceShown(match.opportunity_id, match.workplace),
         salary: salaryText(match),
         estimate: salaryText(match) ? null : shownEstimate(estimates.get(match.opportunity_id), floor),
         url: match.url,

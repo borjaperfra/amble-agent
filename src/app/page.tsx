@@ -21,6 +21,9 @@ export default async function Landing() {
             <Link href="/start" className="btn">
               {t.landing.cta}
             </Link>
+            <Link href="/login" className="text-btn">
+              {t.landing.haveAccount}
+            </Link>
           </div>
         </section>
 
