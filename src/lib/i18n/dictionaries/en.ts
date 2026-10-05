@@ -31,6 +31,8 @@ export const en = {
     switchTo: 'Español',
     switchToLabel: 'Cambiar a español',
     data: 'Your data',
+    // On the public page: for someone who already has an account.
+    signIn: 'Sign in',
     openMenu: 'Open the menu',
     closeMenu: 'Close the menu',
   },
@@ -39,6 +41,7 @@ export const en = {
     heroLine2: 'is.',
     heroSub: 'Meet your professional Rep.',
     cta: 'Meet your Rep →',
+    haveAccount: 'Already have an account? Sign in',
     movementsLabel: 'What amble does',
     movements: [
       { title: 'It gets to know you.', body: 'Not just where you’ve worked.\nWhat you’ve actually done.' },
@@ -740,6 +743,11 @@ export const en = {
     officeElsewhere: 'It asks for office days, and its office isn’t somewhere you’d go',
     wantedAnyway: 'I’d want this one',
     movedToWanted: 'Moved to You want these.',
+    // A new offer they had already sent on their own.
+    alreadyApplied: 'I’ve already applied',
+    movedToSent: 'Marked as sent.',
+    // They wrote, while turning it down, that they already applied.
+    soundsApplied: 'Already applied? Mark it as sent instead of turning it down.',
     handoffStay: 'Carry on here',
     tabs: { new: 'New', wanted: 'You want these', sent: 'Sent', aside: 'Set aside' },
     apply: {
