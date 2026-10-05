@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getRoleQuery, insertRoleQuery } from '../db/matching'
+import { worksIn } from '../db/repo'
 import type { OpportunityRow } from '../db/opportunities'
 import { runStructuredTask } from '../model/provider'
 import { amountsIn } from './assess'
@@ -146,10 +147,16 @@ export async function roleQueryFor(candidateId: string, profile: MatchingProfile
     locationExclude: locationJustified ? data.locationExclude : [],
     requireRemote: remoteJustified && data.requireRemote,
     officeAllowed: remoteJustified ? data.officeAllowed : [],
-    homeCountry: data.homeCountry,
+    // Where they live and what they work in: what they set themselves wins
+    // over what is inferred from their experience and CV.
+    homeCountry: profile.stated.homeCountry ?? data.homeCountry,
     seniority: data.seniority,
     salaryFloor: floorOf(data.salaryFloor, profile),
-    languages: profile.languageClaims.length > 0 ? data.languages : [],
+    languages: profile.stated.languages
+      ? profile.stated.languages.filter(worksIn).map((language) => language.code)
+      : profile.languageClaims.length > 0
+        ? data.languages
+        : [],
   }
   insertRoleQuery(candidateId, key, query, modelRunId)
   return query

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { getLatestIntent, getLatestOfferTriage, listCapabilities, listCapabilityEvidenceIds, listClaims, listEvidence } from '../db/repo'
+import { getStatedAbout, listCapabilities, listCapabilityEvidenceIds, listClaims, listEvidence, type StatedLanguage } from '../db/repo'
 import { isUnverifiedAssisted } from '../pipeline/attribution'
 import { getListeningProfile, type ListeningItem } from '../pipeline/listening'
 
@@ -27,6 +27,9 @@ export interface MatchingProfile {
   experience: string[]
   // What the candidate said about the languages they speak, as said.
   languageClaims: string[]
+  // What they set themselves on /me/preferences: it wins over what the role
+  // query would infer. Null where they have not said it.
+  stated: { homeCountry: string | null; languages: StatedLanguage[] | null }
   hash: string
 }
 
@@ -37,48 +40,14 @@ const LANGUAGE_CLAIM =
   /\b(languages?|idiomas?|lenguas?|speakers?|native|nativ[oa]s?|mother tongue|lengua materna|fluent|fluid[oa]s?|bilingual|biling[uü]es?|english|ingl[eé]s|spanish|espa[nñ]ol|castellano|catalan|catal[aá]n|valenciano|basque|euskera|galician|gallego|french|franc[eé]s|german|alem[aá]n|italian|italiano|portuguese|portugu[eé]s|dutch|neerland[eé]s|[ABC][12])\b/i
 const PROGRAMMING = /\bprogramming\b|\bprogramaci[oó]n\b/i
 
-// What they said they look for, confirmed, as rules: for someone whose
-// rules have not been learned from sample offers yet (a new account), it is
-// all there is. Where they want to work and what they will not consider rule
-// offers out; what they asked to be paid is the floor; the rest weighs. Once a
-// triage has taught amble their rules, those stand instead.
-const INTENT_KINDS: Record<string, { kind: MatchingRule['kind']; lead: string }> = {
-  Location: { kind: 'hard_filter', lead: 'Where they said they want to work' },
-  'Not interested in': { kind: 'hard_filter', lead: 'What they said they will not consider' },
-  Compensation: { kind: 'compensation', lead: 'What they said they want to be paid' },
-  Role: { kind: 'strong', lead: 'The roles they said they want' },
-  Space: { kind: 'strong', lead: 'The areas they said they want' },
-  Company: { kind: 'strong', lead: 'The companies they said they want' },
-  Ownership: { kind: 'strong', lead: 'The ownership they said they want' },
-  Other: { kind: 'strong', lead: 'Also said' },
-}
-
-export function intentRules(candidateId: string): MatchingRule[] {
-  if (getLatestOfferTriage(candidateId)) return []
-  const intent = getLatestIntent(candidateId)
-  if (!intent?.confirmed_at || (intent.valid_until && Date.parse(intent.valid_until) < Date.now())) return []
-  let groups: { label: string; values: string[] }[] = []
-  try {
-    groups = JSON.parse(intent.groups) as typeof groups
-  } catch {
-    return []
-  }
-  return groups.flatMap((group) => {
-    const known = INTENT_KINDS[group.label]
-    const values = (group.values ?? []).map((value) => value.trim()).filter(Boolean)
-    if (!known || values.length === 0) return []
-    return [{ id: `intent_${group.label.toLowerCase().replace(/[^a-z]+/g, '_')}`, label: values.join(', '), statement: `${known.lead}: ${values.join('; ')}.`, wording: values.join('; '), evidence: null, kind: known.kind }]
-  })
-}
-
 export function buildMatchingProfile(candidateId: string): MatchingProfile {
   const listening = getListeningProfile(candidateId)
+  // Every rule they confirmed, whatever it came from (what they said, their
+  // triage, WhatsApp, their own): one list (said-rules.ts).
   const rules: MatchingRule[] = [
     ...listening.revealed.rules.wontConsider.map((item) => ({ ...item, kind: 'hard_filter' as const })),
     ...listening.revealed.rules.money.map((item) => ({ ...item, kind: 'compensation' as const })),
     ...listening.revealed.rules.weighs.map((item) => ({ ...item, kind: 'strong' as const })),
-    // After the rules they confirmed one by one: those are newer.
-    ...intentRules(candidateId),
   ]
 
   const evidenceById = new Map(listEvidence(candidateId).map((item) => [item.id, item]))
@@ -108,6 +77,8 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
     .slice(0, 10)
     .map((claim) => claim.statement)
 
+  const stated = getStatedAbout(candidateId)
+
   // The fingerprint covers what changes a verdict: rules, what must not be
   // filtered on, capability levels and the languages spoken. When it moves, offers are judged again.
   const hash = createHash('sha1')
@@ -120,10 +91,13 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
         notFilteringOn: listening.revealed.notFilteringOn.map((item) => [item.id, item.statement]),
         capabilities: capabilities.map((capability) => [capability.id, capability.assessment, capability.attributed]),
         languageClaims,
+        // Only once they set something: the fingerprint of everyone else, and
+        // every assessment already made for them, stays as it was.
+        ...(stated.homeCountry || stated.languages ? { stated } : {}),
       }),
     )
     .digest('hex')
     .slice(0, 16)
 
-  return { rules, notFilteringOn: listening.revealed.notFilteringOn, capabilities, experience, languageClaims, hash }
+  return { rules, notFilteringOn: listening.revealed.notFilteringOn, capabilities, experience, languageClaims, stated, hash }
 }

@@ -408,10 +408,12 @@ export const interpretIntentOutputSchema = z.object({
     .array(
       z.object({
         label: intentLabelSchema,
-        values: z.array(z.string().min(1).max(120)).min(1).max(6),
+        // As long and as many as what they may confirm (api/intent), since a
+        // change returns what they had confirmed alongside what is new.
+        values: z.array(z.string().min(1).max(200)).min(1).max(12),
       }),
     )
-    .max(9),
+    .max(12),
   listeningFor: z.array(z.string().min(1).max(60)).max(8),
 })
 
@@ -700,22 +702,31 @@ ${JSON.stringify(params.capabilities)}`
   })
 }
 
-export function runInterpretIntentTask(params: { candidateId: string; answer: string }) {
-  const system = `You are Amble's intent interpretation engine, version 2. The candidate described what would make a professional opportunity worth considering. Structure what they said WITHOUT adding anything they didn't say.
+// `confirmed`: what they had already confirmed, when they come back to change
+// it. The new answer is read as a change to that, never as a fresh start: what
+// it does not touch stays.
+export function runInterpretIntentTask(params: { candidateId: string; answer: string; confirmed?: { label: string; values: string[] }[] }) {
+  const updating = Boolean(params.confirmed?.length)
+  const system = `You are Amble's intent interpretation engine, version 3. The candidate described what would make a professional opportunity worth considering. Structure what they said WITHOUT adding anything they didn't say.
 ${UNTRUSTED_RULE}
 
 Rules:
 - Only use these labels: "Role", "Space", "Company", "Compensation", "Ownership", "Location", "Not interested in", "Other".
 - Values must be short items (1-6 words) faithfully derived from the answer. Never invent values, numbers or ranges they didn't state.
 - If they didn't mention compensation, do not create a Compensation group.
-- listeningFor: up to 8 short phrases summarizing what to listen for, strictly from the answer.
+- listeningFor: up to 8 short phrases summarizing what to listen for, strictly from the answer.${
+    updating
+      ? `
+- They had ALREADY CONFIRMED the groups given below, and are coming back to change them. Their new answer adds to or changes those; it is not a fresh start. Return the COMPLETE updated set: keep every confirmed value the new answer does not change or withdraw, word for word; replace a value only where the new answer changes it (a new figure, a different place, a role they now name differently); remove a value only where they say they no longer want it; add what is new. listeningFor covers the whole updated set.`
+      : ''
+  }
 - Respond ONLY with JSON: {"groups": [{"label": ..., "values": [...]}], "listeningFor": [...]}.`
-  const user = `CANDIDATE ANSWER:
+  const user = `${updating ? `ALREADY CONFIRMED:\n${JSON.stringify(params.confirmed)}\n\n` : ''}CANDIDATE ANSWER:
 ${untrusted('answer', params.answer)}`
   return runStructuredTask({
     candidateId: params.candidateId,
     task: 'interpret_intent',
-    version: 'v2',
+    version: 'v3',
     system,
     user,
     schema: interpretIntentOutputSchema,

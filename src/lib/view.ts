@@ -1,6 +1,6 @@
-import { intentRows, type IntentRow } from './intent-order'
 import {
   getDistinctiveProfile,
+  getCurrentIntent,
   getLatestIntent,
   candidateById,
   getOrCreateInterview,
@@ -18,7 +18,6 @@ import {
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
-import { candidateLocale } from './i18n/candidate'
 import { getOpportunitiesView, type Drought, type WeekLedger } from './matching/view'
 
 // An offer still in their hands, as an envelope on the listening horizon.
@@ -202,41 +201,9 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
   }
 }
 
-// What they said they look for, as the Rep listens for it: everything in
-// what they confirmed, since every part of it is applied (where they want to
-// work and what they will not consider rule offers out, the salary is the
-// floor). The stored list stops at eight and leaves out what they will not
-// consider, which dropped their floor or their remote wish from the screen
-// while offers were still judged by them.
-function declaredItems(intent: ReturnType<typeof getLatestIntent>, profile: ListeningProfile, t: Dictionary['listening']): string[] {
-  if (!intent?.confirmed_at) return profile.declared.items
-  let groups: { label: string; values: string[] }[]
-  try {
-    groups = JSON.parse(intent.groups) as typeof groups
-  } catch {
-    return profile.declared.items
-  }
-  const values = (keep: (label: string) => boolean) =>
-    groups.filter((group) => keep(group.label)).flatMap((group) => (group.values ?? []).map((value) => value.trim()).filter(Boolean))
-  const items = [...values((label) => label !== 'Not interested in'), ...values((label) => label === 'Not interested in').map(t.notInterested)]
-  return items.length > 0 ? [...new Set(items)] : profile.declared.items
-}
-
-// What they said, confirmed, as rows (pay, where, role always among them).
-function declaredRows(intent: ReturnType<typeof getLatestIntent>): IntentRow[] {
-  if (!intent?.confirmed_at) return []
-  try {
-    return intentRows(JSON.parse(intent.groups) as IntentRow[])
-  } catch {
-    return []
-  }
-}
-
 export function getListeningViewModel(candidateId: string): {
   evidenceCount: number
   capabilitiesCount: number
-  listeningFor: string[]
-  declaredRows: IntentRow[]
   hasIntent: boolean
   intentConfirmed: boolean
   revealed: ListeningProfile['revealed']
@@ -247,15 +214,14 @@ export function getListeningViewModel(candidateId: string): {
   drought: Drought | null
 } {
   const candidate = candidateById(candidateId)
-  const intent = getLatestIntent(candidate.id)
+  // An answer written and not confirmed yet: the screen asks them to confirm it.
+  const intent = getCurrentIntent(candidate.id)
   const profile = getListeningProfile(candidate.id)
   const opportunities = getOpportunitiesView(candidate.id)
   return {
     evidenceCount: listEvidence(candidate.id).length,
     capabilitiesCount: listCapabilities(candidate.id).length,
-    listeningFor: declaredItems(intent, profile, dictionaries[candidateLocale(candidate)].listening),
-    declaredRows: declaredRows(intent),
-    hasIntent: Boolean(intent),
+    hasIntent: Boolean(intent ?? getLatestIntent(candidate.id)),
     intentConfirmed: profile.declared.confirmed,
     revealed: profile.revealed,
     pendingReview: profile.pendingReview,

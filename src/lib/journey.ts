@@ -1,5 +1,5 @@
 import { getDb } from './db/db'
-import { getLatestIntent, listConfirmedPreferences, listEvidence, listSources, listUnprocessedSources, type CandidateRow } from './db/repo'
+import { getCurrentIntent, listConfirmedPreferences, listEvidence, listSources, listUnprocessedSources, type CandidateRow } from './db/repo'
 import { setupProgress, startSetup } from './pipeline/setup'
 
 // Where someone picks up after signing in: the next step of the setup they
@@ -15,7 +15,7 @@ export function nextStep(candidate: CandidateRow): string {
   const unread = listUnprocessedSources(candidate.id).length > 0
   if (unread) startSetup(candidate.id)
 
-  const intentConfirmed = Boolean(getLatestIntent(candidate.id)?.confirmed_at) || listConfirmedPreferences(candidate.id).length > 0
+  const intentConfirmed = Boolean(getCurrentIntent(candidate.id)) || listConfirmedPreferences(candidate.id).length > 0
   if (!intentConfirmed) return '/me/intent'
 
   const interviewDone = getDb().prepare("SELECT 1 FROM interviews WHERE candidate_id = ? AND status = 'completed'").get(candidate.id)

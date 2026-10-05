@@ -249,7 +249,16 @@ export function shownEstimate(estimate: SalaryEstimate | null | undefined, floor
   const { min, max, source, year, url, role, experience, place } = estimate
   // An offer that does not say its level gets the middle of the table, which
   // may not be theirs: a "below your floor" on that guess would put them off
-  // an offer for a figure nobody stated.
+  // an offer for a figure nobody stated. Unless the guess is so far below
+  // that a level up would not close it: 31-40K against a floor of 100K.
   const guessed = estimate.key?.levelFrom === 'default'
-  return { min, max, source, year, url, role, experience, place, belowFloor: floor && !guessed && belowFloor(estimate, floor) ? floor.amount : null }
+  const short = floor !== null && (guessed ? farBelowFloor(estimate, floor) : belowFloor(estimate, floor))
+  return { min, max, source, year, url, role, experience, place, belowFloor: short && floor ? floor.amount : null }
+}
+
+// On a guessed level, only a gap no level of the table closes is worth saying.
+const FAR_MARGIN = 0.4
+
+function farBelowFloor(estimate: SalaryEstimate, floor: { amount: number; currency: string }): boolean {
+  return floor.currency === estimate.currency && estimate.max < floor.amount * (1 - FAR_MARGIN)
 }

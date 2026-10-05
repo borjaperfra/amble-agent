@@ -499,7 +499,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
   return (
     <article ref={cardRef} className={leaving ? `${styles.card} ${styles.slidingOut}` : styles.card} data-answered={item.response !== null}>
       <p className={styles.cardKicker}>
-        <Symbol size={20} /> {t.opportunities.worthHearing}
+        <Symbol size={20} /> {item.estimate?.belowFloor ? t.opportunities.worthHearingShort : t.opportunities.worthHearing}
       </p>
       <h2 className={styles.cardTitle}>{item.title}</h2>
       <p className={styles.meta}>{meta}</p>

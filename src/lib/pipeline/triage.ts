@@ -3,6 +3,7 @@ import { inTransaction } from '../db/db'
 import {
   answerOfferProbe,
   decideRevealedPreference,
+  getCurrentIntent,
   getLatestIntent,
   getLatestOfferTriage,
   getOfferProbe,
@@ -82,7 +83,7 @@ export const createTriageInputSchema = z
 export type CreateTriageInput = z.infer<typeof createTriageInputSchema>
 
 function declaredSnapshot(candidateId: string): string | null {
-  const intent = getLatestIntent(candidateId)
+  const intent = getCurrentIntent(candidateId) ?? getLatestIntent(candidateId)
   if (!intent) return null
   return `En sus palabras: ${intent.raw_answer}\nInterpretado: ${intent.groups}`
 }
@@ -612,6 +613,7 @@ export function addPreference(
     label: params.label?.trim().slice(0, 60) || null,
     evidenceProbeIds: cited.map((probe) => probe.id),
     quote,
+    source: 'own',
   })
 }
 

@@ -1,0 +1,252 @@
+/* What the Rep listens for, rule by rule: the groups as quiet sections on
+   paper, each rule a line to tap and change, where it came from beside it. */
+.page {
+  max-width: var(--conversation-max);
+  margin: 0 auto;
+  padding: 24px var(--page-pad) 96px;
+}
+
+.top {
+  padding-top: 16px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--heading-lg);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.lead {
+  margin-top: 8px;
+  color: var(--ink-secondary);
+  max-width: 52ch;
+}
+
+.hint {
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 52ch;
+}
+
+.proposed {
+  margin-top: 28px;
+  padding: 18px 20px;
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.proposedTitle,
+.groupTitle,
+.otherTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-bottom: 4px;
+}
+
+.groups {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+.group {
+  padding: 20px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+
+.ruleGroup {
+  grid-column: 1 / -1;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.ruleText {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.meta,
+.actions {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.source {
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.remove {
+  font-size: var(--text-body-sm);
+}
+
+.stale .ruleText {
+  color: var(--ink-tertiary);
+}
+
+.staleNote {
+  grid-column: 1 / -1;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+
+.empty {
+  margin-top: 10px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-tertiary);
+}
+
+.add {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.addInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.add :global(.btn) {
+  height: 44px;
+  padding: 0 16px;
+}
+
+.note {
+  min-height: 1.6em;
+  margin-top: 8px;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.other {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.otherLink {
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.otherLink:hover {
+  text-decoration: underline;
+}
+
+.back {
+  margin-top: 12px;
+}
+
+@media (max-width: 560px) {
+  .rule {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* About them: where they live, the languages they work in, the floor applied. */
+.about {
+  margin-top: 28px;
+  padding: 18px 20px;
+  background: var(--paper-light);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.aboutRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.aboutLabel {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.select {
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+  min-height: 40px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  max-width: 100%;
+}
+
+.languages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.language {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.languageName {
+  min-width: 8em;
+}
+
+.floor {
+  font-family: var(--font-display);
+  font-size: var(--text-body-lg);
+}

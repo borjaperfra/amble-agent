@@ -12,7 +12,6 @@ import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
-import { intentRules } from './profile'
 import { releaseDue } from './release'
 
 // The first read starts while the setup's questions are answered (setup.ts).
@@ -293,7 +292,6 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map([
     ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.wording ?? row.statement]),
-    ...intentRules(candidate.id).map((rule): [string, string] => [rule.id, rule.label]),
   ])
   const decisions = listDecisions(candidate.id)
   // What the table says the roles that publish no salary pay, and the floor

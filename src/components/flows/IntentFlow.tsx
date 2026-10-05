@@ -60,7 +60,8 @@ function relativeRaise(values: string[]): number | null {
   return factors.length > 0 ? Math.min(...factors) : null
 }
 
-export default function IntentFlow({ setupStep }: { setupStep: { current: number; total: number } | null }) {
+// `updating`: they had confirmed what they look for and come back to change it.
+export default function IntentFlow({ setupStep, updating = false }: { setupStep: { current: number; total: number } | null; updating?: boolean }) {
   const router = useRouter()
   const t = useT()
   const [phase, setPhase] = useState<Phase>('ask')
@@ -139,7 +140,8 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
       return
     }
     clearDraft()
-    router.push('/start')
+    // From the setup, on to its next step; coming back to change it, to the rules it changed.
+    router.push(setupStep ? '/start' : '/me/preferences')
   }
 
   function updateValue(groupIndex: number, valueIndex: number, value: string) {
@@ -176,6 +178,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
             {setupStep && <p className={styles.step}>{t.interview.step(setupStep.current, setupStep.total)}</p>}
             <p className={styles.lead}>{setupStep ? t.intent.leadSetup : t.intent.lead}</p>
             <h1 className={styles.question}>{t.intent.question}</h1>
+            <p className={styles.updateNote}>{updating ? t.intent.updateNote : t.intent.guide}</p>
 
             {phase === 'sending' && (
               <div className={styles.workingArea} role="status">
@@ -221,7 +224,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
             )}
             {/* Coming back to change it: what is listened for now is one tap away. */}
             {!setupStep && (
-              <Link href="/listening" className={`text-btn ${styles.current}`}>
+              <Link href="/me/preferences" className={`text-btn ${styles.current}`}>
                 {t.intent.seeCurrent}
               </Link>
             )}
@@ -248,7 +251,7 @@ export default function IntentFlow({ setupStep }: { setupStep: { current: number
         <div className={styles.reveal}>
           {setupStep && <p className={styles.step}>{t.interview.step(setupStep.current, setupStep.total)}</p>}
           <h1 className={styles.revealLead}>{t.intent.revealLead}</h1>
-          <p className={styles.revealSub}>{t.intent.revealSub}</p>
+          <p className={styles.revealSub}>{updating ? t.intent.revealSubUpdate : t.intent.revealSub}</p>
           {result && !result.structured && (
             <>
               <p className={styles.hint}>{t.intent.unstructured}</p>
