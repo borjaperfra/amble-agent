@@ -564,6 +564,7 @@ export const es: Dictionary = {
     documentNothing: 'Lo he leído, pero no he encontrado nada sobre tu experiencia que añadir a tu mapa.',
     documentSetAside: (reason: string) => `No lo he usado. ${reason}`,
     documentAlready: 'Ese documento ya lo tengo en tu mapa.',
+    linkAlready: 'Esa página ya la tengo en tu mapa.',
     documentUnreadable: 'No he podido abrir el archivo. ¿Me lo mandas otra vez, en PDF?',
     documentFailed: 'Ahora no he podido leerlo. Mándamelo otra vez en un rato.',
   },

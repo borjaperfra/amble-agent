@@ -567,6 +567,7 @@ export const en = {
     documentNothing: 'I read it, but found nothing about your experience to add to your map.',
     documentSetAside: (reason: string) => `I haven’t used it. ${reason}`,
     documentAlready: 'I already have that document on your map.',
+    linkAlready: 'I already have that page on your map.',
     documentUnreadable: 'I couldn’t open the file. Could you send it again, as a PDF?',
     documentFailed: 'I couldn’t read it right now. Send it to me again in a while.',
   },

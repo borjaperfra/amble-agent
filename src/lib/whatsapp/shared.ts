@@ -149,12 +149,17 @@ async function fromBoardApi(url: string): Promise<RawOpportunity | null> {
   return null
 }
 
-// What a link shows: an offer, when there is enough of one to judge.
-export async function readSharedLink(url: string): Promise<RawOpportunity | null> {
+// What a link shows. A posting is an offer for certain: one amble already
+// has, one a board's API gives, or a page that marks itself as a job posting.
+// Any other page with enough text is only a page: a portfolio, a post, a
+// project of theirs, or an offer that does not say so; the agent tells which.
+export type SharedLink = { kind: 'posting'; offer: RawOpportunity } | { kind: 'page'; offer: RawOpportunity }
+
+export async function readSharedLink(url: string): Promise<SharedLink | null> {
   const known = knownOffer(url)
-  if (known?.description) return known
+  if (known?.description) return { kind: 'posting', offer: known }
   const viaApi = await fromBoardApi(url)
-  if (viaApi) return viaApi
+  if (viaApi) return { kind: 'posting', offer: viaApi }
   // Never a private address, only https, bounded in time and size.
   const response = await safeFetchText(url.replace(/^http:/i, 'https:'), {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36' },
@@ -170,7 +175,7 @@ export async function readSharedLink(url: string): Promise<RawOpportunity | null
     const perMonth = /month/i.test(salary?.unitText ?? '')
     const yearly = (value?: number) => (value ? Math.round(perMonth ? value * 14 : value) : null)
     const location = places(posting.jobLocation)
-    return {
+    const offer: RawOpportunity = {
       source: 'shared',
       externalId: url,
       companyName: (organisation ?? meta(html, 'og:site_name') ?? host).trim(),
@@ -185,12 +190,13 @@ export async function readSharedLink(url: string): Promise<RawOpportunity | null
       salaryRaw: null,
       postedAt: posting.datePosted ? new Date(posting.datePosted).toISOString() : null,
     }
+    return { kind: 'posting', offer }
   }
   // No structured posting: the page's own text, if there is enough of it.
   const body = htmlToText(html.match(/<body[\s\S]*<\/body>/i)?.[0]?.replace(/<(script|style|nav|header|footer)[\s\S]*?<\/\1>/gi, '') ?? null)
   const title = meta(html, 'og:title') ?? html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim()
   if (!body || body.length < MIN_TEXT || !title) return null
-  return {
+  const page: RawOpportunity = {
     source: 'shared',
     externalId: url,
     companyName: meta(html, 'og:site_name') ?? host,
@@ -205,6 +211,7 @@ export async function readSharedLink(url: string): Promise<RawOpportunity | null
     salaryRaw: null,
     postedAt: null,
   }
+  return { kind: 'page', offer: page }
 }
 
 // The text of an offer, pasted in, with the company and title the agent read from it.

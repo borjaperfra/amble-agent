@@ -17,8 +17,10 @@ import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
 import { answerProfile, parseProfilePayload, proposeCorrection, proposeLanguage, proposeName, takeNote } from './profile'
-import { documentName, isDocument, takeDocument, type SentAttachment } from './documents'
+import { documentName, isDocument, takeDocument, takeLink, type SentAttachment } from './documents'
 import { isMaliciousLink } from '../net/reputation'
+import type { RawOpportunity } from '../sourcing/types'
+import { untrusted } from '../untrusted'
 import { allow } from './throttle'
 import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
 
@@ -199,6 +201,8 @@ type Reply = (body: string, buttons?: { title: string; payload: string }[]) => P
 // (WhatsApp shows it for 25 seconds), and after a few seconds a short line
 // saying the answer is on its way.
 const HOLD_AFTER_MS = 12_000
+// How much of a page that is not marked as an offer the agent reads to tell what it is.
+const PAGE_LINES = 800
 const TYPING_EVERY_MS = 20_000
 
 async function answerWords(
@@ -225,15 +229,19 @@ async function answerWords(
   const typing = () => void showTyping(chat.config, chat.conversationId).catch(() => undefined)
   typing()
 
-  // A link to an offer: read and judged like any offer amble finds.
+  // A link to an offer: read and judged like any offer amble finds. A page
+  // that does not mark itself as one (a portfolio, a post, a project of
+  // theirs, or an offer that does not say so) goes to the agent, who tells
+  // which: an offer is judged, their own work is read into their map.
   const link = text.match(/https?:\/\/[^\s<>"]+/)?.[0]
+  let page: RawOpportunity | null = null
   if (link) {
-    const raw = await readSharedLink(link).catch(() => null)
-    if (raw) {
+    const shared = await readSharedLink(link).catch(() => null)
+    if (shared?.kind === 'posting') {
       if (awaited) settleAwaitedReason(candidate.id, awaited.matchId, null)
       logMessage(candidate.id, 'in', text)
       await reply(w.sharedReading)
-      const verdict = await judgeShared(candidate.id, raw).catch(() => null)
+      const verdict = await judgeShared(candidate.id, shared.offer).catch(() => null)
       if (!verdict) {
         await reply(w.agentFailed)
         return
@@ -242,6 +250,12 @@ async function answerWords(
       await reply(shown.text, shown.buttons)
       return
     }
+    if (shared) {
+      page = shared.offer
+      text = `${text}\n\n(amble read that link; it does not mark itself as a job offer. Its title and first lines:)\n${untrusted('page', `${page.title}\n${(page.description ?? '').slice(0, PAGE_LINES)}`)}`
+    }
+  }
+  if (link && !page) {
     // Not readable (a page behind a sign-in, for one): the agent asks for the
     // text. One known to spread malware was never opened, and they hear why.
     text = (await isMaliciousLink(link).catch(() => false))
@@ -270,13 +284,25 @@ async function answerWords(
   }
   if (awaited) settleAwaitedReason(candidate.id, awaited.matchId, answer.reasonItDoesNotFit)
   let buttons = answer.intent === 'preferences' && answer.preference ? proposePreference(candidate.id, answer.preference) : undefined
-  // A pasted offer: judged after the agent's line that it is reading it.
+  // A pasted offer, or a page the agent read as one: judged after the
+  // agent's line that it is reading it.
   if (answer.action?.type === 'evaluate_posting') {
     // One line that it is reading it: the verdict says the rest, once.
     await reply(w.sharedReading)
-    const verdict = await judgeShared(candidate.id, pastedOffer(text, answer.action.company, answer.action.title)).catch(() => null)
+    const offer = page
+      ? { ...page, companyName: answer.action.company || page.companyName, title: answer.action.title || page.title }
+      : pastedOffer(text, answer.action.company, answer.action.title)
+    const verdict = await judgeShared(candidate.id, offer).catch(() => null)
     const shown = verdict ? presentVerdict(verdict, w) : { text: w.agentFailed, buttons: undefined }
     await reply(shown.text, shown.buttons)
+    return
+  }
+  // A page of their own work: read into their map, with its own lines on
+  // what it added. Only a page amble could read: the agent's line would
+  // promise a reading that never comes.
+  if (answer.action?.type === 'read_link') {
+    if (page && link) await takeLink(candidate, link, reply)
+    else await reply(w.documentSetAside(dictionaries[candidateLocale(candidate)].server.websiteUnreadable))
     return
   }
   // Pausing the search, or resuming it: proposed with its own buttons, and

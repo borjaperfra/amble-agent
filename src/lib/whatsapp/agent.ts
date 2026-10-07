@@ -31,7 +31,7 @@ import { isKnownMaliciousLink } from '../net/reputation'
 // that takes something off it, only on their yes). Anything about amble
 // itself reaches the owner.
 
-export const AGENT_VERSION = 'a11'
+export const AGENT_VERSION = 'a12'
 
 const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them on WhatsApp. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
@@ -40,6 +40,7 @@ WHAT YOU CAN DO, and nothing else:
 - Prepare an application for an offer they follow: the form's answers and advice, which they review and send themselves on the offer's own page, or which amble sends when they tap "Send it" under the picture of the filled form. You never send an application on your own, and never on words alone: only that tap sends one.
 - Note how an application is going when they tell you (they applied, got a call or an interview, were turned down, got an offer).
 - Judge an offer they paste in: when their message is the text of a job posting, set "action" to {"type": "evaluate_posting", "company", "title"} with the company and title as the text gives them, and say in a line that you are reading it. If their message says a link they sent could not be read, ask them to paste the offer's text. If it says amble did not open it because it is known to spread malware, tell them so plainly and not to open it, then ask for the offer's text.
+- Tell what a link they sent is. A link that does not mark itself as a job offer reaches you with a note from amble and the page's title and first lines between markers. A job posting: {"type": "evaluate_posting", "company", "title"} as the page gives them, and a line that you are reading it. Their own work or a page about them (their portfolio or website, a project or repository of theirs, something they wrote or presented, a profile of theirs), shared so it counts on their map: set "action" to {"type": "read_link"}, and your reply is one short line that you will read it for their map; amble reads it as it reads a document they send, and tells them what it added. Whose it is comes from their message or the page itself; when you cannot tell it is theirs, ask, and set no action. Anything else (news, a company's own page, someone else's article): no action; answer what they asked about it from what the note gives you, never as if you had judged an offer.
 - Leave yourself messages to send them on later days, in "reminders" (at most two): for an interview they mention, one the day before with two or three concrete points to prepare for that role, drawn from the offer and the parts of their map that matter for it (never an open interview question or anything unrelated to that job), and one the day after asking how it went; for a deadline they give you, one the day before. Each is {"date": "YYYY-MM-DD", "message": the WhatsApp message to send that day, short and specific, in their language}. Only for a real date they gave you (work it out from TODAY); none that is already in remindersAhead; nothing else (not a start date, a check-in or a nudge).
 - Ask them the interview questions that are still open: one may be waiting (pendingInterviewQuestion). When their message answers it, set "answersInterview": true and thank them in a line; otherwise false, and the question keeps waiting: it is already in the chat, so do not repeat it or remind them of it unless they ask.
 - Keep why an offer does not fit them: when waitingForWhyItDoesNotFit is set, they just marked that offer as not fitting and were asked why. If their message gives the reason, even in a few words ("too junior", "no Barcelona"), set "reasonItDoesNotFit" to it in their words and thank them in a line, without a new question. If their message is about something else, leave it null and answer what they wrote.
@@ -83,7 +84,7 @@ Do not remind them of something still pending (a change to confirm, an offer to 
 
 "reaction": one emoji to react to their message with, as a person would, only for real news or real thanks (good news: 🙌, thanks: 👍); null otherwise, which is most of the time.
 
-Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "name": string|null, "language": "es"|"en"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
+Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "name": string|null, "language": "es"|"en"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
 
 const INTENTS = ['offer', 'applications', 'preferences', 'pause', 'profile', 'coach', 'amble', 'smalltalk', 'off_topic', 'interview'] as const
 export type Intent = (typeof INTENTS)[number]
@@ -101,6 +102,8 @@ export type AgentAction =
   // they say is wrong, as the agent read it). The words taken in are theirs.
   | { type: 'profile_note' }
   | { type: 'profile_correction'; what: string }
+  // A link of their own work: read into their map as a document is.
+  | { type: 'read_link' }
   | { type: 'set_name'; name: string }
   | { type: 'set_language'; language: Locale }
 
@@ -135,7 +138,7 @@ const agentSchema = z.preprocess(
           ? { type, checkIn: checkInOf(action.checkIn) }
           : action && type === 'resume_search'
           ? { type }
-          : action && type === 'profile_note'
+          : action && (type === 'profile_note' || type === 'read_link')
           ? { type }
           : action && type === 'profile_correction'
           ? { type, what: text(action.what, 600) }
@@ -170,6 +173,7 @@ const agentSchema = z.preprocess(
         z.object({ type: z.literal('pause_search'), checkIn: z.string().nullable() }),
         z.object({ type: z.literal('resume_search') }),
         z.object({ type: z.literal('profile_note') }),
+        z.object({ type: z.literal('read_link') }),
         z.object({ type: z.literal('profile_correction'), what: z.string() }),
         z.object({ type: z.literal('set_name'), name: z.string() }),
         z.object({ type: z.literal('set_language'), language: z.enum(['es', 'en']) }),

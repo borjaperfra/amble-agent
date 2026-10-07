@@ -7,7 +7,7 @@ import { dictionaries } from '../i18n/dictionaries'
 import { takeIntake } from '../limits'
 import { TooLargeError } from '../net/safe-fetch'
 import { readLaterSource } from '../pipeline/setup'
-import { createFileSource, MAX_PDF_BYTES } from '../pipeline/sources'
+import { createFileSource, createWebsiteSource, MAX_PDF_BYTES, type SourceCreated } from '../pipeline/sources'
 import { mapLink } from './profile'
 import { fetchMedia, type ZernioConfig } from './zernio'
 
@@ -91,25 +91,58 @@ export async function takeDocument(candidate: CandidateRow, attachment: SentAtta
       await reply(w.documentSetAside(created.detail ?? serverText().onlyPdfOrText))
       return
     }
-    await reply(w.documentReading)
-    const read = await readLaterSource(candidate.id, created.id).catch((error: unknown) => {
-      console.error('[whatsapp] document not read:', created.id, error instanceof Error ? error.message : error)
-      return null
-    })
-    if (!read) {
-      await reply(w.documentFailed)
-      return
-    }
-    if (read.status === 'rejected') {
-      await reply(w.documentSetAside(read.reason))
-      return
-    }
-    if (read.claims === 0) {
-      await reply(w.documentNothing)
-      return
-    }
-    const text = w.documentRead([...read.added, ...read.raised].slice(0, 4), mapLink(candidate.id))
-    // Read without the wording meant for a machine: they hear why it will not be sent on.
-    await reply(created.detail === serverText().machineText ? `${text}\n\n${created.detail}` : text)
+    await readIntoMap(candidate, created, w, reply)
   })
+}
+
+// A link to their own work (a portfolio, a project, a post of theirs) that
+// the agent told from an offer: taken in as the website given in the setup,
+// then read into their map as a document is. The same page twice is not
+// read again.
+export async function takeLink(candidate: CandidateRow, url: string, reply: Reply): Promise<void> {
+  const locale = candidateLocale(candidate)
+  const w = dictionaries[locale].whatsapp
+  return withLocale(locale, async () => {
+    const refused = takeIntake(candidate.id, 'source')
+    if (refused) {
+      await reply(refused === 'too_many_sources' ? serverText().tooManySources : serverText().tooManyToday)
+      return
+    }
+    const secure = url.replace(/^http:/i, 'https:')
+    if (listSources(candidate.id).some((source) => source.status === 'processed' && (source.uri === url || source.uri === secure))) {
+      await reply(w.linkAlready)
+      return
+    }
+    const created = await createWebsiteSource(candidate.id, url)
+    if (created.status !== 'extracted') {
+      await reply(w.documentSetAside(created.detail ?? serverText().websiteUnreadable))
+      return
+    }
+    await readIntoMap(candidate, created, w, reply)
+  })
+}
+
+// Read into their map as the setup reads a source; they hear what it added,
+// or why it was not used.
+async function readIntoMap(candidate: CandidateRow, created: SourceCreated, w: (typeof dictionaries)['es']['whatsapp'], reply: Reply): Promise<void> {
+  await reply(w.documentReading)
+  const read = await readLaterSource(candidate.id, created.id).catch((error: unknown) => {
+    console.error('[whatsapp] source not read:', created.id, error instanceof Error ? error.message : error)
+    return null
+  })
+  if (!read) {
+    await reply(w.documentFailed)
+    return
+  }
+  if (read.status === 'rejected') {
+    await reply(w.documentSetAside(read.reason))
+    return
+  }
+  if (read.claims === 0) {
+    await reply(w.documentNothing)
+    return
+  }
+  const text = w.documentRead([...read.added, ...read.raised].slice(0, 4), mapLink(candidate.id))
+  // Read without the wording meant for a machine: they hear why it will not be sent on.
+  await reply(created.detail === serverText().machineText ? `${text}\n\n${created.detail}` : text)
 }
