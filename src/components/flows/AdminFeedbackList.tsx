@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useI18n } from '@/components/I18nProvider'
 import { postJson } from '@/components/api'
 import type { AdminFeedbackItem } from '@/lib/admin/feedback-triage'
@@ -9,7 +10,8 @@ import styles from '@/app/admin/admin.module.css'
 
 // Feedback as the owner reads it: how much it matters (weight, not colour),
 // what kind it is, one line on what it is about, then the words themselves
-// and who sent them.
+// and who sent them. What was acted on is marked done, with what took care
+// of it, and leaves the pending list.
 export default function AdminFeedbackList({
   items,
   onChange,
@@ -22,11 +24,27 @@ export default function AdminFeedbackList({
   const { locale } = useI18n()
   const a = adminDictionaries[locale].feedback
   const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const day = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' })
+  const [closing, setClosing] = useState<string | null>(null)
+  const [note, setNote] = useState('')
 
   async function toggle(item: AdminFeedbackItem) {
     const seen = !item.seen_at
     onChange(items.map((entry) => (entry.id === item.id ? { ...entry, seen_at: seen ? new Date().toISOString() : null } : entry)))
     await postJson('/api/admin/feedback', { action: 'seen', id: item.id, seen })
+  }
+
+  async function setDone(item: AdminFeedbackItem, done: boolean) {
+    const at = new Date().toISOString()
+    const doneNote = done ? note.trim().slice(0, 200) || null : null
+    onChange(
+      items.map((entry) =>
+        entry.id === item.id ? { ...entry, done_at: done ? at : null, done_note: doneNote, seen_at: done ? (entry.seen_at ?? at) : entry.seen_at } : entry,
+      ),
+    )
+    setClosing(null)
+    setNote('')
+    await postJson('/api/admin/feedback', { action: 'done', id: item.id, done, note: doneNote })
   }
 
   return (
@@ -64,9 +82,54 @@ export default function AdminFeedbackList({
             )}
             <span>{date.format(new Date(item.created_at))}</span>
           </p>
-          <button type="button" className="text-btn" onClick={() => void toggle(item)}>
-            {item.seen_at ? a.markUnread : a.markSeen}
-          </button>
+          {item.done_at ? (
+            <div className={styles.itemActions}>
+              <span className={styles.done}>{a.doneAt(day.format(new Date(item.done_at)), item.done_note)}</span>
+              <button type="button" className="text-btn" onClick={() => void setDone(item, false)}>
+                {a.undoDone}
+              </button>
+            </div>
+          ) : closing === item.id ? (
+            <form
+              className={styles.itemActions}
+              onSubmit={(event) => {
+                event.preventDefault()
+                void setDone(item, true)
+              }}
+            >
+              <input
+                className={styles.doneInput}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={a.doneNote}
+                aria-label={a.doneNote}
+                maxLength={200}
+                autoFocus
+              />
+              <button type="submit" className="text-btn">
+                {a.saveDone}
+              </button>
+              <button type="button" className="text-btn" onClick={() => setClosing(null)}>
+                {a.cancelDone}
+              </button>
+            </form>
+          ) : (
+            <div className={styles.itemActions}>
+              <button type="button" className="text-btn" onClick={() => void toggle(item)}>
+                {item.seen_at ? a.markUnread : a.markSeen}
+              </button>
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => {
+                  setClosing(item.id)
+                  setNote('')
+                }}
+              >
+                {a.markDone}
+              </button>
+            </div>
+          )}
         </li>
       ))}
     </ul>

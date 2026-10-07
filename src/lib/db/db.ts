@@ -640,6 +640,10 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'whatsapp_links', 'template_taps', 'TEXT')
   // The offer's message as the second reading wrote it for them.
   addColumn(db, 'offer_sends', 'pitch', 'TEXT')
+  // Feedback already acted on leaves the owner's list: when, and what took
+  // care of it (an issue, a commit, a line).
+  addColumn(db, 'feedback', 'done_at', 'TEXT')
+  addColumn(db, 'feedback', 'done_note', 'TEXT')
 
   // Attribution (PRODUCT_SPEC §11.1, §12).
   const attributionAdded = addColumn(db, 'evidence', 'attribution', "TEXT NOT NULL DEFAULT 'sole'")

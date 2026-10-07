@@ -16,6 +16,8 @@ export interface FeedbackRow {
   message: string
   created_at: string
   seen_at: string | null
+  done_at: string | null
+  done_note: string | null
 }
 
 export interface FeedbackListing extends FeedbackRow {
@@ -38,6 +40,8 @@ export function recordFeedback(candidate: CandidateRow, params: { message: strin
     message: params.message.trim().slice(0, MAX_FEEDBACK_MESSAGE),
     created_at: now(),
     seen_at: null,
+    done_at: null,
+    done_note: null,
   }
   getDb()
     .prepare('INSERT INTO feedback (id, candidate_id, channel, page, message, created_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -49,6 +53,7 @@ export function listFeedback(): FeedbackListing[] {
   return getDb()
     .prepare(
       `SELECT f.*, c.email, c.name FROM feedback f JOIN candidates c ON c.id = f.candidate_id
+       WHERE f.done_at IS NULL
        ORDER BY f.seen_at IS NOT NULL, f.created_at DESC`,
     )
     .all() as unknown as FeedbackListing[]
@@ -56,6 +61,17 @@ export function listFeedback(): FeedbackListing[] {
 
 export function markFeedbackSeen(id: string, seen: boolean): void {
   getDb().prepare('UPDATE feedback SET seen_at = ? WHERE id = ?').run(seen ? now() : null, id)
+}
+
+// Acted on: it leaves the list of what is pending, with what took care of it.
+// Done is also read; undoing it leaves it read.
+export function markFeedbackDone(id: string, done: boolean, note: string | null): void {
+  const at = now()
+  if (done)
+    getDb()
+      .prepare('UPDATE feedback SET done_at = ?, done_note = ?, seen_at = COALESCE(seen_at, ?) WHERE id = ?')
+      .run(at, note?.trim().slice(0, 200) || null, at, id)
+  else getDb().prepare('UPDATE feedback SET done_at = NULL, done_note = NULL WHERE id = ?').run(id)
 }
 
 // What one person sent through a channel in the last day.

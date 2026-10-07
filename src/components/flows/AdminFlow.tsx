@@ -15,9 +15,9 @@ import styles from '@/app/admin/admin.module.css'
 
 type Tab = 'waitlist' | 'feedback' | 'health'
 type WaitlistFilter = 'all' | 'waiting' | 'invited' | 'joined'
-type FeedbackFilter = 'all' | 'unread' | FeedbackKind
+type FeedbackFilter = 'all' | 'unread' | 'done' | FeedbackKind
 
-const FEEDBACK_FILTERS: FeedbackFilter[] = ['all', 'unread', 'blocking_bug', 'bug', 'confusing', 'request', 'praise', 'other']
+const FEEDBACK_FILTERS: FeedbackFilter[] = ['all', 'unread', 'blocking_bug', 'bug', 'confusing', 'request', 'praise', 'other', 'done']
 
 // Who can still be let in: not in yet and without an accepted invitation.
 function invitable(entry: AdminWaitlistEntry): boolean {
@@ -41,7 +41,8 @@ export default function AdminFlow({ initial, initialTab }: { initial: AdminOverv
   const [untriaged, setUntriaged] = useState(initial.untriaged)
 
   const invitedCount = waitlist.entries.filter((entry) => entry.status === 'invited').length
-  const unread = feedback.filter((item) => !item.seen_at).length
+  const pending = feedback.filter((item) => !item.done_at)
+  const unread = pending.filter((item) => !item.seen_at).length
 
   function showTab(next: Tab) {
     setTab(next)
@@ -97,7 +98,7 @@ export default function AdminFlow({ initial, initialTab }: { initial: AdminOverv
             onClick={() => showTab('feedback')}
           >
             {a.tabs.feedback}
-            <span className={styles.tabCount}>{unread > 0 ? `${unread} / ${feedback.length}` : feedback.length}</span>
+            <span className={styles.tabCount}>{unread > 0 ? `${unread} / ${pending.length}` : pending.length}</span>
           </button>
           <button
             type="button"
@@ -442,14 +443,22 @@ function FeedbackTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const visible = items.filter((item) => (filter === 'all' ? true : filter === 'unread' ? !item.seen_at : item.kind === filter))
-  const present = new Set(items.map((item) => item.kind))
+  // What was acted on lives under «Hecho», out of every other filter.
+  const done = items.filter((item) => item.done_at)
+  const pending = items.filter((item) => !item.done_at)
+  const visible =
+    filter === 'done'
+      ? [...done].sort((x, y) => (y.done_at ?? '').localeCompare(x.done_at ?? ''))
+      : pending.filter((item) => (filter === 'all' ? true : filter === 'unread' ? !item.seen_at : item.kind === filter))
+  const present = new Set(pending.map((item) => item.kind))
 
   return (
     <>
       <div className={styles.tools}>
         <div className={styles.chips}>
-          {FEEDBACK_FILTERS.filter((value) => value === 'all' || value === 'unread' || present.has(value)).map((value) => (
+          {FEEDBACK_FILTERS.filter(
+            (value) => value === 'all' || value === 'unread' || (value === 'done' ? done.length > 0 : present.has(value)),
+          ).map((value) => (
             <button
               key={value}
               type="button"
@@ -457,7 +466,7 @@ function FeedbackTab({
               aria-pressed={filter === value}
               onClick={() => setFilter(value)}
             >
-              {value === 'all' || value === 'unread' ? f.filters[value] : f.kinds[value]}
+              {value === 'done' ? `${f.filters.done} · ${done.length}` : value === 'all' || value === 'unread' ? f.filters[value] : f.kinds[value]}
             </button>
           ))}
         </div>

@@ -335,6 +335,30 @@
   opacity: 0.65;
 }
 
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.done {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.doneInput {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 .itemHead {
   display: flex;
   flex-wrap: wrap;

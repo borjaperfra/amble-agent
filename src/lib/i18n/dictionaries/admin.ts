@@ -74,6 +74,7 @@ const es = {
     filters: {
       all: 'Todo',
       unread: 'Sin leer',
+      done: 'Hecho',
     },
     kinds: {
       blocking_bug: 'Bloqueo',
@@ -89,6 +90,12 @@ const es = {
     screen: 'Pantalla',
     markSeen: 'Marcar como leído',
     markUnread: 'Marcar como no leído',
+    markDone: 'Marcar como hecho',
+    doneNote: 'Qué lo resolvió (issue, commit…)',
+    saveDone: 'Guardar',
+    cancelDone: 'Cancelar',
+    doneAt: (date: string, note: string | null) => (note ? `Hecho el ${date} · ${note}` : `Hecho el ${date}`),
+    undoDone: 'Volver a pendiente',
   },
   person: {
     joined: 'Cuenta creada',
@@ -259,7 +266,7 @@ const en: AdminDictionary = {
     triaging: 'Sorting…',
     triageOff: 'No model set up: feedback is shown by date.',
     unsorted: 'Not sorted',
-    filters: { all: 'All', unread: 'Unread' },
+    filters: { all: 'All', unread: 'Unread', done: 'Done' },
     kinds: {
       blocking_bug: 'Blocker',
       bug: 'Bug',
@@ -274,6 +281,12 @@ const en: AdminDictionary = {
     screen: 'Screen',
     markSeen: 'Mark as read',
     markUnread: 'Mark as unread',
+    markDone: 'Mark as done',
+    doneNote: 'What took care of it (issue, commit…)',
+    saveDone: 'Save',
+    cancelDone: 'Cancel',
+    doneAt: (date, note) => (note ? `Done on ${date} · ${note}` : `Done on ${date}`),
+    undoDone: 'Back to pending',
   },
   person: {
     joined: 'Account created',

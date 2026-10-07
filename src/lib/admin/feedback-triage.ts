@@ -52,6 +52,8 @@ export interface AdminFeedbackItem {
   message: string
   created_at: string
   seen_at: string | null
+  done_at: string | null
+  done_note: string | null
   kind: FeedbackKind | null
   importance: number | null
   summary: string | null
@@ -66,7 +68,7 @@ interface Row extends Omit<AdminFeedbackItem, 'suspicious'> {
 export function listAdminFeedback(candidateId?: string): AdminFeedbackItem[] {
   const rows = getDb()
     .prepare(
-      `SELECT f.id, f.candidate_id, c.email, c.name, f.channel, f.page, f.message, f.created_at, f.seen_at,
+      `SELECT f.id, f.candidate_id, c.email, c.name, f.channel, f.page, f.message, f.created_at, f.seen_at, f.done_at, f.done_note,
               t.kind, t.importance, t.summary, t.suspicious
        FROM feedback f JOIN candidates c ON c.id = f.candidate_id
        LEFT JOIN feedback_triage t ON t.feedback_id = f.id AND t.version = ?
