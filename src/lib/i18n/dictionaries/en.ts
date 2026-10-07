@@ -239,7 +239,7 @@ export const en = {
     distinctiveEmpty:
       'I can’t describe what makes your profile distinctive yet — there isn’t enough strong evidence. That’s not a flaw in you; it’s what I know so far.',
     gaps: 'Things I don’t know yet',
-    gapsLater: 'I’ll ask you about these on WhatsApp, little by little.',
+    gapsLater: 'Now and then I’ll send you one of these questions on WhatsApp; just reply to that message.',
     // WhatsApp not linked yet.
     gapsConnect: 'Connect WhatsApp and I’ll ask you there.',
     gapsConnectAction: 'Connect WhatsApp →',

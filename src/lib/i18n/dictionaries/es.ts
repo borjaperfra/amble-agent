@@ -242,7 +242,7 @@ export const es: Dictionary = {
       'Todavía no puedo describir qué hace distintivo tu perfil: no hay suficiente evidencia sólida. No es un defecto tuyo; es lo que sé hasta ahora.',
     gaps: 'Lo que aún no sé',
     talkItThrough: 'Háblalo con tu Rep →',
-    gapsLater: 'Te lo iré preguntando por WhatsApp, poco a poco.',
+    gapsLater: 'De vez en cuando te mandaré una de estas preguntas por WhatsApp; contéstame a ese mensaje.',
     // WhatsApp not linked yet.
     gapsConnect: 'Conecta WhatsApp y te lo pregunto por ahí.',
     gapsConnectAction: 'Conectar WhatsApp →',
