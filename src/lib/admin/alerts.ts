@@ -1,4 +1,5 @@
 import { getDb } from '../db/db'
+import { volumeUsage } from '../db/backup'
 import { now } from '../db/repo'
 import { whatsappAccountStatus, zernioConfig } from '../whatsapp/zernio'
 
@@ -11,7 +12,10 @@ const FROM = process.env.AMBLE_EMAIL_FROM ?? 'amble <hola@amble.fyi>'
 const TO = process.env.AMBLE_ALERT_TO ?? 'borja@amble.fyi'
 const EVERY_MS = 6 * 60 * 60 * 1000
 
-export type AlertKind = 'out_of_time' | 'model_failures' | 'whatsapp_status'
+export type AlertKind = 'out_of_time' | 'model_failures' | 'whatsapp_status' | 'pass_failed' | 'backup' | 'disk'
+
+// The volume's share in use that is worth a letter: there is still room to act.
+const DISK_SHARE = 0.8
 
 // Model failures worth a letter: over this share of the calls in the window,
 // and only with enough calls in it that one failure is not a share.
@@ -24,12 +28,18 @@ function lastAlert(kind: AlertKind): { sent_at: string | null; value: string | n
 }
 
 async function sendAlert(kind: AlertKind, subject: string, lines: string[]): Promise<boolean> {
-  const last = lastAlert(kind)
-  if (last?.sent_at && Date.now() - Date.parse(last.sent_at) < EVERY_MS) return false
-  // Counted before it goes: a slow or failed send is never followed by a second one at once.
-  getDb()
-    .prepare('INSERT INTO health_alerts (kind, sent_at) VALUES (?, ?) ON CONFLICT (kind) DO UPDATE SET sent_at = excluded.sent_at')
-    .run(kind, now())
+  // A full volume can refuse both the reading and the writing: the letter goes
+  // all the same, and the idempotency key keeps it to one a window.
+  try {
+    const last = lastAlert(kind)
+    if (last?.sent_at && Date.now() - Date.parse(last.sent_at) < EVERY_MS) return false
+    // Counted before it goes: a slow or failed send is never followed by a second one at once.
+    getDb()
+      .prepare('INSERT INTO health_alerts (kind, sent_at) VALUES (?, ?) ON CONFLICT (kind) DO UPDATE SET sent_at = excluded.sent_at')
+      .run(kind, now())
+  } catch (error) {
+    console.error(`[amble] alert (${kind}) not recorded:`, error instanceof Error ? error.message : error)
+  }
   const text = [...lines, '', 'amble.fyi/admin?tab=health'].join('\n')
   const key = process.env.RESEND_API_KEY
   if (!key) {
@@ -49,10 +59,36 @@ async function sendAlert(kind: AlertKind, subject: string, lines: string[]): Pro
   return true
 }
 
-// At the end of a scheduled pass: what it left for lack of time, and how the
-// model has done over the last hours.
-export async function checkPassAlerts(pass: { slot: string; outOfTime: number; read: number }): Promise<AlertKind[]> {
+// At the end of a scheduled pass: whether it failed, whether the day's copy
+// was made, how full the volume is, what it left for lack of time, and how
+// the model has done over the last hours.
+export async function checkPassAlerts(pass: {
+  slot: string
+  outOfTime: number
+  read: number
+  failure: string | null
+  backup: string | null
+}): Promise<AlertKind[]> {
   const sent: AlertKind[] = []
+  if (pass.failure) {
+    const lines = [`La pasada ${pass.slot} falló: ${pass.failure}`, 'Nadie recibe ofertas nuevas hasta que una pasada termine.']
+    if (await sendAlert('pass_failed', 'Una pasada ha fallado', lines)) sent.push('pass_failed')
+  }
+  if (pass.backup) {
+    const lines = [`La copia del día no se hizo: ${pass.backup}`, 'La pasada siguió sin ella.']
+    if (await sendAlert('backup', 'Sin copia de la base hoy', lines)) sent.push('backup')
+  }
+  const usage = volumeUsage()
+  if (usage && usage.total > 0 && 1 - usage.available / usage.total > DISK_SHARE) {
+    const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`
+    const share = Math.round((1 - usage.available / usage.total) * 100)
+    const lines = [
+      `El volumen está al ${share} %: quedan ${gb(usage.available)} de ${gb(usage.total)}.`,
+      `La base ocupa ${gb(usage.database)}; las copias, ${gb(usage.backups)} (${usage.copies} ficheros).`,
+      'Lleno, las pasadas fallan: amplía el volumen en Railway o borra copias en /data/backups.',
+    ]
+    if (await sendAlert('disk', `Volumen al ${share} %`, lines)) sent.push('disk')
+  }
   if (pass.outOfTime > 0) {
     const lines = [
       `La pasada ${pass.slot} se quedó sin tiempo: ${pass.outOfTime} ofertas sin leer, ${pass.read} leídas.`,

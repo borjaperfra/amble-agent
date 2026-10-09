@@ -59,6 +59,7 @@ export default function AdminHealth() {
   const minutes = (from: string, to: string) => h.minutes(Math.round((Date.parse(to) - Date.parse(from)) / 60_000))
   // A count that needs looking at stands out, in words as well as colour.
   const flagged = (n: number) => (n > 0 ? styles.warn : undefined)
+  const bytes = (n: number) => `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(n / 1024 ** 3)} GB`
 
   return (
     <>
@@ -68,6 +69,20 @@ export default function AdminHealth() {
           {h.refresh}
         </button>
       </div>
+
+      <h2 className={styles.section}>{h.volume.title}</h2>
+      {health.volume ? (
+        <>
+          <p className={health.volume.available / health.volume.total < 0.2 ? styles.warn : styles.note}>
+            {h.volume.used(Math.round((1 - health.volume.available / health.volume.total) * 100), bytes(health.volume.available), bytes(health.volume.total))}
+          </p>
+          <p className={styles.hint}>
+            {h.volume.parts(bytes(health.volume.database), bytes(health.volume.backups), health.volume.copies)} {h.volume.full}
+          </p>
+        </>
+      ) : (
+        <p className={styles.note}>{h.volume.unknown}</p>
+      )}
 
       <h2 className={styles.section}>{h.passes.title}</h2>
       {health.passes.length === 0 ? (

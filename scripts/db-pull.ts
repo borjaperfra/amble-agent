@@ -22,8 +22,10 @@ import zlib from 'node:zlib'
 const OWNER = 'user-zero'
 // Always production, whatever environment the folder is linked to (`volume` takes the id).
 const PRODUCTION_ID = '98fa6fec-864b-45b9-b338-e2b1a5a51187'
-const SNAPSHOT = '/data/backups/replica-pull.db'
-const PACKED = `${SNAPSHOT}.gz`
+// The whole copy off the volume (it is small, and full every pass fails);
+// only the compressed one on it, where `railway volume` can download it.
+const SNAPSHOT = '/tmp/replica-pull.db'
+const PACKED = '/data/backups/replica-pull.db.gz'
 const target = path.resolve(process.argv[2] ?? path.join('.amble-data', 'replica'))
 const file = path.join(target, 'amble.db')
 const packed = `${file}.gz`

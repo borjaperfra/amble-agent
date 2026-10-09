@@ -37,8 +37,7 @@ without anyone being written to by mistake or losing what they were doing.
    again), and check /admin › Salud that nobody is mid-setup.
 5. **Schema changes are additive.** `CREATE TABLE IF NOT EXISTS`, new columns
    with defaults, new indexes `IF NOT EXISTS`; never drop or rename in the same
-   deploy that stops using something. Take a backup first
-   (/admin, or `VACUUM INTO '/data/backups/…'` over `railway ssh`).
+   deploy that stops using something. Take a backup first (rule 11).
 6. **A new assessor or role-query version re-reads offers for everyone**
    (`ASSESS_VERSION`, `ROLE_QUERY_VERSION`, task versions in
    `src/lib/model/tasks.ts`): model cost and hours of passes. Bundle such
@@ -52,11 +51,20 @@ without anyone being written to by mistake or losing what they were doing.
    production's.
 9. **On the server, read-only checks go through `railway ssh --environment
    production --service app`**; anything that writes (deleting an account,
-   restoring) starts with a backup in `/data/backups/`.
+   restoring) starts with a backup (rule 11).
 10. **The folder is linked to production.** `railway environment link staging`
     changes where every later `railway` command goes; link production back right
     after (`railway environment link production`), and prefer passing
     `--environment` explicitly.
+11. **The volume is small (4.6 GB) and full stops everything.** On 2026-10-09
+    copies filled it and every pass failed. The daily copy is compressed
+    (`/data/backups/amble-<day>.db.gz`, gunzip it to restore); anything in
+    `/data/backups/` older than 7 days is deleted by the next copy, by-hand
+    copies too (that is also what amble promises about a deleted account). A
+    copy by hand goes to `/tmp` first and lands compressed:
+    `VACUUM INTO '/tmp/x.db'`, then `gzip -c /tmp/x.db > /data/backups/x.db.gz && rm /tmp/x.db`.
+    Delete it once the change holds. /admin › Salud › Volumen shows the room
+    left; over 80 % an alert goes out.
 
 ## Staging
 

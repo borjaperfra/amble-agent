@@ -117,6 +117,13 @@ const es = {
     utcDays: 'Días en UTC.',
     none: '—',
     minutes: (n: number) => (n < 1 ? 'menos de 1 min' : n < 60 ? `${n} min` : `${Math.floor(n / 60)} h ${n % 60} min`),
+    volume: {
+      title: 'Volumen',
+      used: (share: number, available: string, total: string) => `Al ${share} %: quedan ${available} de ${total}.`,
+      parts: (database: string, backups: string, copies: number) => `La base ocupa ${database}; las copias, ${backups} (${copies} ficheros, una al día, ninguna de más de 7 días).`,
+      full: 'Por encima del 80 % llega un aviso: lleno, las pasadas fallan.',
+      unknown: 'No se ha podido leer el volumen.',
+    },
     passes: {
       title: 'Pasadas de escucha',
       empty: 'Ninguna pasada registrada todavía: se anotan desde esta versión.',
@@ -190,9 +197,9 @@ const es = {
     },
     alerts: {
       title: 'Avisos por email',
-      hint: 'A borja@amble.fyi, como mucho uno de cada tipo cada 6 horas: una pasada sin tiempo, más de un 5 % de fallos del modelo en 3 horas, o un cambio de Meta en la cuenta de WhatsApp.',
+      hint: 'A borja@amble.fyi, como mucho uno de cada tipo cada 6 horas: una pasada que falla o se queda sin tiempo, la copia del día sin hacer, el volumen por encima del 80 %, más de un 5 % de fallos del modelo en 3 horas, o un cambio de Meta en la cuenta de WhatsApp.',
       none: 'Ningún aviso enviado todavía.',
-      kinds: { out_of_time: 'Pasada sin tiempo', model_failures: 'Fallos del modelo', whatsapp_status: 'Cambio en WhatsApp' } as Record<string, string>,
+      kinds: { out_of_time: 'Pasada sin tiempo', model_failures: 'Fallos del modelo', whatsapp_status: 'Cambio en WhatsApp', pass_failed: 'Pasada fallida', backup: 'Sin copia del día', disk: 'Volumen casi lleno' } as Record<string, string>,
     },
   },
 }
@@ -308,6 +315,13 @@ const en: AdminDictionary = {
     utcDays: 'Days in UTC.',
     none: '—',
     minutes: (n) => (n < 1 ? 'under 1 min' : n < 60 ? `${n} min` : `${Math.floor(n / 60)} h ${n % 60} min`),
+    volume: {
+      title: 'Volume',
+      used: (share: number, available: string, total: string) => `${share}% used: ${available} free of ${total}.`,
+      parts: (database: string, backups: string, copies: number) => `The database takes ${database}; the copies, ${backups} (${copies} files, one a day, none older than 7 days).`,
+      full: 'Over 80% an alert goes out: full, every pass fails.',
+      unknown: 'The volume could not be read.',
+    },
     passes: {
       title: 'Listening passes',
       empty: 'No pass recorded yet: they are recorded from this version on.',
@@ -381,9 +395,9 @@ const en: AdminDictionary = {
     },
     alerts: {
       title: 'Email alerts',
-      hint: 'To borja@amble.fyi, at most one of each kind every 6 hours: a pass out of time, over 5% of model calls failing in 3 hours, or Meta changing the WhatsApp account’s status.',
+      hint: 'To borja@amble.fyi, at most one of each kind every 6 hours: a pass that fails or runs out of time, the day’s copy not made, the volume over 80%, over 5% of model calls failing in 3 hours, or Meta changing the WhatsApp account’s status.',
       none: 'No alert sent yet.',
-      kinds: { out_of_time: 'Pass out of time', model_failures: 'Model failures', whatsapp_status: 'WhatsApp change' },
+      kinds: { out_of_time: 'Pass out of time', model_failures: 'Model failures', whatsapp_status: 'WhatsApp change', pass_failed: 'Pass failed', backup: 'No copy today', disk: 'Volume nearly full' },
     },
   },
 }

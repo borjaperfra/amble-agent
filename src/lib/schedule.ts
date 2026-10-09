@@ -32,9 +32,14 @@ function madrid(now: Date): { day: string; hour: number; minute: number } {
 }
 
 function log(day: string, line: string) {
-  const directory = path.join(DATA_DIRECTORY, 'logs')
-  fs.mkdirSync(directory, { recursive: true })
-  fs.appendFileSync(path.join(directory, `listen-${day}.log`), `${line}\n`)
+  // A full volume refuses the file: the host's logs below still have it.
+  try {
+    const directory = path.join(DATA_DIRECTORY, 'logs')
+    fs.mkdirSync(directory, { recursive: true })
+    fs.appendFileSync(path.join(directory, `listen-${day}.log`), `${line}\n`)
+  } catch {
+    // Only there, then.
+  }
   // Also to the host's own logs, where the volume's files cannot be read.
   console.log(`[listen] ${line}`)
 }
@@ -124,17 +129,29 @@ async function pass(day: string, slot: string, until: number) {
   const startedAt = new Date().toISOString()
   let matching: CandidatePass[] = []
   let failure: string | null = null
+  // Why the day's copy was not made, when it was due.
+  let backupProblem: string | null = null
   try {
     const resumed = Boolean(readState().passes[slot])
     writeState((state) => {
       state.passes[slot] = { startedAt: state.passes[slot]?.startedAt ?? new Date().toISOString() }
     })
     log(day, `==== ${new Date().toISOString()}${resumed ? ` (resuming ${slot}, cut short by a restart)` : ''}`)
-    // The first pass of the day copies the database before writing to it.
-    const copy = backupToday()
-    if (copy) log(day, `backup: ${copy}`)
+    // The first pass of the day copies the database before writing to it. A
+    // copy that cannot be made is said, and the pass goes on without it:
+    // people's offers matter more than one day's copy.
+    let firstToday = true
+    try {
+      const copy = await backupToday()
+      firstToday = copy.status !== 'exists'
+      if (firstToday) log(day, `backup: ${JSON.stringify(copy)}`)
+      if (copy.status === 'skipped') backupProblem = copy.reason
+    } catch (error) {
+      backupProblem = error instanceof Error ? error.message : String(error)
+      log(day, `backup failed: ${backupProblem}`)
+    }
     // And, once a day too, drops what was set aside of what people uploaded.
-    if (copy) log(day, `uploads: ${JSON.stringify(sweepUploads())}`)
+    if (firstToday) log(day, `uploads: ${JSON.stringify(sweepUploads())}`)
     const result = await runListening({ until })
     matching = result.matching
     log(day, JSON.stringify(result, null, 2))
@@ -152,12 +169,18 @@ async function pass(day: string, slot: string, until: number) {
   } finally {
     running = false
     releaseLock()
-    if (done) writeState((state) => void (state.passes[slot] = { ...state.passes[slot], finishedAt: new Date().toISOString() }))
+    if (done) safely('pass state', () => writeState((state) => void (state.passes[slot] = { ...state.passes[slot], finishedAt: new Date().toISOString() })))
     // A record or an alert that fails is logged; the pass is over either way.
+    // The alerts go even when the record cannot be written (a full volume).
     safely('pass record', async () => {
-      const totals = recordPass(slot, startedAt, failure ? 'failed' : done ? 'done' : 'stopped', matching, failure)
+      let totals = { read: 0, outOfTime: 0 }
+      try {
+        totals = recordPass(slot, startedAt, failure ? 'failed' : done ? 'done' : 'stopped', matching, failure)
+      } catch (error) {
+        console.error('[listen] pass record failed:', error instanceof Error ? error.message : error)
+      }
       // Stopped for a restart: what it left is the next server's, not a lack of time.
-      const alerts = await checkPassAlerts({ slot, outOfTime: done ? totals.outOfTime : 0, read: totals.read })
+      const alerts = await checkPassAlerts({ slot, outOfTime: done ? totals.outOfTime : 0, read: totals.read, failure, backup: backupProblem })
       if (alerts.length > 0) log(day, `alerts: ${alerts.join(', ')}`)
       const whatsapp = await checkWhatsAppStatus()
       if (whatsapp?.changed) log(day, `whatsapp status: ${whatsapp.lastEvent}`)

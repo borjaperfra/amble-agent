@@ -1,3 +1,4 @@
+import { volumeUsage, type VolumeUsage } from '../db/backup'
 import { getDb } from '../db/db'
 import { currentMatchKey } from '../matching/run'
 import { whatsappAccountStatus, zernioConfig, ZernioError, type WhatsAppAccountStatus } from '../whatsapp/zernio'
@@ -93,6 +94,8 @@ export interface AdminHealth {
   whatsappDays: WhatsAppDay[]
   applications: ApplicationRunRow[]
   alerts: AlertRow[]
+  // The data volume: full, every pass fails (2026-10-09). Null where it cannot be read.
+  volume: VolumeUsage | null
 }
 
 const since = (days: number) => new Date(Date.now() - days * DAY_MS).toISOString()
@@ -238,6 +241,7 @@ export function loadHealth(): AdminHealth {
     people: people(),
     whatsappDays: whatsappDays(),
     applications: applications(),
+    volume: volumeUsage(),
     alerts: getDb().prepare('SELECT kind, sent_at FROM health_alerts WHERE sent_at IS NOT NULL ORDER BY sent_at DESC').all() as unknown as AlertRow[],
   }
 }
