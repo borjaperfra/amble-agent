@@ -91,3 +91,12 @@ export function reachableCandidateIds(): string[] {
 export function isReachable(candidateId: string): boolean {
   return reachOf(candidateId) !== null
 }
+
+// For the screens: whether amble has a chat to offer (WhatsApp or Telegram),
+// and whether they connected one.
+export function chatAvailability(candidateId: string): { available: boolean; linked: boolean } {
+  return {
+    available: zernioConfig() !== null || telegramConfig() !== null,
+    linked: (zernioConfig() !== null && linkOf(candidateId) !== null) || (telegramConfig() !== null && telegramLinkOf(candidateId) !== null),
+  }
+}

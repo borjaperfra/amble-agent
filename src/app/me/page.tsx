@@ -5,8 +5,7 @@ import { getMapViewModel } from '@/lib/view'
 import { rewriteExplanationsInBackground } from '@/lib/career/explanations'
 import { serverLocale } from '@/lib/i18n/server'
 import { isSearchPaused } from '@/lib/pause'
-import { linkOf } from '@/lib/whatsapp/link'
-import { zernioConfig } from '@/lib/whatsapp/zernio'
+import { chatAvailability } from '@/lib/channel/reach'
 import MapView, { type MapNextStep } from '@/components/flows/MapView'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +16,8 @@ function mapNextStep(candidateId: string, step: string): MapNextStep {
   if (step === '/me/intent') return { kind: 'intent' }
   if (step === '/onboarding/interview') return { kind: 'questions' }
   if (step === '/onboarding' || step === '/welcome') return { kind: 'sources' }
-  if (zernioConfig() && !linkOf(candidateId)) return { kind: 'whatsapp' }
+  const chat = chatAvailability(candidateId)
+  if (chat.available && !chat.linked) return { kind: 'whatsapp' }
   return { kind: 'done' }
 }
 
@@ -27,7 +27,7 @@ export default async function MapPage() {
   // without making them wait: the next visit shows it.
   after(() => rewriteExplanationsInBackground(candidate.id))
   // What is still unknown is asked on WhatsApp: only once it is linked.
-  const whatsapp = { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null }
+  const whatsapp = chatAvailability(candidate.id)
   return (
     <MapView
       vm={getMapViewModel(candidate.id, await serverLocale())}

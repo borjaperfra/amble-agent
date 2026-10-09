@@ -3,8 +3,7 @@ import { getRevealedPreference, listOfferProbes } from '@/lib/db/repo'
 import { isRereading, startFirstRead } from '@/lib/matching/run'
 import { isSearchPaused } from '@/lib/pause'
 import { getListeningViewModel } from '@/lib/view'
-import { linkOf } from '@/lib/whatsapp/link'
-import { zernioConfig } from '@/lib/whatsapp/zernio'
+import { chatAvailability } from '@/lib/channel/reach'
 import ListeningFlow from '@/components/flows/ListeningFlow'
 
 export const dynamic = 'force-dynamic'
@@ -34,7 +33,7 @@ export default async function ListeningPage() {
   // reading for them at once.
   const firstReading = startFirstRead(candidate.id)
   // Setting up ends by connecting WhatsApp: from then on the Rep writes there.
-  const whatsapp = { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null }
+  const whatsapp = chatAvailability(candidate.id)
   // Paused until they resume it; or reading again after a change to their rules.
   const paused = isSearchPaused(candidate.id)
   const rereading = !paused && isRereading(candidate.id)

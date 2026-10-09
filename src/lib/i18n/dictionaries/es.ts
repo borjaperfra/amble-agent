@@ -467,6 +467,7 @@ export const es: Dictionary = {
     linked: (name: string | null) =>
       `Hecho${name ? `, ${name}` : ''}. Por aquí te escribiré solo cuando algo merezca tu atención: ofertas que encajan de verdad y cómo van tus candidaturas. Y pregúntame lo que quieras sobre tu búsqueda. Soy el agente de IA de amble.`,
     unknown: 'Hola, soy el agente de IA de amble. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
+    unknownTelegram: 'Hola, soy el agente de IA de amble. Para hablar conmigo por aquí, entra en app.amble.fyi y conecta Telegram desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
     askAgain: (title: string, company: string) => `Hace un par de semanas que enviaste la de ${title} en ${company}. ¿Te han dicho algo?`,
@@ -483,6 +484,13 @@ export const es: Dictionary = {
     connected: 'WhatsApp conectado. Te escribo por ahí.',
     disconnect: 'Desconectar',
     unavailable: 'WhatsApp aún no está disponible.',
+    // Telegram (#18): the same Rep, there.
+    connectTitleAny: 'Tu Rep, en WhatsApp o Telegram',
+    connectLeadAny: 'Elige dónde te escribo: por ahí te aviso solo cuando algo merece tu atención (ofertas con mucho encaje y cómo van tus candidaturas), y me puedes preguntar lo que quieras sobre tu búsqueda.',
+    connectTelegram: 'Conectar Telegram',
+    connectWaitingTelegram: 'Pulsa «Iniciar» en el chat de amble que se ha abierto en Telegram. Cuando llegue, esto cambia solo.',
+    connectedTelegram: 'Telegram conectado. Te escribo por ahí.',
+    unavailableTelegram: 'Telegram aún no está disponible.',
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',

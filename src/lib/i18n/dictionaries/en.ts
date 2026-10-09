@@ -467,6 +467,7 @@ export const en = {
     linked: (name: string | null) =>
       `Done${name ? `, ${name}` : ''}. I’ll only write to you here when something deserves your attention: offers that truly fit and how your applications are going. And ask me anything about your search. I’m amble’s AI agent.`,
     unknown: 'Hi, I’m amble’s AI agent. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
+    unknownTelegram: 'Hi, I’m amble’s AI agent. To talk to me here, go to app.amble.fyi and connect Telegram from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
     // The second and last time, a week later.
@@ -484,6 +485,13 @@ export const en = {
     connected: 'WhatsApp connected. I’ll write to you there.',
     disconnect: 'Disconnect',
     unavailable: 'WhatsApp isn’t available yet.',
+    // Telegram (#18): the same Rep, there.
+    connectTitleAny: 'Your Rep, on WhatsApp or Telegram',
+    connectLeadAny: 'Choose where I write to you: there I only tell you when something deserves your attention (offers that truly fit and how your applications are going), and you can ask me anything about your search.',
+    connectTelegram: 'Connect Telegram',
+    connectWaitingTelegram: 'Tap «Start» in amble’s chat that opened in Telegram. When it arrives, this changes on its own.',
+    connectedTelegram: 'Telegram connected. I’ll write to you there.',
+    unavailableTelegram: 'Telegram isn’t available yet.',
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',

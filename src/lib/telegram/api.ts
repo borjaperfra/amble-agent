@@ -57,9 +57,21 @@ function keyboard(buttons: TelegramButton[] | undefined) {
   return usable.length ? { reply_markup: { inline_keyboard: usable.map((button) => [{ text: button.title, callback_data: button.payload }]) } } : {}
 }
 
+// What amble writes is in WhatsApp's marks (*bold*, _italics_): said in
+// Telegram's HTML, everything else escaped so a < in an offer is a <.
+export function asTelegramHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,;:!?])/gm, '$1<i>$2</i>')
+}
+
 // Telegram takes 4096 characters a message: a longer answer goes in parts,
 // the buttons under the last.
-const MAX_TEXT = 4096
+// Escaped, the words grow a little: cut with room to spare.
+const MAX_TEXT = 3800
 
 function parts(text: string): string[] {
   const out: string[] = []
@@ -79,7 +91,8 @@ export async function sendText(config: TelegramConfig, chatId: string, text: str
   for (const [index, piece] of pieces.entries()) {
     last = await call<{ message_id?: number }>(config, 'sendMessage', {
       chat_id: chatId,
-      text: piece,
+      text: asTelegramHtml(piece),
+      parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
       ...(index === pieces.length - 1 ? keyboard(buttons) : {}),
     })
@@ -90,7 +103,7 @@ export async function sendText(config: TelegramConfig, chatId: string, text: str
 // A picture (the filled form) with its text and buttons: uploaded with the
 // message, never left at an address. A caption holds 1024 characters: past
 // that, the text follows on its own.
-const MAX_CAPTION = 1024
+const MAX_CAPTION = 900
 
 export async function sendPhoto(
   config: TelegramConfig,
@@ -102,7 +115,8 @@ export async function sendPhoto(
   form.set('chat_id', chatId)
   form.set('photo', new Blob([new Uint8Array(params.image)], { type: params.filename.endsWith('.png') ? 'image/png' : 'image/jpeg' }), params.filename)
   if (short) {
-    form.set('caption', params.text)
+    form.set('caption', asTelegramHtml(params.text))
+    form.set('parse_mode', 'HTML')
     const markup = keyboard(params.buttons)
     if ('reply_markup' in markup) form.set('reply_markup', JSON.stringify(markup.reply_markup))
   }

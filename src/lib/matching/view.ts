@@ -1,8 +1,7 @@
 import { applicationCv, savedAnswers } from '../apply/answers'
 import { canFillForms } from '../apply/chrome'
 import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
-import { linkOf } from '../whatsapp/link'
-import { zernioConfig } from '../whatsapp/zernio'
+import { chatAvailability } from '../channel/reach'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { getDb } from '../db/db'
@@ -452,7 +451,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     sent: wantedAll.filter((item) => item.progress === 'applied'),
     dropped: wantedAll.filter((item) => item.progress === 'dropped'),
     applicant: { cv: applicationCv(candidate.id)?.filename ?? null, answers: savedAnswers(candidate.id), canFill: canFillForms() },
-    whatsapp: { available: zernioConfig() !== null, linked: linkOf(candidate.id) !== null },
+    whatsapp: chatAvailability(candidate.id),
     decided: decisions.size,
     drought: fits.length + maybe.length === 0 && withheld === 0 ? droughtOf(candidate.id, discarded) : null,
   }

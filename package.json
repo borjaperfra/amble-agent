@@ -15,7 +15,8 @@
     "whatsapp:templates": "tsx scripts/whatsapp-templates.ts",
     "resolve-boards": "tsx --env-file-if-exists=.env.local scripts/resolve-boards.ts",
     "verify-board": "tsx scripts/verify-board.ts",
-    "db:pull": "tsx scripts/db-pull.ts"
+    "db:pull": "tsx scripts/db-pull.ts",
+    "telegram:webhook": "tsx scripts/telegram-webhook.ts"
   },
   "dependencies": {
     "next": "16.3.5",

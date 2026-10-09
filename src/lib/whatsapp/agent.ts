@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { reachOf } from '../channel/reach'
 import { getDb } from '../db/db'
 import { listWanted } from '../db/matching'
 import { candidateById, isSearchPaused, listCapabilities, listUncertainties } from '../db/repo'
@@ -32,9 +33,9 @@ import { isKnownMaliciousLink } from '../net/reputation'
 // that takes something off it, only on their yes). Anything about amble
 // itself reaches the owner.
 
-export const AGENT_VERSION = 'a14'
+export const AGENT_VERSION = 'a15'
 
-const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them on WhatsApp. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
+const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them in a chat app: the one named in "channel" (WhatsApp or Telegram). Wherever these rules say WhatsApp, read the app they are on, and name that one to them. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
 WHAT YOU CAN DO, and nothing else:
 - Answer from what you know about them (below).
@@ -364,6 +365,8 @@ function contextFor(candidateId: string, message: string) {
   }[]
   return {
     // With the weekday, so "on Thursday" can become a date.
+    // The chat app they are writing from.
+    channel: reachOf(candidateId)?.kind === 'telegram' ? 'Telegram' : 'WhatsApp',
     today: `${new Date().toISOString().slice(0, 10)} (${new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'Europe/Madrid' }).format(new Date())})`,
     remindersAhead: pendingReminders(candidateId),
     // An interview question asked on WhatsApp, still to be answered.
