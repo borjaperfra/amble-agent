@@ -117,7 +117,7 @@ export function carryDecision(row: { verdict: MatchRow['verdict']; gates: Gate[]
   }
 
   const fit = row.explanation.roleFit?.fit
-  if (fit === 'wrong_role' || fit === 'below_level') {
+  if (fit === 'wrong_role' || fit === 'below_level' || fit === 'above_level') {
     const hardKept = before.hardFilters.every(([id, words]) => after.hardFilters.some(([otherId, otherWords]) => otherId === id && otherWords === words))
     const judgedOnTheSame =
       same(before.capabilities, after.capabilities) && same(before.experience, after.experience) && same(before.strong, after.strong) && hardKept && nothingNewSpared

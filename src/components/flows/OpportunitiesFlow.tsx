@@ -840,6 +840,12 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
             ? t.opportunities.wrongRole(reason.text)
             : reason.kind === 'below_level'
               ? t.opportunities.belowLevel(reason.text)
+              : reason.kind === 'above_level'
+              ? t.opportunities.aboveLevel(reason.text)
+              : reason.kind === 'salary_estimate'
+              ? t.opportunities.salaryEstimate(estimateRange(reason.estimate))
+              : reason.kind === 'office_abroad'
+              ? t.opportunities.officeAbroad
               : reason.kind === 'filter'
               ? t.opportunities.brokeFilter(reason.rule)
               : reason.kind === 'salary_floor'
@@ -862,7 +868,7 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
           {(reason.kind === 'filter' || reason.kind === 'salary_floor' || reason.kind === 'language') && reason.quote && (
             <span className={styles.discardQuote}> — “{reason.quote}”</span>
           )}
-          {(reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere') && reason.places && (
+          {(reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere' || reason.kind === 'office_abroad') && reason.places && (
             <span className={styles.discardQuote}> — {reason.places}</span>
           )}
         </p>

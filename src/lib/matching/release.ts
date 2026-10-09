@@ -5,6 +5,7 @@ import type { Explanation } from './assess'
 import { buildMatchingProfile } from './profile'
 import { storedRoleQuery } from './role-query'
 import { currentMatchKey, placeFit } from './run'
+import { estimatedShort, estimatesFor } from '../salary/estimate'
 
 // How offers reach a person: a few at a time, never all the reader found.
 // Thirty offers on the first visit read as a list to sift, not as a Rep that
@@ -40,7 +41,7 @@ function setupReadMatches(candidateId: string): ReturnType<typeof listMatchesFor
   return keys.flatMap((row) => listMatchesForKey(candidateId, row.profile_hash))
 }
 
-interface Waiting {
+export interface Waiting {
   opportunityId: string
   fits: boolean
   near: number
@@ -67,6 +68,22 @@ export function releaseDue(candidateId: string): Set<string> {
   const room = !first || first >= dayAgo ? FIRST_RELEASE - released.size : PER_DAY - (lastDay ?? 0)
   if (room <= 0) return released
 
+  const chosen = waitingToRelease(candidateId, released).slice(0, room)
+  if (chosen.length > 0) {
+    const insert = prepared('INSERT OR IGNORE INTO offer_releases (candidate_id, opportunity_id, released_at) VALUES (?, ?, ?)')
+    const at = now()
+    inTransaction(() => {
+      for (const item of chosen) insert.run(candidateId, item.opportunityId, at)
+    })
+    for (const item of chosen) released.add(item.opportunityId)
+  }
+  return released
+}
+
+// What is still to be released to them, in the order it would be: the
+// next ones first.
+export function waitingToRelease(candidateId: string, released: Set<string> = releasedIds(candidateId)): Waiting[] {
+  const db = getDb()
   const query = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))
   const decisions = listDecisions(candidateId)
   const sent = new Set(
@@ -101,19 +118,12 @@ export function releaseDue(candidateId: string): Set<string> {
       publishedAt: at,
     })
   }
-  waiting.sort(
+  // Estimated below their floor, publishing none: set aside, not released (#20).
+  const estimates = estimatesFor(waiting.filter((item) => !item.salary).map((item) => item.opportunityId))
+  const floor = query?.salaryFloor ?? null
+  const due = waiting.filter((item) => item.salary || !estimatedShort(estimates.get(item.opportunityId), floor))
+  return due.sort(
     (a, b) =>
       Number(b.fits) - Number(a.fits) || a.near - b.near || Number(b.fresh) - Number(a.fresh) || Number(b.salary) - Number(a.salary) || b.publishedAt.localeCompare(a.publishedAt),
   )
-
-  const chosen = waiting.slice(0, room)
-  if (chosen.length > 0) {
-    const insert = prepared('INSERT OR IGNORE INTO offer_releases (candidate_id, opportunity_id, released_at) VALUES (?, ?, ?)')
-    const at = now()
-    inTransaction(() => {
-      for (const item of chosen) insert.run(candidateId, item.opportunityId, at)
-    })
-    for (const item of chosen) released.add(item.opportunityId)
-  }
-  return released
 }

@@ -96,7 +96,8 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
   }))
   const rank = (match: Listed) => payRank({ salary: publishedSalary(match), estimate: match.estimate })
   const near = (match: Listed) => (query ? placeFit(match.location, query) : 1)
-  return listed.sort((a, b) => near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
+  // Estimated below their floor, publishing none: set aside, never sent (#20).
+  return listed.filter((match) => match.estimate?.belowFloor == null).sort((a, b) => near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
 }
 
 function publishedSalary(match: MatchListing): string | null {

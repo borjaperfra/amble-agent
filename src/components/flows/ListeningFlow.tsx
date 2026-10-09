@@ -134,6 +134,12 @@ function asideReason(reason: DiscardReason | null, t: Dictionary['listening']): 
       return t.weekReasons.wrongRole
     case 'below_level':
       return t.weekReasons.belowLevel
+    case 'above_level':
+      return t.weekReasons.aboveLevel
+    case 'salary_estimate':
+      return t.weekReasons.salaryEstimate
+    case 'office_abroad':
+      return t.weekReasons.officeAbroad
     case 'salary_floor':
       return t.weekReasons.salaryFloor
     case 'language':

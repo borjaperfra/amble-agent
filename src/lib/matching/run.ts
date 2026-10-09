@@ -1,4 +1,5 @@
 import { getDb, inTransaction } from '../db/db'
+import { recheckNextReleases } from './recheck'
 import { candidateById, listCapabilities, listListeningCandidateIds, now } from '../db/repo'
 import { assessedOpportunityIds, hasAnyMatch, insertMatch, type MatchVerdict } from '../db/matching'
 import { descriptionsOf, listCompanies, listOpenOpportunities, type OpenOpportunity } from '../db/opportunities'
@@ -49,6 +50,8 @@ export function stopStartingReads(): void {
 
 export interface MatchingStats {
   profileHash: string
+  // Judgments next to be shown, made with older rules, judged again in this read (recheck.ts).
+  rechecked?: number
   open: number
   prefilterPassed: number
   prefilterOut: Record<string, number>
@@ -511,7 +514,9 @@ export async function runListening(options: { limit?: number; until?: number } =
   const matching = await Promise.all(
     listListeningCandidateIds().filter((candidateId) => !firstReads.running.has(candidateId)).map(async (candidateId): Promise<CandidatePass> => {
       try {
-        return { candidateId, stats: await runMatching({ candidateId, limit: options.limit, open, deadline }) }
+        // What is next to be shown, judged with older rules: judged again in this read.
+        const rechecked = recheckNextReleases(candidateId)
+        return { candidateId, stats: { ...(await runMatching({ candidateId, limit: options.limit, open, deadline })), rechecked } }
       } catch (error) {
         return { candidateId, error: error instanceof Error ? error.message : 'matching failed' }
       }

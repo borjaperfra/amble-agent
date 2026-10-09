@@ -7,7 +7,7 @@ import { getPreparedApplication, type PreparedApplication } from '../apply/prepa
 import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
-import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
+import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
 import { workplaceShown } from './workplace'
@@ -51,6 +51,7 @@ export interface FoundOpportunity {
 export type DiscardReason =
   | { kind: 'wrong_role'; text: string }
   | { kind: 'below_level'; text: string }
+  | { kind: 'above_level'; text: string }
   | { kind: 'filter'; rule: string; quote: string | null }
   | { kind: 'salary_floor'; quote: string | null }
   | { kind: 'language'; quote: string | null }
@@ -60,6 +61,10 @@ export type DiscardReason =
   // Office days, and its offices are only where they would not go (set aside
   // on what the offer states: facts.ts).
   | { kind: 'office_elsewhere'; places: string | null }
+  // Not remote, and only in countries they did not ask for.
+  | { kind: 'office_abroad'; places: string | null }
+  // It publishes no salary, and what such roles pay is below their floor.
+  | { kind: 'salary_estimate'; estimate: ShownEstimate }
   // The posting's text could not be read: judged on its title, never shown.
   | { kind: 'unread' }
   // None of their rules failed, but one could not be checked: why, in the assessor's words.
@@ -172,9 +177,9 @@ function droughtOf(candidateId: string, discarded: DiscardedOpportunity[]): Drou
     // What set it aside first: one reason per offer.
     const reason = offer.reasons[0]
     if (!reason) continue
-    if (reason.kind === 'wrong_role' || reason.kind === 'below_level') add('role')
-    else if (reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere') add('place')
-    else if (reason.kind === 'salary_floor') add('pay')
+    if (reason.kind === 'wrong_role' || reason.kind === 'below_level' || reason.kind === 'above_level') add('role')
+    else if (reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere' || reason.kind === 'office_abroad') add('place')
+    else if (reason.kind === 'salary_floor' || reason.kind === 'salary_estimate') add('pay')
     else if (reason.kind === 'language') add('language')
     else if (reason.kind === 'unread') add('unread')
     else if (reason.kind === 'filter' || reason.kind === 'unverified') add('rule', reason.rule)
@@ -329,6 +334,17 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     const thisWeek = !stale && Date.parse(match.created_at) >= since
     if (thisWeek) read++
 
+    // Shown, but publishing no salary and estimated below their floor: set
+    // aside with that reason, unless they already answered it (#20).
+    const estimate = match.verdict === 'show' && !salaryText(match) ? shownEstimate(estimates.get(match.opportunity_id), floor) : null
+    if (estimate?.belowFloor != null && !decision && !match.response && !sentOnWhatsapp.has(match.opportunity_id)) {
+      if (match.closed_at) continue
+      const reason: DiscardReason = { kind: 'salary_estimate', estimate }
+      discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons: [reason], response, stale })
+      if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason, at: match.created_at })
+      continue
+    }
+
     if (match.verdict === 'show') {
       if (!released.has(match.opportunity_id) && !decision && !match.response && !sentOnWhatsapp.has(match.opportunity_id)) {
         if (!match.closed_at && !stale) withheld++
@@ -369,11 +385,13 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     const reasons: DiscardReason[] = []
     if (explanation.roleFit.fit === 'wrong_role') reasons.push({ kind: 'wrong_role', text: explanation.roleFit.reason })
     if (explanation.roleFit.fit === 'below_level') reasons.push({ kind: 'below_level', text: explanation.roleFit.reason })
+    if (explanation.roleFit.fit === 'above_level') reasons.push({ kind: 'above_level', text: explanation.roleFit.reason })
     for (const gate of gates) {
       if (gate.ruleId === REMOTE_UNCONFIRMED_GATE) reasons.push({ kind: 'remote_unconfirmed', places: gate.quote })
       else if (gate.ruleId === REMOTE_ELSEWHERE_GATE) reasons.push({ kind: 'remote_elsewhere', places: gate.quote })
       else if (gate.ruleId === REMOTE_COUNTRIES_GATE) reasons.push({ kind: 'remote_countries', places: gate.quote })
       else if (gate.ruleId === OFFICE_ELSEWHERE_GATE) reasons.push({ kind: 'office_elsewhere', places: gate.quote })
+      else if (gate.ruleId === OFFICE_ABROAD_GATE) reasons.push({ kind: 'office_abroad', places: gate.quote })
       else if (gate.result !== 'fail') continue
       else if (gate.ruleId === SALARY_FLOOR_GATE) reasons.push({ kind: 'salary_floor', quote: gate.quote })
       else if (gate.ruleId === LANGUAGE_GATE) reasons.push({ kind: 'language', quote: gate.quote })

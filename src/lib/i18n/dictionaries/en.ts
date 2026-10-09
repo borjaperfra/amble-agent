@@ -213,12 +213,15 @@ export const en = {
     weekReasons: {
       wrongRole: 'Not your role',
       belowLevel: 'Below your level',
+      aboveLevel: 'Well above your level',
+      salaryEstimate: 'Pays below your floor',
       salaryFloor: 'Pay below your floor',
       language: 'Needs another language',
       remoteUnconfirmed: 'Never says remote',
       remoteElsewhere: 'Remote, from outside Europe',
       remoteCountries: 'Remote, only from other countries',
       officeElsewhere: 'Office elsewhere',
+      officeAbroad: 'Only in another country',
       unread: 'Couldn’t read the posting',
       unverified: 'Couldn’t check it',
       noReason: 'Nothing to hold it up',
@@ -735,6 +738,7 @@ export const en = {
     discardedLead: 'Offers I read and decided you wouldn’t want. If I got one wrong, tell me.',
     wrongRole: (reason: string) => `Not your kind of role: ${reason}`,
     belowLevel: (reason: string) => `Below your level: ${reason}`,
+    aboveLevel: (reason: string) => `Well above your level: ${reason}`,
     brokeFilter: (rule: string) => `It breaks “${rule}”`,
     notEnoughReasons: 'I couldn’t find a real reason to show it to you.',
     // An offer judged before their latest change of rules, not yet judged again.
@@ -749,6 +753,8 @@ export const en = {
     remoteElsewhere: 'It’s remote, but every office it lists is outside Europe and it never says it can be done from here',
     remoteCountries: 'It’s remote, but it names the countries it can be done from and yours isn’t one of them',
     officeElsewhere: 'It asks for office days, and its office isn’t somewhere you’d go',
+    officeAbroad: 'It isn’t remote, and it’s only in another country',
+    salaryEstimate: (range: string) => `It publishes no salary, and roles like it usually pay ${range}: below your floor`,
     wantedAnyway: 'I’d want this one',
     movedToWanted: 'Moved to You want these.',
     // A new offer they had already sent on their own.

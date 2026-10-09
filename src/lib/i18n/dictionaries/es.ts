@@ -215,12 +215,15 @@ export const es: Dictionary = {
     weekReasons: {
       wrongRole: 'No es tu rol',
       belowLevel: 'Por debajo de tu nivel',
+      aboveLevel: 'Muy por encima de tu nivel',
       salaryFloor: 'Salario bajo tu suelo',
+      salaryEstimate: 'Pagan por debajo de tu suelo',
       language: 'Pide otro idioma',
       remoteUnconfirmed: 'No dice si es remoto',
       remoteElsewhere: 'Remoto, pero desde fuera de Europa',
       remoteCountries: 'Remoto, pero solo desde otros países',
       officeElsewhere: 'Oficina en otro sitio',
+      officeAbroad: 'Solo en otro país',
       unread: 'No pude leer la oferta',
       unverified: 'No pude comprobarlo',
       noReason: 'Nada que la sostenga',
@@ -731,6 +734,7 @@ export const es: Dictionary = {
     discardedLead: 'Ofertas que he leído y he decidido que no querrías. Si me he equivocado en alguna, dímelo.',
     wrongRole: (reason: string) => `No es tu tipo de rol: ${reason}`,
     belowLevel: (reason: string) => `Por debajo de tu nivel: ${reason}`,
+    aboveLevel: (reason: string) => `Muy por encima de tu nivel: ${reason}`,
     brokeFilter: (rule: string) => `Incumple «${rule}»`,
     notEnoughReasons: 'No he encontrado una razón real para enseñártela.',
     // An offer judged before their latest change of rules, not yet judged again.
@@ -745,6 +749,8 @@ export const es: Dictionary = {
     remoteElsewhere: 'Es remoto, pero todas sus sedes están fuera de Europa y no dice que se pueda hacer desde aquí',
     remoteCountries: 'Es remoto, pero nombra los países desde los que se puede trabajar y el tuyo no está',
     officeElsewhere: 'Pide días de oficina, y su oficina no está donde aceptarías ir',
+    officeAbroad: 'No es en remoto, y solo está en otro país',
+    salaryEstimate: (range: string) => `No publica salario, y estos puestos suelen pagar ${range}: por debajo de tu suelo`,
     wantedAnyway: 'Esta sí me interesa',
     movedToWanted: 'La he pasado a Te interesan.',
     // A new offer they had already sent on their own.

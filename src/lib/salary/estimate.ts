@@ -224,7 +224,7 @@ export function belowFloor(estimate: SalaryEstimate | null, floor: { amount: num
 
 // For ordering: a published salary first, then an estimate that reaches the
 // floor (or any, with no floor), then nothing known, then an estimate below
-// the floor. Never a reason to leave an offer out.
+// the floor (set aside before it is shown: estimatedShort).
 export function payRank(item: { salary: string | null; estimate: ShownEstimate | null }): number {
   if (item.salary) return 3
   if (!item.estimate) return 1
@@ -257,6 +257,14 @@ export function shownEstimate(estimate: SalaryEstimate | null | undefined, floor
   const guessed = estimate.key?.levelFrom === 'default'
   const short = floor !== null && (guessed ? farBelowFloor(estimate, floor) : belowFloor(estimate, floor))
   return { min, max, source, year, url, role, experience, place, belowFloor: short && floor ? floor.amount : null }
+}
+
+// An offer that publishes no salary and whose estimate falls below their
+// floor (as the line under it would say) is set aside, not given to them:
+// on the screens, in the few released each day and on WhatsApp (#20). On a
+// guessed level only a gap no level closes counts, as for the line.
+export function estimatedShort(estimate: SalaryEstimate | null | undefined, floor: { amount: number; currency: string } | null): boolean {
+  return shownEstimate(estimate, floor)?.belowFloor != null
 }
 
 // On a guessed level, only a gap no level of the table closes is worth saying.

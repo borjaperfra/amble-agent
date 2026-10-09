@@ -407,7 +407,7 @@ function presentVerdict(verdict: SharedVerdict, w: (typeof dictionaries)['es']['
   if (match.verdict === 'discarded') {
     const failed = gates.find((gate) => gate.result === 'fail')
     const why =
-      explanation.roleFit.fit === 'wrong_role' || explanation.roleFit.fit === 'below_level'
+      explanation.roleFit.fit === 'wrong_role' || explanation.roleFit.fit === 'below_level' || explanation.roleFit.fit === 'above_level'
         ? explanation.roleFit.reason
         : (failed?.note || failed?.quote || explanation.roleFit.reason)
     return { text: [head, '', w.sharedNo, wholeSentences(why)].filter(Boolean).join('\n') }
