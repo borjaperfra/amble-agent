@@ -253,6 +253,21 @@
   line-height: 1.45;
 }
 
+/* A row's name with its hint under it: the action stays the last thing on the right. */
+.rowStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowStack > .rowHint,
+.row .rowStack > .rowHint {
+  flex: none;
+  text-align: left;
+  max-width: none;
+}
+
 .footer {
   flex-direction: column;
   align-items: flex-end;

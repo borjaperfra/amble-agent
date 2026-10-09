@@ -204,14 +204,18 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
             linkedins.map((source) => chip(source, 'LinkedIn'))
           ) : (
             <div className={`${styles.row} ${styles.enter}`}>
-              <span className={styles.rowLabel}>LinkedIn</span>
+              {/* Name and hint stacked, so «Añadir» stays at the right edge like
+                  the other rows' (#27). A profile URL cannot be read; the
+                  profile's own PDF can. */}
+              <span className={styles.rowStack}>
+                <span className={styles.rowLabel}>LinkedIn</span>
+                <span className={styles.rowHint}>{t.onboarding.linkedinHint}</span>
+              </span>
               <span className={styles.rowRight}>
                 <button type="button" className="text-btn" disabled={busy} onClick={() => linkedinInputRef.current?.click()} aria-label={t.onboarding.linkedinUploadLabel}>
                   {pending === 'linkedin' ? t.onboarding.reading : t.common.add}
                 </button>
               </span>
-              {/* A profile URL cannot be read; the profile's own PDF can. */}
-              <span className={styles.rowHint}>{t.onboarding.linkedinHint}</span>
             </div>
           )}
           {errorAt('linkedin')}
