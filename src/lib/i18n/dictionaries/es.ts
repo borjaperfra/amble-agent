@@ -296,6 +296,13 @@ export const es: Dictionary = {
     closeLabel: 'Cerrar evidencia',
     confirmed: 'Lo confirmaste tú',
     private: 'Privado. Solo tú puedes verlo.',
+    addTitle: '¿Tienes algo que lo demuestre?',
+    addHint: 'Cuéntame un proyecto, un resultado o cómo lo hiciste, o pega un enlace (tu web, un repositorio, algo que escribiste).',
+    addPlaceholder: 'Por ejemplo: «En 2023 migré el pago de la tienda a Stripe yo sola; bajó un 30 % el abandono.»',
+    addButton: 'Añadir a mi mapa',
+    adding: 'Enviando…',
+    added: 'Gracias. Lo estoy añadiendo a tu mapa: en un par de minutos lo verás aquí.',
+    addFailed: 'No se ha podido enviar. Vuelve a intentarlo.',
   },
   strength: {
     strong: 'Evidencia sólida',
@@ -618,6 +625,7 @@ export const es: Dictionary = {
     // Why what an older CV said no longer counts.
     replacedByNewerCv: 'Sustituido por un CV más reciente.',
     toldOnWhatsApp: 'Contado a tu Rep por WhatsApp',
+    toldOnMap: (capability: string) => `Añadido en tu mapa, sobre «${capability}»`,
     correctedOnWhatsApp: 'Corregido con tu Rep por WhatsApp',
     assistedCeiling: (unverified: number, total: number) =>
       `Por ahora cuenta como algo de evidencia: ${unverified} de ${total} piezas salen de trabajo que hiciste con ayuda de IA y del que aún no me has hablado.`,

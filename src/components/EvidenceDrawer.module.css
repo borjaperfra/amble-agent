@@ -131,6 +131,60 @@
   margin: 0;
 }
 
+/* Proof brought from here (#24). */
+.add {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.addTitle {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.addHint {
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  color: var(--ink-tertiary);
+  margin: 0;
+}
+
+.addText {
+  width: 100%;
+  font: inherit;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  resize: vertical;
+}
+
+.addText:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px var(--moss-wash);
+}
+
+.addDone {
+  font-size: var(--text-body-sm);
+  color: var(--moss-dark);
+  margin: 0;
+}
+
+.addProblem {
+  font-size: var(--text-body-sm);
+  color: var(--clay);
+  margin: 0;
+}
+
 .note {
   margin-top: auto;
   padding-top: 24px;

@@ -294,6 +294,13 @@ export const en = {
     closeLabel: 'Close evidence',
     confirmed: 'You confirmed this',
     private: 'Private. Only you can see this.',
+    addTitle: 'Have something that shows it?',
+    addHint: 'Tell me about a project, a result or how you did it, or paste a link (your site, a repository, something you wrote).',
+    addPlaceholder: 'For example: “In 2023 I moved the shop’s checkout to Stripe on my own; drop-off fell by 30%.”',
+    addButton: 'Add to my map',
+    adding: 'Sending…',
+    added: 'Thank you. I’m adding it to your map: you’ll see it here in a couple of minutes.',
+    addFailed: 'It couldn’t be sent. Please try again.',
   },
   strength: {
     strong: 'Strong evidence',
@@ -621,6 +628,7 @@ export const en = {
     // Why what an older CV said no longer counts.
     replacedByNewerCv: 'Replaced by a newer CV.',
     toldOnWhatsApp: 'Told to your Rep on WhatsApp',
+    toldOnMap: (capability: string) => `Added on your map, about “${capability}”`,
     correctedOnWhatsApp: 'Corrected with your Rep on WhatsApp',
     assistedCeiling: (unverified: number, total: number) =>
       `For now it counts as some evidence: ${unverified} of ${total} pieces come from work you did with AI help and have not yet told me about.`,

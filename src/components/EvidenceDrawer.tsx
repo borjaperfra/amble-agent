@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { postJson } from './api'
 import type { Capability, Evidence } from '@/domains/candidate/types'
 import { useT } from './I18nProvider'
 import styles from './EvidenceDrawer.module.css'
@@ -113,8 +114,58 @@ export default function EvidenceDrawer({
           ))}
         </ul>
 
+        <AddEvidence capabilityId={capability.id} />
+
         <p className={styles.note}>{t.evidence.private}</p>
       </div>
     </div>
+  )
+}
+
+// Proof of this capability, brought from here without waiting for a
+// question (#24): words, a link, or both; taken in in the background.
+function AddEvidence({ capabilityId }: { capabilityId: string }) {
+  const t = useT()
+  const [text, setText] = useState('')
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
+  const [problem, setProblem] = useState<string | null>(null)
+
+  async function send() {
+    if (!text.trim()) return
+    setState('sending')
+    setProblem(null)
+    const { ok, data } = await postJson<{ problems?: string[] }>('/api/career/evidence', { capabilityId, text })
+    if (!ok) {
+      setState('failed')
+      setProblem(data.error ?? null)
+      return
+    }
+    setText('')
+    setState('sent')
+    setProblem(data.problems?.[0] ?? null)
+  }
+
+  return (
+    <section className={styles.add}>
+      <h3 className={styles.addTitle}>{t.evidence.addTitle}</h3>
+      <p className={styles.addHint}>{t.evidence.addHint}</p>
+      <textarea
+        className={styles.addText}
+        value={text}
+        maxLength={4000}
+        rows={3}
+        placeholder={t.evidence.addPlaceholder}
+        onChange={(event) => {
+          setText(event.target.value)
+          if (state !== 'sending') setState('idle')
+        }}
+      />
+      <button type="button" className="btn" onClick={() => void send()} disabled={state === 'sending' || !text.trim()}>
+        {state === 'sending' ? t.evidence.adding : t.evidence.addButton}
+      </button>
+      {state === 'sent' && <p className={styles.addDone}>{t.evidence.added}</p>}
+      {state === 'failed' && <p className={styles.addProblem}>{problem ?? t.evidence.addFailed}</p>}
+      {state === 'sent' && problem && <p className={styles.addProblem}>{problem}</p>}
+    </section>
   )
 }

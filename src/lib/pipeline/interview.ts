@@ -434,6 +434,22 @@ export function takeGapAnswer(
   return turn.id
 }
 
+// Proof of one capability they added from their map (#24): taken in as
+// what they told about it, aimed at it, so it is weighed again with it.
+const MAP_NOTE_REASON =
+  'Nothing was asked: on their profile they added this as proof of one capability ({name}). Extract only what they assert about themselves.'
+
+export function takeMapNote(
+  candidateId: string,
+  capability: { id: string; name: string },
+  words: string,
+  then?: (result: IncorporatedAnswer) => Promise<void>,
+): string {
+  const turn = noteTurn(candidateId, serverText().toldOnMap(capability.name), MAP_NOTE_REASON.replace('{name}', capability.name), [capability.id])
+  takeAnswer(candidateId, turn.id, words, then)
+  return turn.id
+}
+
 // A correction they confirmed. What it makes untrue leaves their map at once
 // (retracted, never deleted: the record keeps what was believed and why it
 // stopped), and their words are then taken in as a note: the right version,
