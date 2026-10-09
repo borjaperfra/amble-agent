@@ -6,7 +6,7 @@ import { dictionaries } from '../i18n/dictionaries'
 import type { Locale } from '../i18n/locale'
 import { runStructuredTask } from '../model/provider'
 import { refreshDerivedProfile } from '../pipeline/graph'
-import { takeCorrection, takeToldNote, type IncorporatedAnswer } from '../pipeline/interview'
+import { takeCorrection, takeGapAnswer, takeToldNote, type IncorporatedAnswer } from '../pipeline/interview'
 import { untrusted, UNTRUSTED_RULE } from '../untrusted'
 import { logMessage } from './conversation'
 import { linkOf } from './link'
@@ -68,6 +68,14 @@ export function takeNote(candidateId: string, words: string): void {
       words,
       afterTaken(candidateId, () => turnId, false),
     )
+  })
+}
+
+// Their answer to one of the questions their map shows as still unknown.
+export function takeGap(candidateId: string, uncertainty: { id: string; capability_id: string | null; description: string }, words: string): void {
+  let turnId = ''
+  withLocale(candidateLocale(candidateById(candidateId)), () => {
+    turnId = takeGapAnswer(candidateId, uncertainty, words, afterTaken(candidateId, () => turnId, false))
   })
 }
 

@@ -317,6 +317,31 @@ export function takeToldNote(candidateId: string, words: string, then?: (result:
   return turn.id
 }
 
+// An answer, on WhatsApp, to something their map shows as still unknown,
+// without being asked it there (#23): taken in as the answer to a question
+// about it, so it can settle it, as the interview's own answers do.
+const GAP_REASON = 'Not asked by the Rep: their profile showed this as still unknown, and they answered it on WhatsApp.'
+
+export function takeGapAnswer(
+  candidateId: string,
+  uncertainty: { id: string; capability_id: string | null; description: string },
+  words: string,
+  then?: (result: IncorporatedAnswer) => Promise<void>,
+): string {
+  const interview = getOrCreateInterview(candidateId)
+  const turn = insertTurn({
+    id: newId('turn'),
+    interview_id: interview.id,
+    idx: listTurns(interview.id).length,
+    question: uncertainty.description,
+    question_reason: GAP_REASON,
+    target_capability_ids: JSON.stringify(uncertainty.capability_id ? [uncertainty.capability_id] : []),
+    target_uncertainty_ids: JSON.stringify([uncertainty.id]),
+  })
+  takeAnswer(candidateId, turn.id, words, then)
+  return turn.id
+}
+
 // A correction they confirmed. What it makes untrue leaves their map at once
 // (retracted, never deleted: the record keeps what was believed and why it
 // stopped), and their words are then taken in as a note: the right version,

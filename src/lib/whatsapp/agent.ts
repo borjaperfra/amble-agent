@@ -16,6 +16,7 @@ import { recentMessages } from './conversation'
 import { followupOutcomes } from './followups'
 import { awaitedReason, awaitingOf, type ProposedPreference } from './offers'
 import { pendingInterviewQuestion } from './interview'
+import { getMapViewModel } from '../view'
 import { describeChange } from './profile'
 import { pendingReminders } from './reminders'
 import { isKnownMaliciousLink } from '../net/reputation'
@@ -31,7 +32,7 @@ import { isKnownMaliciousLink } from '../net/reputation'
 // that takes something off it, only on their yes). Anything about amble
 // itself reaches the owner.
 
-export const AGENT_VERSION = 'a13'
+export const AGENT_VERSION = 'a14'
 
 const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them on WhatsApp. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
@@ -46,6 +47,7 @@ WHAT YOU CAN DO, and nothing else:
 - Keep why an offer does not fit them: when waitingForWhyItDoesNotFit is set, they just marked that offer as not fitting and were asked why. If their message gives the reason, even in a few words ("too junior", "no Barcelona"), set "reasonItDoesNotFit" to it in their words and thank them in a line, without a new question. If their message is about something else, leave it null and answer what they wrote.
 - Propose a change to what you listen for; it applies only when they confirm.
 - Pause the search until further notice, or resume it, when they ask; it applies only when they confirm. While it is paused (searchPaused), amble reads nothing for them and writes nothing first; you still answer when they write.
+- Take an answer to what their map shows as still unknown: mapGaps are the questions the "still unknown" part of their map shows them, each with its id, which they may answer here without being asked. When their message answers one of them (it says what that question asks, even briefly), set "action" to {"type": "answers_gap", "gap": its id} and say in a line that you are adding it to their map; amble takes it in as the answer to that question and tells them what it changed. This comes before "profile_note" when both fit, and never when it answers pendingInterviewQuestion ("answersInterview" then).
 - Keep their map up to date from what they tell you (their map is the professional profile amble built from what they shared, which every offer is judged against). When their message adds something about their own work or experience that is not in what you know (a project, a responsibility, a result, a skill, how long), set "action" to {"type": "profile_note"} and say in a line that you are adding it to their map, never that it is already there: amble takes it from their own words, as it takes an answer to an interview question, and then tells them what it added. When their message says something in their map is wrong (not true, not theirs, the team's or someone else's work, a wrong number, title or date: "eso lo hizo el equipo, no yo", "son 6 años, no 4"), set "action" to {"type": "profile_correction", "what": what they say is wrong, and the right version if they give it, in a sentence close to their words} and say in one short line that you are looking for it in their map, and nothing more ("Vale, lo busco en tu mapa."): what would come off it follows on its own, with buttons to confirm, so do not describe it or the buttons. Only for what they say themselves about their own work: never for what you suggest or infer, a question about what their map says, or advice on how to present something. When their message answers pendingInterviewQuestion, that is "answersInterview", not this.
 - Change the name you call them by, or the language you talk to them in (Spanish or English, here and in the app), when they ask: set "action" to {"type": "set_name", "name": the name as they wrote it} or {"type": "set_language", "language": "es"|"en"}, and ask it as a question in a line ("¿Te llamo Bea a partir de ahora?"); they get buttons to confirm, so never say it is done. If it is already so (name, language), say so in a line and set no action.
 - Read a new CV, or their LinkedIn profile as a PDF: they send the file here, in this chat, and amble reads it into their map and tells them what it added. If they ask how to update their CV or their map with a document, tell them that.
@@ -84,7 +86,7 @@ Do not remind them of something still pending (a change to confirm, an offer to 
 
 "reaction": one emoji to react to their message with, as a person would, only for real news or real thanks (good news: 🙌, thanks: 👍); null otherwise, which is most of the time.
 
-Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"offer_closed"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "name": string|null, "language": "es"|"en"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
+Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"offer_closed"|"answers_gap"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "gap": string|null, "name": string|null, "language": "es"|"en"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
 
 const INTENTS = ['offer', 'applications', 'preferences', 'pause', 'profile', 'coach', 'amble', 'smalltalk', 'off_topic', 'interview'] as const
 export type Intent = (typeof INTENTS)[number]
@@ -106,6 +108,8 @@ export type AgentAction =
   | { type: 'profile_correction'; what: string }
   // A link of their own work: read into their map as a document is.
   | { type: 'read_link' }
+  // Their answer to one of the map's open questions (mapGaps), by its id.
+  | { type: 'answers_gap'; gap: string }
   | { type: 'set_name'; name: string }
   | { type: 'set_language'; language: Locale }
 
@@ -148,6 +152,8 @@ const agentSchema = z.preprocess(
           ? { type, name: nameOf(action.name) }
           : action && type === 'set_language' && (action.language === 'es' || action.language === 'en')
           ? { type, language: action.language }
+          : action && type === 'answers_gap' && text(action.gap, 80)
+          ? { type, gap: text(action.gap, 80) }
           : action && type === 'offer_closed' && text(action.company, 120)
           ? { type, company: text(action.company, 120) }
           : action && (type === 'evaluate_posting' || text(action.company, 120)) && (type === 'prepare_application' || type === 'evaluate_posting' || (type === 'application_update' && (STATUSES as readonly string[]).includes(status)))
@@ -174,6 +180,7 @@ const agentSchema = z.preprocess(
         z.object({ type: z.literal('prepare_application'), company: z.string() }),
         z.object({ type: z.literal('application_update'), company: z.string(), status: z.enum(STATUSES) }),
         z.object({ type: z.literal('offer_closed'), company: z.string() }),
+        z.object({ type: z.literal('answers_gap'), gap: z.string() }),
         z.object({ type: z.literal('evaluate_posting'), company: z.string(), title: z.string() }),
         z.object({ type: z.literal('pause_search'), checkIn: z.string().nullable() }),
         z.object({ type: z.literal('resume_search') }),
@@ -361,6 +368,8 @@ function contextFor(candidateId: string, message: string) {
     remindersAhead: pendingReminders(candidateId),
     // An interview question asked on WhatsApp, still to be answered.
     pendingInterviewQuestion: pendingInterviewQuestion(candidateId)?.question ?? null,
+    // What their map shows them as still unknown, as it shows it.
+    mapGaps: mapGapsOf(candidateId),
     name: candidate.name,
     // The language you talk to them in, here and in the app.
     language: candidateLocale(candidate) === 'es' ? 'Spanish' : 'English',
@@ -542,4 +551,19 @@ export async function answerMessage(candidateId: string, message: string, langua
   const crisis = soundsLikeCrisis(message)
   if (crisis && !reply.includes(HELP_LINE)) reply = `${reply}\n\n${dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.helpLine}`
   return { ...data, reply, forward: data.forward || crisis }
+}
+
+// The questions the map shows under what is still unknown (MapView shows
+// three): the ones someone may answer here unasked.
+export const MAP_GAPS_SHOWN = 3
+
+export function mapGapsOf(candidateId: string): { id: string; about: string; question: string }[] {
+  try {
+    const candidate = candidateById(candidateId)
+    return getMapViewModel(candidateId, candidateLocale(candidate))
+      .gaps.slice(0, MAP_GAPS_SHOWN)
+      .map((gap) => ({ id: gap.id, about: gap.name, question: gap.explanation }))
+  } catch {
+    return []
+  }
 }

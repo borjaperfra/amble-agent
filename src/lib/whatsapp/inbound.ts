@@ -1,5 +1,5 @@
 import { getDb } from '../db/db'
-import { getCandidate, isSearchPaused, now, type CandidateRow } from '../db/repo'
+import { getCandidate, getUncertainty, isSearchPaused, now, type CandidateRow } from '../db/repo'
 import { emailOwnerAbout, feedbackToday, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
@@ -8,7 +8,7 @@ import { runAction } from './actions'
 import { answerInterviewQuestion, pendingInterviewQuestion, sendTeasedQuestion } from './interview'
 import { leaveReminder, sendTeasedReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
-import { answerMessage, languageOf } from './agent'
+import { answerMessage, languageOf, mapGapsOf } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
@@ -16,7 +16,7 @@ import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settle
 import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
-import { answerProfile, parseProfilePayload, proposeCorrection, proposeLanguage, proposeName, takeNote } from './profile'
+import { answerProfile, parseProfilePayload, proposeCorrection, proposeLanguage, proposeName, takeGap, takeNote } from './profile'
 import { documentName, isDocument, takeDocument, takeLink, type SentAttachment } from './documents'
 import { isMaliciousLink } from '../net/reputation'
 import type { RawOpportunity } from '../sourcing/types'
@@ -316,7 +316,7 @@ async function answerWords(
     buttons = proposeName(candidate.id, answer.action.name)
   } else if (answer.action?.type === 'set_language') {
     buttons = proposeLanguage(candidate.id, answer.action.language)
-  } else if (answer.action?.type === 'profile_note' || answer.action?.type === 'profile_correction') {
+  } else if (answer.action?.type === 'profile_note' || answer.action?.type === 'profile_correction' || answer.action?.type === 'answers_gap') {
     // Their map: after the reply.
   } else if (answer.action) {
     // What it decided to do: prepare an application (offered with buttons),
@@ -335,6 +335,14 @@ async function answerWords(
   // buttons; when nothing there is what they say is wrong, what they said
   // is taken in as told.
   if (!question && answer.action?.type === 'profile_note') takeNote(candidate.id, message)
+  // An answer to a question their map shows: only one it shows now; any
+  // other id the agent gave is taken as what they told.
+  if (!question && answer.action?.type === 'answers_gap') {
+    const gapId = answer.action.gap
+    const gap = mapGapsOf(candidate.id).some((item) => item.id === gapId) ? getUncertainty(gapId) : undefined
+    if (gap && gap.candidate_id === candidate.id && gap.status === 'OPEN') takeGap(candidate.id, gap, message)
+    else takeNote(candidate.id, message)
+  }
   if (!question && answer.action?.type === 'profile_correction') {
     const proposal = await proposeCorrection(candidate.id, message, answer.action.what).then(
       (found) => found ?? 'none',
