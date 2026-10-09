@@ -591,6 +591,7 @@ export const es: Dictionary = {
     machineText:
       'Tu CV lleva texto oculto o instrucciones para sistemas automáticos. Lo he leído sin ese texto, pero así no lo enviaré a empresas: sus filtros suelen detectarlo y descartarlo. Si subes una versión sin él, la usaré.',
     noTextInFile: 'No he podido leer texto de este archivo: puede que sea un escaneo o una foto. Sube el PDF que exportas desde Word, Google Docs o LinkedIn.',
+    cvTooLong: (pages: number) => `Este CV es muy largo (unas ${pages} páginas). Sube una versión de 2 a 4 páginas: con eso tengo bastante para conocerte, y la leo en un momento.`,
     notEnoughText: 'Apenas encuentro texto en este archivo: puede que sea un escaneo o una foto. Sube el PDF que exportas desde Word, Google Docs o LinkedIn.',
     websiteUnreadableDetail: (why: string) => `No he podido leer esta web (${why}). Tu Rep solo ha guardado la URL.`,
     websiteUnreadable: 'No he podido leer esta web. La URL está guardada, pero no he podido leer su texto.',

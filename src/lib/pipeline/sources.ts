@@ -52,6 +52,12 @@ const MIN_VISIBLE_SIZE = 3
 const PAGE_MARGIN = 5
 // A stray footnote mark is not a hidden paragraph.
 const MAX_HIDDEN_CHARS = 40
+// A CV people upload runs 2,500-7,500 characters (one to three pages); one of
+// 28,000 took the model a minute and a half on a good day and timed out for
+// an hour on a slow one, for little a short one would not say. Past this they
+// are asked for a shorter one. LinkedIn's export is what it is: read whole.
+const MAX_CV_CHARS = 16_000
+const CHARS_PER_PAGE = 3_000
 
 interface PdfText {
   pages: string[]
@@ -297,6 +303,11 @@ export async function createFileSource(
   // what is read, and the file is marked so it is never sent on.
   const machineText = hidden.length > MAX_HIDDEN_CHARS || injectionSignals(`${content}\n${hidden}`).length > 0
   content = withoutInjections(content)
+
+  const length = content.replace(/\[page \d+\]/g, '').trim().length
+  if (length > MAX_CV_CHARS && detectSourceSignature(content)?.type !== 'linkedin') {
+    return failed(serverText().cvTooLong(Math.round(length / CHARS_PER_PAGE)))
+  }
 
   // Only now, read and long enough, is anything of it kept.
   fs.mkdirSync(path.dirname(storedPath), { recursive: true })

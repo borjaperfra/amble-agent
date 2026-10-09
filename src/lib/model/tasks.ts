@@ -460,9 +460,9 @@ ${untrusted('document', params.content.slice(0, 60_000))}`
 }
 
 // A CV read into statements and a map weighed write up to 20,000 tokens, in
-// 45-90 s on a good day: twice the usual limit, so a slow hour does not cut
-// them short over and over.
-const LONG_READ_MS = 300_000
+// 45-90 s on a good day: half again the usual limit, so a slow hour does not
+// cut them short over and over. A longer CV is not read (MAX_CV_CHARS).
+const LONG_READ_MS = 180_000
 
 export interface EvidenceForAssessment {
   id: string

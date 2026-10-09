@@ -594,6 +594,7 @@ export const en = {
     machineText:
       "Your CV carries hidden text or instructions for automated systems. I read it without them, but I won't send it to companies like this: their filters tend to spot it and set it aside. Upload a version without it and I'll use that.",
     noTextInFile: "I couldn't read any text from this file: it may be a scan or a photo. Upload the PDF you export from Word, Google Docs or LinkedIn.",
+    cvTooLong: (pages: number) => `This CV is very long (about ${pages} pages). Upload a 2-4 page version: that is plenty for me to get to know you, and I read it in a moment.`,
     notEnoughText: "I can barely find any text in this file: it may be a scan or a photo. Upload the PDF you export from Word, Google Docs or LinkedIn.",
     websiteUnreadableDetail: (why: string) => `I couldn't read this website (${why}). Your Rep stored the URL only.`,
     websiteUnreadable: "I couldn't read this website. The URL is stored, but I couldn't read its text.",
