@@ -205,6 +205,31 @@ function listOf(result: unknown, keys: string[]): unknown[] {
 // How the number stands with Meta, for the owner's health tab: its name and
 // whether it was approved, the business's last event, its sending tier and
 // quality, and each template's review.
+// What Meta last said about the business: an object ({event, violation_info},
+// with when), not a string, so the plain reader above found nothing and the
+// health tab showed no event while a SCAM violation stood (2026-10-09).
+function lastEventOf(account: unknown): string | null {
+  const find = (source: unknown, depth = 0): { status: Record<string, unknown>; event: unknown } | null => {
+    if (!source || typeof source !== 'object' || depth > 3) return null
+    const record = source as Record<string, unknown>
+    if ('lastEvent' in record) return { status: record, event: record.lastEvent }
+    for (const nested of Object.values(record)) {
+      const found = nested && typeof nested === 'object' && !Array.isArray(nested) ? find(nested, depth + 1) : null
+      if (found) return found
+    }
+    return null
+  }
+  const found = find(account)
+  if (!found?.event) return null
+  if (typeof found.event === 'string') return found.event
+  if (typeof found.event !== 'object') return null
+  const event = found.event as Record<string, unknown>
+  const name = typeof event.event === 'string' ? event.event : 'EVENT'
+  const violation = (event.violation_info as Record<string, unknown> | undefined)?.violation_type
+  const at = typeof found.status.lastEventAt === 'string' ? found.status.lastEventAt.slice(0, 10) : null
+  return [name, typeof violation === 'string' ? violation : null, at].filter(Boolean).join(' · ')
+}
+
 export async function whatsappAccountStatus(config: ZernioConfig): Promise<WhatsAppAccountStatus> {
   const [accounts, templates] = await Promise.all([call<unknown>(config, 'GET', '/accounts?platform=whatsapp'), listTemplates(config)])
   const listed = listOf(accounts, ['accounts', 'data'])
@@ -213,12 +238,11 @@ export async function whatsappAccountStatus(config: ZernioConfig): Promise<Whats
     listed.find((entry) => ['_id', 'id', 'accountId'].some((key) => String((entry as Record<string, unknown> | null)?.[key] ?? '') === config.accountId)) ??
     listed[0] ??
     null
-  const businessStatus = account && typeof account === 'object' ? (account as Record<string, unknown>).businessStatus : null
   return {
     displayName: field(account, 'displayName'),
     nameStatus: field(account, 'nameStatus'),
     lastReviewedName: field(account, 'lastReviewedName'),
-    lastEvent: field(businessStatus ?? account, 'lastEvent'),
+    lastEvent: lastEventOf(account),
     messagingLimitTier: field(account, 'messagingLimitTier'),
     qualityRating: field(account, 'qualityRating'),
     templates: listOf(templates, ['data', 'templates']).map((template) => ({
