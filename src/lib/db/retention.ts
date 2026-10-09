@@ -1,4 +1,7 @@
-import { getDb, inTransaction } from './db'
+import fs from 'node:fs'
+import path from 'node:path'
+import { volumeUsage } from './backup'
+import { DATA_DIRECTORY, getDb, inTransaction } from './db'
 import { now } from './repo'
 
 // How long offers are kept. An offer is worth storing while it is open, and
@@ -34,7 +37,10 @@ import { now } from './repo'
 // A call that failed keeps its answer the six months: it is what explains it.
 //
 // Rows deleted do not shrink the file on their own; the file is compacted when
-// a fifth of it is free.
+// a fifth of it is free, and once a week anyway: rows deleted here and there
+// leave pages half empty that are not counted free (on a replica, 471 MB
+// became 319 with 13 % of it free). Compacting writes the whole database once
+// more on the volume, so it waits for room.
 
 const DAY_MS = 24 * 60 * 60 * 1000
 export const STALE_AFTER_DAYS = 21
@@ -46,6 +52,8 @@ export const STRIP_ROUTINE_OUTPUT_AFTER_DAYS = 14
 const ROUTINE_TASKS = ['assess_opportunity', 'read_offer_facts']
 export const FORGET_MODEL_RUNS_AFTER_DAYS = 365
 const VACUUM_FREE_SHARE = 0.2
+const VACUUM_EVERY_DAYS = 7
+const LAST_VACUUM_FILE = path.join(DATA_DIRECTORY, 'last-vacuum')
 
 export interface RetentionStats {
   closedStale: number
@@ -121,10 +129,20 @@ export function applyRetention(at: string = now()): RetentionStats {
 
   const pages = (db.prepare('PRAGMA page_count').get() as { page_count: number }).page_count
   const free = (db.prepare('PRAGMA freelist_count').get() as { freelist_count: number }).freelist_count
-  if (pages > 0 && free / pages >= VACUUM_FREE_SHARE) {
+  let last = 0
+  try {
+    last = Date.parse(fs.readFileSync(LAST_VACUUM_FILE, 'utf8').trim()) || 0
+  } catch {
+    // Never compacted here: it is due.
+  }
+  const due = (pages > 0 && free / pages >= VACUUM_FREE_SHARE) || Date.parse(at) - last >= VACUUM_EVERY_DAYS * DAY_MS
+  const usage = volumeUsage()
+  const room = !usage || usage.available > usage.database * 1.2
+  if (due && room) {
     // In WAL mode the compacted file only replaces the old one at a checkpoint.
     db.exec('VACUUM')
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    fs.writeFileSync(LAST_VACUUM_FILE, at)
     stats.vacuumed = true
   }
   return stats
