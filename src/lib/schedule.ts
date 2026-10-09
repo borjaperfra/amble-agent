@@ -6,6 +6,7 @@ import { DATA_DIRECTORY, getDb } from './db/db'
 import { pruneEarlierMatches } from './matching/prune'
 import { rereadsInFlight, runListening, stopping, stopStartingReads, type CandidatePass } from './matching/run'
 import { sweepUploads } from './pipeline/sources'
+import { checkOfferLinks } from './sourcing/liveness'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
@@ -161,6 +162,14 @@ async function pass(day: string, slot: string, until: number) {
       log(day, `pruned matches: ${JSON.stringify(pruneEarlierMatches())}`)
     } catch (error) {
       log(day, `pruning matches failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    // Offers from aggregators someone is about to see: their links, opened.
+    if (!stopping()) {
+      try {
+        log(day, `links: ${JSON.stringify(await checkOfferLinks({ until }))}`)
+      } catch (error) {
+        log(day, `links failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
     // Stopped by a restart: the pass after it picks up where this one was.
     if (stopping()) {

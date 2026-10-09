@@ -644,6 +644,11 @@ function migrate(db: DatabaseSync): void {
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')
   addColumn(db, 'feedback', 'done_note', 'TEXT')
+  // An aggregator's offer whose own page was opened (sourcing/liveness.ts):
+  // when, and when that page said it was closed. Closed so, it stays closed
+  // when the aggregator returns it again.
+  addColumn(db, 'opportunity_sources', 'link_checked_at', 'TEXT')
+  addColumn(db, 'opportunity_sources', 'link_closed_at', 'TEXT')
 
   // Attribution (PRODUCT_SPEC §11.1, §12).
   const attributionAdded = addColumn(db, 'evidence', 'attribution', "TEXT NOT NULL DEFAULT 'sole'")

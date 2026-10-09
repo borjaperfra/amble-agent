@@ -159,7 +159,10 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
          salary_min = COALESCE(salary_min, ?), salary_max = COALESCE(salary_max, ?),
          salary_currency = COALESCE(salary_currency, ?), salary_raw = COALESCE(salary_raw, ?),
          posted_at = CASE WHEN posted_at IS NULL OR (? IS NOT NULL AND ? < posted_at) THEN ? ELSE posted_at END,
-         last_seen_at = ?, closed_at = NULL
+         last_seen_at = ?,
+         closed_at = CASE WHEN EXISTS (
+           SELECT 1 FROM opportunity_sources WHERE source = ? AND external_id = ? AND link_closed_at IS NOT NULL
+         ) THEN closed_at ELSE NULL END
        WHERE id = ?`,
     ).run(
       description,
@@ -175,6 +178,8 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
       raw.postedAt,
       raw.postedAt,
       seenAt,
+      raw.source,
+      raw.externalId,
       opportunityId,
     )
   } else {
@@ -207,7 +212,8 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
   prepared(
     `INSERT INTO opportunity_sources (source, external_id, opportunity_id, url, first_seen_at, last_seen_at)
      VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(source, external_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, closed_at = NULL, url = COALESCE(excluded.url, url)`,
+     ON CONFLICT(source, external_id) DO UPDATE SET last_seen_at = excluded.last_seen_at,
+       closed_at = CASE WHEN link_closed_at IS NULL THEN NULL ELSE closed_at END, url = COALESCE(excluded.url, url)`,
   ).run(raw.source, raw.externalId, opportunityId, raw.url, seenAt, seenAt)
 
   return { opportunityId, created }
