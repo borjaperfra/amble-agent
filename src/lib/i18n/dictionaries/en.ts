@@ -578,6 +578,8 @@ export const en = {
     found: 'What I’m finding',
     capabilities: (count: number) => `${count} ${count === 1 ? 'capability' : 'capabilities'}`,
     rejected: (name: string, reason: string) => `I didn’t use “${name}”: ${reason}`,
+    slow: 'This is taking longer than usual: the model is slow right now. I’m still trying; you can leave and come back whenever you like, what I read stays.',
+    later: (name: string) => `“${name}” is taking a while: I’m going on without it and will add it to your map once I’ve read it.`,
   },
   server: {
     inYourWords: 'In your words',

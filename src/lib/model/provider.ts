@@ -42,7 +42,13 @@ export interface StructuredTaskOptions<T> {
   // Work nobody is waiting on (listening). It queues behind anything a person
   // is waiting for on the screen.
   background?: boolean
+  // How long one answer may take. A long read (a CV into statements, the map
+  // weighed) writes tens of thousands of tokens: at two minutes a slow model
+  // cut it short again and again (2026-10-08, a CV retried for an hour).
+  timeoutMs?: number
 }
+
+const DEFAULT_TIMEOUT_MS = 120_000
 
 // The provider limits requests in flight per key (Helmcode allows 10 per key
 // on deepseek-v4-flash). With several keys (AMBLE_MODEL_API_KEYS, comma
@@ -179,13 +185,14 @@ async function callWhenFree(
   system: string,
   user: string,
   temperature: number,
+  timeoutMs: number,
 ): Promise<{ content: string; latencyMs: number; usage: Usage }> {
   const deadline = Date.now() + RETRY_BUDGET_MS[background ? 'background' : 'interactive']
   for (let retry = 0; ; retry++) {
     const pool = await acquireSlot(background)
     let waitMs = 0
     try {
-      return await callChatCompletion(baseUrl, pool.key, modelId, system, user, temperature)
+      return await callChatCompletion(baseUrl, pool.key, modelId, system, user, temperature, timeoutMs)
     } catch (error) {
       if (!isBusy(error) || retry >= BUSY_RETRIES[background ? 'background' : 'interactive']) throw error
       waitMs = busyWait(error, retry)
@@ -277,9 +284,10 @@ async function callChatCompletion(
   system: string,
   user: string,
   temperature: number,
+  timeoutMs: number,
 ): Promise<{ content: string; latencyMs: number; usage: Usage }> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 120_000)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   const startedAt = Date.now()
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -369,7 +377,7 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
       })
     let reply: { content: string; latencyMs: number; usage: Usage }
     try {
-      reply = await callWhenFree(options.background ?? false, config.baseUrl, config.modelId, system, attemptUser, temperature)
+      reply = await callWhenFree(options.background ?? false, config.baseUrl, config.modelId, system, attemptUser, temperature, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
     } catch (error) {
       // HTTP, network or time: recorded, and the task ends.
       const modelError = error instanceof ModelError ? error : new ModelError(error instanceof Error ? error.message : 'Unknown model error')

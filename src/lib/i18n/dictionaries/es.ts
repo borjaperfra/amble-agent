@@ -575,6 +575,8 @@ export const es: Dictionary = {
     found: 'Lo que voy encontrando',
     capabilities: (count: number) => `${count} ${count === 1 ? 'capacidad' : 'capacidades'}`,
     rejected: (name: string, reason: string) => `No he usado «${name}»: ${reason}`,
+    slow: 'Está tardando más de lo normal: el modelo va lento ahora mismo. Sigo intentándolo; puedes salir y volver cuando quieras, lo que lea se queda.',
+    later: (name: string) => `«${name}» está tardando: sigo sin él y lo añado a tu mapa en cuanto lo lea.`,
   },
   server: {
     inYourWords: 'En tus palabras',

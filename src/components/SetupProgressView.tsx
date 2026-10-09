@@ -83,6 +83,13 @@ export default function SetupProgressView({ progress }: { progress: SetupProgres
         </div>
       )}
 
+      {progress.attempts > 0 && progress.stage !== 'done' && <p className={styles.rejected}>{p.slow}</p>}
+      {progress.later.map((item) => (
+        <p key={item.id} className={styles.rejected}>
+          {p.later(item.name)}
+        </p>
+      ))}
+
       {progress.rejected.map((item) => (
         <p key={item.name} className={styles.rejected}>
           {p.rejected(item.name, item.reason)}

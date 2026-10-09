@@ -455,8 +455,14 @@ ${untrusted('document', params.content.slice(0, 60_000))}`
     user,
     schema: extractClaimsOutputSchema,
     temperature: 0.1,
+    timeoutMs: LONG_READ_MS,
   })
 }
+
+// A CV read into statements and a map weighed write up to 20,000 tokens, in
+// 45-90 s on a good day: twice the usual limit, so a slow hour does not cut
+// them short over and over.
+const LONG_READ_MS = 300_000
 
 export interface EvidenceForAssessment {
   id: string
@@ -516,6 +522,7 @@ ${untrusted('evidence', JSON.stringify(params.evidence.map(evidenceForPrompt)))}
     user,
     schema: assessCapabilitiesOutputSchema,
     temperature: 0.2,
+    timeoutMs: LONG_READ_MS,
   })
 }
 

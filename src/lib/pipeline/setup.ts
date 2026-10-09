@@ -20,6 +20,12 @@ export interface SetupProgress {
   found: string[]
   capabilities: { name: string; assessment: string }[]
   rejected: { name: string; reason: string }[]
+  // Sources the model could not finish now (slow, busy) while the others were
+  // read: the setup goes on without them and they are read in a while.
+  later: { id: string; name: string }[]
+  // Times it was started again after a passing failure: the screen says it
+  // is taking longer than usual instead of a bar that stops at half.
+  attempts: number
   error: string | null
   startedAt: number
   // Weighed into capabilities with everything read so far: a restart after a
@@ -60,6 +66,8 @@ export function startSetup(candidateId: string): SetupProgress {
     found: resumed?.found ?? [],
     capabilities: resumed?.capabilities ?? [],
     rejected: resumed?.rejected ?? [],
+    later: [],
+    attempts: resumed ? resumed.attempts + 1 : 0,
     error: null,
     startedAt: resumed?.startedAt ?? Date.now(),
     weighed,
@@ -84,6 +92,9 @@ async function run(candidateId: string, progress: SetupProgress): Promise<void> 
     // sooner. What it judges stays on the screen when their answers change
     // the profile, and is read again with them (interview.ts).
     startFirstReadSoon(candidateId)
+
+    // What could not be read now is read in a while, into the map.
+    if (progress.later.length > 0) void readLeftForLater(candidateId, progress.later.map((source) => source.id))
 
     // The map's summary: after, with nobody waiting for it.
     await refreshDerivedProfile(candidateId).catch(() => undefined)
@@ -133,6 +144,25 @@ export function readLaterSource(candidateId: string, sourceId: string): Promise<
   )
 }
 
+const LATER_TRIES = 3
+const LATER_EVERY_MS = 3 * 60 * 1000
+
+async function readLeftForLater(candidateId: string, sourceIds: string[]): Promise<void> {
+  for (const sourceId of sourceIds) {
+    for (let attempt = 1; attempt <= LATER_TRIES; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, LATER_EVERY_MS))
+      // Read by then some other way (a restart, the setup started again).
+      if (!listUnprocessedSources(candidateId).some((source) => source.id === sourceId)) break
+      try {
+        await readLaterSource(candidateId, sourceId)
+        break
+      } catch (error) {
+        console.error(`[setup] later read ${attempt}/${LATER_TRIES} failed for`, candidateId, error instanceof Error ? error.message : error)
+      }
+    }
+  }
+}
+
 async function readAndWeigh(candidateId: string, progress: SetupProgress): Promise<void> {
   const pending = listUnprocessedSources(candidateId)
   // Every source at once: each is one long model call. All of them finish
@@ -151,8 +181,13 @@ async function readAndWeigh(candidateId: string, progress: SetupProgress): Promi
       }
     }),
   )
-  const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
-  if (failed) throw failed.reason
+  const failed = results.flatMap((result, index) => (result.status === 'rejected' ? [{ source: pending[index], reason: result.reason }] : []))
+  // One source the model could not finish no longer holds up the rest: with
+  // something read from the others, the setup goes on and it is read later.
+  // On 2026-10-08 one CV timed out for an hour while GitHub and LinkedIn,
+  // already read, waited with it.
+  if (failed.length > 0 && (failed.length === pending.length || listClaims(candidateId).length === 0)) throw failed[0].reason
+  progress.later = failed.map(({ source }) => ({ id: source.id, name: source.name }))
   if (listClaims(candidateId).length === 0) throw new Error('nothing_extracted')
 
   progress.stage = 'weighing'
