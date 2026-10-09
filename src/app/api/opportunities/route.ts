@@ -7,12 +7,12 @@ import { reportedClosed, SAYS_CLOSED } from '@/lib/sourcing/liveness'
 
 export const runtime = 'nodejs'
 
-const RESPONSES: MatchResponse[] = ['interested', 'not_for_me', 'wanted_anyway']
+const RESPONSES: MatchResponse[] = ['interested', 'not_for_me', 'wanted_anyway', 'later']
 const PROGRESS: (MatchProgress | null)[] = ['applied', 'dropped', null]
 
 // GET                                               -> what the Rep found and what it set aside
 // POST { matchId, response, reason? }               -> the candidate's answer
-//   response: 'interested' | 'not_for_me'  (on something shown)
+//   response: 'interested' | 'not_for_me' | 'later'  (on something shown)
 //             'already_applied'            (on something shown: they sent it on their own)
 //             'wanted_anyway'              (overruling a discard)
 // POST { opportunityIds, progress }                 -> how far they took an offer they wanted

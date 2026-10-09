@@ -774,7 +774,10 @@ export const en = {
     // They wrote, while turning it down, that they already applied.
     soundsApplied: 'Already applied? Mark it as sent instead of turning it down.',
     handoffStay: 'Carry on here',
-    tabs: { new: 'New', wanted: 'You want these', sent: 'Sent', aside: 'Set aside' },
+    tabs: { new: 'New', wanted: 'You want these', later: 'Later', sent: 'Sent', aside: 'Set aside' },
+    later: 'For later',
+    savedForLater: 'Kept for later. It doesn’t count as a no.',
+    laterEmpty: 'Offers that could fit, but not now, wait here. They don’t count as a no and I learn nothing from them.',
     apply: {
       prepare: 'Prepare my application',
       prepareLead: 'I read the form and your evidence, and leave each field ready or tell you what is missing.',

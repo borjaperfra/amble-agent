@@ -17,14 +17,14 @@ import { estimateRange, estimateSource } from '@/lib/salary/format'
 import type { ShownEstimate } from '@/lib/salary/estimate'
 import styles from '@/app/opportunities/opportunities.module.css'
 
-type Response = 'interested' | 'not_for_me' | 'wanted_anyway' | 'already_applied'
+type Response = 'interested' | 'not_for_me' | 'wanted_anyway' | 'already_applied' | 'later'
 
 // Offers answered here before the Rep asks to carry on on WhatsApp.
 const HANDOFF_AFTER = 5
 const HANDOFF_KEY = 'amble-whatsapp-handoff-stayed'
 type Progress = 'applied' | 'dropped' | null
-export type Tab = 'new' | 'wanted' | 'sent' | 'aside'
-const TABS: Tab[] = ['new', 'wanted', 'sent', 'aside']
+export type Tab = 'new' | 'wanted' | 'later' | 'sent' | 'aside'
+const TABS: Tab[] = ['new', 'wanted', 'later', 'sent', 'aside']
 
 async function respond(matchId: string, response: Response, reason?: string): Promise<boolean> {
   return (await postJson('/api/opportunities', { matchId, response, reason })).ok
@@ -61,6 +61,8 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   const [asideShown, setAsideShown] = useState(ASIDE_PAGE)
 
   const newDeck = [...pending(view.found), ...pending(view.maybe)]
+  // Kept for another moment (#25): still to answer, when they choose.
+  const laterDeck = [...view.found, ...view.maybe].filter((item) => item.response === 'later')
 
   // The WhatsApp offer, after the first few answers, until they choose to
   // carry on here (remembered on this device).
@@ -122,9 +124,19 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   const counts = {
     new: newDeck.length,
     wanted: view.wanted.length,
+    later: laterDeck.length,
     sent: view.sent.length,
     aside: view.discarded.length + view.dropped.length,
   }
+
+  const noticeFor = (response: Response) =>
+    response === 'interested'
+      ? t.opportunities.movedToWanted
+      : response === 'already_applied'
+        ? t.opportunities.movedToSent
+        : response === 'later'
+          ? t.opportunities.savedForLater
+          : t.opportunities.savedNotForMe
 
   function choose(next: Tab) {
     setTab(next)
@@ -240,7 +252,27 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                   <FoundCard
                     item={item}
                     onAnswered={(response) => {
-                      setNotice({ text: response === 'interested' ? t.opportunities.movedToWanted : response === 'already_applied' ? t.opportunities.movedToSent : t.opportunities.savedNotForMe, key: '' })
+                      setNotice({ text: noticeFor(response), key: '' })
+                      void reload().then(toPanel)
+                    }}
+                  />
+                )}
+              />
+            ))}
+
+          {tab === 'later' &&
+            (laterDeck.length === 0 ? (
+              <p className={styles.panelEmpty}>{t.opportunities.laterEmpty}</p>
+            ) : (
+              <Deck
+                items={laterDeck}
+                itemKey={(item) => item.id}
+                label={t.opportunities.tabs.later}
+                render={(item) => (
+                  <FoundCard
+                    item={item}
+                    onAnswered={(response) => {
+                      setNotice({ text: noticeFor(response), key: '' })
                       void reload().then(toPanel)
                     }}
                   />
@@ -477,6 +509,8 @@ function fewPlaces(location: string | null, more: (count: number) => string): st
 const SOUNDS_APPLIED = /\bya\b.{0,25}\b(apliqu|aplicad|envi[eé]|enviad|me (he )?inscrib|postul)|\balready\b.{0,15}\b(applied|sent|apply)/i
 
 function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
+  // Still theirs to answer: new, or kept for later.
+  const open = item.response === null || item.response === 'later'
   const [leaving, setLeaving] = useState(false)
   const t = useT()
   const [asking, setAsking] = useState(false)
@@ -555,7 +589,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
         </a>
       )}
 
-      {item.response === null && !asking && (
+      {open && !asking && (
         <div ref={actionsRef} className={styles.actions}>
           <button type="button" className="btn" onClick={() => void answer('interested')}>
             {t.opportunities.interested}
@@ -567,6 +601,12 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
           <button type="button" className="text-btn" onClick={() => void answer('already_applied')}>
             {t.opportunities.alreadyApplied}
           </button>
+          {/* Not now, or not quite: kept, and nothing learned from it (#25). */}
+          {item.response === null && (
+            <button type="button" className="text-btn" onClick={() => void answer('later')}>
+              {t.opportunities.later}
+            </button>
+          )}
         </div>
       )}
 
@@ -586,7 +626,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
         )}
 
       {/* DESIGN_SYSTEM §24: ask what to learn, without forcing feedback. */}
-      {item.response === null && asking && (
+      {open && asking && (
         <div className={styles.learn}>
           <label className={styles.learnLabel} htmlFor={`learn-${item.id}`}>
             {t.opportunities.learnPrompt}

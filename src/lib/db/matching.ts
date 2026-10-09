@@ -122,7 +122,9 @@ export function listMatchesForKey(
 
 // 'wanted_anyway' is the candidate overruling a discard: the signal that a
 // filter or a role-fit judgment was wrong.
-export type MatchResponse = 'interested' | 'not_for_me' | 'wanted_anyway'
+// 'later': kept for another moment, neither a yes nor a no (#25). It is
+// never learned from, and like any answer it leaves what is new to answer.
+export type MatchResponse = 'interested' | 'not_for_me' | 'wanted_anyway' | 'later'
 
 export type MatchProgress = 'applied' | 'dropped'
 

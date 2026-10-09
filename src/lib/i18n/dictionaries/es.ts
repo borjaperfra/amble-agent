@@ -770,7 +770,10 @@ export const es: Dictionary = {
     // They wrote, while turning it down, that they already applied.
     soundsApplied: '¿Ya la enviaste? Márcala como enviada en vez de descartarla.',
     handoffStay: 'Seguir aquí',
-    tabs: { new: 'Nuevas', wanted: 'Te interesan', sent: 'Enviadas', aside: 'Apartadas' },
+    tabs: { new: 'Nuevas', wanted: 'Te interesan', later: 'Más adelante', sent: 'Enviadas', aside: 'Apartadas' },
+    later: 'Para más adelante',
+    savedForLater: 'Guardada para más adelante. No cuenta como un no.',
+    laterEmpty: 'Aquí quedan las que podrían encajar, pero no ahora. No cuentan como un no ni me enseñan nada.',
     apply: {
       prepare: 'Prepárame la candidatura',
       prepareLead: 'Leo el formulario y tu evidencia, y te dejo cada campo listo o te digo qué falta.',
