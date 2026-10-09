@@ -467,6 +467,20 @@ export const es: Dictionary = {
     linked: (name: string | null) =>
       `Hecho${name ? `, ${name}` : ''}. Por aquí te escribiré solo cuando algo merezca tu atención: ofertas que encajan de verdad y cómo van tus candidaturas. Y pregúntame lo que quieras sobre tu búsqueda. Soy el agente de IA de amble.`,
     unknown: 'Hola, soy el agente de IA de amble. Para hablar conmigo, entra en app.amble.fyi y conecta tu WhatsApp desde allí.',
+    // Telegram's «/» menu (#32): what each command says in it, and the answers.
+    commands: {
+      ofertas: 'Las ofertas que tienes pendientes',
+      mapa: 'Tu mapa: lo que sé de ti',
+      preferencias: 'Lo que busco por ti, para cambiarlo',
+      pausa: 'Pausar o reanudar la búsqueda',
+      ayuda: 'Qué puedo hacer',
+    },
+    commandOffersAsk: '¿Qué ofertas tengo pendientes?',
+    commandPauseAsk: 'Quiero pausar la búsqueda, o reanudarla si ya está en pausa.',
+    commandMap: (url: string) => `Tu mapa, con lo que sé de ti y lo que aún no sé: ${url}`,
+    commandPreferences: (url: string) => `Lo que busco por ti, para cambiarlo cuando quieras: ${url}`,
+    commandHelp:
+      'Te escribo cuando una oferta encaja de verdad, y te pregunto cómo van tus candidaturas. Me puedes preguntar lo que quieras sobre tu búsqueda, pedirme que prepare una candidatura, mandarme tu CV en PDF o un audio. En el menú «/» tienes /ofertas, /mapa, /preferencias y /pausa.',
     unknownTelegram: 'Hola, soy el agente de IA de amble. Para hablar conmigo por aquí, entra en app.amble.fyi y conecta Telegram desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
@@ -498,7 +512,9 @@ export const es: Dictionary = {
     salaryEstimated: (range: string, source: string) => `Salario estimado: ${range} · ${source}`,
     salaryUnknown: 'Salario: no lo publica',
     inApp: 'En la app',
-    offerButtons: { interested: 'Me interesa', notFit: 'No encaja', more: 'Cuéntame más' },
+    offerButtons: { interested: 'Me interesa', notFit: 'No encaja', more: 'Cuéntame más', later: 'Para más adelante', applied: 'Ya la envié', open: 'Ver oferta' },
+    offerLater: 'Guardada para más adelante. No cuenta como un no; la tienes en la app, en «Más adelante».',
+    offerApplied: 'Apuntada como enviada. Si te dicen algo, cuéntamelo.',
     applyButtons: { yes: 'Sí, prepárala', no: 'Ahora no' },
     fillOffer: '¿Te la relleno en el formulario de la empresa? Te enseño cómo queda y solo la envío si me dices que sí.',
     fillButtons: { yes: 'Sí, rellénala', no: 'Luego' },

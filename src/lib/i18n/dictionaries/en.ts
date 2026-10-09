@@ -467,6 +467,20 @@ export const en = {
     linked: (name: string | null) =>
       `Done${name ? `, ${name}` : ''}. I’ll only write to you here when something deserves your attention: offers that truly fit and how your applications are going. And ask me anything about your search. I’m amble’s AI agent.`,
     unknown: 'Hi, I’m amble’s AI agent. To talk to me, go to app.amble.fyi and connect your WhatsApp from there.',
+    // Telegram's «/» menu (#32): what each command says in it, and the answers.
+    commands: {
+      ofertas: 'The offers waiting for you',
+      mapa: 'Your map: what I know about you',
+      preferencias: 'What I look for, to change it',
+      pausa: 'Pause or resume the search',
+      ayuda: 'What I can do',
+    },
+    commandOffersAsk: 'Which offers are waiting for me?',
+    commandPauseAsk: 'I want to pause the search, or resume it if it’s paused.',
+    commandMap: (url: string) => `Your map, with what I know about you and what I don’t yet: ${url}`,
+    commandPreferences: (url: string) => `What I look for on your behalf, to change it whenever you like: ${url}`,
+    commandHelp:
+      'I write when an offer truly fits, and ask how your applications are going. You can ask me anything about your search, ask me to prepare an application, or send me your CV as a PDF or a voice note. In the «/» menu you have /ofertas, /mapa, /preferencias and /pausa.',
     unknownTelegram: 'Hi, I’m amble’s AI agent. To talk to me here, go to app.amble.fyi and connect Telegram from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
@@ -500,7 +514,9 @@ export const en = {
     salaryEstimated: (range: string, source: string) => `Estimated salary: ${range} · ${source}`,
     salaryUnknown: 'Salary: not published',
     inApp: 'In the app',
-    offerButtons: { interested: 'Interested', notFit: 'Not a fit', more: 'Tell me more' },
+    offerButtons: { interested: 'Interested', notFit: 'Not a fit', more: 'Tell me more', later: 'For later', applied: 'Already applied', open: 'See the offer' },
+    offerLater: 'Kept for later. It doesn’t count as a no; it’s in the app, under «Later».',
+    offerApplied: 'Marked as sent. If they get back to you, tell me.',
     applyButtons: { yes: 'Yes, prepare it', no: 'Not now' },
     fillOffer: 'Shall I fill it in on the company’s form? I’ll show you how it looks and only send it if you say yes.',
     fillButtons: { yes: 'Yes, fill it in', no: 'Later' },

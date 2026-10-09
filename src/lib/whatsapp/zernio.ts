@@ -70,7 +70,12 @@ export interface Button {
   title: string
   // What comes back on the webhook when it is tapped.
   payload: string
+  // Telegram only: it opens this address instead. WhatsApp leaves it out.
+  url?: string
 }
+
+// WhatsApp's reply buttons: three at most, none that opens an address.
+const replyButtons = (buttons: Button[]) => buttons.filter((button) => !button.url).slice(0, 3).map(({ title, payload }) => ({ type: 'postback', title, payload }))
 
 // A message in a conversation that is open: free text, and up to three reply
 // buttons. `utility` sends it as a business-initiated utility message when the
@@ -87,7 +92,7 @@ export async function sendMessage(
       accountId: config.accountId,
       message: params.text,
       linkPreview: false,
-      ...(params.buttons?.length ? { buttons: params.buttons.slice(0, 3).map((button) => ({ type: 'postback', ...button })) } : {}),
+      ...(params.buttons?.length ? { buttons: replyButtons(params.buttons) } : {}),
       ...(params.utility ? { category: 'utility' } : {}),
     },
     params.idempotencyKey,
@@ -106,7 +111,7 @@ export async function sendPicture(
   form.set('accountId', config.accountId)
   form.set('message', params.text)
   form.set('attachment', new Blob([new Uint8Array(params.image)], { type: params.filename.endsWith('.png') ? 'image/png' : 'image/jpeg' }), params.filename)
-  if (params.buttons?.length) form.set('buttons', JSON.stringify(params.buttons.slice(0, 3).map((button) => ({ type: 'postback', ...button }))))
+  if (params.buttons?.length) form.set('buttons', JSON.stringify(replyButtons(params.buttons)))
   const response = await fetch(`${API}/inbox/conversations/${encodeURIComponent(params.conversationId)}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiKey}`, ...(params.idempotencyKey ? { 'Idempotency-Key': params.idempotencyKey } : {}) },

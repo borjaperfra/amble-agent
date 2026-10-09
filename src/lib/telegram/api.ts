@@ -49,12 +49,16 @@ export interface TelegramButton {
   title: string
   // What comes back on the webhook when it is tapped (at most 64 bytes).
   payload: string
+  // A button that opens this address instead.
+  url?: string
 }
 
 // One button a row: their titles can be as long as they need.
 function keyboard(buttons: TelegramButton[] | undefined) {
-  const usable = (buttons ?? []).filter((button) => Buffer.byteLength(button.payload) <= 64)
-  return usable.length ? { reply_markup: { inline_keyboard: usable.map((button) => [{ text: button.title, callback_data: button.payload }]) } } : {}
+  const usable = (buttons ?? []).filter((button) => (button.url ? /^https:\/\//.test(button.url) : Buffer.byteLength(button.payload) <= 64))
+  return usable.length
+    ? { reply_markup: { inline_keyboard: usable.map((button) => [button.url ? { text: button.title, url: button.url } : { text: button.title, callback_data: button.payload }]) } }
+    : {}
 }
 
 // What amble writes is in WhatsApp's marks (*bold*, _italics_): said in
@@ -153,6 +157,11 @@ export async function fetchFile(config: TelegramConfig, fileId: string, maxBytes
   const bytes = Buffer.from(await response.arrayBuffer())
   if (bytes.length > maxBytes) throw new TooLargeError(`file of ${bytes.length} bytes`)
   return bytes
+}
+
+// The menu that opens on «/» (#32), in each language amble speaks.
+export async function setCommands(config: TelegramConfig, commands: { command: string; description: string }[], languageCode?: string): Promise<void> {
+  await call(config, 'setMyCommands', { commands, ...(languageCode ? { language_code: languageCode } : {}) })
 }
 
 // Where Telegram sends what reaches the bot, and only what amble reads.

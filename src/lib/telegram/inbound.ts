@@ -1,3 +1,4 @@
+import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
 import { getCandidate, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
@@ -47,6 +48,11 @@ export interface TelegramUpdate {
   message?: TelegramMessage
   callback_query?: { id: string; from: TelegramUser; data?: string; message?: TelegramMessage }
 }
+
+// The «/» menu (#32). Some are answered here (a link, the list); the rest
+// are what they would have written, and the agent answers them as such.
+export const COMMANDS = ['ofertas', 'mapa', 'preferencias', 'pausa', 'ayuda'] as const
+type Command = (typeof COMMANDS)[number]
 
 // Where to start, said to a chat amble does not know: once in a while.
 const STRANGER_REPLIES = 2
@@ -108,12 +114,30 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
     return
   }
 
+  // A command from the menu.
+  const command = text.match(/^\/([a-z]+)(?:@\w+)?\s*$/i)?.[1]?.toLowerCase() as Command | undefined
+  const said = command && (COMMANDS as readonly string[]).includes(command) ? command : null
+  const words = dictionaries[candidateLocale(candidate)].whatsapp
+  if (said === 'mapa') {
+    await reply(words.commandMap(issueAppLink(candidate.id, '/me')))
+    return
+  }
+  if (said === 'preferencias') {
+    await reply(words.commandPreferences(issueAppLink(candidate.id, '/me/preferences')))
+    return
+  }
+  if (said === 'ayuda') {
+    await reply(words.commandHelp)
+    return
+  }
+
   const file = (ref: TelegramFileRef | undefined, fallback: string, mime: string | null): IncomingFile | null =>
     ref ? { name: (ref.file_name ?? fallback).slice(0, 120), mimeType: ref.mime_type ?? mime, fetch: (maxBytes) => fetchFile(config, ref.file_id, maxBytes) } : null
   return handleFromPerson(
     candidate,
     {
-      text,
+      // /ofertas and /pausa are what they would have written.
+      text: said === 'ofertas' ? words.commandOffersAsk : said === 'pausa' ? words.commandPauseAsk : text,
       interactiveId: tap?.data ?? null,
       buttonPayload: null,
       document: file(message.document, 'Telegram.pdf', null),

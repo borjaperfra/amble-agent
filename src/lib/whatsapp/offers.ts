@@ -4,7 +4,7 @@ import { cloudBrowserConfigured } from '../apply/cloud'
 import { getPreparedApplication, prepareApplication } from '../apply/prepare'
 import { issueAppLink } from '../auth/applinks'
 import { getDb } from '../db/db'
-import { getMatch, listMatchesForKey, respondToMatch, setProgress, type MatchListing, type MatchRow } from '../db/matching'
+import { getMatch, listMatchesForKey, respondAsApplied, respondToMatch, setProgress, type MatchListing, type MatchRow } from '../db/matching'
 import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
@@ -148,6 +148,14 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
       { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
       { title: w.offerButtons.notFit, payload: `of:${match.id}:not_fit` },
       { title: w.offerButtons.more, payload: `of:${match.id}:more` },
+      // Telegram takes more than three, and buttons that open a page (#32).
+      ...(reach.kind === 'telegram'
+        ? [
+            { title: w.offerButtons.later, payload: `of:${match.id}:later` },
+            { title: w.offerButtons.applied, payload: `of:${match.id}:applied` },
+            ...(match.url ? [{ title: w.offerButtons.open, payload: '', url: match.url }] : []),
+          ]
+        : []),
     ],
     idempotencyKey: `of:${match.id}`,
   })
@@ -242,7 +250,7 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
 // ── What they answer ──────────────────────────────────────────────────────
 
 export type OfferTap =
-  | { kind: 'offer'; matchId: string; answer: 'interested' | 'not_fit' | 'more' }
+  | { kind: 'offer'; matchId: string; answer: 'interested' | 'not_fit' | 'more' | 'later' | 'applied' }
   | { kind: 'apply'; matchId: string; answer: 'yes' | 'no' }
   // Fill the prepared application in the company's own form, in the cloud.
   | { kind: 'fill'; matchId: string; answer: 'yes' | 'no' }
@@ -250,8 +258,8 @@ export type OfferTap =
   | { kind: 'send'; matchId: string; answer: 'yes' | 'look' | 'no' }
 
 export function parseOfferPayload(value: string | null): OfferTap | null {
-  const offer = value?.match(/^of:([\w-]+):(interested|not_fit|more)$/)
-  if (offer) return { kind: 'offer', matchId: offer[1], answer: offer[2] as 'interested' | 'not_fit' | 'more' }
+  const offer = value?.match(/^of:([\w-]+):(interested|not_fit|more|later|applied)$/)
+  if (offer) return { kind: 'offer', matchId: offer[1], answer: offer[2] as 'interested' | 'not_fit' | 'more' | 'later' | 'applied' }
   const apply = value?.match(/^ap:([\w-]+):(yes|no)$/)
   if (apply) return { kind: 'apply', matchId: apply[1], answer: apply[2] as 'yes' | 'no' }
   const fill = value?.match(/^af:([\w-]+):(yes|no)$/)
@@ -329,6 +337,20 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
       { title: w.applyButtons.yes, payload: `ap:${match.id}:yes` },
       { title: w.applyButtons.no, payload: `ap:${match.id}:no` },
     ])
+    return
+  }
+  // Kept for another moment: neither a yes nor a no, nothing learned (#25, #32).
+  if (tap.kind === 'offer' && tap.answer === 'later') {
+    respondToMatch(match.id, candidateId, 'later', null)
+    answered(candidateId, match.id, 'later')
+    await reply(w.offerLater)
+    return
+  }
+  // Sent already, on their own: wanted and sent at once.
+  if (tap.kind === 'offer' && tap.answer === 'applied') {
+    respondAsApplied(match.id, candidateId)
+    answered(candidateId, match.id, 'applied')
+    await reply(w.offerApplied)
     return
   }
   if (tap.kind === 'offer' && tap.answer === 'not_fit') {
