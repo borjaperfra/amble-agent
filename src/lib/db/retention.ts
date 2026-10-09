@@ -28,6 +28,10 @@ import { now } from './repo'
 // who use AI systems to keep logs. What the model answered word for word
 // carries personal data and is not needed for that: it goes after six
 // months (the Act's minimum for logs), leaving the rest of the record.
+// What it answered about an offer (its judgment, its facts) goes after two
+// weeks: that answer is already kept where it is used (the assessment, the
+// facts), and at thousands of calls a day it was a fifth of the database.
+// A call that failed keeps its answer the six months: it is what explains it.
 //
 // Rows deleted do not shrink the file on their own; the file is compacted when
 // a fifth of it is free.
@@ -38,6 +42,8 @@ export const DELETE_CLOSED_AFTER_DAYS = 14
 export const STRIP_DESCRIPTION_AFTER_DAYS = 30
 export const FORGET_WHATSAPP_EVENTS_AFTER_DAYS = 30
 export const STRIP_MODEL_OUTPUT_AFTER_DAYS = 183
+export const STRIP_ROUTINE_OUTPUT_AFTER_DAYS = 14
+const ROUTINE_TASKS = ['assess_opportunity', 'read_offer_facts']
 export const FORGET_MODEL_RUNS_AFTER_DAYS = 365
 const VACUUM_FREE_SHARE = 0.2
 
@@ -99,6 +105,13 @@ export function applyRetention(at: string = now()): RetentionStats {
       db
         .prepare('UPDATE model_runs SET raw_output = NULL WHERE created_at < ? AND raw_output IS NOT NULL')
         .run(daysAgo(STRIP_MODEL_OUTPUT_AFTER_DAYS, at)).changes,
+    )
+    stats.modelOutputsStripped += Number(
+      db
+        .prepare(
+          `UPDATE model_runs SET raw_output = NULL WHERE created_at < ? AND ok = 1 AND raw_output IS NOT NULL AND task IN (${ROUTINE_TASKS.map(() => '?').join(', ')})`,
+        )
+        .run(daysAgo(STRIP_ROUTINE_OUTPUT_AFTER_DAYS, at), ...ROUTINE_TASKS).changes,
     )
     stats.modelRunsDeleted = Number(db.prepare('DELETE FROM model_runs WHERE created_at < ?').run(daysAgo(FORGET_MODEL_RUNS_AFTER_DAYS, at)).changes)
   })

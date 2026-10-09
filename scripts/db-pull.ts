@@ -34,13 +34,14 @@ const packed = `${file}.gz`
 // without a shell: the binary it wraps is next to it.
 function railwayBinary(): string {
   if (process.platform !== 'win32') return 'railway'
-  try {
-    const shim = execFileSync('where', ['railway.cmd'], { encoding: 'utf8' }).split(/\r?\n/)[0].trim()
-    const binary = path.join(path.dirname(shim), 'node_modules', '@railway', 'cli', 'bin', 'railway.exe')
-    return fs.existsSync(binary) ? binary : 'railway'
-  } catch {
-    return 'railway'
+  // Looked for along PATH here: `where` prints it in the console's code page,
+  // and a folder with accents ("Pérez Francés") comes back mangled.
+  for (const folder of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!folder || !fs.existsSync(path.join(folder, 'railway.cmd'))) continue
+    const binary = path.join(folder, 'node_modules', '@railway', 'cli', 'bin', 'railway.exe')
+    if (fs.existsSync(binary)) return binary
   }
+  return 'railway'
 }
 const RAILWAY = railwayBinary()
 

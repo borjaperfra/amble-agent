@@ -3,6 +3,7 @@ import path from 'node:path'
 import { checkPassAlerts, checkWhatsAppStatus } from './admin/alerts'
 import { backupToday } from './db/backup'
 import { DATA_DIRECTORY, getDb } from './db/db'
+import { pruneEarlierMatches } from './matching/prune'
 import { rereadsInFlight, runListening, stopping, stopStartingReads, type CandidatePass } from './matching/run'
 import { sweepUploads } from './pipeline/sources'
 import { releaseLock, takeLock } from './sourcing/lock'
@@ -155,6 +156,12 @@ async function pass(day: string, slot: string, until: number) {
     const result = await runListening({ until })
     matching = result.matching
     log(day, JSON.stringify(result, null, 2))
+    // Judgments of earlier profiles nothing reads any more (matching/prune.ts).
+    try {
+      log(day, `pruned matches: ${JSON.stringify(pruneEarlierMatches())}`)
+    } catch (error) {
+      log(day, `pruning matches failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     // Stopped by a restart: the pass after it picks up where this one was.
     if (stopping()) {
       done = false
