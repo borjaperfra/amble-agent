@@ -9,6 +9,7 @@ import { isUnverifiedAssisted } from '../pipeline/attribution'
 import { injectionSignals, UNTRUSTED_RULE } from '../untrusted'
 import { readApplicationForm, type FormField } from './form'
 import { isKnownMaliciousLink } from '../net/reputation'
+import { readSourceContent } from '../pipeline/sources'
 
 // "Prepare my application": for an offer the candidate wants, how best to
 // apply, a short message, and an answer for each field of the form.
@@ -155,9 +156,20 @@ Respond ONLY with JSON: {"advice": {"channel": string, "channelWhy": string, "cv
 
 // What the Rep knows of their links: GitHub and a website from their sources,
 // never one known to spread malware, which would go to a company in their name.
-function links(candidateId: string): { github: string | null; website: string | null } {
-  const sources = listSources(candidateId).filter((source) => source.uri && !isKnownMaliciousLink(source.uri))
+// A LinkedIn profile's address as its own PDF prints it ("www.linkedin.com/in/…").
+const PROFILE_IN_TEXT = /linkedin\.com\/in\/([A-Za-z0-9_%-]{3,100})/i
+
+function links(candidateId: string): { github: string | null; website: string | null; linkedin: string | null } {
+  const all = listSources(candidateId)
+  const sources = all.filter((source) => source.uri && !isKnownMaliciousLink(source.uri))
   const github = sources.find((source) => source.type === 'github')?.uri ?? null
+  // The profile's address they gave, or the one their LinkedIn PDF (or CV)
+  // prints: before, a form's LinkedIn field was always left to them (#15).
+  const handle = all
+    .filter((source) => source.type === 'linkedin' || source.type === 'cv')
+    .map((source) => PROFILE_IN_TEXT.exec(readSourceContent(source))?.[1])
+    .find(Boolean)
+  const linkedin = sources.find((source) => source.type === 'linkedin')?.uri ?? (handle ? `https://www.linkedin.com/in/${handle}` : null)
   const site = sources.find((source) => source.type === 'website')?.uri ?? null
   let website: string | null = null
   if (site) {
@@ -167,7 +179,7 @@ function links(candidateId: string): { github: string | null; website: string | 
       website = site
     }
   }
-  return { github, website }
+  return { github, website, linkedin }
 }
 
 interface DraftRow {
@@ -219,7 +231,7 @@ async function prepare(candidateId: string, opportunityId: string): Promise<Prep
     .filter((item) => !isUnverifiedAssisted(item))
     .slice(0, MAX_EVIDENCE)
   const evidenceIds = new Set(evidence.map((item) => item.id))
-  const { github, website } = links(candidateId)
+  const { github, website, linkedin } = links(candidateId)
 
   // Filled in here, or left to the candidate, before any model call.
   const decided = new Map<string, PreparedAnswer>()
@@ -232,7 +244,7 @@ async function prepare(candidateId: string, opportunityId: string): Promise<Prep
     if (field.kind === 'name') fact(namePart(field, candidate.name), t.name)
     else if (field.kind === 'email') fact(candidate.email, t.email)
     else if (field.kind === 'phone') fact(null, t.phone)
-    else if (field.kind === 'linkedin') fact(null, t.linkedin)
+    else if (field.kind === 'linkedin') fact(linkedin, t.linkedin)
     // A field that asks for GitHub takes only GitHub; one for a website or portfolio, the site first.
     else if (field.kind === 'website') fact(/github/i.test(field.label) ? github : (website ?? github), t.website)
     else if (field.kind === 'resume') decided.set(field.id, { ...base, source: 'you', answer: null, note: t.resume })
@@ -279,7 +291,6 @@ async function prepare(candidateId: string, opportunityId: string): Promise<Prep
   // A link or an address in what it wrote must be theirs: the posting cannot
   // make it send the company somewhere else in their name.
   const bare = (url: string) => url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
-  const linkedin = listSources(candidateId).find((source) => source.type === 'linkedin' && source.uri)?.uri ?? null
   const ownLinks = [github, website, linkedin].filter((value): value is string => Boolean(value)).map(bare)
   const foreign = (text: string) =>
     (text.match(/https?:\/\/[^\s)>\]]+|www\.[^\s)>\]]+/gi) ?? []).some((url) => !ownLinks.some((own) => bare(url).startsWith(own))) ||
