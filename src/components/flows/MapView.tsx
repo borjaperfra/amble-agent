@@ -138,6 +138,14 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
           </a>
         )}
 
+        {/* Which languages they work in, and how well (#8): asked until said. */}
+        {!vm.languagesStated && (
+          <Link href="/me/preferences#about-title" className={styles.gapsSummary}>
+            <span className={styles.gapsSummaryHow}>{t.map.languagesAsk}</span>
+            <span className={styles.gapsSummaryAction}>{t.map.languagesAction}</span>
+          </Link>
+        )}
+
         <section className={styles.section} aria-labelledby="demonstrates">
           <p id="demonstrates" className={`kicker ${styles.sectionKicker}`}>
             {t.map.demonstrates}

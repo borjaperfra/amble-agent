@@ -4,6 +4,7 @@ import {
   getLatestIntent,
   candidateById,
   getOrCreateInterview,
+  getStatedAbout,
   listCapabilities,
   listCapabilityEvidenceIds,
   listClaims,
@@ -74,6 +75,9 @@ export interface MapViewModel {
   capabilities: CapabilityViewItem[]
   gaps: GapViewItem[]
   distinctive: string[] | null
+  // Whether they said which languages they speak, and how well (#8): until
+  // they do, the map asks.
+  languagesStated: boolean
   counts: {
     claims: number
     evidence: number
@@ -200,6 +204,7 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
     capabilities: capabilityItems,
     gaps,
     distinctive: distinctiveNames,
+    languagesStated: getStatedAbout(candidate.id).languages !== null,
     counts: {
       claims: listClaims(candidate.id).length,
       evidence: evidence.length,

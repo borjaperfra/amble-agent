@@ -218,7 +218,7 @@ export const en = {
       aboveLevel: 'Well above your level',
       salaryEstimate: 'Pays below your floor',
       salaryFloor: 'Pay below your floor',
-      language: 'Needs another language',
+      language: 'Needs another language or level',
       remoteUnconfirmed: 'Never says remote',
       remoteElsewhere: 'Remote, from outside Europe',
       remoteCountries: 'Remote, only from other countries',
@@ -244,6 +244,8 @@ export const en = {
     distinctiveEmpty:
       'I can’t describe what makes your profile distinctive yet — there isn’t enough strong evidence. That’s not a flaw in you; it’s what I know so far.',
     gaps: 'Things I don’t know yet',
+    languagesAsk: 'Which languages do you speak, and how well? Tell me and I’ll take it into account in every offer.',
+    languagesAction: 'Set languages →',
     noGaps: 'There’s nothing important left for me to ask you right now.',
     gapsLater: 'Now and then I’ll send you one of these questions on WhatsApp; just reply to that message.',
     // WhatsApp not linked yet.
@@ -759,7 +761,7 @@ export const en = {
     unread: 'I could only read its title, not the posting itself, and I don’t show you something without knowing what it asks.',
     unverified: (rule: string, note: string) => `I couldn’t check “${rule}”: ${note}`,
     belowFloor: 'The salary it publishes is well below your floor',
-    requiredLanguage: 'It requires a language you don’t speak',
+    requiredLanguage: 'It requires a language you don’t speak, or a higher level than yours',
     remoteUnconfirmed: 'It never says it can be remote, and none of its offices is somewhere you’d go',
     remoteElsewhere: 'It’s remote, but every office it lists is outside Europe and it never says it can be done from here',
     remoteCountries: 'It’s remote, but it names the countries it can be done from and yours isn’t one of them',
