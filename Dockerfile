@@ -1,20 +1,22 @@
 # amble, as one container: the Next server, scheduled listening inside it, and
 # everything it keeps (SQLite and the files people give it) on a volume at
-# /data. Node 24 for node:sqlite.
+# /data. Node 24 for node:sqlite, from the AWS mirror of Docker's official
+# images: the same image, without Docker Hub's pull limit, which stopped
+# builds on 2026-10-09 (429 on node:24-slim).
 
-FROM node:24-slim AS deps
+FROM public.ecr.aws/docker/library/node:24-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:24-slim AS build
+FROM public.ecr.aws/docker/library/node:24-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:24-slim AS run
+FROM public.ecr.aws/docker/library/node:24-slim AS run
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
