@@ -146,3 +146,24 @@ export async function checkOfferLinks(options: { until?: number; at?: number } =
   stats.hostsRefusing = [...refusals.entries()].filter(([, n]) => n >= HOST_REFUSALS).map(([host]) => host)
   return stats
 }
+
+// Someone says an offer amble gave them is closed ("está caducada", on the
+// screen or on WhatsApp). Its links are opened at once: closed there, it
+// closes for everyone. Either way it leaves their list: one they followed is
+// no longer followed, one they had not answered is a «not for me» in their
+// words. The page may not show it (an aggregator still listing an offer the
+// company took down, 2026-10-07): their word is enough for them, not for others.
+export const SAYS_CLOSED = /(?<!\p{L})(?:cerrad[ao]s?|caducad[ao]s?|expirad[ao]s?|ya no (?:existe|est[aá]|acepta)|closed|expired|no longer (?:available|open|accepting)|filled)(?!\p{L})/iu
+
+export async function reportedClosed(opportunityId: string): Promise<{ closedForAll: boolean }> {
+  const sightings = getDb()
+    .prepare('SELECT source, external_id, url FROM opportunity_sources WHERE opportunity_id = ? AND closed_at IS NULL AND url IS NOT NULL')
+    .all(opportunityId) as unknown as { source: string; external_id: string; url: string }[]
+  let closedForAll = false
+  for (const sighting of sightings) {
+    const { state } = await checkLink(sighting.url)
+    if (state === 'closed') closedForAll = closeByLink(sighting.source, sighting.external_id, opportunityId) || closedForAll
+    else if (state === 'open') getDb().prepare('UPDATE opportunity_sources SET link_checked_at = ? WHERE source = ? AND external_id = ?').run(now(), sighting.source, sighting.external_id)
+  }
+  return { closedForAll }
+}

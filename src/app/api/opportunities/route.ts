@@ -3,6 +3,7 @@ import { getMatch, respondAsApplied, respondToMatch, setProgress, type MatchProg
 import { forCandidate } from '@/lib/auth/request'
 import { getOpportunitiesView } from '@/lib/matching/view'
 import { learnFromNo } from '@/lib/pipeline/learn-from-no'
+import { reportedClosed, SAYS_CLOSED } from '@/lib/sourcing/liveness'
 
 export const runtime = 'nodejs'
 
@@ -51,6 +52,10 @@ function respond(body: Record<string, unknown>, candidateId: string) {
   respondToMatch(match.id, candidateId, response, reason)
   // A reason that may hold for offers like it proposes a rule, after the
   // answer is saved and without making them wait (learn-from-no.ts).
+  // «Está caducada»: its link is opened, and if it is closed it closes for everyone.
+  if (response === 'not_for_me' && reason && SAYS_CLOSED.test(reason)) {
+    void reportedClosed(match.opportunity_id).catch((error) => console.error('[amble] closed offer check failed:', error instanceof Error ? error.message : error))
+  }
   if (response === 'not_for_me' && reason) {
     void learnFromNo(candidateId, match.opportunity_id, reason).catch((error) => console.error('[amble] learn from a no failed:', error instanceof Error ? error.message : error))
   }

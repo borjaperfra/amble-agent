@@ -1,6 +1,7 @@
 import { getDb } from '../db/db'
 import { listWanted, respondToMatch, setProgress } from '../db/matching'
 import { now } from '../db/repo'
+import { reportedClosed } from '../sourcing/liveness'
 import type { AgentAction } from './agent'
 import type { FollowupAnswer } from './followups'
 
@@ -46,6 +47,37 @@ function findOffer(candidateId: string, company: string): Known | null {
   return [...followed, ...sent].find((item) => norm(item.company).includes(wanted) || wanted.includes(norm(item.company))) ?? null
 }
 
+// An offer they say is closed leaves their list now (one they followed is no
+// longer followed; one waiting for their answer is a «not for me»), and its
+// page is opened: closed there, it closes for everyone.
+function offerClosed(candidateId: string, company: string): ActionResult {
+  const wanted = norm(company)
+  const offer =
+    findOffer(candidateId, company) ??
+    (wanted
+      ? ((
+          getDb()
+            .prepare(
+              `SELECT r.opportunity_id, c.name AS company FROM offer_releases r JOIN opportunities o ON o.id = r.opportunity_id
+               JOIN companies c ON c.id = o.company_id WHERE r.candidate_id = ? AND o.closed_at IS NULL ORDER BY r.released_at DESC`,
+            )
+            .all(candidateId) as unknown as { opportunity_id: string; company: string }[]
+        )
+          .filter((row) => norm(row.company).includes(wanted) || wanted.includes(norm(row.company)))
+          .map((row) => ({ opportunityId: row.opportunity_id, company: row.company, followed: false, applied: false }))[0] ?? null)
+      : null)
+  if (!offer) return { done: false }
+  // One they already applied to stays so: closed to new candidates, theirs goes on.
+  if (offer.followed) {
+    if (!offer.applied) setProgress(candidateId, [offer.opportunityId], 'dropped')
+  } else {
+    const matchId = latestMatchId(candidateId, offer.opportunityId)
+    if (matchId) respondToMatch(matchId, candidateId, 'not_for_me', 'cerrada')
+  }
+  void reportedClosed(offer.opportunityId).catch((error) => console.error('[amble] closed offer check failed:', error instanceof Error ? error.message : error))
+  return { done: true }
+}
+
 function latestMatchId(candidateId: string, opportunityId: string): string | null {
   const row = getDb()
     .prepare('SELECT id FROM opportunity_matches WHERE candidate_id = ? AND opportunity_id = ? ORDER BY created_at DESC LIMIT 1')
@@ -68,6 +100,7 @@ export function runAction(
 ): ActionResult {
   // A pasted offer is judged, and a pause or a change to their map or
   // account proposed, in the inbound path, not here.
+  if (action.type === 'offer_closed') return offerClosed(candidateId, action.company)
   if (action.type !== 'prepare_application' && action.type !== 'application_update') return { done: false }
   const offer = findOffer(candidateId, action.company)
   if (!offer) return { done: false }
