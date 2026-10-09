@@ -23,6 +23,8 @@ interface NextQuestion {
   turnId?: string
   question?: string
   reason?: string
+  // A round of questions past the setup ended (pipeline/interview.ts).
+  round?: 'done' | 'empty'
   error?: string
 }
 
@@ -44,13 +46,16 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
   const [answer, setAnswer] = useDraft(current?.turnId ? `answer:${current.turnId}` : null)
   const [showWhy, setShowWhy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [round, setRound] = useState<'done' | 'empty' | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const show = useCallback(
     (next: NextQuestion) => {
       if (next.action === 'STOP') {
+        setRound(next.round ?? null)
         setPhase('complete')
-        window.setTimeout(() => router.push('/start'), 1600)
+        // After the setup, the next step; after a round, back to their map.
+        window.setTimeout(() => router.push(next.round ? '/me' : '/start'), next.round ? 2400 : 1600)
         return
       }
       if (next.action === 'UNREADABLE') {
@@ -162,7 +167,9 @@ export default function InterviewFlow({ owner, step: firstStep, steps }: { owner
 
         {phase === 'complete' && (
           <div className={styles.stage} role="status">
-            <p className={styles.complete}>{t.interview.completion}</p>
+            <p className={styles.complete}>
+              {round === 'done' ? t.interview.roundDone : round === 'empty' ? t.interview.roundEmpty : t.interview.completion}
+            </p>
           </div>
         )}
 

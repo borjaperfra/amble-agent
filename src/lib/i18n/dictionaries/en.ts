@@ -101,6 +101,8 @@ export const en = {
   interview: {
     saveAndLeave: 'Save & leave',
     completion: 'Thank you. I’m getting to work.',
+    roundDone: 'Thank you, it’s on your map. That’s all I wanted to ask for now.',
+    roundEmpty: 'There’s nothing important left for me to ask you right now.',
     step: (current: number, total: number) => `Step ${current} of ${total}`,
     answerLabel: 'Your answer',
     unreadableTitle: 'I couldn’t use what you shared.',
@@ -242,6 +244,7 @@ export const en = {
     distinctiveEmpty:
       'I can’t describe what makes your profile distinctive yet — there isn’t enough strong evidence. That’s not a flaw in you; it’s what I know so far.',
     gaps: 'Things I don’t know yet',
+    noGaps: 'There’s nothing important left for me to ask you right now.',
     gapsLater: 'Now and then I’ll send you one of these questions on WhatsApp; just reply to that message.',
     // WhatsApp not linked yet.
     gapsConnect: 'Connect WhatsApp and I’ll ask you there.',

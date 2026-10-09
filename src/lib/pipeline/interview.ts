@@ -5,6 +5,7 @@ import {
   getOrCreateInterview,
   getEvidence,
   getTurn,
+  getUncertainty,
   insertClaim,
   insertTurn,
   insertUncertainty,
@@ -17,11 +18,13 @@ import {
   newId,
   parseJsonArray,
   retractEvidence,
+  setPlannedGaps,
   uncertaintyExistsByDescription,
   updateUncertaintyStatus,
   upsertCapability,
   linkCapabilityEvidence,
   type InterviewTurnRow,
+  type UncertaintyRow,
 } from '../db/repo'
 import {
   runExtractAnswerClaimsTask,
@@ -44,6 +47,7 @@ const MAX_DEFENCE_QUESTIONS = 4
 // interview continues later, on WhatsApp.
 export const SETUP_QUESTIONS = 2
 const SETUP_DEFENCE_QUESTIONS = 1
+const MAX_NEW_GAPS_PER_ANSWER = 1
 
 export interface NextQuestion {
   action: 'ASK' | 'STOP'
@@ -51,6 +55,9 @@ export interface NextQuestion {
   turnId?: string
   question?: string
   reason?: string
+  // A round past the setup ended: 'done' when its questions were asked,
+  // 'empty' when the map showed nothing worth asking.
+  round?: 'done' | 'empty'
 }
 
 function turnKind(turn: InterviewTurnRow): 'gap' | 'defence' {
@@ -91,7 +98,8 @@ function asTurn(turn: InterviewTurnRow): NextQuestion {
 // The next question to show: the first one asked and not answered, in order;
 // in the setup, a new one only while fewer than SETUP_QUESTIONS exist.
 export function planNextQuestion(candidateId: string, options: { setup?: boolean } = {}): Promise<NextQuestion> {
-  const setup = options.setup ?? true
+  // Until their first interview is over, the setup's; after, a round.
+  const setup = options.setup ?? !getDb().prepare("SELECT 1 FROM interviews WHERE candidate_id = ? AND status = 'completed'").get(candidateId)
   return inLine(`plan:${candidateId}`, async () => {
     const interview = getOrCreateInterview(candidateId)
     const turns = listTurns(interview.id)
@@ -101,7 +109,91 @@ export function planNextQuestion(candidateId: string, options: { setup?: boolean
       completeInterview(interview.id)
       return { action: 'STOP', reason: serverText().interviewLongEnough }
     }
-    return planOne(candidateId, setup)
+    return setup ? planOne(candidateId, true) : planRound(candidateId)
+  })
+}
+
+// Past the setup, questions come in rounds (#22). A round asks what the map
+// showed under what is still unknown when it began, one question each, in
+// its order, and nothing else: before, every answer could bring other
+// questions to the map and the next one was about anything, so it never
+// ended and never matched what they had read. What their answers open
+// waits for the next round; the round ends when its questions are asked.
+// On the web and on WhatsApp alike.
+async function planRound(candidateId: string): Promise<NextQuestion> {
+  const interview = getOrCreateInterview(candidateId)
+  const everyTurn = listTurns(interview.id)
+  if (asked(everyTurn).filter((turn) => turn.answer !== null).length >= MAX_QUESTIONS) {
+    completeInterview(interview.id)
+    return { action: 'STOP', reason: serverText().interviewLongEnough, round: 'done' }
+  }
+  let planned: string[]
+  if (interview.planned_gaps === null) {
+    // Loaded here: the map's view reads much of what this file feeds.
+    const { mapGapIds } = await import('../view')
+    planned = mapGapIds(candidateId)
+    setPlannedGaps(interview.id, planned)
+  } else {
+    planned = parseJsonArray(interview.planned_gaps)
+  }
+  const askedAbout = new Set(everyTurn.flatMap((turn) => parseJsonArray(turn.target_uncertainty_ids)))
+  for (const id of [...planned]) {
+    if (askedAbout.has(id)) continue
+    const gap = getUncertainty(id)
+    // Settled meanwhile (another answer, a document): nothing to ask.
+    if (!gap || gap.candidate_id !== candidateId || gap.status !== 'OPEN') continue
+    const turn = await roundTurn(candidateId, interview.id, everyTurn, gap)
+    if (turn) return asTurn(turn)
+    // Nothing worth asking about it after all: it leaves the round.
+    planned = planned.filter((other) => other !== id)
+    setPlannedGaps(interview.id, planned)
+  }
+  completeInterview(interview.id)
+  return { action: 'STOP', reason: serverText().interviewLongEnough, round: planned.length === 0 ? 'empty' : 'done' }
+}
+
+// One question about one thing the map shows: a defence of their work when
+// the doubt is whose it was, else the planner's, about that alone.
+async function roundTurn(candidateId: string, interviewId: string, everyTurn: InterviewTurnRow[], gap: UncertaintyRow): Promise<InterviewTurnRow | null> {
+  const base = { id: newId('turn'), interview_id: interviewId, idx: everyTurn.length, target_uncertainty_ids: JSON.stringify([gap.id]) }
+  if (gap.kind === 'ATTRIBUTION') {
+    const defence = await planDefenceQuestion(candidateId)
+    if (!defence) return null
+    return insertTurn({
+      ...base,
+      question: defence.question,
+      question_reason: defence.reason,
+      target_capability_ids: JSON.stringify(defence.capabilityIds),
+      kind: 'defence',
+      target_evidence_ids: JSON.stringify(defence.evidenceIds),
+    })
+  }
+  const capabilities = listCapabilities(candidateId).filter((capability) => gap.capability_id === null || capability.id === gap.capability_id)
+  const { data } = await runPlanNextQuestionTask({
+    candidateId,
+    capabilities: capabilities.map((capability) => ({
+      id: capability.id,
+      name: capability.name,
+      assessment: capability.assessment,
+      reason: capability.reason.slice(0, 200),
+      uncertaintyIds: capability.id === gap.capability_id ? [gap.id] : [],
+    })),
+    uncertainties: [{ id: gap.id, capabilityId: gap.capability_id, description: gap.description, materiality: gap.materiality }],
+    resolvedUncertaintyIds: listUncertainties(candidateId, 'RESOLVED').map((uncertainty) => uncertainty.id),
+    recentTurns: everyTurn.slice(-6).map((turn) => ({
+      question: turn.question ?? '',
+      answer: turn.answer === null ? '(asked, not answered yet: do not ask about this again)' : turn.answer.slice(0, 2000),
+    })),
+    questionsAsked: asked(everyTurn).length,
+    minimumTarget: 1,
+    lookingFor: lookingFor(candidateId),
+  })
+  if (data.action === 'STOP' || !data.question) return null
+  return insertTurn({
+    ...base,
+    question: data.question,
+    question_reason: data.reason,
+    target_capability_ids: JSON.stringify(gap.capability_id ? [gap.capability_id] : data.targetCapabilityIds),
   })
 }
 
@@ -605,8 +697,14 @@ async function reassessScope(
       if (update.status === 'RESOLVED') resolvedUncertaintyIds.push(update.id)
     }
 
-    for (const uncertainty of reassessData.newUncertainties) {
+    // One answer brings at most one new question to the map, the one that
+    // matters most (#22): each answer used to open as many as it settled.
+    // Those that matter little are kept, and the map does not show them.
+    const weight: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+    let shownOpened = 0
+    for (const uncertainty of [...reassessData.newUncertainties].sort((a, b) => (weight[a.materiality] ?? 3) - (weight[b.materiality] ?? 3))) {
       if (uncertaintyExistsByDescription(candidateId, uncertainty.description)) continue
+      if (uncertainty.materiality !== 'LOW' && shownOpened++ >= MAX_NEW_GAPS_PER_ANSWER) continue
       insertUncertainty({
         id: newId('unc'),
         candidate_id: candidateId,

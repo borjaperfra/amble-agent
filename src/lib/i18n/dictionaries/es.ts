@@ -102,6 +102,8 @@ export const es: Dictionary = {
   interview: {
     saveAndLeave: 'Guardar y salir',
     completion: 'Gracias. Me pongo a buscar.',
+    roundDone: 'Gracias, ya está en tu mapa. Por ahora no tengo más preguntas.',
+    roundEmpty: 'Ahora mismo no me queda nada importante que preguntarte.',
     step: (current: number, total: number) => `Paso ${current} de ${total}`,
     answerLabel: 'Tu respuesta',
     unreadableTitle: 'No he podido usar lo que has compartido.',
@@ -244,6 +246,7 @@ export const es: Dictionary = {
     distinctiveEmpty:
       'Todavía no puedo describir qué hace distintivo tu perfil: no hay suficiente evidencia sólida. No es un defecto tuyo; es lo que sé hasta ahora.',
     gaps: 'Lo que aún no sé',
+    noGaps: 'Ahora mismo no me queda nada importante que preguntarte.',
     talkItThrough: 'Háblalo con tu Rep →',
     gapsLater: 'De vez en cuando te mandaré una de estas preguntas por WhatsApp; contéstame a ese mensaje.',
     // WhatsApp not linked yet.

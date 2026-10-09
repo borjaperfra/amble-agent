@@ -184,6 +184,13 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
           )}
         </section>
 
+        {/* Past the setup, with nothing worth asking left: said, not left blank (#22). */}
+        {vm.gaps.length === 0 && (next.kind === 'whatsapp' || next.kind === 'done') && (
+          <section className={`${styles.section} ${styles.gapsSection}`}>
+            <p className={styles.gapsNote}>{t.map.noGaps}</p>
+          </section>
+        )}
+
         {vm.gaps.length > 0 && (
           <section className={`${styles.section} ${styles.gapsSection}`} aria-labelledby="gaps">
             <p id="gaps" className={`kicker ${styles.sectionKicker}`}>

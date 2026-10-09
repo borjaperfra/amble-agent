@@ -644,6 +644,9 @@ function migrate(db: DatabaseSync): void {
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')
   addColumn(db, 'feedback', 'done_note', 'TEXT')
+  // Past the setup, a round of questions asks what the map showed as still
+  // unknown when it began, those and no others (#22): their ids, as JSON.
+  addColumn(db, 'interviews', 'planned_gaps', 'TEXT')
   // An aggregator's offer whose own page was opened (sourcing/liveness.ts):
   // when, and when that page said it was closed. Closed so, it stays closed
   // when the aggregator returns it again.

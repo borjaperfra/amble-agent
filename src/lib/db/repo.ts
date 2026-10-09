@@ -216,6 +216,7 @@ export interface InterviewRow {
   status: string
   created_at: string
   completed_at: string | null
+  planned_gaps: string | null
 }
 
 export interface InterviewTurnRow {
@@ -769,6 +770,10 @@ export function getOrCreateInterview(candidateId: string): InterviewRow {
     now(),
   )
   return db.prepare('SELECT * FROM interviews WHERE id = ?').get(id) as unknown as InterviewRow
+}
+
+export function setPlannedGaps(id: string, uncertaintyIds: string[]): void {
+  getDb().prepare('UPDATE interviews SET planned_gaps = ? WHERE id = ?').run(JSON.stringify(uncertaintyIds), id)
 }
 
 export function completeInterview(id: string): void {

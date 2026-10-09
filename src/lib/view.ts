@@ -105,6 +105,16 @@ function evidenceToViewItem(item: EvidenceRow, sourceNames: Map<string, string>,
   }
 }
 
+// The questions the map shows under what is still unknown, in its order:
+// what a round of questions asks (pipeline/interview.ts). MapView shows three.
+export const MAP_GAPS_SHOWN = 3
+
+export function mapGapIds(candidateId: string): string[] {
+  return getMapViewModel(candidateId, 'en')
+    .gaps.slice(0, MAP_GAPS_SHOWN)
+    .map((gap) => gap.id)
+}
+
 export function getMapViewModel(candidateId: string, locale: Locale): MapViewModel {
   const t = dictionaries[locale]
   const candidate = candidateById(candidateId)

@@ -16,7 +16,7 @@ import { recentMessages } from './conversation'
 import { followupOutcomes } from './followups'
 import { awaitedReason, awaitingOf, type ProposedPreference } from './offers'
 import { pendingInterviewQuestion } from './interview'
-import { getMapViewModel } from '../view'
+import { getMapViewModel, MAP_GAPS_SHOWN } from '../view'
 import { describeChange } from './profile'
 import { pendingReminders } from './reminders'
 import { isKnownMaliciousLink } from '../net/reputation'
@@ -553,10 +553,8 @@ export async function answerMessage(candidateId: string, message: string, langua
   return { ...data, reply, forward: data.forward || crisis }
 }
 
-// The questions the map shows under what is still unknown (MapView shows
-// three): the ones someone may answer here unasked.
-export const MAP_GAPS_SHOWN = 3
-
+// The questions the map shows under what is still unknown: the ones
+// someone may answer here unasked.
 export function mapGapsOf(candidateId: string): { id: string; about: string; question: string }[] {
   try {
     const candidate = candidateById(candidateId)
