@@ -1,9 +1,8 @@
-import { sendTemplate, templatesEnabled } from './templates'
+import { templatesEnabled } from './templates'
+import { reachOf } from '../channel/reach'
 import { getDb } from '../db/db'
 import { isSearchPaused, newId, now } from '../db/repo'
 import { logMessage } from './conversation'
-import { linkOf, windowOpen } from './link'
-import { sendMessage, zernioConfig } from './zernio'
 
 // What the agent left itself to say on a later day: how an interview went,
 // the day after it; a deadline, the day before. Sent with the daily round,
@@ -42,8 +41,6 @@ export function reminderDueToday(candidateId: string): boolean {
 
 export async function sendDueReminders(): Promise<{ sent: number; skipped: number }> {
   const stats = { sent: 0, skipped: 0 }
-  const config = zernioConfig()
-  if (!config) return stats
   const today = new Date().toISOString().slice(0, 10)
   const due = getDb()
     .prepare('SELECT id, candidate_id, message FROM whatsapp_reminders WHERE sent_at IS NULL AND due_on <= ? ORDER BY due_on')
@@ -52,10 +49,10 @@ export async function sendDueReminders(): Promise<{ sent: number; skipped: numbe
   for (const reminder of due) {
     // Paused: kept, and sent if still due once they resume it.
     if (done.has(reminder.candidate_id) || isSearchPaused(reminder.candidate_id)) continue
-    const link = linkOf(reminder.candidate_id)
-    const open = link ? windowOpen(link) : false
+    const reach = reachOf(reminder.candidate_id)
+    const open = reach?.open ?? false
     // The shared test number only writes inside the 24 hours.
-    if (!link?.conversation_id || (!open && config.sandbox)) {
+    if (!reach || (!open && reach.sandbox)) {
       stats.skipped++
       continue
     }
@@ -63,13 +60,13 @@ export async function sendDueReminders(): Promise<{ sent: number; skipped: numbe
       if (!open && templatesEnabled()) {
         // A variable holds one line: the reminder, short, as its name.
         const what = reminder.message.replace(/\s+/g, ' ').trim().slice(0, 120)
-        await sendTemplate(config, link, 'reminder', [what], [`tpl:rem:${reminder.id}`, null], `tpl-rem:${reminder.id}`)
+        await reach.template('reminder', [what], [`tpl:rem:${reminder.id}`, null], `tpl-rem:${reminder.id}`)
         getDb().prepare('UPDATE whatsapp_reminders SET sent_at = ? WHERE id = ?').run(now(), reminder.id)
         done.add(reminder.candidate_id)
         stats.sent++
         continue
       }
-      await sendMessage(config, { conversationId: link.conversation_id, text: reminder.message, utility: !open, idempotencyKey: `rem:${reminder.id}` })
+      await reach.send({ text: reminder.message, utility: !open, idempotencyKey: `rem:${reminder.id}` })
       getDb().prepare('UPDATE whatsapp_reminders SET sent_at = ? WHERE id = ?').run(now(), reminder.id)
       logMessage(reminder.candidate_id, 'out', reminder.message)
       done.add(reminder.candidate_id)
@@ -91,11 +88,10 @@ export function dropPastReminders(candidateId: string): void {
 
 // "Vale" on the reminder's template: the reminder itself, now the 24 hours are open.
 export async function sendTeasedReminder(candidateId: string, reminderId: string): Promise<boolean> {
-  const config = zernioConfig()
-  const link = linkOf(candidateId)
+  const reach = reachOf(candidateId)
   const reminder = getDb().prepare('SELECT message FROM whatsapp_reminders WHERE id = ? AND candidate_id = ?').get(reminderId, candidateId) as { message: string } | undefined
-  if (!config || !link?.conversation_id || !reminder) return false
-  await sendMessage(config, { conversationId: link.conversation_id, text: reminder.message, idempotencyKey: `rem:${reminderId}` })
+  if (!reach || !reminder) return false
+  await reach.send({ text: reminder.message, idempotencyKey: `rem:${reminderId}` })
   logMessage(candidateId, 'out', reminder.message)
   return true
 }

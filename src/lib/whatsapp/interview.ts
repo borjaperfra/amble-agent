@@ -1,4 +1,5 @@
-import { sendTemplate, templatesEnabled } from './templates'
+import { templatesEnabled } from './templates'
+import { reachableCandidateIds, reachOf } from '../channel/reach'
 import { getDb } from '../db/db'
 import { candidateById, getTurn, isSearchPaused, now } from '../db/repo'
 import { refreshDetectedLocale } from '../i18n/candidate'
@@ -7,9 +8,7 @@ import { dictionaries } from '../i18n/dictionaries'
 import { refreshDerivedProfile } from '../pipeline/graph'
 import { planNextQuestion, SETUP_QUESTIONS, takeAnswer } from '../pipeline/interview'
 import { logMessage } from './conversation'
-import { linkOf, windowOpen } from './link'
 import { wroteFirstRecently } from './proactive'
-import { sendMessage, zernioConfig } from './zernio'
 
 // The interview goes on after the setup, on WhatsApp: one question at a
 // time, days apart, never on a day amble already wrote to them. What they
@@ -64,27 +63,24 @@ function setupOver(candidateId: string): boolean {
 
 export async function sendDueInterviewQuestions(): Promise<{ asked: number; skipped: number }> {
   const stats = { asked: 0, skipped: 0 }
-  const config = zernioConfig()
-  if (!config) return stats
   const db = getDb()
-  const candidates = db.prepare('SELECT candidate_id FROM whatsapp_links WHERE conversation_id IS NOT NULL').all() as unknown as { candidate_id: string }[]
-  for (const { candidate_id: candidateId } of candidates) {
-    const link = linkOf(candidateId)
+  for (const candidateId of reachableCandidateIds()) {
+    const reach = reachOf(candidateId)
     // Paused: amble does not write first until they resume it.
-    if (!link?.conversation_id || isSearchPaused(candidateId)) continue
+    if (!reach || isSearchPaused(candidateId)) continue
     // The setup's questions first, in the web. A question they left open there
     // a day ago is not a setup still going on: it is the next one to ask here.
     if (!setupOver(candidateId) || pendingInterviewQuestion(candidateId) || wroteToday(candidateId) || wroteFirstRecently(candidateId)) continue
     const last = db.prepare('SELECT MAX(asked_at) AS at FROM whatsapp_questions WHERE candidate_id = ?').get(candidateId) as { at: string | null }
     if (last.at && Date.now() - Date.parse(last.at) < DAYS_APART * DAY_MS) continue
-    const open = windowOpen(link)
-    if (!open && config.sandbox) {
+    const open = reach.open
+    if (!open && reach.sandbox) {
       stats.skipped++
       continue
     }
     try {
       if (!open && templatesEnabled()) {
-        await sendTemplate(config, link, 'question', [], ['tpl:question', null], `tpl-iq:${candidateId}:${new Date().toISOString().slice(0, 10)}`)
+        await reach.template('question', [], ['tpl:question', null], `tpl-iq:${candidateId}:${new Date().toISOString().slice(0, 10)}`)
         // Counted as asked, so it is not asked again for a while.
         db.prepare('INSERT INTO whatsapp_questions (candidate_id, turn_id, asked_at) VALUES (?, ?, ?)').run(candidateId, `template:${now()}`, now())
         stats.asked++
@@ -94,7 +90,7 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
       if (next.action !== 'ASK' || !next.turnId || !next.question) continue
       const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
       const text = w.interviewQuestion(next.question)
-      await sendMessage(config, { conversationId: link.conversation_id, text, utility: !open, idempotencyKey: `iq:${next.turnId}` })
+      await reach.send({ text, utility: !open, idempotencyKey: `iq:${next.turnId}` })
       db.prepare('INSERT INTO whatsapp_questions (candidate_id, turn_id, asked_at) VALUES (?, ?, ?)').run(candidateId, next.turnId, now())
       logMessage(candidateId, 'out', text)
       stats.asked++
@@ -107,13 +103,12 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
 
 // "Dime" on the question's template: the question itself.
 export async function sendTeasedQuestion(candidateId: string): Promise<boolean> {
-  const config = zernioConfig()
-  const link = linkOf(candidateId)
-  if (!config || !link?.conversation_id) return false
+  const reach = reachOf(candidateId)
+  if (!reach) return false
   const next = await planNextQuestion(candidateId, { setup: false })
   if (next.action !== 'ASK' || !next.turnId || !next.question) return false
   const text = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.interviewQuestion(next.question)
-  await sendMessage(config, { conversationId: link.conversation_id, text, idempotencyKey: `iq:${next.turnId}` })
+  await reach.send({ text, idempotencyKey: `iq:${next.turnId}` })
   getDb().prepare('INSERT INTO whatsapp_questions (candidate_id, turn_id, asked_at) VALUES (?, ?, ?)').run(candidateId, next.turnId, now())
   logMessage(candidateId, 'out', text)
   return true

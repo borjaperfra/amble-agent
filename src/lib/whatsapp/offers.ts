@@ -17,12 +17,11 @@ import { storedRoleQuery, type RoleQuery } from '../matching/role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { estimateRange, estimateSource } from '../salary/format'
 import { logMessage } from './conversation'
-import { linkOf, windowOpen, type WhatsAppLink } from './link'
 import { wroteFirstRecently } from './proactive'
 import { reviewForSending, type Pitch } from './review'
 import { tellSent } from './sent'
-import { sendTemplate, templatesEnabled } from './templates'
-import { sendMessage, sendPicture, zernioConfig, type ZernioConfig } from './zernio'
+import { templatesEnabled } from './templates'
+import { reachableCandidateIds, reachOf, type Reach } from '../channel/reach'
 
 // Offers on WhatsApp: only what the first reading found to be their kind of
 // role, and only after a second reading finds nothing that would let them
@@ -139,12 +138,11 @@ export function offerText(match: Listed, pitch: Pitch | null, d: (typeof diction
     .join('\n')
 }
 
-async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, pitch: Pitch | null): Promise<void> {
-  const d = dictionaries[candidateLocale(candidateById(link.candidate_id))]
+async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promise<void> {
+  const d = dictionaries[candidateLocale(candidateById(reach.candidateId))]
   const w = d.whatsapp
   const body = offerText(match, pitch, d)
-  await sendMessage(config, {
-    conversationId: link.conversation_id as string,
+  await reach.send({
     text: body,
     buttons: [
       { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
@@ -153,22 +151,21 @@ async function sendOne(config: ZernioConfig, link: WhatsAppLink, match: Listed, 
     ],
     idempotencyKey: `of:${match.id}`,
   })
-  getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), link.candidate_id, match.id)
-  logMessage(link.candidate_id, 'out', body)
+  getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), reach.candidateId, match.id)
+  logMessage(reach.candidateId, 'out', body)
 }
 
 // "Cuéntame" on the offer's template: the offer itself, as reviewed when
 // the template went out. False when it is no longer there to show.
 export async function showTeasedOffer(candidateId: string, matchId: string): Promise<boolean> {
-  const config = zernioConfig()
-  const link = linkOf(candidateId)
-  if (!config || !link?.conversation_id) return false
+  const reach = reachOf(candidateId)
+  if (!reach) return false
   const match = listMatchesForKey(candidateId, currentMatchKey(candidateId)).find((row) => row.id === matchId)
   if (!match || match.closed_at) return false
   const sent = getDb().prepare('SELECT pitch FROM offer_sends WHERE candidate_id = ? AND match_id = ?').get(candidateId, matchId) as { pitch: string | null } | undefined
   const floor = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))?.salaryFloor ?? null
   const estimate = publishedSalary(match) ? null : shownEstimate(estimatesFor([match.opportunity_id]).get(match.opportunity_id), floor)
-  await sendOne(config, link, { ...match, estimate }, sent?.pitch ? (JSON.parse(sent.pitch) as Pitch) : null)
+  await sendOne(reach, { ...match, estimate }, sent?.pitch ? (JSON.parse(sent.pitch) as Pitch) : null)
   return true
 }
 
@@ -182,23 +179,19 @@ export interface OfferStats {
 // passes the second reading, if the pace allows one now.
 export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStats> {
   const stats: OfferStats = { sent: 0, held: 0, skipped: [] }
-  const config = zernioConfig()
-  if (!config) return stats
   const hour = madridHour()
   if (hour < SEND_FROM_HOUR || hour >= SEND_UNTIL_HOUR) return stats
   const ids = onlyCandidateId
     ? [onlyCandidateId]
-    : (getDb().prepare('SELECT candidate_id FROM whatsapp_links WHERE conversation_id IS NOT NULL').all() as unknown as { candidate_id: string }[]).map(
-        (row) => row.candidate_id,
-      )
+    : reachableCandidateIds()
   for (const candidateId of ids) {
-    const link = linkOf(candidateId)
+    const reach = reachOf(candidateId)
     // Paused: nothing goes out until they resume it.
-    if (!link?.conversation_id || isSearchPaused(candidateId) || !paceAllows(candidateId) || wroteFirstRecently(candidateId)) continue
+    if (!reach || isSearchPaused(candidateId) || !paceAllows(candidateId) || wroteFirstRecently(candidateId)) continue
     // Outside the 24 hours an offer goes as the approved template that asks
     // first; the shared test number has none.
-    const open = windowOpen(link)
-    if (!open && (!templatesEnabled() || config.sandbox)) {
+    const open = reach.open
+    if (!open && (!templatesEnabled() || reach.sandbox)) {
       stats.skipped.push({ candidateId, reason: 'window closed: an offer needs a template' })
       continue
     }
@@ -229,9 +222,9 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
           stats.held++
           continue
         }
-        if (open) await sendOne(config, link, match, review.pitch)
+        if (open) await sendOne(reach, match, review.pitch)
         else {
-          await sendTemplate(config, link, 'offer', [], [`tpl:of:${match.id}`, null], `tpl-of:${match.id}`)
+          await reach.template('offer', [], [`tpl:of:${match.id}`, null], `tpl-of:${match.id}`)
           // Counted for the pace now; the whole offer follows their tap.
           getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), candidateId, match.id)
         }
@@ -295,15 +288,22 @@ export interface ProposedPreference {
   either?: boolean
 }
 
+// Kept on whichever channel they are connected by (WhatsApp, Telegram).
 export function awaitingOf(candidateId: string): Awaiting | null {
-  const row = getDb().prepare('SELECT awaiting FROM whatsapp_links WHERE candidate_id = ?').get(candidateId) as { awaiting: string | null } | undefined
+  const row = getDb()
+    .prepare(
+      `SELECT COALESCE((SELECT awaiting FROM whatsapp_links WHERE candidate_id = ?), (SELECT awaiting FROM telegram_links WHERE candidate_id = ?)) AS awaiting`,
+    )
+    .get(candidateId, candidateId) as { awaiting: string | null } | undefined
   if (!row?.awaiting) return null
   const awaiting = JSON.parse(row.awaiting) as Awaiting
   return Date.parse(awaiting.until) > Date.now() ? awaiting : null
 }
 
 export function setAwaiting(candidateId: string, awaiting: Awaiting | null): void {
-  getDb().prepare('UPDATE whatsapp_links SET awaiting = ? WHERE candidate_id = ?').run(awaiting ? JSON.stringify(awaiting) : null, candidateId)
+  const value = awaiting ? JSON.stringify(awaiting) : null
+  getDb().prepare('UPDATE whatsapp_links SET awaiting = ? WHERE candidate_id = ?').run(value, candidateId)
+  getDb().prepare('UPDATE telegram_links SET awaiting = ? WHERE candidate_id = ?').run(value, candidateId)
 }
 
 function answered(candidateId: string, matchId: string, answer: string): void {
@@ -435,11 +435,9 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
       // yes. A "not a robot" check, if the form asks for one when sending, is
       // theirs then, in the live view. Anything left: theirs to finish there.
       const picture = result.left.length === 0 ? filledPicture(candidateId, match.opportunity_id) : null
-      const config = zernioConfig()
-      const link = linkOf(candidateId)
-      if (picture && config && link?.conversation_id) {
-        await sendPicture(config, {
-          conversationId: link.conversation_id,
+      const reach = reachOf(candidateId)
+      if (picture && reach) {
+        await reach.sendPicture({
           image: picture,
           filename: 'formulario.jpg',
           text: w.fillReady,

@@ -22,7 +22,7 @@ import { isMaliciousLink } from '../net/reputation'
 import type { RawOpportunity } from '../sourcing/types'
 import { untrusted } from '../untrusted'
 import { allow } from './throttle'
-import { markRead, react, sendMessage, showTyping, zernioConfig, type ZernioConfig } from './zernio'
+import { fetchMedia, markRead, react, sendMessage, showTyping, zernioConfig } from './zernio'
 
 // One event from the provider's webhook. Each is handled once (they retry
 // until answered, with the same id). What someone writes is, in order: the
@@ -74,7 +74,7 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   const phone = (message.sender.phoneNumber ?? `+${message.sender.id}`).replace(/[^\d+]/g, '')
   const userId = message.sender.businessScopedUserId ?? null
   const text = typeof message.text === 'string' ? message.text.trim() : ''
-  let interactiveId = event.metadata?.interactiveId ?? null
+  const interactiveId = event.metadata?.interactiveId ?? null
 
   // Each reply its own key: one event can be answered in several messages.
   let replies = 0
@@ -109,12 +109,73 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
   const candidate = getCandidate(link.candidate_id)
   if (!candidate) return
   replyTo = candidate.id
+
+  const attachments = (message.attachments as (SentAttachment & { type?: string; url?: string; mimeType?: string })[] | undefined) ?? []
+  const fromZernio = (attachment: SentAttachment & { url?: string; mimeType?: string }): IncomingFile => ({
+    name: documentName(attachment),
+    mimeType: attachment.mimeType ?? null,
+    fetch: (maxBytes) => fetchMedia(config, attachment.url ?? '', maxBytes),
+  })
+  const document = attachments.find(isDocument)
+  const voice = attachments.find((item) => item.type === 'audio' && item.url)
+  return handleFromPerson(
+    candidate,
+    {
+      text,
+      interactiveId,
+      buttonPayload: event.metadata?.buttonPayload ?? null,
+      document: document ? fromZernio(document) : null,
+      voice: voice ? { name: 'voice', mimeType: voice.mimeType ?? 'audio/ogg', fetch: (maxBytes) => fetchZernioVoice(config.apiKey, voice.url ?? '', maxBytes) } : null,
+      otherAttachment: attachments.length > 0,
+    },
+    {
+      reply,
+      typing: () => void showTyping(config, message.conversationId).catch(() => undefined),
+      react: (emoji) => {
+        if (message.platformMessageId) void react(config, message.conversationId, message.platformMessageId, emoji).catch(() => undefined)
+      },
+    },
+  )
+}
+
+// What someone wrote, on any channel (WhatsApp, Telegram), once it is known
+// whose it is: the words, a tapped button, a document or a voice note.
+export interface IncomingFile {
+  name: string
+  mimeType: string | null
+  // Its bytes, whole or not at all (TooLargeError past maxBytes); null when gone.
+  fetch(maxBytes: number): Promise<Buffer | null>
+}
+
+export interface PersonMessage {
+  text: string
+  // The payload of a button they tapped.
+  interactiveId: string | null
+  // WhatsApp only: the words of a template's button.
+  buttonPayload: string | null
+  document: IncomingFile | null
+  voice: IncomingFile | null
+  // Something else came with it (a picture): not read yet.
+  otherAttachment: boolean
+}
+
+// How to answer on the channel it came from.
+export interface ChatIO {
+  reply: Reply
+  typing(): void
+  react(emoji: string): void
+}
+
+export async function handleFromPerson(candidate: CandidateRow, input: PersonMessage, io: ChatIO): Promise<void> {
+  const { text } = input
+  const reply = io.reply
+  let interactiveId = input.interactiveId
   const w = dictionaries[candidateLocale(candidate)].whatsapp
 
   // A template's button: what it stands for. "Not now" is acknowledged; the
   // offer, the reminder or the question it announced follows the tap; the
   // rest answer as the ordinary message's buttons would.
-  const fromTemplate = templateTap(candidate.id, event.metadata?.buttonPayload ?? null, text)
+  const fromTemplate = templateTap(candidate.id, input.buttonPayload, text)
   if (fromTemplate !== null) {
     if (fromTemplate === '') {
       logMessage(candidate.id, 'in', text)
@@ -169,28 +230,26 @@ export async function handleEvent(event: InboundEvent): Promise<void> {
 
   // A document (a new CV, their LinkedIn PDF) is read into their map,
   // whatever words come with it.
-  const document = (message.attachments as SentAttachment[] | undefined)?.find(isDocument)
-  if (document) {
-    logMessage(candidate.id, 'in', text || `[${documentName(document)}]`)
-    void showTyping(config, message.conversationId).catch(() => undefined)
-    await takeDocument(candidate, document, config, reply)
+  if (input.document) {
+    logMessage(candidate.id, 'in', text || `[${input.document.name}]`)
+    io.typing()
+    await takeDocument(candidate, input.document, reply)
     return
   }
 
   // A voice note is heard as what it says; a picture is not read yet.
   if (!text) {
-    const voice = (message.attachments as { type?: string; url?: string; mimeType?: string }[] | undefined)?.find((item) => item.type === 'audio' && item.url)
-    if (voice?.url) {
-      const heard = await hear(config.apiKey, voice.url, voice.mimeType ?? 'audio/ogg', candidateLocale(candidate)).catch(() => '')
-      if (heard) return answerWords(candidate, heard, reply, w, { config, conversationId: message.conversationId, messageId: message.platformMessageId ?? null })
+    if (input.voice) {
+      const heard = await hear(input.voice, candidateLocale(candidate)).catch(() => '')
+      if (heard) return answerWords(candidate, heard, reply, w, io)
       await reply(w.voiceFailed)
       return
     }
-    if ((message.attachments?.length ?? 0) > 0) await reply(w.textOnly)
+    if (input.otherAttachment) await reply(w.textOnly)
     return
   }
 
-  return answerWords(candidate, text, reply, w, { config, conversationId: message.conversationId, messageId: message.platformMessageId ?? null })
+  return answerWords(candidate, text, reply, w, io)
 }
 
 type Reply = (body: string, buttons?: { title: string; payload: string }[]) => Promise<void>
@@ -210,7 +269,7 @@ async function answerWords(
   message: string,
   reply: Reply,
   w: (typeof dictionaries)['es']['whatsapp'],
-  chat: { config: ZernioConfig; conversationId: string; messageId: string | null },
+  chat: ChatIO,
 ): Promise<void> {
   let text = message
   // What they wrote, before any note of amble's is added to it.
@@ -226,7 +285,7 @@ async function answerWords(
     return
   }
 
-  const typing = () => void showTyping(chat.config, chat.conversationId).catch(() => undefined)
+  const typing = () => chat.typing()
   typing()
 
   // A link to an offer: read and judged like any offer amble finds. A page
@@ -277,7 +336,7 @@ async function answerWords(
   clearInterval(typingTimer)
   if (holding) await holding
   logMessage(candidate.id, 'in', text)
-  if (answer?.reaction && chat.messageId) void react(chat.config, chat.conversationId, chat.messageId, answer.reaction).catch(() => undefined)
+  if (answer?.reaction) chat.react(answer.reaction)
   if (!answer) {
     await reply(w.agentFailed)
     return
@@ -362,17 +421,24 @@ async function answerWords(
 
 // A voice note: fetched from the provider (it needs our key, and WhatsApp
 // drops media after a while, so now) and transcribed. The audio is not kept.
-async function hear(apiKey: string, url: string, mimeType: string, language: string): Promise<string> {
-  // Our key goes only to Zernio's own media endpoint, never to another host.
+async function hear(voice: IncomingFile, language: string): Promise<string> {
+  // A voice note, not a file of any size.
+  const bytes = await voice.fetch(MAX_AUDIO_BYTES)
+  if (!bytes) return ''
+  const mimeType = voice.mimeType ?? 'audio/ogg'
+  const audio = new Blob([new Uint8Array(bytes)], { type: mimeType })
+  return transcribe(audio, mimeType.includes('mp4') ? 'note.m4a' : 'note.ogg', language)
+}
+
+// WhatsApp's voice note, as it always was fetched: our key only to Zernio's
+// own media endpoint, never to another host.
+async function fetchZernioVoice(apiKey: string, url: string, maxBytes: number): Promise<Buffer | null> {
   const own = new URL(url).hostname === 'zernio.com'
   const response = await fetch(url, { headers: own ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(30_000) })
-  if (!response.ok) return ''
-  // A voice note, not a file of any size.
-  if (Number(response.headers.get('content-length') ?? 0) > MAX_AUDIO_BYTES) return ''
-  const bytes = await response.arrayBuffer()
-  if (bytes.byteLength > MAX_AUDIO_BYTES) return ''
-  const audio = new Blob([bytes], { type: mimeType })
-  return transcribe(audio, mimeType.includes('mp4') ? 'note.m4a' : 'note.ogg', language)
+  if (!response.ok) return null
+  if (Number(response.headers.get('content-length') ?? 0) > maxBytes) return null
+  const bytes = Buffer.from(await response.arrayBuffer())
+  return bytes.length > maxBytes ? null : bytes
 }
 
 // What one person may ask the agent: enough for any conversation, not for

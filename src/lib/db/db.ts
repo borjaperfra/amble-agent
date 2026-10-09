@@ -504,6 +504,29 @@ function createDb(): DatabaseSync {
       expires_at TEXT NOT NULL
     );
 
+    -- amble on Telegram (#18): the chat each person connected, and the
+    -- one-time codes of the links that connect it (t.me/<bot>?start=<code>).
+    -- What is said there is kept with the rest of the conversation
+    -- (whatsapp_messages), and its updates are handled once (whatsapp_events,
+    -- as tg:<update_id>).
+    CREATE TABLE IF NOT EXISTS telegram_links (
+      candidate_id TEXT PRIMARY KEY REFERENCES candidates(id),
+      chat_id TEXT NOT NULL UNIQUE,
+      user_id TEXT,
+      username TEXT,
+      linked_at TEXT NOT NULL,
+      last_inbound_at TEXT,
+      -- What the agent waits for next (as whatsapp_links.awaiting).
+      awaiting TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS telegram_link_codes (
+      code TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS whatsapp_events (
       id TEXT PRIMARY KEY,
       event TEXT NOT NULL,

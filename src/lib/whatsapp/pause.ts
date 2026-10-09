@@ -1,13 +1,12 @@
-import { sendTemplate, templatesEnabled } from './templates'
+import { templatesEnabled } from './templates'
+import { reachOf } from '../channel/reach'
 import { candidateById, newId } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { getDb } from '../db/db'
 import { isSearchPaused, pauseSearch, resumeSearch } from '../pause'
 import { logMessage } from './conversation'
-import { linkOf, windowOpen } from './link'
 import { awaitingOf, setAwaiting } from './offers'
-import { sendMessage, zernioConfig } from './zernio'
 
 // Pausing the search on WhatsApp, or resuming it: the agent proposes it when
 // they say so, and only a yes on its buttons does it. Each proposal has its
@@ -60,16 +59,14 @@ export async function answerPause(candidateId: string, tap: PauseTap, reply: Rep
 // buttons to do it. Whatever they answer, it is not asked again.
 export async function sendPauseCheckIns(): Promise<{ asked: number; skipped: number }> {
   const stats = { asked: 0, skipped: 0 }
-  const config = zernioConfig()
-  if (!config) return stats
   const due = getDb()
     .prepare('SELECT id, pause_check_on FROM candidates WHERE search_paused_at IS NOT NULL AND pause_check_on IS NOT NULL AND pause_check_on <= ?')
     .all(new Date().toISOString().slice(0, 10)) as { id: string; pause_check_on: string }[]
   for (const { id, pause_check_on: checkOn } of due) {
-    const link = linkOf(id)
-    const open = link ? windowOpen(link) : false
+    const reach = reachOf(id)
+    const open = reach?.open ?? false
     getDb().prepare('UPDATE candidates SET pause_check_on = NULL WHERE id = ?').run(id)
-    if (!link?.conversation_id || (!open && config.sandbox)) {
+    if (!reach || (!open && reach.sandbox)) {
       stats.skipped++
       continue
     }
@@ -79,11 +76,11 @@ export async function sendPauseCheckIns(): Promise<{ asked: number; skipped: num
         const locale = candidateLocale(candidateById(id))
         const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'Europe/Madrid' }).format(new Date(`${checkOn}T12:00:00Z`))
         const buttons = proposePause(id, false)
-        await sendTemplate(config, link, 'pause', [date], buttons.map((button) => button.payload), `tpl-pause:${id}:${checkOn}`)
+        await reach.template('pause', [date], buttons.map((button) => button.payload), `tpl-pause:${id}:${checkOn}`)
         stats.asked++
         continue
       }
-      await sendMessage(config, { conversationId: link.conversation_id, text, buttons: proposePause(id, false), utility: !open, idempotencyKey: `pausecheck:${id}:${new Date().toISOString().slice(0, 10)}` })
+      await reach.send({ text, buttons: proposePause(id, false), utility: !open, idempotencyKey: `pausecheck:${id}:${new Date().toISOString().slice(0, 10)}` })
       logMessage(id, 'out', text)
       stats.asked++
     } catch {

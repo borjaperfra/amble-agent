@@ -1,13 +1,13 @@
 import { wroteFirstRecently } from './proactive'
-import { sendTemplate, templatesEnabled } from './templates'
+import { templatesEnabled } from './templates'
+import { reachableCandidateIds, reachOf } from '../channel/reach'
 import { getDb } from '../db/db'
 import { candidateById, isSearchPaused, now } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { logMessage } from './conversation'
-import { linkOf, windowOpen } from './link'
 import { reminderDueToday } from './reminders'
-import { sendMessage, zernioConfig, ZernioError } from './zernio'
+import { ZernioError } from './zernio'
 
 // The only thing amble writes about on WhatsApp: a week after someone sends an
 // application, whether they have heard anything, with three answers to tap.
@@ -121,24 +121,19 @@ export interface FollowupStats {
 // Once a day: the question owed to each person with WhatsApp linked.
 export async function sendDueFollowups(): Promise<FollowupStats> {
   const stats: FollowupStats = { asked: 0, skipped: [] }
-  const config = zernioConfig()
-  if (!config) return stats
-  const candidates = getDb().prepare('SELECT candidate_id FROM whatsapp_links WHERE conversation_id IS NOT NULL').all() as unknown as {
-    candidate_id: string
-  }[]
-  for (const { candidate_id: candidateId } of candidates) {
-    const link = linkOf(candidateId)
+  for (const candidateId of reachableCandidateIds()) {
+    const reach = reachOf(candidateId)
     // Paused: amble does not write first until they resume it.
-    if (!link?.conversation_id || isSearchPaused(candidateId) || askedToday(candidateId) || wroteFirstRecently(candidateId)) continue
+    if (!reach || isSearchPaused(candidateId) || askedToday(candidateId) || wroteFirstRecently(candidateId)) continue
     // A reminder due today (the eve of an interview, a deadline) goes instead:
     // one message from amble in the morning, not two.
     if (reminderDueToday(candidateId)) continue
     const due = nextDue(candidateId)
     if (!due) continue
-    const open = windowOpen(link)
+    const open = reach.open
     // The shared test number can only write inside the 24 hours; a real one
     // writes a utility message outside them.
-    if (!open && config.sandbox) {
+    if (!open && reach.sandbox) {
       stats.skipped.push({ candidateId, reason: 'window closed on the sandbox number' })
       continue
     }
@@ -149,9 +144,7 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
       // Past the 24 hours, the approved template asks it, its buttons in the
       // template's order (replied, nothing yet, a no).
       if (!open && templatesEnabled()) {
-        await sendTemplate(
-          config,
-          link,
+        await reach.template(
           'followup',
           [due.title, due.company],
           [payload(due.opportunity_id, due.round, 'called'), payload(due.opportunity_id, due.round, 'nothing'), payload(due.opportunity_id, due.round, 'rejected')],
@@ -163,8 +156,7 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
         stats.asked++
         continue
       }
-      await sendMessage(config, {
-        conversationId: link.conversation_id,
+      await reach.send({
         text,
         buttons: ANSWERS.map((answer) => ({ title: w.answers[answer], payload: payload(due.opportunity_id, due.round, answer) })),
         utility: !open,

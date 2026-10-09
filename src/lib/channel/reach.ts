@@ -1,0 +1,93 @@
+import { getDb } from '../db/db'
+import { sendPhoto, sendText, telegramConfig } from '../telegram/api'
+import { telegramLinkOf } from '../telegram/link'
+import { linkOf, windowOpen } from '../whatsapp/link'
+import { sendTemplate, type TemplateKind } from '../whatsapp/templates'
+import { sendMessage, sendPicture, zernioConfig, type Button } from '../whatsapp/zernio'
+
+// Where amble writes to someone first: WhatsApp or Telegram (#18), and what
+// that channel allows now. Everything that writes on its own (offers,
+// questions, reminders, follow-ups, the pause) goes through here, never to a
+// provider directly. Someone with both connected is written to where they
+// last wrote.
+
+export type ChannelKind = 'whatsapp' | 'telegram'
+
+export interface Outgoing {
+  text: string
+  buttons?: Button[]
+  // WhatsApp only: past the 24 hours, sent as a utility message (Direct Send).
+  utility?: boolean
+  // WhatsApp only: the provider keeps it from going twice.
+  idempotencyKey?: string
+}
+
+export interface Reach {
+  candidateId: string
+  kind: ChannelKind
+  // Free to write now: WhatsApp within 24 hours of their last message;
+  // Telegram always.
+  open: boolean
+  // WhatsApp's shared test number: no templates of ours there.
+  sandbox: boolean
+  send(message: Outgoing): Promise<void>
+  sendPicture(params: { image: Buffer; filename: string; text: string; buttons?: Button[]; idempotencyKey?: string }): Promise<void>
+  // WhatsApp only, past the 24 hours: the approved template that asks first.
+  template(kind: TemplateKind, values: string[], payloads: (string | null)[], idempotencyKey: string): Promise<void>
+}
+
+export function reachOf(candidateId: string): Reach | null {
+  const zernio = zernioConfig()
+  const whatsapp = zernio ? linkOf(candidateId) : null
+  const telegram = telegramConfig()
+  const chat = telegram ? telegramLinkOf(candidateId) : null
+  const onWhatsApp = Boolean(whatsapp?.conversation_id)
+  if (chat && telegram && (!onWhatsApp || (chat.last_inbound_at ?? chat.linked_at) >= (whatsapp?.last_inbound_at ?? whatsapp?.linked_at ?? ''))) {
+    return {
+      candidateId,
+      kind: 'telegram',
+      open: true,
+      sandbox: false,
+      send: async (message) => {
+        await sendText(telegram, chat.chat_id, message.text, message.buttons)
+      },
+      sendPicture: (params) => sendPhoto(telegram, chat.chat_id, params),
+      template: async () => {
+        throw new Error('Telegram has no templates')
+      },
+    }
+  }
+  if (!zernio || !whatsapp?.conversation_id) return null
+  const conversationId = whatsapp.conversation_id
+  return {
+    candidateId,
+    kind: 'whatsapp',
+    open: windowOpen(whatsapp),
+    sandbox: zernio.sandbox,
+    send: async (message) => {
+      await sendMessage(zernio, { conversationId, ...message })
+    },
+    sendPicture: async (params) => {
+      await sendPicture(zernio, { conversationId, ...params })
+    },
+    template: (kind, values, payloads, idempotencyKey) => sendTemplate(zernio, whatsapp, kind, values, payloads, idempotencyKey),
+  }
+}
+
+// Everyone amble can write to on some channel.
+export function reachableCandidateIds(): string[] {
+  const db = getDb()
+  const ids = new Set<string>()
+  if (zernioConfig()) {
+    for (const row of db.prepare('SELECT candidate_id FROM whatsapp_links WHERE conversation_id IS NOT NULL').all() as { candidate_id: string }[]) ids.add(row.candidate_id)
+  }
+  if (telegramConfig()) {
+    for (const row of db.prepare('SELECT candidate_id FROM telegram_links').all() as { candidate_id: string }[]) ids.add(row.candidate_id)
+  }
+  return [...ids]
+}
+
+// Connected anywhere: what the screens ask before offering to connect.
+export function isReachable(candidateId: string): boolean {
+  return reachOf(candidateId) !== null
+}

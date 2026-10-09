@@ -9,9 +9,8 @@ import { refreshDerivedProfile } from '../pipeline/graph'
 import { takeCorrection, takeGapAnswer, takeToldNote, type IncorporatedAnswer } from '../pipeline/interview'
 import { untrusted, UNTRUSTED_RULE } from '../untrusted'
 import { logMessage } from './conversation'
-import { linkOf } from './link'
+import { reachOf } from '../channel/reach'
 import { awaitingOf, setAwaiting, type ProfileChange } from './offers'
-import { sendMessage, zernioConfig } from './zernio'
 
 // Their map and their account, changed on WhatsApp. What they tell about
 // their work is taken in as an interview answer is (the same extraction:
@@ -36,10 +35,9 @@ export function mapLink(candidateId: string): string {
 
 // A message of amble's own, after the reply: what was added, once it is in.
 async function tell(candidateId: string, text: string, key: string): Promise<void> {
-  const config = zernioConfig()
-  const link = linkOf(candidateId)
-  if (!config || !link?.conversation_id) return
-  await sendMessage(config, { conversationId: link.conversation_id, text, idempotencyKey: key })
+  const reach = reachOf(candidateId)
+  if (!reach) return
+  await reach.send({ text, idempotencyKey: key })
   logMessage(candidateId, 'out', text)
 }
 

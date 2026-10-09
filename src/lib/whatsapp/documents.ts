@@ -8,8 +8,8 @@ import { takeIntake } from '../limits'
 import { TooLargeError } from '../net/safe-fetch'
 import { readLaterSource } from '../pipeline/setup'
 import { createFileSource, createWebsiteSource, MAX_PDF_BYTES, type SourceCreated } from '../pipeline/sources'
+import type { IncomingFile } from './inbound'
 import { mapLink } from './profile'
-import { fetchMedia, type ZernioConfig } from './zernio'
 
 // A document sent on WhatsApp (a new CV, their LinkedIn PDF). Fetched from
 // the provider at once (WhatsApp drops media after a while), then taken in
@@ -48,7 +48,8 @@ function samePdf(sourceId: string, bytes: Buffer): boolean {
 
 type Reply = (text: string, buttons?: { title: string; payload: string }[]) => Promise<unknown>
 
-export async function takeDocument(candidate: CandidateRow, attachment: SentAttachment, config: ZernioConfig, reply: Reply): Promise<void> {
+// A document they sent, on WhatsApp or Telegram.
+export async function takeDocument(candidate: CandidateRow, file: IncomingFile, reply: Reply): Promise<void> {
   const locale = candidateLocale(candidate)
   const w = dictionaries[locale].whatsapp
   // What the checks say to them is in their language.
@@ -61,7 +62,7 @@ export async function takeDocument(candidate: CandidateRow, attachment: SentAtta
     }
     let bytes: Buffer | null = null
     try {
-      bytes = await fetchMedia(config, attachment.url ?? '', MAX_PDF_BYTES)
+      bytes = await file.fetch(MAX_PDF_BYTES)
     } catch (error) {
       if (error instanceof TooLargeError) {
         await reply(w.documentSetAside(serverText().fileTooLarge))
@@ -75,7 +76,7 @@ export async function takeDocument(candidate: CandidateRow, attachment: SentAtta
 
     // The same file again is already on their map. A new one under an old
     // name (an updated "CV.pdf") is a new source, named so.
-    let name = documentName(attachment)
+    let name = file.name
     const known = listSources(candidate.id).filter((source) => source.original_filename === name && (source.status === 'extracted' || source.status === 'processed'))
     if (known.some((source) => source.status === 'processed' && samePdf(source.id, bytes))) {
       await reply(w.documentAlready)
@@ -86,7 +87,7 @@ export async function takeDocument(candidate: CandidateRow, attachment: SentAtta
       name = `${name.slice(0, name.length - extension.length)} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})${extension}`
     }
 
-    const created = await createFileSource(candidate.id, new File([new Uint8Array(bytes)], name, { type: attachment.mimeType ?? '' }))
+    const created = await createFileSource(candidate.id, new File([new Uint8Array(bytes)], name, { type: file.mimeType ?? '' }))
     if (created.status === 'failed') {
       await reply(w.documentSetAside(created.detail ?? serverText().onlyPdfOrText))
       return
