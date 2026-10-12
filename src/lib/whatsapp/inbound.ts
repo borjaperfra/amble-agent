@@ -16,6 +16,8 @@ import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settle
 import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
+import { getMatch } from '../db/matching'
+import { readNo } from '../pipeline/learn-from-no'
 import { answerProfile, parseProfilePayload, proposeCorrection, proposeLanguage, proposeName, takeGap, takeNote } from './profile'
 import { documentName, isDocument, takeDocument, takeLink, type SentAttachment } from './documents'
 import { isMaliciousLink } from '../net/reputation'
@@ -389,6 +391,22 @@ async function answerWords(
     if (done.buttons) buttons = done.buttons
   }
   await reply(answer.reply, buttons)
+  // Why an offer did not fit, when it holds for others too: asked at once,
+  // with its own buttons (#42); on their yes it applies to the ones waiting too.
+  const reason = awaited ? answer.reasonItDoesNotFit : null
+  if (awaited && reason && !buttons?.length) {
+    const opportunityId = getMatch(awaited.matchId)?.opportunity_id
+    const rule = opportunityId
+      ? await readNo(candidate.id, opportunityId, reason).catch((error: unknown) => {
+          console.error('[amble] learn from a no failed:', error instanceof Error ? error.message : error)
+          return null
+        })
+      : null
+    if (rule) {
+      const label = rule.label ?? rule.statement
+      await reply(w.noRuleAsk(label), proposePreference(candidate.id, { kind: rule.kind, label, statement: rule.statement, replaces: null }, w.noRuleButtons))
+    }
+  }
   // The offer they asked to see: its card, with its buttons to answer it.
   if (answer.action?.type === 'show_offer') {
     const opportunityId = offerToShow(candidate.id, answer.action.company, answer.action.title)

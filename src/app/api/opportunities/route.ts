@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getMatch, respondAsApplied, respondToMatch, setProgress, type MatchProgress, type MatchResponse } from '@/lib/db/matching'
 import { forCandidate } from '@/lib/auth/request'
 import { getOpportunitiesView } from '@/lib/matching/view'
-import { learnFromNo } from '@/lib/pipeline/learn-from-no'
 import { reportedClosed, SAYS_CLOSED } from '@/lib/sourcing/liveness'
 
 export const runtime = 'nodejs'
@@ -56,9 +55,8 @@ function respond(body: Record<string, unknown>, candidateId: string) {
   if (response === 'not_for_me' && reason && SAYS_CLOSED.test(reason)) {
     void reportedClosed(match.opportunity_id).catch((error) => console.error('[amble] closed offer check failed:', error instanceof Error ? error.message : error))
   }
-  if (response === 'not_for_me' && reason) {
-    void learnFromNo(candidateId, match.opportunity_id, reason).catch((error) => console.error('[amble] learn from a no failed:', error instanceof Error ? error.message : error))
-  }
+  // What the reason may say about other offers is read when the page asks
+  // for it (/api/opportunities/learn), so the answer itself never waits.
   return NextResponse.json({ ok: true })
 }
 

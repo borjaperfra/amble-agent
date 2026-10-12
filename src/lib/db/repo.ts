@@ -1261,13 +1261,15 @@ export function insertProposedPreference(row: {
   quote: string
   modelRunId: string | null
   source: 'offer'
-}): void {
+}): string {
+  const id = newId('rpr')
   getDb()
     .prepare(
       `INSERT INTO revealed_preferences (id, candidate_id, triage_id, kind, statement, wording, label, origin, declared, evidence_probe_ids, quote, status, model_run_id, created_at, source)
        VALUES (?, ?, NULL, ?, ?, ?, ?, 'analysis', NULL, '[]', ?, 'proposed', ?, ?, ?)`,
     )
-    .run(newId('rpr'), row.candidateId, row.kind, row.statement, row.statement, row.label, row.quote, row.modelRunId, now(), row.source)
+    .run(id, row.candidateId, row.kind, row.statement, row.statement, row.label, row.quote, row.modelRunId, now(), row.source)
+  return id
 }
 
 // Proposals waiting for them that no triage owns (from an offer they turned down).

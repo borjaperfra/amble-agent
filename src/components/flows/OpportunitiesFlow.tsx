@@ -54,6 +54,24 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   const [drafts, setDrafts] = useState<Record<string, PreparedApplication>>({})
   const [prepareErrors, setPrepareErrors] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<{ text: string; key: string } | null>(null)
+  // A «no encaja» whose reason holds for other offers: asked at once (#42).
+  const [rule, setRule] = useState<RuleProposal | null>(null)
+
+  async function askRule(matchId: string, reason: string) {
+    const { ok, data } = await postJson<{ proposal?: RuleProposal | null }>('/api/opportunities/learn', { matchId, reason })
+    if (ok && data.proposal) setRule(data.proposal)
+  }
+
+  async function decideRule(decision: 'confirmed' | 'rejected') {
+    if (!rule) return
+    const id = rule.id
+    setRule(null)
+    const { ok } = await postJson('/api/triage', { action: 'decide', preferenceId: id, decision })
+    if (!ok) return
+    setNotice({ text: decision === 'confirmed' ? t.opportunities.ruleSaved : t.opportunities.ruleKept, key: '' })
+    // The offers waiting that break it go once they are read again with it.
+    if (decision === 'confirmed') window.setTimeout(() => void reload().then(toPanel), RULE_RELOAD_MS)
+  }
   // Ready to read, until they open it: offer key to its title.
   const [ready, setReady] = useState<Record<string, string>>({})
   const [focus, setFocus] = useState<string | null>(null)
@@ -251,9 +269,10 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                 render={(item) => (
                   <FoundCard
                     item={item}
-                    onAnswered={(response) => {
+                    onAnswered={(response, reason) => {
                       setNotice({ text: noticeFor(response), key: '' })
                       void reload().then(toPanel)
+                      if (response === 'not_for_me' && reason) void askRule(item.id, reason)
                     }}
                   />
                 )}
@@ -271,9 +290,10 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                 render={(item) => (
                   <FoundCard
                     item={item}
-                    onAnswered={(response) => {
+                    onAnswered={(response, reason) => {
                       setNotice({ text: noticeFor(response), key: '' })
                       void reload().then(toPanel)
+                      if (response === 'not_for_me' && reason) void askRule(item.id, reason)
                     }}
                   />
                 )}
@@ -369,6 +389,17 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
         </div>
       </main>
 
+      {rule && !notice && (
+        <div className={styles.notice} role="group" aria-live="polite">
+          <span>{t.opportunities.ruleAsk(rule.label ?? rule.statement)}</span>
+          <button type="button" className={styles.noticeAction} onClick={() => void decideRule('confirmed')}>
+            {t.opportunities.ruleYes}
+          </button>
+          <button type="button" className={styles.noticeAction} onClick={() => void decideRule('rejected')}>
+            {t.opportunities.ruleNo}
+          </button>
+        </div>
+      )}
       {notice && (
         <Notice
           key={notice.text}
@@ -505,10 +536,20 @@ function fewPlaces(location: string | null, more: (count: number) => string): st
   return places.length <= 3 ? location : `${places.slice(0, 3).join(' · ')} ${more(places.length - 3)}`
 }
 
+interface RuleProposal {
+  id: string
+  label: string | null
+  statement: string
+}
+
+// Their rules changed: the re-read starts 20 s later (REREAD_AFTER_MS) and
+// carries what still stands at once, so the list is looked at again after that.
+const RULE_RELOAD_MS = 30_000
+
 // Words for having sent it already: "ya apliqué", "ya la he enviado", "already applied".
 const SOUNDS_APPLIED = /\bya\b.{0,25}\b(apliqu|aplicad|envi[eé]|enviad|me (he )?inscrib|postul)|\balready\b.{0,15}\b(applied|sent|apply)/i
 
-function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response) => void }) {
+function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (response: Response, reason?: string) => void }) {
   // Still theirs to answer: new, or kept for later.
   const open = item.response === null || item.response === 'later'
   const [leaving, setLeaving] = useState(false)
@@ -527,7 +568,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
         setLeaving(true)
         await wait(SLIDE_MS)
       }
-      onAnswered(response)
+      onAnswered(response, withReason?.trim() || undefined)
     } else {
       setError(t.opportunities.responseFailed)
     }

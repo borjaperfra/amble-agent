@@ -17,7 +17,12 @@ const HOURS_TO_ANSWER = 24
 
 type Reply = (text: string, buttons?: { title: string; payload: string }[]) => Promise<unknown>
 
-export function proposePreference(candidateId: string, preference: ProposedPreference): { title: string; payload: string }[] {
+// labels: the yes and no in other words (after a «no encaja», #42).
+export function proposePreference(
+  candidateId: string,
+  preference: ProposedPreference,
+  labels?: { yes: string; no: string },
+): { title: string; payload: string }[] {
   // Only one of their confirmed rules can be replaced.
   const replaced = preference.replaces ? getRevealedPreference(preference.replaces) : undefined
   const replaces = replaced?.candidate_id === candidateId && replaced.status === 'confirmed' ? replaced.id : null
@@ -32,8 +37,8 @@ export function proposePreference(candidateId: string, preference: ProposedPrefe
     ]
   }
   return [
-    { title: w.preferenceButtons.yes, payload: `pr:${id}:yes` },
-    { title: w.preferenceButtons.no, payload: `pr:${id}:no` },
+    { title: labels?.yes ?? w.preferenceButtons.yes, payload: `pr:${id}:yes` },
+    { title: labels?.no ?? w.preferenceButtons.no, payload: `pr:${id}:no` },
   ]
 }
 
