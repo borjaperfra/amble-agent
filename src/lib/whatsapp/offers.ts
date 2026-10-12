@@ -155,6 +155,8 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
             { title: w.offerButtons.later, payload: `of:${match.id}:later` },
             { title: w.offerButtons.applied, payload: `of:${match.id}:applied` },
             ...(match.url ? [{ title: w.offerButtons.open, payload: '', url: match.url }] : []),
+            // To a friend: a chat of theirs opens with the offer to send.
+            { title: w.offerButtons.share, payload: '', share: `of:${match.id}` },
           ]
         : []),
     ],

@@ -8,6 +8,7 @@ import { handleFromPerson, type IncomingFile } from '../whatsapp/inbound'
 import { sendDueOffers } from '../whatsapp/offers'
 import { allow } from '../whatsapp/throttle'
 import { answerTap, fetchFile, markAnswered, reactTo, replaceText, sendText, sendTyping, telegramConfig, type SentMessage, type TelegramButton } from './api'
+import { answerShare, type InlineQuery } from './share'
 import { refreshSummary } from './summary'
 import { saveTelegramLink, takeStartCode, telegramLinkByChat, touchTelegramLink } from './link'
 
@@ -56,6 +57,7 @@ export interface TelegramUpdate {
   message?: TelegramMessage
   callback_query?: { id: string; from: TelegramUser; data?: string; message?: TelegramMessage }
   message_reaction?: TelegramReaction
+  inline_query?: InlineQuery
 }
 
 // A reaction to an offer's card answers it as one of its buttons would:
@@ -68,7 +70,7 @@ interface ReactedCard {
   title: string
   messageId: number
   body: string
-  open: TelegramButton | null
+  keep: TelegramButton[]
 }
 
 function reactedCard(chatId: string, reaction: TelegramReaction): ReactedCard | null {
@@ -85,7 +87,7 @@ function reactedCard(chatId: string, reaction: TelegramReaction): ReactedCard | 
     title: `${emoji} ${answer === 'interested' ? words.interested : words.notFit}`,
     messageId: reaction.message_id,
     body: card.body,
-    open: card.url ? { title: words.open, payload: '', url: card.url } : null,
+    keep: [...(card.url ? [{ title: words.open, payload: '', url: card.url }] : []), { title: words.share, payload: '', share: `of:${card.match_id}` }],
   }
 }
 
@@ -109,6 +111,13 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   if (typeof update?.update_id !== 'number') return
   const config = telegramConfig()
   if (!config) return
+  // «@bot …» in any chat: their offers, to share.
+  if (update.inline_query) {
+    await answerShare(config, update.inline_query).catch((error: unknown) =>
+      console.error('[telegram] share not answered:', error instanceof Error ? error.message : error),
+    )
+    return
+  }
   const tap = update.callback_query ?? null
   const reaction = update.message_reaction ?? null
   const message = update.message ?? tap?.message ?? null
@@ -140,7 +149,7 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
     tap && tapped && message
       ? (line) => markAnswered(config, chatId, message as SentMessage, line)
       : reacted
-        ? (line) => replaceText(config, chatId, reacted.messageId, `${reacted.body}\n\n${line}`, reacted.open ? [reacted.open] : undefined)
+        ? (line) => replaceText(config, chatId, reacted.messageId, `${reacted.body}\n\n${line}`, reacted.keep)
         : null
   // A line saying amble is on it becomes the answer it announced, when that
   // comes soon enough to be seen; later, the answer goes as a new message,

@@ -72,6 +72,8 @@ export interface Button {
   payload: string
   // Telegram only: it opens this address instead. WhatsApp leaves it out.
   url?: string
+  // Telegram only: it opens a chat of theirs to share this (an inline query).
+  share?: string
 }
 
 // WhatsApp's reply buttons: three at most, none that opens an address.

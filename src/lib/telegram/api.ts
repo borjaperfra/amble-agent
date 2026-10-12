@@ -51,14 +51,23 @@ export interface TelegramButton {
   payload: string
   // A button that opens this address instead.
   url?: string
+  // A button that opens a chat of theirs to share what this inline query
+  // finds there (an offer, to a friend).
+  share?: string
 }
 
 // One button a row: their titles can be as long as they need.
 function keyboard(buttons: TelegramButton[] | undefined) {
-  const usable = (buttons ?? []).filter((button) => (button.url ? /^https:\/\//.test(button.url) : Buffer.byteLength(button.payload) <= 64))
-  return usable.length
-    ? { reply_markup: { inline_keyboard: usable.map((button) => [button.url ? { text: button.title, url: button.url } : { text: button.title, callback_data: button.payload }]) } }
-    : {}
+  const usable = (buttons ?? []).filter((button) =>
+    button.url ? /^https:\/\//.test(button.url) : button.share !== undefined ? button.share.length <= 256 : Buffer.byteLength(button.payload) <= 64,
+  )
+  const key = (button: TelegramButton) =>
+    button.url
+      ? { text: button.title, url: button.url }
+      : button.share !== undefined
+        ? { text: button.title, switch_inline_query_chosen_chat: { query: button.share, allow_user_chats: true, allow_group_chats: true } }
+        : { text: button.title, callback_data: button.payload }
+  return usable.length ? { reply_markup: { inline_keyboard: usable.map((button) => [key(button)]) } } : {}
 }
 
 // What amble writes is in WhatsApp's marks (*bold*, _italics_): said in
@@ -120,18 +129,18 @@ export interface SentMessage {
   entities?: unknown[]
   caption?: string
   caption_entities?: unknown[]
-  reply_markup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string }[][] }
+  reply_markup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string; switch_inline_query_chosen_chat?: unknown }[][] }
 }
 
 // A card they answered (#33): what it said, with its marks, and below it
-// what they chose; of its buttons only those that open a page stay. False
-// when it no longer fits (a caption holds 1024 characters, a message 4096):
-// then nothing changed.
+// what they chose; of its buttons only those that open a page or share it
+// stay. False when it no longer fits (a caption holds 1024 characters, a
+// message 4096): then nothing changed.
 export async function markAnswered(config: TelegramConfig, chatId: string, card: SentMessage, line: string): Promise<boolean> {
   const caption = card.text === undefined && card.caption !== undefined
   const words = `${(caption ? card.caption : card.text) ?? ''}\n\n${line}`
   if (words.length > (caption ? 1024 : 4096)) return false
-  const links = (card.reply_markup?.inline_keyboard ?? []).map((row) => row.filter((key) => key.url)).filter((row) => row.length > 0)
+  const links = (card.reply_markup?.inline_keyboard ?? []).map((row) => row.filter((key) => key.url || key.switch_inline_query_chosen_chat)).filter((row) => row.length > 0)
   await call(config, caption ? 'editMessageCaption' : 'editMessageText', {
     chat_id: chatId,
     message_id: card.message_id,
@@ -229,6 +238,17 @@ export async function fetchFile(config: TelegramConfig, fileId: string, maxBytes
   return bytes
 }
 
+// What «@bot …» typed in any chat finds: articles that become a message of
+// theirs when chosen, or a button to connect when there is nothing to show.
+export async function answerInlineQuery(
+  config: TelegramConfig,
+  queryId: string,
+  results: unknown[],
+  button: { text: string; start_parameter: string } | null,
+): Promise<void> {
+  await call(config, 'answerInlineQuery', { inline_query_id: queryId, results, is_personal: true, cache_time: 10, ...(button ? { button } : {}) }, 10_000)
+}
+
 // The menu that opens on «/» (#32), in each language amble speaks.
 export async function setCommands(config: TelegramConfig, commands: { command: string; description: string }[], languageCode?: string): Promise<void> {
   await call(config, 'setMyCommands', { commands, ...(languageCode ? { language_code: languageCode } : {}) })
@@ -236,7 +256,7 @@ export async function setCommands(config: TelegramConfig, commands: { command: s
 
 // Where Telegram sends what reaches the bot, and only what amble reads.
 export async function setWebhook(config: TelegramConfig, url: string): Promise<void> {
-  await call(config, 'setWebhook', { url, secret_token: config.webhookSecret, allowed_updates: ['message', 'callback_query', 'message_reaction'], drop_pending_updates: false })
+  await call(config, 'setWebhook', { url, secret_token: config.webhookSecret, allowed_updates: ['message', 'callback_query', 'message_reaction', 'inline_query'], drop_pending_updates: false })
 }
 
 // The webhook's header, compared in constant time.
