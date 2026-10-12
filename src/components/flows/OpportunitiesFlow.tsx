@@ -544,6 +544,21 @@ const QUESTIONS_HIDDEN = 'amble-questions-hidden-until'
 const HIDE_DAYS = 7
 const noSubscription = () => () => undefined
 
+// A reason read at a glance: what comes before its colon, when it says
+// what the point is in a few words, in bold; the rest after it.
+const LEAD_MAX = 60
+
+function Lead({ text }: { text: string }) {
+  const at = text.indexOf(':')
+  if (at < 8 || at > LEAD_MAX) return <>{text}</>
+  return (
+    <>
+      <strong>{text.slice(0, at)}</strong>
+      {text.slice(at)}
+    </>
+  )
+}
+
 // The company at a glance: its logo, served by amble, or its initials when
 // there is none (or it fails to load).
 function CompanyMark({ name, logo, size }: { name: string; logo: string | null; size: number }) {
@@ -653,10 +668,10 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
           <p className={styles.cardCompany}>{item.company}</p>
           <h2 className={styles.cardTitle}>{item.title}</h2>
           {places && <p className={styles.meta}>{places}</p>}
+          <Pay salary={item.salary} estimate={item.estimate} />
         </div>
       </header>
       {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
-      <Pay salary={item.salary} estimate={item.estimate} />
       {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
       <p className={styles.summary}>{item.summary}</p>
 
@@ -665,7 +680,9 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
         <h3 className={styles.blockLabel}>{t.opportunities.whyShowing}</h3>
         <ul className={styles.points}>
           {item.why.map((reason) => (
-            <li key={reason.text}>{reason.text}</li>
+            <li key={reason.text}>
+              <Lead text={reason.text} />
+            </li>
           ))}
         </ul>
         {item.why.some((reason) => reason.evidence || reason.quote) && (

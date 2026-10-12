@@ -1155,3 +1155,40 @@
   text-transform: uppercase;
   color: var(--ink-tertiary);
 }
+
+/* Hierarchy of the card (#41, second pass): its sections read as headings,
+   the words under them at body size, the pay in the role's column. */
+.blockWhy .blockLabel,
+.blockConsider .blockLabel,
+.blockUnknown .blockLabel {
+  font-family: var(--font-display);
+  font-size: var(--heading-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.3;
+}
+
+.points li {
+  font-size: var(--text-body);
+}
+
+.points strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.blockConsider .quote,
+.sources .quote {
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+.blockUnknown .unknowns li {
+  font-size: var(--text-body);
+}
+
+.cardHeadText .salary,
+.cardHeadText .estimate {
+  margin-top: 6px;
+}
