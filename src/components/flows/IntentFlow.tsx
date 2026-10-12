@@ -144,6 +144,22 @@ export default function IntentFlow({ setupStep, updating = false }: { setupStep:
     router.push(setupStep ? '/start' : '/me/preferences')
   }
 
+  // Where they would work, several at once (#36): a choice tapped is added to
+  // «Location» in words the listener reads the same way every time, and
+  // tapped again it goes. Remote and any number of cities with an office
+  // combine: the role query reads them as remote, or an office in one of them.
+  function togglePlace(text: string) {
+    const same = (value: string) => value.trim().toLowerCase() === text.toLowerCase()
+    setEditedGroups((prev) => {
+      const group = prev.find((item) => item.label === 'Location')
+      if (!group) return [...prev, { label: 'Location', values: [text] }]
+      const values = group.values.some(same) ? group.values.filter((value) => !same(value)) : [...group.values, text]
+      return values.length > 0
+        ? prev.map((item) => (item === group ? { ...item, values } : item))
+        : prev.filter((item) => item !== group)
+    })
+  }
+
   function updateValue(groupIndex: number, valueIndex: number, value: string) {
     setEditedGroups((prev) =>
       prev.map((group, gi) =>
@@ -315,8 +331,11 @@ export default function IntentFlow({ setupStep, updating = false }: { setupStep:
                     </span>
                   </form>
                 )}
+                {label === 'Location' && (
+                  <PlacePicks values={group?.values ?? []} onToggle={togglePlace} />
+                )}
                 {/* A row not said: shown as such, to say it here. */}
-                {!group && (CORE as readonly string[]).includes(label) && (
+                {!group && (CORE as readonly string[]).includes(label) && label !== 'Location' && (
                   <form
                     className={styles.fill}
                     onSubmit={(event) => {
@@ -374,5 +393,53 @@ export default function IntentFlow({ setupStep, updating = false }: { setupStep:
         </div>
       </main>
     </>
+  )
+}
+
+// The places offered to tap: remote, the cities most people here work in,
+// and any other city written in. Each one marked is a value of «Location».
+function PlacePicks({ values, onToggle }: { values: string[]; onToggle: (text: string) => void }) {
+  const t = useT()
+  const words = t.intent.places
+  const [other, setOther] = useState('')
+  const chosen = new Set(values.map((value) => value.trim().toLowerCase()))
+  const offered = [words.remote, ...words.cities.map((city) => words.office(city))]
+  // Cities written in by them stay as chips too, to take them away the same way.
+  const written = values.filter((value) => !offered.some((item) => item.toLowerCase() === value.trim().toLowerCase()) && value.startsWith(words.office('')))
+  return (
+    <div className={styles.places}>
+      <p className={styles.fillLabel}>{words.label}</p>
+      <div className={styles.placeChips} role="group" aria-label={words.label}>
+        {[...offered, ...written].map((text) => {
+          const on = chosen.has(text.toLowerCase())
+          return (
+            <button key={text} type="button" className={on ? `${styles.placeChip} ${styles.placeChipOn}` : styles.placeChip} aria-pressed={on} onClick={() => onToggle(text)}>
+              {text}
+            </button>
+          )
+        })}
+      </div>
+      <form
+        className={styles.fillRow}
+        onSubmit={(event) => {
+          event.preventDefault()
+          const city = other.trim().replace(/^\p{Ll}/u, (letter) => letter.toUpperCase())
+          if (!city) return
+          if (!chosen.has(words.office(city).toLowerCase())) onToggle(words.office(city))
+          setOther('')
+        }}
+      >
+        <input
+          className={styles.fillInput}
+          aria-label={words.otherLabel}
+          placeholder={words.otherPlaceholder}
+          value={other}
+          onChange={(event) => setOther(event.target.value)}
+        />
+        <button type="submit" className="btn btn-quiet" disabled={!other.trim()}>
+          {t.intent.add}
+        </button>
+      </form>
+    </div>
   )
 }
