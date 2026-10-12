@@ -1192,3 +1192,35 @@
 .cardHeadText .estimate {
   margin-top: 6px;
 }
+
+/* The published pay as a tag beside the role (#41, third pass). */
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.titleRow .cardTitle {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.payTag {
+  flex: none;
+  margin-top: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--moss-wash);
+  border: 1px solid var(--moss-soft);
+  color: var(--moss-dark);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.blockConsider .quote {
+  font-size: var(--text-body-lg);
+}

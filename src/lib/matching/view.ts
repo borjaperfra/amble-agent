@@ -298,7 +298,8 @@ function earlierMatches(candidateId: string, matchKey: string, judged: Set<strin
 // The company's logo, fetched once by amble and served from here: the
 // browser never asks a third party (api/logos).
 function logoOf(match: MatchListing): string | null {
-  return match.company_domain ? `/api/logos/${encodeURIComponent(match.company_id)}` : null
+  // ?v: a new way of finding logos reaches browsers that kept the old one.
+  return match.company_domain ? `/api/logos/${encodeURIComponent(match.company_id)}?v=2` : null
 }
 
 // Every judgment the screen may show them: under their current profile, and

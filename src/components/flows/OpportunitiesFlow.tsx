@@ -563,6 +563,13 @@ function Lead({ text }: { text: string }) {
 // there is none (or it fails to load).
 function CompanyMark({ name, logo, size }: { name: string; logo: string | null; size: number }) {
   const [failed, setFailed] = useState(false)
+  // A logo that failed before the page came alive fired its error unheard:
+  // looked at once it is mounted.
+  const image = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    const element = image.current
+    if (element?.complete && element.naturalWidth === 0) setFailed(true)
+  }, [])
   const initials = name
     .split(/[\s-]+/)
     .filter(Boolean)
@@ -572,7 +579,7 @@ function CompanyMark({ name, logo, size }: { name: string; logo: string | null; 
   return (
     <span className={styles.mark} style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }} aria-hidden="true">
       {/* eslint-disable-next-line @next/next/no-img-element -- a few KB from our own route, already sized */}
-      {logo && !failed ? <img src={logo} alt="" width={size} height={size} loading="lazy" onError={() => setFailed(true)} /> : initials}
+      {logo && !failed ? <img ref={image} src={logo} alt="" width={size} height={size} loading="lazy" onError={() => setFailed(true)} /> : initials}
     </span>
   )
 }
@@ -666,9 +673,13 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
         <CompanyMark name={item.company} logo={item.logo} size={44} />
         <div className={styles.cardHeadText}>
           <p className={styles.cardCompany}>{item.company}</p>
-          <h2 className={styles.cardTitle}>{item.title}</h2>
+          {/* The published pay as a tag beside the role; under it on a phone. */}
+          <div className={styles.titleRow}>
+            <h2 className={styles.cardTitle}>{item.title}</h2>
+            {item.salary && <span className={styles.payTag}>{item.salary}</span>}
+          </div>
           {places && <p className={styles.meta}>{places}</p>}
-          <Pay salary={item.salary} estimate={item.estimate} />
+          {!item.salary && <Pay salary={null} estimate={item.estimate} />}
         </div>
       </header>
       {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
