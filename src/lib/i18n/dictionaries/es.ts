@@ -481,6 +481,16 @@ export const es: Dictionary = {
     commandPreferences: (url: string) => `Lo que busco por ti, para cambiarlo cuando quieras: ${url}`,
     commandHelp:
       'Te escribo cuando una oferta encaja de verdad, y te pregunto cómo van tus candidaturas. Me puedes preguntar lo que quieras sobre tu búsqueda, pedirme que prepare una candidatura, mandarme tu CV en PDF o un audio. A una oferta también puedes reaccionar con 👍 o 👎. En el menú «/» tienes /ofertas, /mapa, /preferencias y /pausa.',
+    summary: {
+      title: '📌 *Tu búsqueda*',
+      week: (shown: number, wanted: number) => `Últimos 7 días: ${shown} ${shown === 1 ? 'oferta nueva' : 'ofertas nuevas'}, ${wanted} te ${wanted === 1 ? 'interesa' : 'interesan'}`,
+      later: (count: number) => `Para más adelante: ${count}`,
+      applied: (sent: number, called: number) => `Candidaturas enviadas: ${sent}${called > 0 ? ` · te han llamado de ${called}` : ''}`,
+      paused: 'Búsqueda en pausa: no te escribo ofertas hasta que la reanudes.',
+      updated: (when: string) => `_Actualizado: ${when}_`,
+      offers: 'Ver ofertas',
+      map: 'Tu mapa',
+    },
     unknownTelegram: 'Hola, soy el agente de IA de amble. Para hablar conmigo por aquí, entra en app.amble.fyi y conecta Telegram desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,

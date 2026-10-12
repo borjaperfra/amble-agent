@@ -195,6 +195,11 @@ export async function sendDocument(config: TelegramConfig, chatId: string, param
   if (!response.ok || !data?.ok) throw new TelegramError(data?.description ?? `Telegram answered ${response.status}`, response.status)
 }
 
+// A message of amble's pinned at the top of their chat, without a sound.
+export async function pinMessage(config: TelegramConfig, chatId: string, messageId: number): Promise<void> {
+  await call(config, 'pinChatMessage', { chat_id: chatId, message_id: messageId, disable_notification: true }, 10_000)
+}
+
 // "typing…" on their screen, for about five seconds.
 export async function sendTyping(config: TelegramConfig, chatId: string): Promise<void> {
   await call(config, 'sendChatAction', { chat_id: chatId, action: 'typing' }, 10_000)

@@ -10,6 +10,7 @@ import { checkOfferLinks } from './sourcing/liveness'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
+import { refreshSummaries } from './telegram/summary'
 import { sendDueInterviewQuestions } from './whatsapp/interview'
 import { sendDueReminders } from './whatsapp/reminders'
 import { sendPauseCheckIns } from './whatsapp/pause'
@@ -179,6 +180,8 @@ async function pass(day: string, slot: string, until: number) {
     }
     // What this pass found that deserves a message, at the pace allowed.
     log(day, `offers: ${JSON.stringify(await sendDueOffers())}`)
+    // On Telegram, the summary pinned in their chat, as it stands now.
+    log(day, `telegram summaries: ${JSON.stringify(await refreshSummaries())}`)
   } catch (error) {
     failure = error instanceof Error ? error.message : String(error)
     log(day, `pass failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)

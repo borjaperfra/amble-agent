@@ -8,6 +8,7 @@ import { handleFromPerson, type IncomingFile } from '../whatsapp/inbound'
 import { sendDueOffers } from '../whatsapp/offers'
 import { allow } from '../whatsapp/throttle'
 import { answerTap, fetchFile, markAnswered, reactTo, replaceText, sendText, sendTyping, telegramConfig, type SentMessage, type TelegramButton } from './api'
+import { refreshSummary } from './summary'
 import { saveTelegramLink, takeStartCode, telegramLinkByChat, touchTelegramLink } from './link'
 
 // One update from Telegram's webhook, handled once (Telegram retries until
@@ -174,6 +175,8 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
     await reply(dictionaries[candidateLocale(candidate ?? null)].whatsapp.linked(candidate?.name ?? null))
     // What it has already found, now that it can say so.
     await sendDueOffers(linking)
+    // And the summary pinned at the top, from the start.
+    await refreshSummary(linking).catch((error: unknown) => console.error('[telegram] summary not pinned:', error instanceof Error ? error.message : error))
     return
   }
 

@@ -689,6 +689,8 @@ function migrate(db: DatabaseSync): void {
   // when the aggregator returns it again.
   addColumn(db, 'opportunity_sources', 'link_checked_at', 'TEXT')
   addColumn(db, 'opportunity_sources', 'link_closed_at', 'TEXT')
+  // The summary pinned in their Telegram chat, edited where it is (telegram/summary.ts).
+  addColumn(db, 'telegram_links', 'summary_message_id', 'INTEGER')
 
   // Attribution (PRODUCT_SPEC §11.1, §12).
   const attributionAdded = addColumn(db, 'evidence', 'attribution', "TEXT NOT NULL DEFAULT 'sole'")
