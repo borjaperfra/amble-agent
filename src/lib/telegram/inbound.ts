@@ -7,7 +7,7 @@ import { logMessage } from '../whatsapp/conversation'
 import { handleFromPerson, type IncomingFile } from '../whatsapp/inbound'
 import { sendDueOffers } from '../whatsapp/offers'
 import { allow } from '../whatsapp/throttle'
-import { answerTap, fetchFile, reactTo, sendText, sendTyping, telegramConfig } from './api'
+import { answerTap, fetchFile, markAnswered, reactTo, replaceText, sendText, sendTyping, telegramConfig, type SentMessage } from './api'
 import { saveTelegramLink, takeStartCode, telegramLinkByChat, touchTelegramLink } from './link'
 
 // One update from Telegram's webhook, handled once (Telegram retries until
@@ -58,6 +58,13 @@ type Command = (typeof COMMANDS)[number]
 const STRANGER_REPLIES = 2
 const STRANGER_WINDOW_MS = 6 * 60 * 60 * 1000
 
+// The lines that say amble is on it (thinking, reading a link or a CV), in
+// either language, and how long one waits to become its answer (#33).
+const HOLDING_LINES = new Set(
+  Object.values(dictionaries).flatMap((words) => [words.whatsapp.thinking, words.whatsapp.sharedReading, words.whatsapp.documentReading]),
+)
+const REPLACE_HOLDING_MS = 90_000
+
 export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   if (typeof update?.update_id !== 'number') return
   const config = telegramConfig()
@@ -80,8 +87,30 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   const text = tap ? tapped : (message.text ?? message.caption ?? '').trim()
 
   let replyTo: string | null = null
+  // The card they tapped changes where it is (#33): what they chose below
+  // it, and the first answer with it when that answer asks for no tap.
+  let card = tap && tapped ? (message as SentMessage) : null
+  // A line saying amble is on it becomes the answer it announced, when that
+  // comes soon enough to be seen; later, the answer goes as a new message,
+  // which their phone tells them about (an edit it does not).
+  let holding: { messageId: number; at: number } | null = null
+  const send = async (body: string, buttons?: { title: string; payload: string }[]) => {
+    if (card) {
+      const answered = card
+      card = null
+      const choice = `✓ ${tapped}`
+      const folded = !buttons?.length && (await markAnswered(config, chatId, answered, `${choice}\n${plainWords(body)}`).catch(() => false))
+      if (folded) return
+      await markAnswered(config, chatId, answered, choice).catch(() => false)
+    }
+    const waiting = holding
+    holding = null
+    if (waiting && Date.now() - waiting.at < REPLACE_HOLDING_MS && (await replaceText(config, chatId, waiting.messageId, body, buttons).catch(() => false))) return
+    const sent = await sendText(config, chatId, body, buttons)
+    if (sent.messageId !== null && HOLDING_LINES.has(body)) holding = { messageId: sent.messageId, at: Date.now() }
+  }
   const reply = async (body: string, buttons?: { title: string; payload: string }[]) => {
-    await sendText(config, chatId, body, buttons)
+    await send(body, buttons)
     if (replyTo) logMessage(replyTo, 'out', body)
   }
 
@@ -133,7 +162,7 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
 
   const file = (ref: TelegramFileRef | undefined, fallback: string, mime: string | null): IncomingFile | null =>
     ref ? { name: (ref.file_name ?? fallback).slice(0, 120), mimeType: ref.mime_type ?? mime, fetch: (maxBytes) => fetchFile(config, ref.file_id, maxBytes) } : null
-  return handleFromPerson(
+  await handleFromPerson(
     candidate,
     {
       // /ofertas and /pausa are what they would have written.
@@ -152,4 +181,12 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
       },
     },
   )
+  // A tap answered with nothing to say: the card still shows what they chose.
+  if (card) await markAnswered(config, chatId, card, `✓ ${tapped}`).catch(() => false)
+}
+
+// What amble writes is in WhatsApp's marks; under a card it is plain words
+// (the card's own marks are offsets, which new marks would have to join).
+function plainWords(text: string): string {
+  return text.replace(/\*([^*\n]+)\*/g, '$1').replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,;:!?])/gm, '$1$2')
 }

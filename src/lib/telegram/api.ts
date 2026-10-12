@@ -104,6 +104,50 @@ export async function sendText(config: TelegramConfig, chatId: string, text: str
   return { messageId: last?.message_id ?? null }
 }
 
+// One of amble's messages as Telegram gives it back with a tap: its words
+// and their marks (bold, links) as offsets, and its buttons.
+export interface SentMessage {
+  message_id: number
+  text?: string
+  entities?: unknown[]
+  caption?: string
+  caption_entities?: unknown[]
+  reply_markup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string }[][] }
+}
+
+// A card they answered (#33): what it said, with its marks, and below it
+// what they chose; of its buttons only those that open a page stay. False
+// when it no longer fits (a caption holds 1024 characters, a message 4096):
+// then nothing changed.
+export async function markAnswered(config: TelegramConfig, chatId: string, card: SentMessage, line: string): Promise<boolean> {
+  const caption = card.text === undefined && card.caption !== undefined
+  const words = `${(caption ? card.caption : card.text) ?? ''}\n\n${line}`
+  if (words.length > (caption ? 1024 : 4096)) return false
+  const links = (card.reply_markup?.inline_keyboard ?? []).map((row) => row.filter((key) => key.url)).filter((row) => row.length > 0)
+  await call(config, caption ? 'editMessageCaption' : 'editMessageText', {
+    chat_id: chatId,
+    message_id: card.message_id,
+    ...(caption ? { caption: words, caption_entities: card.caption_entities ?? [] } : { text: words, entities: card.entities ?? [], link_preview_options: { is_disabled: true } }),
+    reply_markup: { inline_keyboard: links },
+  })
+  return true
+}
+
+// A line saying amble is on it, turned into what it was waiting for. False
+// when the answer needs more than one message: then nothing changed.
+export async function replaceText(config: TelegramConfig, chatId: string, messageId: number, text: string, buttons?: TelegramButton[]): Promise<boolean> {
+  if (text.length > MAX_TEXT) return false
+  await call(config, 'editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text: asTelegramHtml(text),
+    parse_mode: 'HTML',
+    link_preview_options: { is_disabled: true },
+    ...keyboard(buttons),
+  })
+  return true
+}
+
 // A picture (the filled form) with its text and buttons: uploaded with the
 // message, never left at an address. A caption holds 1024 characters: past
 // that, the text follows on its own.
