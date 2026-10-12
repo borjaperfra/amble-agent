@@ -160,11 +160,16 @@ interface AshbyJob {
   compensation?: { scrapeableCompensationSalarySummary?: string | null; compensationTierSummary?: string | null }
 }
 
+// The type the company chose wins: Ashby sets isRemote on hybrid roles too
+// (Attio's GTM Partnerships Lead, 2026-10-12: Hybrid in New York, London and
+// San Francisco, isRemote true), which read as remote let it past «remote or
+// 1-2 days in Valencia». isRemote counts only when no type is given.
 function ashbyWorkplace(job: AshbyJob, location: string | null): Workplace | null {
   const type = job.workplaceType?.toLowerCase()
-  if (type === 'remote' || job.isRemote) return 'remote'
+  if (type === 'remote') return 'remote'
   if (type === 'hybrid') return 'hybrid'
   if (type === 'onsite') return 'onsite'
+  if (job.isRemote) return 'remote'
   return inferWorkplace(location)
 }
 
@@ -456,10 +461,12 @@ interface BambooDetail {
   }
 }
 
+// As for Ashby: the location type given wins over the remote flag.
 function bambooWorkplace(listing: BambooListing, location: string | null): Workplace | null {
-  if (listing.isRemote || listing.locationType === '1') return 'remote'
+  if (listing.locationType === '1') return 'remote'
   if (listing.locationType === '2') return 'hybrid'
   if (listing.locationType === '0') return 'onsite'
+  if (listing.isRemote) return 'remote'
   return inferWorkplace(location, listing.jobOpeningName)
 }
 

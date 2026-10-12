@@ -137,6 +137,9 @@ function findOpportunity(raw: RawOpportunity, companyId: string, urlNorm: string
   ).get(companyId, normaliseTitle(raw.title), raw.location) as unknown as OpportunityRow | undefined
 }
 
+// Boards whose remote flag was read over the type they give (fixed 2026-10-12).
+const CORRECTED_WORKPLACE_SOURCES = new Set(['ashby', 'bamboohr'])
+
 export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: string): { opportunityId: string; created: boolean } {
   const urlNorm = normaliseUrl(raw.url)
   const existing = findOpportunity(raw, companyId, urlNorm)
@@ -182,6 +185,19 @@ export function recordSighting(raw: RawOpportunity, companyId: string, seenAt: s
       raw.externalId,
       opportunityId,
     )
+    // A hybrid or on-site role kept as remote, from before its board's own
+    // type was read right (sourcing/ats.ts): corrected, and a judgment to show
+    // it made on the wrong tag, not shown to anyone yet, is made again in the
+    // pass. One that set it aside stands: the right tag only confirms it.
+    if (CORRECTED_WORKPLACE_SOURCES.has(raw.source) && existing.workplace === 'remote' && (raw.workplace === 'hybrid' || raw.workplace === 'onsite')) {
+      prepared('UPDATE opportunities SET workplace = ? WHERE id = ?').run(raw.workplace, opportunityId)
+      prepared(
+        `DELETE FROM opportunity_matches WHERE opportunity_id = ? AND verdict = 'show' AND response IS NULL
+           AND NOT EXISTS (SELECT 1 FROM offer_releases r WHERE r.candidate_id = opportunity_matches.candidate_id AND r.opportunity_id = opportunity_matches.opportunity_id)
+           AND NOT EXISTS (SELECT 1 FROM offer_sends s WHERE s.candidate_id = opportunity_matches.candidate_id AND s.match_id = opportunity_matches.id)
+           AND NOT EXISTS (SELECT 1 FROM opportunity_decisions d WHERE d.candidate_id = opportunity_matches.candidate_id AND d.opportunity_id = opportunity_matches.opportunity_id)`,
+      ).run(opportunityId)
+    }
   } else {
     opportunityId = newId('opp')
     created = true
