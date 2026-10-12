@@ -12,6 +12,7 @@ import { dictionaries } from '../i18n/dictionaries'
 import type { Locale } from '../i18n/locale'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
+import { shownMatches } from '../matching/view'
 import { workplaceShown } from '../matching/workplace'
 import { currentMatchKey, placeFit } from '../matching/run'
 import { storedRoleQuery, type RoleQuery } from '../matching/role-query'
@@ -173,7 +174,9 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
 export async function showTeasedOffer(candidateId: string, matchId: string, byOpportunity = false): Promise<boolean> {
   const reach = reachOf(candidateId)
   if (!reach) return false
-  const match = listMatchesForKey(candidateId, currentMatchKey(candidateId)).find((row) => (byOpportunity ? row.opportunity_id : row.id) === matchId)
+  // Where the screen looks: an offer judged with an earlier profile is still
+  // theirs to answer until it is read again.
+  const match = shownMatches(candidateId).find((row) => (byOpportunity ? row.opportunity_id : row.id) === matchId)
   if (!match || match.closed_at) return false
   const sent = getDb().prepare('SELECT pitch FROM offer_sends WHERE candidate_id = ? AND match_id = ?').get(candidateId, matchId) as { pitch: string | null } | undefined
   const floor = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))?.salaryFloor ?? null

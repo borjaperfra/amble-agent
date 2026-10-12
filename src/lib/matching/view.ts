@@ -289,6 +289,15 @@ function earlierMatches(candidateId: string, matchKey: string, judged: Set<strin
   return latest
 }
 
+// Every judgment the screen may show them: under their current profile, and
+// the latest made with an earlier one for offers the current has not judged
+// yet (until a pass reads them again).
+export function shownMatches(candidateId: string): (MatchRow & MatchListing)[] {
+  const matchKey = currentMatchKey(candidateId)
+  const current = listMatchesForKey(candidateId, matchKey)
+  return [...current, ...earlierMatches(candidateId, matchKey, new Set(current.map((match) => match.opportunity_id)))]
+}
+
 export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const candidate = candidateById(candidateId)
   const matchKey = currentMatchKey(candidate.id)
