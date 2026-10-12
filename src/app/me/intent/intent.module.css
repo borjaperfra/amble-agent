@@ -253,3 +253,49 @@
   height: 44px;
   padding: 0 16px;
 }
+
+/* Where they could work, several at once (#36). */
+.places {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.placeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.placeChip {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--paper-light);
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.placeChip:hover {
+  border-color: var(--ink-tertiary);
+  color: var(--ink);
+}
+
+.placeChipOn {
+  background: var(--moss-wash);
+  border-color: var(--moss);
+  color: var(--moss-dark);
+  font-weight: 600;
+}
+
+.placeChipOn::before {
+  content: '✓ ';
+}
