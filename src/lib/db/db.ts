@@ -527,6 +527,19 @@ function createDb(): DatabaseSync {
       expires_at TEXT NOT NULL
     );
 
+    -- Signing in to the app with Telegram (#35): a code the browser opens the
+    -- bot with (t.me/<bot>?start=login_<code>), and a secret in that browser's
+    -- cookie; once the person confirms in their chat, the browser holding the
+    -- secret is signed in. Only hashes are kept; ten minutes, once.
+    CREATE TABLE IF NOT EXISTS telegram_logins (
+      code_hash TEXT PRIMARY KEY,
+      secret_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      candidate_id TEXT REFERENCES candidates(id),
+      approved_at TEXT
+    );
+
     -- Offers sent on Telegram, by their message: a reaction to one (👍, 👎)
     -- answers it as its buttons would, and what they chose is shown below
     -- its words. Forgotten after a month (retention.ts).

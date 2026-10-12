@@ -6,7 +6,7 @@
 //   railway run --environment staging --service app-staging npm run telegram:webhook -- https://<staging host>
 
 import { dictionaries } from '../src/lib/i18n/dictionaries'
-import { setCommands, setWebhook, telegramConfig } from '../src/lib/telegram/api'
+import { setCommands, setMenuButton, setWebhook, telegramConfig } from '../src/lib/telegram/api'
 import { COMMANDS } from '../src/lib/telegram/inbound'
 
 async function main() {
@@ -21,6 +21,9 @@ async function main() {
   await setCommands(config, menu('es'))
   await setCommands(config, menu('en'), 'en')
   console.log(`commands: ${COMMANDS.map((command) => '/' + command).join(' ')}`)
+  // The «amble» button beside where they write: the app inside Telegram.
+  await setMenuButton(config, `${base}/tg`, 'amble')
+  console.log(`menu button: ${base}/tg`)
 }
 
 main().catch((error) => {

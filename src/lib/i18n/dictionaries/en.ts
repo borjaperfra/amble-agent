@@ -345,6 +345,12 @@ export const en = {
   },
   // Text the server writes for the candidate without the model: source
   // statuses, graph entries the Rep adds on its own, errors that reach a screen.
+  telegramApp: {
+    opening: 'Opening amble…',
+    notLinked: 'This Telegram account isn’t connected to amble yet. Sign in with your email and connect it from the app.',
+    outside: 'This page opens from Telegram, with the «amble» button in the chat.',
+    signIn: 'Sign in with my email',
+  },
   login: {
     title: 'Sign in to amble',
     lead: 'I’ll email you a code. No passwords.',
@@ -368,6 +374,9 @@ export const en = {
     noAccount: 'amble is in closed beta. No access yet?',
     waitlist: 'Join at amble.fyi',
     signOut: 'Sign out',
+    telegram: 'Sign in with Telegram',
+    telegramWaiting: 'Confirm it in Telegram and come back here: you’ll be signed in.',
+    telegramGone: 'The confirmation didn’t arrive. Try again.',
     joinTitle: 'You’ve been invited to amble',
     joinLead: 'Give me your email and I’ll send you a code to create your account. No passwords.',
     invitationUsed: 'This invitation has already been used.',
@@ -493,6 +502,12 @@ export const en = {
     },
     shareConnect: 'Connect your amble account to share your offers',
     sharedWith: (site: string) => `Found with amble, which looks for offers that fit you: ${site}`,
+    loginConfirm: 'Someone wants to sign in to your amble account from a browser. Is it you? Say yes only if you just tapped «Sign in with Telegram».',
+    loginButtons: { yes: 'Yes, it’s me', no: 'It wasn’t me' },
+    loginDone: 'Done. Go back to the browser: you’re in.',
+    loginRefused: 'All right, nobody gets in. If you didn’t ask for it, there’s nothing else to do.',
+    loginExpired: 'That link has expired. Tap «Sign in with Telegram» on the page again.',
+    loginNotLinked: 'This Telegram account isn’t connected to amble. Sign in with your email, connect Telegram from the app, and next time you can sign in from here.',
     unknownTelegram: 'Hi, I’m amble’s AI agent. To talk to me here, go to app.amble.fyi and connect Telegram from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,

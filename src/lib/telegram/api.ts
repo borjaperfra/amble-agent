@@ -54,17 +54,26 @@ export interface TelegramButton {
   // A button that opens a chat of theirs to share what this inline query
   // finds there (an offer, to a friend).
   share?: string
+  // A button that opens this address of the app inside Telegram, signed in
+  // (the Mini App, #34). Only https.
+  app?: string
 }
 
 // One button a row: their titles can be as long as they need.
 function keyboard(buttons: TelegramButton[] | undefined) {
   const usable = (buttons ?? []).filter((button) =>
-    button.url ? /^https:\/\//.test(button.url) : button.share !== undefined ? button.share.length <= 256 : Buffer.byteLength(button.payload) <= 64,
+    button.url || button.app
+      ? /^https:\/\//.test(button.url ?? button.app ?? '')
+      : button.share !== undefined
+        ? button.share.length <= 256
+        : Buffer.byteLength(button.payload) <= 64,
   )
   const key = (button: TelegramButton) =>
     button.url
       ? { text: button.title, url: button.url }
-      : button.share !== undefined
+      : button.app
+        ? { text: button.title, web_app: { url: button.app } }
+        : button.share !== undefined
         ? { text: button.title, switch_inline_query_chosen_chat: { query: button.share, allow_user_chats: true, allow_group_chats: true } }
         : { text: button.title, callback_data: button.payload }
   return usable.length ? { reply_markup: { inline_keyboard: usable.map((button) => [key(button)]) } } : {}
@@ -129,7 +138,7 @@ export interface SentMessage {
   entities?: unknown[]
   caption?: string
   caption_entities?: unknown[]
-  reply_markup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string; switch_inline_query_chosen_chat?: unknown }[][] }
+  reply_markup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string; web_app?: unknown; switch_inline_query_chosen_chat?: unknown }[][] }
 }
 
 // A card they answered (#33): what it said, with its marks, and below it
@@ -140,7 +149,7 @@ export async function markAnswered(config: TelegramConfig, chatId: string, card:
   const caption = card.text === undefined && card.caption !== undefined
   const words = `${(caption ? card.caption : card.text) ?? ''}\n\n${line}`
   if (words.length > (caption ? 1024 : 4096)) return false
-  const links = (card.reply_markup?.inline_keyboard ?? []).map((row) => row.filter((key) => key.url || key.switch_inline_query_chosen_chat)).filter((row) => row.length > 0)
+  const links = (card.reply_markup?.inline_keyboard ?? []).map((row) => row.filter((key) => key.url || key.web_app || key.switch_inline_query_chosen_chat)).filter((row) => row.length > 0)
   await call(config, caption ? 'editMessageCaption' : 'editMessageText', {
     chat_id: chatId,
     message_id: card.message_id,
@@ -247,6 +256,11 @@ export async function answerInlineQuery(
   button: { text: string; start_parameter: string } | null,
 ): Promise<void> {
   await call(config, 'answerInlineQuery', { inline_query_id: queryId, results, is_personal: true, cache_time: 10, ...(button ? { button } : {}) }, 10_000)
+}
+
+// The button beside where they write: amble, inside Telegram (#34).
+export async function setMenuButton(config: TelegramConfig, url: string, text: string): Promise<void> {
+  await call(config, 'setChatMenuButton', { menu_button: { type: 'web_app', text, web_app: { url } } })
 }
 
 // The menu that opens on «/» (#32), in each language amble speaks.

@@ -5,11 +5,12 @@ import Header from '@/components/Header'
 import Symbol from '@/components/Symbol'
 import { useI18n } from '@/components/I18nProvider'
 import { postJson } from '@/components/api'
+import { useVisibleInterval } from '@/components/flows/useVisibleInterval'
 import { privacyUrl } from '@/lib/legal'
 import styles from '@/app/login/login.module.css'
 
 type Phase = 'email' | 'code'
-type ErrorKey = 'invalidEmail' | 'tooMany' | 'failed' | 'wrongCode' | 'expiredCode' | 'invitationUsed' | 'betaFull'
+type ErrorKey = 'invalidEmail' | 'tooMany' | 'failed' | 'wrongCode' | 'expiredCode' | 'invitationUsed' | 'betaFull' | 'telegramGone'
 
 // What the auth routes answer, as the screen says it.
 const ERRORS: Record<string, ErrorKey> = {
@@ -30,6 +31,12 @@ const FADE_MS = 320
 const LEAVE_MS = 620
 // Long enough to read "welcome back" before the page fades.
 const GREET_MS = 1100
+// Signing in with Telegram (#35): how often the page asks whether they
+// confirmed in the chat, how long before a missing code is taken as gone (the
+// tab that opens the bot sets it a moment after the tap), and when to stop.
+const TELEGRAM_POLL_MS = 2000
+const TELEGRAM_GRACE_MS = 20_000
+const TELEGRAM_GIVE_UP_MS = 10 * 60 * 1000
 // Pasted figures arrive one after another, this far apart.
 const CASCADE_MS = 70
 // The browser remembers the last address that signed in here, so the next
@@ -73,7 +80,7 @@ function withEmail(sentence: string, email: string) {
 // steps, email then code. One eye stays with you through both: it looks at
 // what you write, blinks when the code is on its way, listens while it waits,
 // narrows at a wrong code, and closes when you are in, to wake on the next page.
-export default function LoginFlow({ next, invitation = null }: { next: string; invitation?: string | null }) {
+export default function LoginFlow({ next, invitation = null, telegram = false }: { next: string; invitation?: string | null; telegram?: boolean }) {
   const { locale, t } = useI18n()
   const [phase, setPhase] = useState<Phase>('email')
   // Only the browser knows it: empty while rendering on the server.
@@ -94,6 +101,47 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
   // The first step arrives with the page; later ones arrive on their own.
   const [moved, setMoved] = useState(false)
   const verifying = useRef(false)
+  // Since when the page waits for their yes in Telegram, and whether the bot
+  // has had the code yet.
+  const [telegramSince, setTelegramSince] = useState<number | null>(null)
+  const telegramSeen = useRef(false)
+  const polling = useRef(false)
+
+  async function enter() {
+    setGaze(null)
+    setLid(1)
+    setLeaving(true)
+    await wait(LEAVE_MS)
+    // A full load, not a client navigation: the page that fades out here must
+    // not stay on screen if the new session's first render stalls.
+    window.location.replace(next)
+  }
+
+  useVisibleInterval(
+    () => {
+      if (telegramSince === null || polling.current) return
+      polling.current = true
+      void postJson('/api/auth/telegram/poll', {})
+        .then(async ({ data }) => {
+          const elapsed = Date.now() - telegramSince
+          if (data.status === 'in') {
+            setTelegramSince(null)
+            await enter()
+            return
+          }
+          if (data.status === 'pending') telegramSeen.current = true
+          if ((data.status === 'gone' && (telegramSeen.current || elapsed > TELEGRAM_GRACE_MS)) || elapsed > TELEGRAM_GIVE_UP_MS) {
+            setTelegramSince(null)
+            setError('telegramGone')
+          }
+        })
+        .finally(() => {
+          polling.current = false
+        })
+    },
+    TELEGRAM_POLL_MS,
+    telegramSince !== null,
+  )
 
   async function post(path: string, body: unknown): Promise<{ error: string | null; data: Record<string, unknown> }> {
     const { ok, data } = await postJson(path, body)
@@ -131,13 +179,7 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
         setGreeting(t.login.welcomeBack(first))
         await wait(GREET_MS)
       }
-      setGaze(null)
-      setLid(1)
-      setLeaving(true)
-      await wait(LEAVE_MS)
-      // A full load, not a client navigation: the page that fades out here must
-      // not stay on screen if the new session's first render stalls.
-      window.location.replace(next)
+      await enter()
       return
     }
     // A quiet no: the eye narrows, the figures fade, the field empties.
@@ -256,6 +298,30 @@ export default function LoginFlow({ next, invitation = null }: { next: string; i
                   </p>
                 )}
               </form>
+              {/* Their chat with amble's bot, connected before: a tab opens it, this page waits for their yes there. */}
+              {telegram && !invitation && (
+                <div className={styles.aside}>
+                  {telegramSince === null ? (
+                    <a
+                      className="text-btn"
+                      href="/api/auth/telegram/start"
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => {
+                        telegramSeen.current = false
+                        setError(null)
+                        setTelegramSince(Date.now())
+                      }}
+                    >
+                      {t.login.telegram}
+                    </a>
+                  ) : (
+                    <p className={styles.lead} role="status">
+                      {t.login.telegramWaiting}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className={`${styles.step} ${styles.enter}`} key="code">

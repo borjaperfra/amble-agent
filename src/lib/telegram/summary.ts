@@ -1,4 +1,4 @@
-import { issueAppLink } from '../auth/applinks'
+import { appBase } from '../auth/applinks'
 import { getDb } from '../db/db'
 import { candidateById, isSearchPaused } from '../db/repo'
 import { candidateLocale } from '../i18n/candidate'
@@ -13,7 +13,7 @@ import { telegramLinkOf } from './link'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
-function summaryText(candidateId: string): { text: string; buttons: { title: string; payload: string; url: string }[] } {
+function summaryText(candidateId: string): { text: string; buttons: { title: string; payload: string; app: string }[] } {
   const db = getDb()
   const candidate = candidateById(candidateId)
   const locale = candidateLocale(candidate)
@@ -42,11 +42,10 @@ function summaryText(candidateId: string): { text: string; buttons: { title: str
   ]
   return {
     text: lines.filter((line): line is string => line !== null).join('\n'),
-    // Into their own account: the links last two days, and the summary is
-    // renewed every pass.
+    // The app inside Telegram, signed in by Telegram itself (#34).
     buttons: [
-      { title: w.offers, payload: '', url: issueAppLink(candidateId, '/opportunities') },
-      { title: w.map, payload: '', url: issueAppLink(candidateId, '/me') },
+      { title: w.offers, payload: '', app: `${appBase()}/tg?to=${encodeURIComponent('/opportunities')}` },
+      { title: w.map, payload: '', app: `${appBase()}/tg?to=${encodeURIComponent('/me')}` },
     ],
   }
 }

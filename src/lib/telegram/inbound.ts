@@ -9,6 +9,7 @@ import { sendDueOffers } from '../whatsapp/offers'
 import { allow } from '../whatsapp/throttle'
 import { answerTap, fetchFile, markAnswered, reactTo, replaceText, sendText, sendTyping, telegramConfig, type SentMessage, type TelegramButton } from './api'
 import { answerShare, type InlineQuery } from './share'
+import { approveLogin, loginCodeIn, refuseLogin } from './login'
 import { refreshSummary } from './summary'
 import { saveTelegramLink, takeStartCode, telegramLinkByChat, touchTelegramLink } from './link'
 
@@ -189,8 +190,14 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
     return
   }
 
+  // "/start login_<code>" from the login page (#35).
+  const login = !payload && text ? loginCodeIn(text) : null
   const link = telegramLinkByChat(chatId)
   if (!link) {
+    if (login) {
+      await reply(`${dictionaries.es.whatsapp.loginNotLinked}\n\n${dictionaries.en.whatsapp.loginNotLinked}`)
+      return
+    }
     if (allow('stranger-tg', chatId, STRANGER_REPLIES, STRANGER_WINDOW_MS)) {
       await reply(`${dictionaries.es.whatsapp.unknownTelegram}\n\n${dictionaries.en.whatsapp.unknownTelegram}`)
     }
@@ -200,6 +207,27 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   const candidate = getCandidate(link.candidate_id)
   if (!candidate) return
   replyTo = candidate.id
+  const words = dictionaries[candidateLocale(candidate)].whatsapp
+  // Signing in to a browser: only on their yes, which they are told to give
+  // only if they asked for it (a link can be sent to them by someone else).
+  if (login) {
+    await reply(words.loginConfirm, [
+      { title: words.loginButtons.yes, payload: `tl:${login}:yes` },
+      { title: words.loginButtons.no, payload: `tl:${login}:no` },
+    ])
+    return
+  }
+  const loginTap = payload?.match(/^tl:([A-Za-z0-9_-]{24}):(yes|no)$/)
+  if (loginTap) {
+    const [, code, answer] = loginTap
+    if (answer === 'yes' && approveLogin(code, candidate.id)) {
+      await reply(words.loginDone)
+      return
+    }
+    refuseLogin(code)
+    await reply(answer === 'yes' ? words.loginExpired : words.loginRefused)
+    return
+  }
   // "/start" again, from someone already connected: a greeting, not a question.
   if (/^\/start\b/.test(text)) {
     await reply(dictionaries[candidateLocale(candidate)].whatsapp.linked(candidate.name))
@@ -209,7 +237,6 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   // A command from the menu.
   const command = text.match(/^\/([a-z]+)(?:@\w+)?\s*$/i)?.[1]?.toLowerCase() as Command | undefined
   const said = command && (COMMANDS as readonly string[]).includes(command) ? command : null
-  const words = dictionaries[candidateLocale(candidate)].whatsapp
   if (said === 'mapa') {
     await reply(words.commandMap(issueAppLink(candidate.id, '/me')))
     return
