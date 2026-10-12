@@ -168,11 +168,12 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
 }
 
 // "Cuéntame" on the offer's template: the offer itself, as reviewed when
-// the template went out. False when it is no longer there to show.
-export async function showTeasedOffer(candidateId: string, matchId: string): Promise<boolean> {
+// the template went out; or one they asked the agent to see (by its offer).
+// False when it is no longer there to show.
+export async function showTeasedOffer(candidateId: string, matchId: string, byOpportunity = false): Promise<boolean> {
   const reach = reachOf(candidateId)
   if (!reach) return false
-  const match = listMatchesForKey(candidateId, currentMatchKey(candidateId)).find((row) => row.id === matchId)
+  const match = listMatchesForKey(candidateId, currentMatchKey(candidateId)).find((row) => (byOpportunity ? row.opportunity_id : row.id) === matchId)
   if (!match || match.closed_at) return false
   const sent = getDb().prepare('SELECT pitch FROM offer_sends WHERE candidate_id = ? AND match_id = ?').get(candidateId, matchId) as { pitch: string | null } | undefined
   const floor = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))?.salaryFloor ?? null

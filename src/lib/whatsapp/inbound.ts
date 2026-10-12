@@ -4,7 +4,7 @@ import { emailOwnerAbout, feedbackToday, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { MAX_AUDIO_BYTES, transcribe } from '../model/transcribe'
-import { runAction } from './actions'
+import { offerToShow, runAction } from './actions'
 import { answerInterviewQuestion, pendingInterviewQuestion, sendTeasedQuestion } from './interview'
 import { leaveReminder, sendTeasedReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
@@ -375,7 +375,12 @@ async function answerWords(
     buttons = proposeName(candidate.id, answer.action.name)
   } else if (answer.action?.type === 'set_language') {
     buttons = proposeLanguage(candidate.id, answer.action.language)
-  } else if (answer.action?.type === 'profile_note' || answer.action?.type === 'profile_correction' || answer.action?.type === 'answers_gap') {
+  } else if (
+    answer.action?.type === 'profile_note' ||
+    answer.action?.type === 'profile_correction' ||
+    answer.action?.type === 'answers_gap' ||
+    answer.action?.type === 'show_offer'
+  ) {
     // Their map: after the reply.
   } else if (answer.action) {
     // What it decided to do: prepare an application (offered with buttons),
@@ -384,6 +389,12 @@ async function answerWords(
     if (done.buttons) buttons = done.buttons
   }
   await reply(answer.reply, buttons)
+  // The offer they asked to see: its card, with its buttons to answer it.
+  if (answer.action?.type === 'show_offer') {
+    const opportunityId = offerToShow(candidate.id, answer.action.company, answer.action.title)
+    const shown = opportunityId ? await showTeasedOffer(candidate.id, opportunityId, true).catch(() => false) : false
+    if (!shown) await reply(w.offerNotFound)
+  }
   for (const reminder of answer.reminders) leaveReminder(candidate.id, reminder.date, reminder.message)
   // Their answer to the interview question waiting on WhatsApp.
   const question = answer.answersInterview ? pendingInterviewQuestion(candidate.id) : null

@@ -541,6 +541,7 @@ export const es: Dictionary = {
     salaryUnknown: 'Salario: no lo publica',
     inApp: 'En la app',
     offerButtons: { interested: 'Me interesa', notFit: 'No encaja', more: 'Cuéntame más', later: 'Para más adelante', applied: 'Ya la envié', open: 'Ver oferta', share: 'Compartir' },
+    offerNotFound: 'No la encuentro entre las que te he pasado. En la app, en Ofertas, las tienes todas.',
     offerLater: 'Guardada para más adelante. No cuenta como un no; la tienes en la app, en «Más adelante».',
     offerApplied: 'Apuntada como enviada. Si te dicen algo, cuéntamelo.',
     applyButtons: { yes: 'Sí, prepárala', no: 'Ahora no' },

@@ -543,6 +543,7 @@ export const en = {
     salaryUnknown: 'Salary: not published',
     inApp: 'In the app',
     offerButtons: { interested: 'Interested', notFit: 'Not a fit', more: 'Tell me more', later: 'For later', applied: 'Already applied', open: 'See the offer', share: 'Share' },
+    offerNotFound: 'I can’t find it among the ones I gave you. They’re all in the app, under Offers.',
     offerLater: 'Kept for later. It doesn’t count as a no; it’s in the app, under «Later».',
     offerApplied: 'Marked as sent. If they get back to you, tell me.',
     applyButtons: { yes: 'Yes, prepare it', no: 'Not now' },

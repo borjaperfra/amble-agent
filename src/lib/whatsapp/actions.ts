@@ -78,6 +78,27 @@ function offerClosed(candidateId: string, company: string): ActionResult {
   return { done: true }
 }
 
+// The offer they ask to see, among those amble gave them (waiting in the
+// app, sent, or followed), most recent first: by company, and by title when
+// that company has more than one.
+export function offerToShow(candidateId: string, company: string, title: string | null): string | null {
+  const wanted = norm(company)
+  if (!wanted) return null
+  const rows = getDb()
+    .prepare(
+      `SELECT o.id AS opportunity_id, o.title, c.name AS company, MAX(x.at) AS at FROM (
+         SELECT opportunity_id, released_at AS at FROM offer_releases WHERE candidate_id = ?
+         UNION ALL SELECT opportunity_id, sent_at AS at FROM offer_sends WHERE candidate_id = ? AND sent_at IS NOT NULL
+         UNION ALL SELECT opportunity_id, decided_at AS at FROM opportunity_decisions WHERE candidate_id = ?
+       ) x JOIN opportunities o ON o.id = x.opportunity_id JOIN companies c ON c.id = o.company_id
+       WHERE o.closed_at IS NULL GROUP BY o.id ORDER BY at DESC`,
+    )
+    .all(candidateId, candidateId, candidateId) as unknown as { opportunity_id: string; title: string; company: string }[]
+  const atCompany = rows.filter((row) => norm(row.company).includes(wanted) || wanted.includes(norm(row.company)))
+  const titled = title ? atCompany.filter((row) => norm(row.title).includes(norm(title)) || norm(title).includes(norm(row.title))) : []
+  return (titled[0] ?? atCompany[0])?.opportunity_id ?? null
+}
+
 function latestMatchId(candidateId: string, opportunityId: string): string | null {
   const row = getDb()
     .prepare('SELECT id FROM opportunity_matches WHERE candidate_id = ? AND opportunity_id = ? ORDER BY created_at DESC LIMIT 1')
