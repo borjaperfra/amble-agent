@@ -92,6 +92,9 @@ export function getMatch(id: string): MatchRow | undefined {
 export interface MatchListing {
   title: string
   company_name: string
+  company_id: string
+  // Where its logo is looked up (/api/logos).
+  company_domain: string | null
   url: string | null
   closed_at: string | null
   location: string | null
@@ -110,7 +113,7 @@ export function listMatchesForKey(
 ): (MatchRow & MatchListing)[] {
   return getDb()
     .prepare(
-      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency, c.name AS company_name
+      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency, c.name AS company_name, c.id AS company_id, c.domain AS company_domain
        FROM opportunity_matches m
        JOIN opportunities o ON o.id = m.opportunity_id
        JOIN companies c ON c.id = o.company_id

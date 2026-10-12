@@ -368,25 +368,9 @@
 }
 
 .wantedBtn {
+  /* A real button now (btn btn-quiet): it was easy to miss (#41). */
   align-self: flex-start;
-  min-height: 44px;
-  padding: 0 12px;
-  margin-top: 4px;
-  font: inherit;
-  font-size: var(--text-body-sm);
-  color: var(--ink-secondary);
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition:
-    color var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard);
-}
-
-.wantedBtn:hover {
-  color: var(--ink);
-  border-color: var(--ink-tertiary);
+  margin-top: 6px;
 }
 
 .footer {
@@ -1043,4 +1027,131 @@
   display: flex;
   align-items: center;
   gap: 4px 16px;
+}
+
+/* Offer cards that scan (#41): who first, with its logo; why as points;
+   each section with a mark of its own, sparingly coloured. */
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.cardHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cardCompany {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--paper-light);
+  color: var(--ink-secondary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.blockWhy,
+.blockConsider,
+.blockUnknown {
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.blockWhy .blockLabel {
+  color: var(--moss);
+}
+
+.blockConsider .blockLabel {
+  color: var(--clay);
+}
+
+.blockUnknown .blockLabel {
+  color: var(--slate);
+}
+
+.points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.points li {
+  position: relative;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.points li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moss);
+}
+
+.sources summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+}
+
+.sources[open] summary {
+  margin-bottom: 8px;
+}
+
+.discardedHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.breach {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 12px;
+  border-left: 2px solid var(--clay-soft);
+}
+
+.breachOffer {
+  font-size: var(--text-body-sm);
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.breachLabel {
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
 }

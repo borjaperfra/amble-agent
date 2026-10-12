@@ -544,6 +544,24 @@ const QUESTIONS_HIDDEN = 'amble-questions-hidden-until'
 const HIDE_DAYS = 7
 const noSubscription = () => () => undefined
 
+// The company at a glance: its logo, served by amble, or its initials when
+// there is none (or it fails to load).
+function CompanyMark({ name, logo, size }: { name: string; logo: string | null; size: number }) {
+  const [failed, setFailed] = useState(false)
+  const initials = name
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('')
+  return (
+    <span className={styles.mark} style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }} aria-hidden="true">
+      {/* eslint-disable-next-line @next/next/no-img-element -- a few KB from our own route, already sized */}
+      {logo && !failed ? <img src={logo} alt="" width={size} height={size} loading="lazy" onError={() => setFailed(true)} /> : initials}
+    </span>
+  )
+}
+
 function hiddenNow(): boolean {
   try {
     return (Number(window.localStorage.getItem(QUESTIONS_HIDDEN)) || 0) > Date.now()
@@ -606,7 +624,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
   const [asking, setAsking] = useState(false)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const meta = [item.company, fewPlaces(item.location, t.opportunities.morePlaces), item.workplace].filter(Boolean).join(' · ')
+  const places = [fewPlaces(item.location, t.opportunities.morePlaces), item.workplace].filter(Boolean).join(' · ')
   const { cardRef, actionsRef, shown: barShown } = useDecisionBar(item.response === null && !asking && !leaving)
 
   async function answer(response: Response, withReason?: string) {
@@ -628,28 +646,47 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
       <p className={styles.cardKicker}>
         <Symbol size={20} /> {item.estimate?.belowFloor ? t.opportunities.worthHearingShort : t.opportunities.worthHearing}
       </p>
-      <h2 className={styles.cardTitle}>{item.title}</h2>
-      <p className={styles.meta}>{meta}</p>
+      {/* Who and what, first and apart: the logo finds it at a glance (#41). */}
+      <header className={styles.cardHead}>
+        <CompanyMark name={item.company} logo={item.logo} size={44} />
+        <div className={styles.cardHeadText}>
+          <p className={styles.cardCompany}>{item.company}</p>
+          <h2 className={styles.cardTitle}>{item.title}</h2>
+          {places && <p className={styles.meta}>{places}</p>}
+        </div>
+      </header>
       {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
       <Pay salary={item.salary} estimate={item.estimate} />
       {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
       <p className={styles.summary}>{item.summary}</p>
 
-      <section className={styles.block}>
+      {/* Why it fits, as points to scan; where each comes from, folded (#41). */}
+      <section className={`${styles.block} ${styles.blockWhy}`}>
         <h3 className={styles.blockLabel}>{t.opportunities.whyShowing}</h3>
-        <ul className={styles.reasons}>
+        <ul className={styles.points}>
           {item.why.map((reason) => (
-            <li key={reason.text} className={styles.reason}>
-              <p>{reason.text}</p>
-              {reason.evidence && <p className={styles.evidence}>{reason.evidence}</p>}
-              {reason.quote && <blockquote className={styles.quote}>“{reason.quote}”</blockquote>}
-            </li>
+            <li key={reason.text}>{reason.text}</li>
           ))}
         </ul>
+        {item.why.some((reason) => reason.evidence || reason.quote) && (
+          <details className={styles.sources}>
+            <summary>{t.opportunities.whereFrom}</summary>
+            <ul className={styles.reasons}>
+              {item.why
+                .filter((reason) => reason.evidence || reason.quote)
+                .map((reason) => (
+                  <li key={reason.text} className={styles.reason}>
+                    {reason.evidence && <p className={styles.evidence}>{reason.evidence}</p>}
+                    {reason.quote && <blockquote className={styles.quote}>“{reason.quote}”</blockquote>}
+                  </li>
+                ))}
+            </ul>
+          </details>
+        )}
       </section>
 
       {(item.considerAlso || item.fit === 'stretch') && (
-        <section className={styles.block}>
+        <section className={`${styles.block} ${styles.blockConsider}`}>
           <h3 className={styles.blockLabel}>{t.opportunities.considerAlso}</h3>
           {item.considerAlso ? (
             <>
@@ -663,7 +700,7 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
       )}
 
       {item.unknowns.length > 0 && (
-        <section className={styles.block}>
+        <section className={`${styles.block} ${styles.blockUnknown}`}>
           <h3 className={styles.blockLabel}>{t.opportunities.unknowns}</h3>
           <ul className={styles.unknowns}>
             {item.unknowns.map((unknown) => (
@@ -929,7 +966,7 @@ function DroppedItem({ item, onChanged }: { item: WantedOpportunity; onChanged: 
       </p>
       <button
         type="button"
-        className={styles.wantedBtn}
+        className={`btn btn-quiet ${styles.wantedBtn}`}
         onClick={async () => {
           setError(null)
           if (await markProgress(item.opportunityIds, null)) onChanged()
@@ -953,19 +990,24 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
 
   return (
     <li className={styles.discardedItem}>
-      <p className={styles.discardedTitle}>
-        {item.url ? (
-          <a href={item.url} target="_blank" rel="noreferrer">
-            {item.title}
-          </a>
-        ) : (
-          item.title
-        )}{' '}
-        <span className={styles.meta}>· {item.company}</span>
-      </p>
+      <div className={styles.discardedHead}>
+        <CompanyMark name={item.company} logo={item.logo} size={28} />
+        <p className={styles.discardedTitle}>
+          {item.url ? (
+            <a href={item.url} target="_blank" rel="noreferrer">
+              {item.title}
+            </a>
+          ) : (
+            item.title
+          )}{' '}
+          <span className={styles.meta}>· {item.company}</span>
+        </p>
+      </div>
       {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
+      {/* What it breaks, then what the offer says, each on its own line (#41). */}
       {item.reasons.map((reason, index) => (
-        <p key={index} className={styles.discardReason}>
+        <div key={index} className={styles.breach}>
+          <p className={styles.discardReason}>
           {reason.kind === 'wrong_role'
             ? t.opportunities.wrongRole(reason.text)
             : reason.kind === 'below_level'
@@ -995,13 +1037,18 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
               : reason.kind === 'unverified'
               ? t.opportunities.unverified(reason.rule, reason.note)
               : t.opportunities.notEnoughReasons}
+          </p>
           {(reason.kind === 'filter' || reason.kind === 'salary_floor' || reason.kind === 'language') && reason.quote && (
-            <span className={styles.discardQuote}> — “{reason.quote}”</span>
+            <p className={styles.breachOffer}>
+              <span className={styles.breachLabel}>{t.opportunities.offerSays}</span> <span className={styles.discardQuote}>“{reason.quote}”</span>
+            </p>
           )}
           {(reason.kind === 'remote_unconfirmed' || reason.kind === 'remote_elsewhere' || reason.kind === 'remote_countries' || reason.kind === 'office_elsewhere' || reason.kind === 'office_abroad') && reason.places && (
-            <span className={styles.discardQuote}> — {reason.places}</span>
+            <p className={styles.breachOffer}>
+              <span className={styles.breachLabel}>{t.opportunities.offerPlaces}</span> {reason.places}
+            </p>
           )}
-        </p>
+        </div>
       ))}
       {item.response === 'wanted_anyway' ? (
         <p className={styles.saved} role="status">
@@ -1010,7 +1057,7 @@ function DiscardedItem({ item, onWanted }: { item: DiscardedOpportunity; onWante
       ) : (
         <button
           type="button"
-          className={styles.wantedBtn}
+          className={`btn btn-quiet ${styles.wantedBtn}`}
           onClick={async () => {
             setError(null)
             if (await respond(item.id, 'wanted_anyway')) onWanted()

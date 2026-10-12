@@ -27,6 +27,8 @@ const SETUP_READ_MS = 15 * 60 * 1000
 export interface FoundOpportunity {
   id: string
   company: string
+  // Its logo, served by amble (/api/logos); null when its site is unknown.
+  logo: string | null
   title: string
   location: string | null
   workplace: string | null
@@ -73,6 +75,7 @@ export type DiscardReason =
 export interface DiscardedOpportunity {
   id: string
   company: string
+  logo: string | null
   title: string
   url: string | null
   reasons: DiscardReason[]
@@ -274,7 +277,7 @@ function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchL
 function earlierMatches(candidateId: string, matchKey: string, judged: Set<string>): (MatchRow & MatchListing)[] {
   const rows = getDb()
     .prepare(
-      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency, c.name AS company_name
+      `SELECT m.*, o.title, o.url, o.closed_at, o.location, o.workplace, o.salary_raw, o.salary_min, o.salary_max, o.salary_currency, c.name AS company_name, c.id AS company_id, c.domain AS company_domain
        FROM opportunity_matches m
        JOIN opportunities o ON o.id = m.opportunity_id
        JOIN companies c ON c.id = o.company_id
@@ -290,6 +293,12 @@ function earlierMatches(candidateId: string, matchKey: string, judged: Set<strin
     latest.push(row)
   }
   return latest
+}
+
+// The company's logo, fetched once by amble and served from here: the
+// browser never asks a third party (api/logos).
+function logoOf(match: MatchListing): string | null {
+  return match.company_domain ? `/api/logos/${encodeURIComponent(match.company_id)}` : null
 }
 
 // Every judgment the screen may show them: under their current profile, and
@@ -351,7 +360,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     if (estimate?.belowFloor != null && !decision && !match.response && !sentOnWhatsapp.has(match.opportunity_id)) {
       if (match.closed_at) continue
       const reason: DiscardReason = { kind: 'salary_estimate', estimate }
-      discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons: [reason], response, stale })
+      discarded.push({ id: match.id, company: match.company_name, logo: logoOf(match), title: match.title, url: match.url, reasons: [reason], response, stale })
       if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason, at: match.created_at })
       continue
     }
@@ -363,6 +372,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
       }
       if (!wanted) found.push({
         id: match.id,
+        logo: logoOf(match),
         company: match.company_name,
         title: match.title,
         location: match.location,
@@ -419,7 +429,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
         reasons.push(unclear ? { kind: 'unverified', rule: ruleLabels.get(unclear.ruleId) as string, note: unclear.note } : { kind: 'no_reason' })
       }
     }
-    if (!wanted) discarded.push({ id: match.id, company: match.company_name, title: match.title, url: match.url, reasons, response, stale })
+    if (!wanted) discarded.push({ id: match.id, company: match.company_name, logo: logoOf(match), title: match.title, url: match.url, reasons, response, stale })
     if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason: reasons[0], at: match.created_at })
   }
 
