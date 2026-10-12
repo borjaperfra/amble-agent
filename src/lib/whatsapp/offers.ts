@@ -1,8 +1,9 @@
 import { releaseDue } from '../matching/release'
 import { applicationState, canFillForm, cancelApplication, fillApplication, filledPicture, submitApplication } from '../apply/browser'
 import { cloudBrowserConfigured } from '../apply/cloud'
-import { getPreparedApplication, prepareApplication } from '../apply/prepare'
+import { getPreparedApplication, prepareApplication, type PreparedApplication } from '../apply/prepare'
 import { issueAppLink } from '../auth/applinks'
+import { letterPdf } from '../pdf/letter'
 import { getDb } from '../db/db'
 import { getMatch, listMatchesForKey, respondAsApplied, respondToMatch, setProgress, type MatchListing, type MatchRow } from '../db/matching'
 import { candidateById, isSearchPaused, now } from '../db/repo'
@@ -321,6 +322,23 @@ function answered(candidateId: string, matchId: string, answer: string): void {
 
 type Reply = (text: string, buttons?: { title: string; payload: string }[]) => Promise<unknown>
 
+// On Telegram, a prepared application's letter as a PDF to attach, when a
+// letter is asked for or would help: a file is what a form takes.
+async function sendLetter(candidateId: string, opportunityId: string, prepared: PreparedApplication): Promise<void> {
+  if (!prepared.message || prepared.advice.coverLetter === 'skip') return
+  const reach = reachOf(candidateId)
+  if (!reach?.sendDocument) return
+  const candidate = candidateById(candidateId)
+  const w = dictionaries[candidateLocale(candidate)].whatsapp
+  const company =
+    (getDb().prepare('SELECT c.name AS company FROM opportunities o JOIN companies c ON c.id = o.company_id WHERE o.id = ?').get(opportunityId) as
+      | { company: string }
+      | undefined)?.company ?? ''
+  const filename = `${w.letterFile}${company ? ` - ${company}` : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '')
+  await reach.sendDocument({ file: letterPdf({ title: candidate?.name ?? null, text: prepared.message }), filename, mimeType: 'application/pdf', caption: w.letterCaption(company) })
+  logMessage(candidateId, 'out', `[${filename}]`)
+}
+
 export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: Reply): Promise<void> {
   const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
   const match = getMatch(tap.matchId)
@@ -414,6 +432,9 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
       } else {
         await reply([...summary, w.applyFinish(appUrl(candidateId, '/opportunities?tab=wanted'))].join('\n'))
       }
+      await sendLetter(candidateId, match.opportunity_id, prepared).catch((error: unknown) =>
+        console.error('[telegram] letter not sent:', error instanceof Error ? error.message : error),
+      )
     } catch {
       await reply(w.applyFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
     }

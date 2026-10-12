@@ -547,6 +547,8 @@ export const en = {
     applyLater: (url: string) => `OK. It’s saved at ${url} for whenever you want.`,
     applyWorking: 'On it. I’m reading the form and preparing it; it takes a couple of minutes.',
     applyReady: 'Ready.',
+    letterFile: 'Cover letter',
+    letterCaption: (company: string) => `The letter for ${company} as a PDF, in case the form asks you to attach one. It is the same text you have in the app.`,
     // How to send it, by what the preparation advised.
     applyChannel: {
       form: 'It goes through the offer’s own form.',

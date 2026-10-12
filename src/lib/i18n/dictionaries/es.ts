@@ -545,6 +545,8 @@ export const es: Dictionary = {
     applyLater: (url: string) => `Vale. La tienes guardada en ${url} para cuando quieras.`,
     applyWorking: 'Me pongo. Leo el formulario y te lo preparo; tardo un par de minutos.',
     applyReady: 'Lista.',
+    letterFile: 'Carta de presentación',
+    letterCaption: (company: string) => `La carta para ${company} en PDF, por si el formulario pide adjuntarla. Es el mismo texto que tienes en la app.`,
     applyChannel: {
       form: 'Se envía por el formulario de la oferta.',
       referral: 'Antes de enviarla, merece la pena buscar a alguien dentro que te presente: pesa más que el formulario solo.',

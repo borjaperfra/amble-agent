@@ -183,6 +183,18 @@ export async function sendPhoto(
   if (!short) await sendText(config, chatId, params.text, params.buttons, { quiet: params.quiet })
 }
 
+// A file of amble's for them (a cover letter as a PDF), with a line about it.
+export async function sendDocument(config: TelegramConfig, chatId: string, params: { file: Buffer; filename: string; mimeType: string; caption: string }): Promise<void> {
+  const form = new FormData()
+  form.set('chat_id', chatId)
+  form.set('document', new Blob([new Uint8Array(params.file)], { type: params.mimeType }), params.filename)
+  form.set('caption', asTelegramHtml(params.caption.slice(0, MAX_CAPTION)))
+  form.set('parse_mode', 'HTML')
+  const response = await fetch(`${config.api}/bot${config.token}/sendDocument`, { method: 'POST', body: form, signal: AbortSignal.timeout(60_000) })
+  const data = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null
+  if (!response.ok || !data?.ok) throw new TelegramError(data?.description ?? `Telegram answered ${response.status}`, response.status)
+}
+
 // "typing…" on their screen, for about five seconds.
 export async function sendTyping(config: TelegramConfig, chatId: string): Promise<void> {
   await call(config, 'sendChatAction', { chat_id: chatId, action: 'typing' }, 10_000)

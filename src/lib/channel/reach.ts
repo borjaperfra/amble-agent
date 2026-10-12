@@ -1,5 +1,5 @@
 import { getDb } from '../db/db'
-import { sendPhoto, sendText, telegramConfig } from '../telegram/api'
+import { sendDocument, sendPhoto, sendText, telegramConfig } from '../telegram/api'
 import { telegramLinkOf } from '../telegram/link'
 import { linkOf, windowOpen } from '../whatsapp/link'
 import { sendTemplate, type TemplateKind } from '../whatsapp/templates'
@@ -38,6 +38,8 @@ export interface Reach {
   sandbox: boolean
   send(message: Outgoing): Promise<void>
   sendPicture(params: { image: Buffer; filename: string; text: string; buttons?: Button[]; idempotencyKey?: string; quiet?: boolean }): Promise<void>
+  // Telegram only: a file for them (a cover letter); elsewhere absent.
+  sendDocument?(params: { file: Buffer; filename: string; mimeType: string; caption: string }): Promise<void>
   // WhatsApp only, past the 24 hours: the approved template that asks first.
   template(kind: TemplateKind, values: string[], payloads: (string | null)[], idempotencyKey: string): Promise<void>
 }
@@ -74,6 +76,7 @@ export function reachOf(candidateId: string): Reach | null {
         }
       },
       sendPicture: (params) => sendPhoto(telegram, chat.chat_id, { ...params, quiet: params.quiet || night() }),
+      sendDocument: (params) => sendDocument(telegram, chat.chat_id, params),
       template: async () => {
         throw new Error('Telegram has no templates')
       },
