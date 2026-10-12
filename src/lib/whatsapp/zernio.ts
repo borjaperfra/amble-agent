@@ -74,6 +74,8 @@ export interface Button {
   url?: string
   // Telegram only: it opens a chat of theirs to share this (an inline query).
   share?: string
+  // Telegram only: on the same row as the button before it.
+  beside?: boolean
 }
 
 // WhatsApp's reply buttons: three at most, none that opens an address.

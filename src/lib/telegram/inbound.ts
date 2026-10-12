@@ -88,7 +88,7 @@ function reactedCard(chatId: string, reaction: TelegramReaction): ReactedCard | 
     title: `${emoji} ${answer === 'interested' ? words.interested : words.notFit}`,
     messageId: reaction.message_id,
     body: card.body,
-    keep: [...(card.url ? [{ title: words.open, payload: '', url: card.url }] : []), { title: words.share, payload: '', share: `of:${card.match_id}` }],
+    keep: [{ title: words.share, payload: '', share: `of:${card.match_id}` }],
   }
 }
 

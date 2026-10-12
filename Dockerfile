@@ -27,6 +27,10 @@ ENV NODE_ENV=production \
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
+# The cloud browser's library, whole: the server's own copy is traced from
+# what the code imports and leaves out the files it reads at run time
+# (browsers.json), so filling a form failed before it began (2026-10-02, 10-12).
+COPY --from=deps /app/node_modules/playwright-core ./node_modules/playwright-core
 # The volume is mounted here; it may arrive owned by root, so the server runs
 # as the image's default user rather than guessing the volume's owner.
 RUN mkdir -p /data

@@ -146,21 +146,20 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
   const body = offerText(match, pitch, d)
   await reach.send({
     text: body,
-    buttons: [
-      { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
-      { title: w.offerButtons.notFit, payload: `of:${match.id}:not_fit` },
-      { title: w.offerButtons.more, payload: `of:${match.id}:more` },
-      // Telegram takes more than three, and buttons that open a page (#32).
-      ...(reach.kind === 'telegram'
+    // On Telegram, only the answer and sharing it with a friend: the offer's
+    // link is in its text, and the rest is said in words or in the app.
+    buttons:
+      reach.kind === 'telegram'
         ? [
-            { title: w.offerButtons.later, payload: `of:${match.id}:later` },
-            { title: w.offerButtons.applied, payload: `of:${match.id}:applied` },
-            ...(match.url ? [{ title: w.offerButtons.open, payload: '', url: match.url }] : []),
-            // To a friend: a chat of theirs opens with the offer to send.
+            { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
+            { title: w.offerButtons.notFit, payload: `of:${match.id}:not_fit`, beside: true },
             { title: w.offerButtons.share, payload: '', share: `of:${match.id}` },
           ]
-        : []),
-    ],
+        : [
+            { title: w.offerButtons.interested, payload: `of:${match.id}:interested` },
+            { title: w.offerButtons.notFit, payload: `of:${match.id}:not_fit` },
+            { title: w.offerButtons.more, payload: `of:${match.id}:more` },
+          ],
     idempotencyKey: `of:${match.id}`,
     card: { matchId: match.id, url: match.url ?? null },
   })
@@ -502,7 +501,8 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
         return
       }
       await reply([w.fillDone(result.filled.length, result.left, live), result.captcha ? w.fillCaptcha : null].filter(Boolean).join('\n\n'))
-    } catch {
+    } catch (error) {
+      console.error('[amble] form not filled:', match.opportunity_id, error instanceof Error ? error.message : error)
       await reply(w.fillFailed(appUrl(candidateId, '/opportunities?tab=wanted')))
     }
     return

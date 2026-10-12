@@ -57,9 +57,12 @@ export interface TelegramButton {
   // A button that opens this address of the app inside Telegram, signed in
   // (the Mini App, #34). Only https.
   app?: string
+  // On the same row as the button before it (two short answers side by side).
+  beside?: boolean
 }
 
-// One button a row: their titles can be as long as they need.
+// One button a row, so their titles can be as long as they need, unless one
+// asks to sit beside the one before.
 function keyboard(buttons: TelegramButton[] | undefined) {
   const usable = (buttons ?? []).filter((button) =>
     button.url || button.app
@@ -76,7 +79,12 @@ function keyboard(buttons: TelegramButton[] | undefined) {
         : button.share !== undefined
         ? { text: button.title, switch_inline_query_chosen_chat: { query: button.share, allow_user_chats: true, allow_group_chats: true } }
         : { text: button.title, callback_data: button.payload }
-  return usable.length ? { reply_markup: { inline_keyboard: usable.map((button) => [key(button)]) } } : {}
+  const rows: ReturnType<typeof key>[][] = []
+  for (const button of usable) {
+    if (button.beside && rows.length > 0) rows[rows.length - 1].push(key(button))
+    else rows.push([key(button)])
+  }
+  return rows.length ? { reply_markup: { inline_keyboard: rows } } : {}
 }
 
 // What amble writes is in WhatsApp's marks (*bold*, _italics_): said in
