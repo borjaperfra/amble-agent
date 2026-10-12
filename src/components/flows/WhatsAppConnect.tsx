@@ -16,7 +16,17 @@ const ROUTE: Record<Channel, string> = { whatsapp: '/api/whatsapp', telegram: '/
 // amble has a bot: a link opens amble's chat, they tap «Start», and the page
 // sees it arrive. Connected, amble writes there.
 // Compact: only the buttons and what happens, under a line that already said why.
-export default function WhatsAppConnect({ linked: initiallyLinked, compact = false }: { linked: boolean; compact?: boolean }) {
+// addOnly: for someone on a chat already, only the offer of Telegram too
+// (and what follows from it), nothing about the chat they have.
+export default function WhatsAppConnect({
+  linked: initiallyLinked,
+  compact = false,
+  addOnly = false,
+}: {
+  linked: boolean
+  compact?: boolean
+  addOnly?: boolean
+}) {
   const w = useT().whatsapp
   const [linked, setLinked] = useState<Record<Channel, boolean>>({ whatsapp: initiallyLinked, telegram: false })
   const [telegram, setTelegram] = useState(false)
@@ -102,6 +112,25 @@ export default function WhatsAppConnect({ linked: initiallyLinked, compact = fal
         {w.connectTelegramToo}
       </button>
     ) : null
+
+  if (addOnly) {
+    if (!telegramToo && waiting !== 'telegram' && !(linked.telegram && linked.whatsapp) && !problem) return null
+    return (
+      <div className={styles.whatsappCompact}>
+        {(waiting === 'telegram' || linked.telegram) && linked.whatsapp && (
+          <p className={styles.whatsappLead} aria-live="polite">
+            {status}
+          </p>
+        )}
+        {telegramToo}
+        {problem && (
+          <p className={styles.error} role="alert">
+            {problem}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   if (compact) {
     return (

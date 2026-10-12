@@ -220,7 +220,11 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
               </Link>
             )}
             {whatsapp.linked ? (
-              <p className={styles.gapsNote}>{t.map.gapsLater}</p>
+              <>
+                <p className={styles.gapsNote}>{t.map.gapsLater}</p>
+                {/* On one app already: only the other, if amble has it. */}
+                <WhatsAppConnect linked compact addOnly />
+              </>
             ) : (
               whatsapp.available && (
                 <div className={styles.gapsConnect}>
