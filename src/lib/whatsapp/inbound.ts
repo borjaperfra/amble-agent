@@ -392,7 +392,13 @@ async function answerWords(
   // The offer they asked to see: its card, with its buttons to answer it.
   if (answer.action?.type === 'show_offer') {
     const opportunityId = offerToShow(candidate.id, answer.action.company, answer.action.title)
-    const shown = opportunityId ? await showTeasedOffer(candidate.id, opportunityId, true).catch(() => false) : false
+    const shown = opportunityId
+      ? await showTeasedOffer(candidate.id, opportunityId, true).catch((error: unknown) => {
+          console.error('[amble] offer card not sent:', opportunityId, error instanceof Error ? error.message : error)
+          return false
+        })
+      : false
+    if (!shown) console.error('[amble] offer to show not found:', answer.action.company, answer.action.title, opportunityId)
     if (!shown) await reply(w.offerNotFound)
   }
   for (const reminder of answer.reminders) leaveReminder(candidate.id, reminder.date, reminder.message)
