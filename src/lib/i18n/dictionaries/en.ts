@@ -530,6 +530,7 @@ export const en = {
     connectTitleAny: 'Your Rep, on WhatsApp or Telegram',
     connectLeadAny: 'Choose where I write to you: there I only tell you when something deserves your attention (offers that truly fit and how your applications are going), and you can ask me anything about your search.',
     connectTelegram: 'Connect Telegram',
+    connectTelegramToo: 'Connect Telegram too',
     connectWaitingTelegram: 'Tap «Start» in amble’s chat that opened in Telegram. When it arrives, this changes on its own.',
     connectedTelegram: 'Telegram connected. I’ll write to you there.',
     unavailableTelegram: 'Telegram isn’t available yet.',

@@ -80,7 +80,7 @@ export default function WhatsAppConnect({ linked: initiallyLinked, compact = fal
   }
 
   const anyLinked = linked.whatsapp || linked.telegram
-  const status = linked.telegram ? w.connectedTelegram : linked.whatsapp ? w.connected : waiting === 'telegram' ? w.connectWaitingTelegram : waiting === 'whatsapp' ? w.connectWaiting : null
+  const status = linked.telegram ? w.connectedTelegram : waiting === 'telegram' ? w.connectWaitingTelegram : linked.whatsapp ? w.connected : waiting === 'whatsapp' ? w.connectWaiting : null
   const problem = failed === 'telegram' ? w.unavailableTelegram : failed === 'whatsapp' ? w.unavailable : null
   const buttons = (
     <>
@@ -95,13 +95,24 @@ export default function WhatsAppConnect({ linked: initiallyLinked, compact = fal
     </>
   )
 
+  // On WhatsApp already, Telegram too: amble then writes where they last wrote.
+  const telegramToo =
+    telegram && linked.whatsapp && !linked.telegram && waiting !== 'telegram' ? (
+      <button type="button" className="text-btn" onClick={() => void connect('telegram')}>
+        {w.connectTelegramToo}
+      </button>
+    ) : null
+
   if (compact) {
     return (
       <div className={styles.whatsappCompact}>
         {anyLinked || waiting ? (
-          <p className={styles.whatsappLead} aria-live="polite">
-            {status}
-          </p>
+          <>
+            <p className={styles.whatsappLead} aria-live="polite">
+              {status}
+            </p>
+            {telegramToo}
+          </>
         ) : (
           <div className={styles.whatsappActions}>{buttons}</div>
         )}
@@ -138,6 +149,7 @@ export default function WhatsAppConnect({ linked: initiallyLinked, compact = fal
                 </button>
               ))
           : buttons}
+        {telegramToo}
       </div>
       {problem && (
         <p className={styles.error} role="alert">

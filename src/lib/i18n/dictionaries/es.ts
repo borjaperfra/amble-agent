@@ -529,6 +529,7 @@ export const es: Dictionary = {
     connectTitleAny: 'Tu Rep, en WhatsApp o Telegram',
     connectLeadAny: 'Elige dónde te escribo: por ahí te aviso solo cuando algo merece tu atención (ofertas con mucho encaje y cómo van tus candidaturas), y me puedes preguntar lo que quieras sobre tu búsqueda.',
     connectTelegram: 'Conectar Telegram',
+    connectTelegramToo: 'Conectar también Telegram',
     connectWaitingTelegram: 'Pulsa «Iniciar» en el chat de amble que se ha abierto en Telegram. Cuando llegue, esto cambia solo.',
     connectedTelegram: 'Telegram conectado. Te escribo por ahí.',
     unavailableTelegram: 'Telegram aún no está disponible.',
