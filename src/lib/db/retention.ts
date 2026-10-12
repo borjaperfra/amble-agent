@@ -108,6 +108,7 @@ export function applyRetention(at: string = now()): RetentionStats {
     stats.whatsappEvents = Number(
       db.prepare('DELETE FROM whatsapp_events WHERE received_at < ?').run(daysAgo(FORGET_WHATSAPP_EVENTS_AFTER_DAYS, at)).changes,
     )
+    db.prepare('DELETE FROM telegram_cards WHERE sent_at < ?').run(daysAgo(FORGET_WHATSAPP_EVENTS_AFTER_DAYS, at))
 
     stats.modelOutputsStripped = Number(
       db

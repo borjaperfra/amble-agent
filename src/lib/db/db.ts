@@ -527,6 +527,20 @@ function createDb(): DatabaseSync {
       expires_at TEXT NOT NULL
     );
 
+    -- Offers sent on Telegram, by their message: a reaction to one (👍, 👎)
+    -- answers it as its buttons would, and what they chose is shown below
+    -- its words. Forgotten after a month (retention.ts).
+    CREATE TABLE IF NOT EXISTS telegram_cards (
+      chat_id TEXT NOT NULL,
+      message_id INTEGER NOT NULL,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      match_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      url TEXT,
+      sent_at TEXT NOT NULL,
+      PRIMARY KEY (chat_id, message_id)
+    );
+
     CREATE TABLE IF NOT EXISTS whatsapp_events (
       id TEXT PRIMARY KEY,
       event TEXT NOT NULL,

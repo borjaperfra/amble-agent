@@ -23,6 +23,9 @@ export interface Outgoing {
   // Telegram only: what can wait (a question for their map, a follow-up,
   // what was added) arrives without a sound. At night everything does.
   quiet?: boolean
+  // Telegram only: an offer's card, kept by its message so a reaction to it
+  // answers it (telegram_cards).
+  card?: { matchId: string; url: string | null }
 }
 
 export interface Reach {
@@ -61,7 +64,14 @@ export function reachOf(candidateId: string): Reach | null {
       open: true,
       sandbox: false,
       send: async (message) => {
-        await sendText(telegram, chat.chat_id, message.text, message.buttons, { quiet: message.quiet || night() })
+        const sent = await sendText(telegram, chat.chat_id, message.text, message.buttons, { quiet: message.quiet || night() })
+        if (message.card && sent.messageId !== null) {
+          getDb()
+            .prepare(
+              'INSERT OR REPLACE INTO telegram_cards (chat_id, message_id, candidate_id, match_id, body, url, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(chat.chat_id, sent.messageId, candidateId, message.card.matchId, message.text, message.card.url, new Date().toISOString())
+        }
       },
       sendPicture: (params) => sendPhoto(telegram, chat.chat_id, { ...params, quiet: params.quiet || night() }),
       template: async () => {

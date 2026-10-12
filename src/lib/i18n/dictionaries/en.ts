@@ -480,7 +480,7 @@ export const en = {
     commandMap: (url: string) => `Your map, with what I know about you and what I don’t yet: ${url}`,
     commandPreferences: (url: string) => `What I look for on your behalf, to change it whenever you like: ${url}`,
     commandHelp:
-      'I write when an offer truly fits, and ask how your applications are going. You can ask me anything about your search, ask me to prepare an application, or send me your CV as a PDF or a voice note. In the «/» menu you have /ofertas, /mapa, /preferencias and /pausa.',
+      'I write when an offer truly fits, and ask how your applications are going. You can ask me anything about your search, ask me to prepare an application, or send me your CV as a PDF or a voice note. You can also react to an offer with 👍 or 👎. In the «/» menu you have /ofertas, /mapa, /preferencias and /pausa.',
     unknownTelegram: 'Hi, I’m amble’s AI agent. To talk to me here, go to app.amble.fyi and connect Telegram from there.',
     noted: 'Noted. Thank you.',
     ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,

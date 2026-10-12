@@ -158,6 +158,7 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
         : []),
     ],
     idempotencyKey: `of:${match.id}`,
+    card: { matchId: match.id, url: match.url ?? null },
   })
   getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), reach.candidateId, match.id)
   logMessage(reach.candidateId, 'out', body)

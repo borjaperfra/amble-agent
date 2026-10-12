@@ -480,7 +480,7 @@ export const es: Dictionary = {
     commandMap: (url: string) => `Tu mapa, con lo que sé de ti y lo que aún no sé: ${url}`,
     commandPreferences: (url: string) => `Lo que busco por ti, para cambiarlo cuando quieras: ${url}`,
     commandHelp:
-      'Te escribo cuando una oferta encaja de verdad, y te pregunto cómo van tus candidaturas. Me puedes preguntar lo que quieras sobre tu búsqueda, pedirme que prepare una candidatura, mandarme tu CV en PDF o un audio. En el menú «/» tienes /ofertas, /mapa, /preferencias y /pausa.',
+      'Te escribo cuando una oferta encaja de verdad, y te pregunto cómo van tus candidaturas. Me puedes preguntar lo que quieras sobre tu búsqueda, pedirme que prepare una candidatura, mandarme tu CV en PDF o un audio. A una oferta también puedes reaccionar con 👍 o 👎. En el menú «/» tienes /ofertas, /mapa, /preferencias y /pausa.',
     unknownTelegram: 'Hola, soy el agente de IA de amble. Para hablar conmigo por aquí, entra en app.amble.fyi y conecta Telegram desde allí.',
     noted: 'Lo he apuntado. Gracias.',
     ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,

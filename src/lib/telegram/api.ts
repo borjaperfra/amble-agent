@@ -219,7 +219,7 @@ export async function setCommands(config: TelegramConfig, commands: { command: s
 
 // Where Telegram sends what reaches the bot, and only what amble reads.
 export async function setWebhook(config: TelegramConfig, url: string): Promise<void> {
-  await call(config, 'setWebhook', { url, secret_token: config.webhookSecret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: false })
+  await call(config, 'setWebhook', { url, secret_token: config.webhookSecret, allowed_updates: ['message', 'callback_query', 'message_reaction'], drop_pending_updates: false })
 }
 
 // The webhook's header, compared in constant time.
