@@ -13,6 +13,7 @@ import type { Locale } from '../i18n/locale'
 import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
 import { shownMatches } from '../matching/view'
+import { officeNotAllowed } from '../matching/office'
 import { workplaceShown } from '../matching/workplace'
 import { currentMatchKey, placeFit } from '../matching/run'
 import { storedRoleQuery, type RoleQuery } from '../matching/role-query'
@@ -86,6 +87,8 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
     seenRoles.add(role)
     if (match.verdict !== 'show' || match.closed_at || match.response || considered.has(match.id) || decided.has(match.opportunity_id)) continue
     if (!released.has(match.opportunity_id)) continue
+    // An office where they would not go: never sent (office.ts).
+    if (officeNotAllowed(match.location, workplaceShown(match.opportunity_id, match.workplace), query)) continue
     const explanation = JSON.parse(match.explanation) as Explanation
     if (explanation.roleFit.fit !== 'fits') continue
     picked.push(match)

@@ -1,3 +1,5 @@
+import { officeNotAllowed } from './office'
+import { workplaceShown } from './workplace'
 import { getDb, inTransaction, prepared } from '../db/db'
 import { listDecisions, listMatchesForKey } from '../db/matching'
 import { now } from '../db/repo'
@@ -107,6 +109,8 @@ export function waitingToRelease(candidateId: string, released: Set<string> = re
     seenRoles.add(role)
     if (match.verdict !== 'show' || match.closed_at || match.response) continue
     if (released.has(match.opportunity_id) || decisions.has(match.opportunity_id) || sent.has(match.opportunity_id)) continue
+    // An office where they would not go: never released (office.ts).
+    if (officeNotAllowed(match.location, workplaceShown(match.opportunity_id, match.workplace), query)) continue
     const explanation = JSON.parse(match.explanation) as Explanation
     const at = (published.get(match.opportunity_id) as { at: string } | undefined)?.at ?? match.created_at
     waiting.push({
