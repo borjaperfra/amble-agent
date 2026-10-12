@@ -1014,3 +1014,33 @@
 .handoffStay {
   min-height: 44px;
 }
+
+/* What amble would still ask them, above the tabs (#43): quiet, one line of
+   words and one way in. */
+.questions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0 0 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--moss);
+  border-radius: var(--radius-md);
+  background: var(--moss-soft);
+}
+
+.questionsText {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: var(--text-body-sm);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.questionsActions {
+  display: flex;
+  align-items: center;
+  gap: 4px 16px;
+}

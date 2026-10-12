@@ -3,7 +3,7 @@ import { canFillForms } from '../apply/chrome'
 import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
 import { chatAvailability } from '../channel/reach'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
-import { candidateById, listCapabilities, listConfirmedPreferences } from '../db/repo'
+import { candidateById, getStatedAbout, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
@@ -152,6 +152,9 @@ export interface OpportunitiesView {
   decided: number
   // Nothing of theirs to show: why, in numbers, from what was read.
   drought: Drought | null
+  // What amble would still ask them, reachable from here (#43): the open
+  // questions of their map, and whether they said which languages they speak.
+  questions: { open: number; languagesStated: boolean }
 }
 
 // Why nothing reaches them yet: of the offers open, how many are of their
@@ -463,5 +466,13 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     whatsapp: chatAvailability(candidate.id),
     decided: decisions.size,
     drought: fits.length + maybe.length === 0 && withheld === 0 ? droughtOf(candidate.id, discarded) : null,
+    questions: {
+      open: (
+        getDb()
+          .prepare("SELECT COUNT(*) AS n FROM uncertainties WHERE candidate_id = ? AND status = 'OPEN' AND resolvable_by_interview = 1")
+          .get(candidate.id) as { n: number }
+      ).n,
+      languagesStated: getStatedAbout(candidate.id).languages !== null,
+    },
   }
 }

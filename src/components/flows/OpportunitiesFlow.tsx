@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import Header from '@/components/Header'
 import Deck from '@/components/Deck'
@@ -174,6 +174,7 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
       <main className={styles.page}>
         <p className="kicker">{t.opportunities.kicker}</p>
         <h1 className={styles.title}>{t.opportunities.title}</h1>
+        <MoreQuestions questions={view.questions} />
 
         <div className={styles.tabs} role="tablist" aria-label={t.opportunities.title}>
           {TABS.map((key) => (
@@ -534,6 +535,54 @@ function fewPlaces(location: string | null, more: (count: number) => string): st
   if (!location) return null
   const places = location.split(' · ')
   return places.length <= 3 ? location : `${places.slice(0, 3).join(' · ')} ${more(places.length - 3)}`
+}
+
+// What amble would still ask them, a tap away (#43): first the languages
+// they speak, which many offers ask for, then the open questions of their
+// map. «Ahora no» hides it in this browser for a week.
+const QUESTIONS_HIDDEN = 'amble-questions-hidden-until'
+const HIDE_DAYS = 7
+const noSubscription = () => () => undefined
+
+function hiddenNow(): boolean {
+  try {
+    return (Number(window.localStorage.getItem(QUESTIONS_HIDDEN)) || 0) > Date.now()
+  } catch {
+    return false
+  }
+}
+
+function MoreQuestions({ questions }: { questions: OpportunitiesView['questions'] }) {
+  const t = useT()
+  // Only the browser knows: hidden while rendering on the server.
+  const hiddenHere = useSyncExternalStore(noSubscription, hiddenNow, () => true)
+  const [hidden, setHidden] = useState(false)
+  const languages = !questions.languagesStated
+  if (hidden || hiddenHere || (!languages && questions.open === 0)) return null
+  return (
+    <aside className={styles.questions} aria-label={t.opportunities.questions.label}>
+      <p className={styles.questionsText}>{languages ? t.opportunities.questions.languages : t.opportunities.questions.open(questions.open)}</p>
+      <div className={styles.questionsActions}>
+        <Link href={languages ? '/me/preferences#about-title' : '/onboarding/interview'} className="btn btn-quiet">
+          {languages ? t.opportunities.questions.languagesGo : t.opportunities.questions.openGo}
+        </Link>
+        <button
+          type="button"
+          className="text-btn"
+          onClick={() => {
+            try {
+              window.localStorage.setItem(QUESTIONS_HIDDEN, String(Date.now() + HIDE_DAYS * 24 * 60 * 60 * 1000))
+            } catch {
+              // Without storage it is hidden until the page is opened again.
+            }
+            setHidden(true)
+          }}
+        >
+          {t.opportunities.questions.later}
+        </button>
+      </div>
+    </aside>
+  )
 }
 
 interface RuleProposal {
