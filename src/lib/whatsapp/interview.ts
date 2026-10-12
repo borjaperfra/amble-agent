@@ -90,7 +90,7 @@ export async function sendDueInterviewQuestions(): Promise<{ asked: number; skip
       if (next.action !== 'ASK' || !next.turnId || !next.question) continue
       const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
       const text = w.interviewQuestion(next.question)
-      await reach.send({ text, utility: !open, idempotencyKey: `iq:${next.turnId}` })
+      await reach.send({ text, utility: !open, quiet: true, idempotencyKey: `iq:${next.turnId}` })
       db.prepare('INSERT INTO whatsapp_questions (candidate_id, turn_id, asked_at) VALUES (?, ?, ?)').run(candidateId, next.turnId, now())
       logMessage(candidateId, 'out', text)
       stats.asked++

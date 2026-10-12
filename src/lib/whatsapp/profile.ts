@@ -37,7 +37,7 @@ export function mapLink(candidateId: string): string {
 async function tell(candidateId: string, text: string, key: string): Promise<void> {
   const reach = reachOf(candidateId)
   if (!reach) return
-  await reach.send({ text, idempotencyKey: key })
+  await reach.send({ text, quiet: true, idempotencyKey: key })
   logMessage(candidateId, 'out', text)
 }
 

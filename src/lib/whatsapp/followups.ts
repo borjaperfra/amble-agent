@@ -160,6 +160,7 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
         text,
         buttons: ANSWERS.map((answer) => ({ title: w.answers[answer], payload: payload(due.opportunity_id, due.round, answer) })),
         utility: !open,
+        quiet: true,
         idempotencyKey: `fu:${candidateId}:${due.opportunity_id}:${due.round}`,
       })
       getDb()

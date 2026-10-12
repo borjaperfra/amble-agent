@@ -89,7 +89,14 @@ function parts(text: string): string[] {
   return out
 }
 
-export async function sendText(config: TelegramConfig, chatId: string, text: string, buttons?: TelegramButton[]): Promise<{ messageId: number | null }> {
+// Quiet: it arrives without a sound or a vibration (what can wait).
+export async function sendText(
+  config: TelegramConfig,
+  chatId: string,
+  text: string,
+  buttons?: TelegramButton[],
+  options: { quiet?: boolean } = {},
+): Promise<{ messageId: number | null }> {
   const pieces = parts(text)
   let last: { message_id?: number } | null = null
   for (const [index, piece] of pieces.entries()) {
@@ -98,6 +105,7 @@ export async function sendText(config: TelegramConfig, chatId: string, text: str
       text: asTelegramHtml(piece),
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
+      ...(options.quiet ? { disable_notification: true } : {}),
       ...(index === pieces.length - 1 ? keyboard(buttons) : {}),
     })
   }
@@ -156,11 +164,12 @@ const MAX_CAPTION = 900
 export async function sendPhoto(
   config: TelegramConfig,
   chatId: string,
-  params: { image: Buffer; filename: string; text: string; buttons?: TelegramButton[] },
+  params: { image: Buffer; filename: string; text: string; buttons?: TelegramButton[]; quiet?: boolean },
 ): Promise<void> {
   const short = params.text.length <= MAX_CAPTION
   const form = new FormData()
   form.set('chat_id', chatId)
+  if (params.quiet) form.set('disable_notification', 'true')
   form.set('photo', new Blob([new Uint8Array(params.image)], { type: params.filename.endsWith('.png') ? 'image/png' : 'image/jpeg' }), params.filename)
   if (short) {
     form.set('caption', asTelegramHtml(params.text))
@@ -171,7 +180,7 @@ export async function sendPhoto(
   const response = await fetch(`${config.api}/bot${config.token}/sendPhoto`, { method: 'POST', body: form, signal: AbortSignal.timeout(60_000) })
   const data = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null
   if (!response.ok || !data?.ok) throw new TelegramError(data?.description ?? `Telegram answered ${response.status}`, response.status)
-  if (!short) await sendText(config, chatId, params.text, params.buttons)
+  if (!short) await sendText(config, chatId, params.text, params.buttons, { quiet: params.quiet })
 }
 
 // "typing…" on their screen, for about five seconds.

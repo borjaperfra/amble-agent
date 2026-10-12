@@ -80,7 +80,7 @@ export async function sendPauseCheckIns(): Promise<{ asked: number; skipped: num
         stats.asked++
         continue
       }
-      await reach.send({ text, buttons: proposePause(id, false), utility: !open, idempotencyKey: `pausecheck:${id}:${new Date().toISOString().slice(0, 10)}` })
+      await reach.send({ text, buttons: proposePause(id, false), utility: !open, quiet: true, idempotencyKey: `pausecheck:${id}:${new Date().toISOString().slice(0, 10)}` })
       logMessage(id, 'out', text)
       stats.asked++
     } catch {

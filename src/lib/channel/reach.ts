@@ -20,6 +20,9 @@ export interface Outgoing {
   utility?: boolean
   // WhatsApp only: the provider keeps it from going twice.
   idempotencyKey?: string
+  // Telegram only: what can wait (a question for their map, a follow-up,
+  // what was added) arrives without a sound. At night everything does.
+  quiet?: boolean
 }
 
 export interface Reach {
@@ -31,9 +34,18 @@ export interface Reach {
   // WhatsApp's shared test number: no templates of ours there.
   sandbox: boolean
   send(message: Outgoing): Promise<void>
-  sendPicture(params: { image: Buffer; filename: string; text: string; buttons?: Button[]; idempotencyKey?: string }): Promise<void>
+  sendPicture(params: { image: Buffer; filename: string; text: string; buttons?: Button[]; idempotencyKey?: string; quiet?: boolean }): Promise<void>
   // WhatsApp only, past the 24 hours: the approved template that asks first.
   template(kind: TemplateKind, values: string[], payloads: (string | null)[], idempotencyKey: string): Promise<void>
+}
+
+// From 22:00 to 08:00 in Madrid, where amble's people are.
+const QUIET_FROM_HOUR = 22
+const QUIET_UNTIL_HOUR = 8
+
+function night(date = new Date()): boolean {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(date))
+  return hour >= QUIET_FROM_HOUR || hour < QUIET_UNTIL_HOUR
 }
 
 export function reachOf(candidateId: string): Reach | null {
@@ -49,9 +61,9 @@ export function reachOf(candidateId: string): Reach | null {
       open: true,
       sandbox: false,
       send: async (message) => {
-        await sendText(telegram, chat.chat_id, message.text, message.buttons)
+        await sendText(telegram, chat.chat_id, message.text, message.buttons, { quiet: message.quiet || night() })
       },
-      sendPicture: (params) => sendPhoto(telegram, chat.chat_id, params),
+      sendPicture: (params) => sendPhoto(telegram, chat.chat_id, { ...params, quiet: params.quiet || night() }),
       template: async () => {
         throw new Error('Telegram has no templates')
       },
