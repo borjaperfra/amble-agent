@@ -188,13 +188,20 @@ async function callWhenFree(
   timeoutMs: number,
 ): Promise<{ content: string; latencyMs: number; usage: Usage }> {
   const deadline = Date.now() + RETRY_BUDGET_MS[background ? 'background' : 'interactive']
+  // Tries that count against the cap; `retry` (every busy answer) lengthens the wait.
+  let counted = 0
   for (let retry = 0; ; retry++) {
     const pool = await acquireSlot(background)
     let waitMs = 0
     try {
       return await callChatCompletion(baseUrl, pool.key, modelId, system, user, temperature, timeoutMs)
     } catch (error) {
-      if (!isBusy(error) || retry >= BUSY_RETRIES[background ? 'background' : 'interactive']) throw error
+      if (!isBusy(error)) throw error
+      // A read nobody waits on keeps trying through a 429 for its whole budget:
+      // while the key is paused it only waits, and when the provider limits for
+      // a few minutes (2026-10-15, 20:09) counting each reopening as a try made
+      // 160 offers give up at once.
+      if (!(background && error.status === 429) && counted++ >= BUSY_RETRIES[background ? 'background' : 'interactive']) throw error
       waitMs = busyWait(error, retry)
       if (Date.now() + waitMs > deadline) throw error
       // Rate-limited: that key waits; the call goes on at once on another key
@@ -223,7 +230,7 @@ OUTPUT LANGUAGE: write every human-readable value (sentences, names, labels, que
 
 interface ChatCompletionResponse {
   choices?: { message?: { content?: string } }[]
-  error?: { message?: string }
+  error?: { message?: string; code?: string; type?: string }
   usage?: {
     prompt_tokens?: number
     completion_tokens?: number
@@ -308,11 +315,21 @@ async function callChatCompletion(
       signal: controller.signal,
     })
     const latencyMs = Date.now() - startedAt
-    const body = (await response.json().catch(() => null)) as ChatCompletionResponse | null
+    const text = await response.text().catch(() => '')
+    let body: ChatCompletionResponse | null = null
+    try {
+      body = JSON.parse(text) as ChatCompletionResponse
+    } catch {
+      body = null
+    }
     if (!response.ok) {
+      // Why it refused, as the provider says it (a code like rate_limited and
+      // its message, or the body when it is not JSON): a 429 alone does not
+      // tell a limit per minute from a daily budget or the provider being full.
+      const said = [body?.error?.code, body?.error?.type, body?.error?.message].filter((part) => typeof part === 'string' && part.length > 0)
       throw new ModelError(`The model returned an error (HTTP ${response.status}).`, {
         status: response.status,
-        detail: body?.error?.message ?? undefined,
+        detail: (said.length > 0 ? [...new Set(said)].join(': ') : text.trim()).slice(0, 300) || undefined,
         retryAfterMs: retryAfterMs(response.headers.get('retry-after')),
       })
     }
@@ -381,7 +398,9 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
     } catch (error) {
       // HTTP, network or time: recorded, and the task ends.
       const modelError = error instanceof ModelError ? error : new ModelError(error instanceof Error ? error.message : 'Unknown model error')
-      record({ content: null, latencyMs: null, error: modelError.message })
+      // The message first (the health page counts '%HTTP 429%'), then what the provider said.
+      const asked = modelError.retryAfterMs ? `Retry-After ${Math.round(modelError.retryAfterMs / 1000)} s` : null
+      record({ content: null, latencyMs: null, error: [modelError.message, modelError.detail, asked].filter(Boolean).join(' · ') })
       throw modelError
     }
     const { content, latencyMs, usage } = reply
