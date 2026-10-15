@@ -18,6 +18,11 @@ export interface MatchingCapability {
   // False when the capability rests mostly on undefended co-produced work:
   // it cannot be offered to a company as individual skill (PRODUCT_SPEC §11.1).
   attributed: boolean
+  // The latest year its evidence names ("to present" being this one), null
+  // when none does: what was done long ago is background, not what they do
+  // now (#37). Not part of the profile's fingerprint, so knowing it does not
+  // make anyone's offers be read again.
+  lastYear: number | null
 }
 
 export interface MatchingProfile {
@@ -72,17 +77,24 @@ export function buildMatchingProfile(candidateId: string): MatchingProfile {
   ]
 
   const evidenceById = new Map(listEvidence(candidateId).map((item) => [item.id, item]))
+  const claimById = new Map(listClaims(candidateId).map((claim) => [claim.id, claim.statement]))
+  // A piece of evidence is as recent as the latest year it, its excerpt or
+  // the statement of experience it supports names.
+  const yearOf = (item: { statement: string; source_excerpt: string | null; claim_id: string | null }) =>
+    latestYear([item.statement, item.source_excerpt ?? '', item.claim_id ? (claimById.get(item.claim_id) ?? '') : ''].join(' '))
   const links = listCapabilityEvidenceIds(candidateId)
   const capabilities = listCapabilities(candidateId)
     .filter((capability) => capability.assessment !== 'NO_EVIDENCE_YET')
     .map((capability) => {
       const linked = (links.get(capability.id) ?? []).map((id) => evidenceById.get(id)).filter((item) => item !== undefined)
       const unverified = linked.filter(isUnverifiedAssisted).length
+      const years = linked.map(yearOf).filter((year): year is number => year !== null)
       return {
         id: capability.id,
         name: capability.name,
         assessment: capability.assessment,
         attributed: !(linked.length > 0 && unverified * 2 > linked.length),
+        lastYear: years.length > 0 ? Math.max(...years) : null,
       }
     })
     .sort((a, b) => a.id.localeCompare(b.id))

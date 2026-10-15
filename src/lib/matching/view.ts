@@ -9,6 +9,7 @@ import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type M
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
+import { officeNotAllowed } from './office'
 import { workplaceShown } from './workplace'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
@@ -366,18 +367,31 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
       continue
     }
 
+    // An office where they would not go, for a role that is not remote: set
+    // aside now, whatever an older judgment said, unless they answered it.
+    const workplace = workplaceShown(match.opportunity_id, match.workplace)
+    if (match.verdict === 'show' && !decision && !match.response && officeNotAllowed(match.location, workplace, roleQuery)) {
+      if (match.closed_at) continue
+      const reason: DiscardReason = { kind: 'office_elsewhere', places: match.location }
+      discarded.push({ id: match.id, company: match.company_name, logo: logoOf(match), title: match.title, url: match.url, reasons: [reason], response, stale })
+      if (thisWeek) week.push({ id: match.id, company: match.company_name, title: match.title, status: 'aside', reason, at: match.created_at })
+      continue
+    }
+
     if (match.verdict === 'show') {
       if (!released.has(match.opportunity_id) && !decision && !match.response && !sentOnWhatsapp.has(match.opportunity_id)) {
         if (!match.closed_at && !stale) withheld++
         continue
       }
+      // Closed before they answered it: nothing left to answer.
+      if (match.closed_at && !decision && !match.response) continue
       if (!wanted) found.push({
         id: match.id,
         logo: logoOf(match),
         company: match.company_name,
         title: match.title,
         location: match.location,
-        workplace: workplaceShown(match.opportunity_id, match.workplace),
+        workplace,
         salary: salaryText(match),
         estimate: salaryText(match) ? null : shownEstimate(estimates.get(match.opportunity_id), floor),
         url: match.url,

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { NextResponse } from 'next/server'
 import { isOwner } from '@/lib/auth/session'
+import { latestDaily, sendOffsite } from '@/lib/db/backup'
 import { getDb } from '@/lib/db/db'
 
 export const runtime = 'nodejs'
@@ -28,4 +29,15 @@ export async function GET() {
   } finally {
     fs.rmSync(file, { force: true })
   }
+}
+
+// The latest daily copy, up to R2 now: to see the bucket and its key work
+// without waiting for the next morning's pass.
+export async function POST() {
+  if (!(await isOwner())) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+  const file = latestDaily()
+  if (!file) return NextResponse.json({ error: 'No daily copy on the volume yet.' }, { status: 409 })
+  const result = await sendOffsite(file)
+  if (!result) return NextResponse.json({ error: 'R2 is not set (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET).' }, { status: 409 })
+  return NextResponse.json(result, { status: 'error' in result ? 502 : 200 })
 }

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
 import { DATA_DIRECTORY, getDb } from './db'
+import { offsiteConfig, uploadOffsite } from './offsite'
 
 // A copy of the database a day, kept on the same volume, the last few only.
 // It guards against a bad write or a broken migration, not against losing the
@@ -15,6 +16,9 @@ import { DATA_DIRECTORY, getDb } from './db'
 // promises about a deleted account), copies taken by hand included; and when
 // there is no room for one, it is skipped and said, never left to stop a pass.
 // To restore one: gunzip it, then put it in place of amble.db.
+//
+// With R2 set (offsite.ts), each daily copy also goes there, and once it is
+// up only today's stays on the volume: the week of copies lives off it.
 
 const KEEP = 7
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -34,7 +38,8 @@ export interface VolumeUsage {
 
 export type BackupResult =
   | { status: 'exists' }
-  | { status: 'done'; file: string; bytes: number; removed: string[] }
+  // offsite: up to R2, or why not (the copies then stay here, a week of them).
+  | { status: 'done'; file: string; bytes: number; removed: string[]; offsite?: { key: string } | { error: string } }
   | { status: 'skipped'; reason: string; removed: string[] }
 
 const size = (file: string) => {
@@ -119,5 +124,43 @@ export async function backupToday(): Promise<BackupResult> {
   } finally {
     fs.rmSync(snapshot, { force: true })
   }
-  return { status: 'done', file: target, bytes: size(target), removed }
+  const offsite = await sendOffsite(target)
+  if (offsite && 'key' in offsite) removed.push(...keepOnlyToday(target))
+  return { status: 'done', file: target, bytes: size(target), removed, ...(offsite ? { offsite } : {}) }
+}
+
+// The day's copy to R2, when it is set.
+export async function sendOffsite(file: string): Promise<{ key: string } | { error: string } | null> {
+  const config = offsiteConfig()
+  if (!config) return null
+  const key = `daily/${path.basename(file)}`
+  try {
+    await uploadOffsite(config, file, key)
+    return { key }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+// Up in R2: the older dailies leave the volume.
+function keepOnlyToday(today: string): string[] {
+  const removed: string[] = []
+  for (const name of fs.readdirSync(BACKUP_DIRECTORY)) {
+    if (DAILY.test(name) && path.join(BACKUP_DIRECTORY, name) !== today) {
+      fs.rmSync(path.join(BACKUP_DIRECTORY, name), { force: true })
+      removed.push(name)
+    }
+  }
+  return removed
+}
+
+// The latest daily copy on the volume, for sending it by hand (admin).
+export function latestDaily(): string | null {
+  if (!fs.existsSync(BACKUP_DIRECTORY)) return null
+  const last = fs
+    .readdirSync(BACKUP_DIRECTORY)
+    .filter((name) => name.endsWith('.db.gz') && DAILY.test(name))
+    .sort()
+    .pop()
+  return last ? path.join(BACKUP_DIRECTORY, last) : null
 }

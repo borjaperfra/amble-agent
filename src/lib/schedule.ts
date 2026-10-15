@@ -149,6 +149,8 @@ async function pass(day: string, slot: string, until: number) {
       firstToday = copy.status !== 'exists'
       if (firstToday) log(day, `backup: ${JSON.stringify(copy)}`)
       if (copy.status === 'skipped') backupProblem = copy.reason
+      // Made, but not up in R2: kept here (a week of them), and said.
+      if (copy.status === 'done' && copy.offsite && 'error' in copy.offsite) backupProblem = `copia hecha aquí, pero no subida a R2: ${copy.offsite.error}`
     } catch (error) {
       backupProblem = error instanceof Error ? error.message : String(error)
       log(day, `backup failed: ${backupProblem}`)
