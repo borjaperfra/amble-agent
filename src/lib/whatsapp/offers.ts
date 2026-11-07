@@ -14,6 +14,7 @@ import type { Explanation } from '../matching/assess'
 import { buildMatchingProfile } from '../matching/profile'
 import { shownMatches } from '../matching/view'
 import { officeNotAllowed } from '../matching/office'
+import { roleKey } from '../matching/role-key'
 import { excludedCompanyIds } from '../db/excluded-companies'
 import { workplaceShown } from '../matching/workplace'
 import { currentMatchKey, placeFit } from '../matching/run'
@@ -81,15 +82,27 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
   const released = releaseDue(candidateId)
   // A company they want nothing from: never sent, even if released before (#44).
   const excluded = excludedCompanyIds(candidateId)
+  // Sent once is sent: by the offer, not by the judgment of it, which a
+  // change to their profile makes anew (#45).
+  const sent = new Set(
+    (db.prepare('SELECT opportunity_id FROM offer_sends WHERE candidate_id = ? AND sent_at IS NOT NULL').all(candidateId) as unknown as { opportunity_id: string }[]).map(
+      (row) => row.opportunity_id,
+    ),
+  )
+  const judged = listMatchesForKey(candidateId, currentMatchKey(candidateId))
+  // A role one copy of which was sent or answered: never sent again, from
+  // another city or another pass (role-key.ts). Released is by the role too.
+  const given = new Set(judged.filter((match) => sent.has(match.opportunity_id) || decided.has(match.opportunity_id)).map(roleKey))
+  const releasedRoles = new Set(judged.filter((match) => released.has(match.opportunity_id)).map(roleKey))
   const seenRoles = new Set<string>()
   const picked: (MatchRow & MatchListing)[] = []
-  for (const match of listMatchesForKey(candidateId, currentMatchKey(candidateId))) {
+  for (const match of judged) {
     // One role posted in several cities is one message.
-    const role = match.model_run_id ?? match.id
-    if (seenRoles.has(role)) continue
+    const role = roleKey(match)
+    if (seenRoles.has(role) || given.has(role)) continue
     seenRoles.add(role)
-    if (match.verdict !== 'show' || match.closed_at || match.response || considered.has(match.id) || decided.has(match.opportunity_id)) continue
-    if (!released.has(match.opportunity_id) || excluded.has(match.company_id)) continue
+    if (match.verdict !== 'show' || match.closed_at || match.response || considered.has(match.id)) continue
+    if (!releasedRoles.has(role) || excluded.has(match.company_id)) continue
     // An office where they would not go: never sent (office.ts).
     if (officeNotAllowed(match.location, workplaceShown(match.opportunity_id, match.workplace), query)) continue
     const explanation = JSON.parse(match.explanation) as Explanation
@@ -103,8 +116,18 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
   }))
   const rank = (match: Listed) => payRank({ salary: publishedSalary(match), estimate: match.estimate })
   const near = (match: Listed) => (query ? placeFit(match.location, query) : 1)
+  // Not the company of the last one sent while there is another to send:
+  // three of ElevenLabs in a row read as «always the same one» (#45).
+  const last = db
+    .prepare(
+      'SELECT o.company_id FROM offer_sends s JOIN opportunities o ON o.id = s.opportunity_id WHERE s.candidate_id = ? AND s.sent_at IS NOT NULL ORDER BY s.sent_at DESC LIMIT 1',
+    )
+    .get(candidateId) as { company_id: string } | undefined
+  const again = (match: Listed) => Number(match.company_id === last?.company_id)
   // Estimated below their floor, publishing none: set aside, never sent (#20).
-  return listed.filter((match) => match.estimate?.belowFloor == null).sort((a, b) => near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
+  return listed
+    .filter((match) => match.estimate?.belowFloor == null)
+    .sort((a, b) => again(a) - again(b) || near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
 }
 
 function publishedSalary(match: MatchListing): string | null {

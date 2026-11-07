@@ -1,4 +1,5 @@
 import { officeNotAllowed } from './office'
+import { roleKey } from './role-key'
 import { excludedCompanyIds } from '../db/excluded-companies'
 import { workplaceShown } from './workplace'
 import { getDb, inTransaction, prepared } from '../db/db'
@@ -101,14 +102,20 @@ export function waitingToRelease(candidateId: string, released: Set<string> = re
   const excluded = excludedCompanyIds(candidateId)
   const waiting: Waiting[] = []
   const listed = new Set<string>()
-  for (const match of [...listMatchesForKey(candidateId, currentMatchKey(candidateId)), ...setupReadMatches(candidateId)]) {
+  const judged = [...listMatchesForKey(candidateId, currentMatchKey(candidateId)), ...setupReadMatches(candidateId)]
+  // A role one copy of which they already have, answered or were sent: no
+  // other copy of it is released (#45, role-key.ts).
+  const given = new Set(
+    judged.filter((match) => released.has(match.opportunity_id) || decisions.has(match.opportunity_id) || sent.has(match.opportunity_id)).map(roleKey),
+  )
+  for (const match of judged) {
     // Judged under the current profile and the one before it: the current
     // judgment decides, whatever it was.
     if (listed.has(match.opportunity_id)) continue
     listed.add(match.opportunity_id)
-    // One role posted in several cities is one offer.
-    const role = match.model_run_id ?? match.id
-    if (seenRoles.has(role)) continue
+    // One role posted in several cities, or in several passes, is one offer.
+    const role = roleKey(match)
+    if (seenRoles.has(role) || given.has(role)) continue
     seenRoles.add(role)
     if (match.verdict !== 'show' || match.closed_at || match.response) continue
     if (released.has(match.opportunity_id) || decisions.has(match.opportunity_id) || sent.has(match.opportunity_id)) continue

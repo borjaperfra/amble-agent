@@ -10,6 +10,7 @@ import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GAT
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
 import { officeNotAllowed } from './office'
+import { roleKey } from './role-key'
 import { excludedCompanyIds } from '../db/excluded-companies'
 import { workplaceShown } from './workplace'
 import { storedRoleQuery } from './role-query'
@@ -258,18 +259,30 @@ function salaryText(match: Pick<MatchListing, 'salary_raw' | 'salary_min' | 'sal
 // Postings of one role in several cities were judged together (one model run):
 // the screen shows the role once, with every city. The link and the state are
 // those of a posting still open, if any is.
-function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchListing)[] {
+// One role posted many times is one offer (#45, role-key.ts), whichever
+// pass judged each copy. The copy that leads: one they answered (their
+// answer holds for the role), else an open one amble would show, else an
+// open one, the nearest to them first («within Spain» before «within
+// Poland»: its link is the one they get); its places are those of the
+// copies judged as it was.
+function collapseRoles(matches: (MatchRow & MatchListing)[], answered: Set<string>, near: (location: string | null) => number): (MatchRow & MatchListing)[] {
   const roles = new Map<string, (MatchRow & MatchListing)[]>()
   for (const match of matches) {
-    const key = match.model_run_id ? `${match.model_run_id}|${match.title}` : match.id
+    const key = roleKey(match)
     const postings = roles.get(key)
     if (postings) postings.push(match)
     else roles.set(key, [match])
   }
-  return [...roles.values()].map((postings) => {
-    const lead = postings.find((posting) => !posting.closed_at) ?? postings[0]
-    const open = postings.filter((posting) => !posting.closed_at)
-    const places = [...new Set((open.length ? open : postings).map((posting) => posting.location).filter(Boolean))]
+  return [...roles.values()].map((unsorted) => {
+    const postings = unsorted.length > 1 ? [...unsorted].sort((a, b) => near(a.location) - near(b.location)) : unsorted
+    const lead =
+      postings.find((posting) => answered.has(posting.opportunity_id) || posting.response) ??
+      postings.find((posting) => !posting.closed_at && posting.verdict === 'show') ??
+      postings.find((posting) => !posting.closed_at) ??
+      postings[0]
+    const alike = postings.filter((posting) => posting.verdict === lead.verdict)
+    const open = alike.filter((posting) => !posting.closed_at)
+    const places = [...new Set((open.length ? open : alike).map((posting) => posting.location).filter(Boolean))]
     return { ...lead, location: places.join(' · ') || null }
   })
 }
@@ -317,7 +330,12 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const candidate = candidateById(candidateId)
   const matchKey = currentMatchKey(candidate.id)
   const current = listMatchesForKey(candidate.id, matchKey)
-  const matches = collapseRoles([...current, ...earlierMatches(candidate.id, matchKey, new Set(current.map((match) => match.opportunity_id)))])
+  const nearQuery = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))
+  const matches = collapseRoles(
+    [...current, ...earlierMatches(candidate.id, matchKey, new Set(current.map((match) => match.opportunity_id)))],
+    new Set(listDecisions(candidate.id).keys()),
+    (location) => (nearQuery ? placeFit(location, nearQuery) : 1),
+  )
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map([
     ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.wording ?? row.statement]),
@@ -326,7 +344,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   // What the table says the roles that publish no salary pay, and the floor
   // it is compared with (from the query already designed for their profile).
   const estimates = estimatesFor(matches.map((match) => match.opportunity_id))
-  const roleQuery = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))
+  const roleQuery = nearQuery
   const floor = roleQuery?.salaryFloor ?? null
 
   // A few at a time: what is not released yet waits, unless they answered
