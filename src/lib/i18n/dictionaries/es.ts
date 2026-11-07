@@ -63,7 +63,7 @@ export const es: Dictionary = {
     githubPlaceholder: 'usuario',
     githubLabel: 'Usuario o URL de perfil de GitHub',
     linkedinPlaceholder: 'URL del perfil',
-    linkedinHint: 'Sube el PDF de tu perfil. En LinkedIn: Más → Guardar en PDF.',
+    linkedinHint: 'Sube el PDF de tu perfil: en LinkedIn, botón Recursos → Guardar en PDF.',
     replaceCv: 'Subir uno nuevo',
     replaceCvLabel: 'Subir un CV nuevo, que sustituye a este',
     replaceNote: 'Al continuar leo el nuevo, y sustituye al anterior en tu mapa.',

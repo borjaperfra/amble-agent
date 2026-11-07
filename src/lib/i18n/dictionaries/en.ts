@@ -61,7 +61,7 @@ export const en = {
     read: 'read',
     githubPlaceholder: 'username',
     githubLabel: 'GitHub username or profile URL',
-    linkedinHint: 'Upload your profile’s PDF. On LinkedIn: More → Save to PDF.',
+    linkedinHint: 'Upload your profile’s PDF: on LinkedIn, the Resources button → Save to PDF.',
     replaceCv: 'Upload a new one',
     replaceCvLabel: 'Upload a new CV to replace this one',
     replaceNote: 'When you continue I read the new one, and it replaces the old one on your map.',
