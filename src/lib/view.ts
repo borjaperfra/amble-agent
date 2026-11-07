@@ -16,6 +16,7 @@ import {
   listUncertainties,
   parseJsonArray,
   type EvidenceRow,
+  answeredGapIds,
 } from './db/repo'
 import type { EvidenceStrength } from '@/domains/candidate/types'
 import { getListeningProfile, type ListeningProfile } from './pipeline/listening'
@@ -128,6 +129,8 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
   const evidenceById = new Map(evidence.map((item) => [item.id, item]))
   const sourceNames = new Map(listSources(candidate.id).map((source) => [source.id, source.name]))
   const uncertainties = listUncertainties(candidate.id)
+  // Asked once and answered: not shown, nor asked, again (#47).
+  const answered = answeredGapIds(candidate.id)
   const distinctiveIds = getDistinctiveProfile(candidate.id)
 
   const capabilityItems: CapabilityViewItem[] = capabilities.map((capability) => {
@@ -163,6 +166,7 @@ export function getMapViewModel(candidateId: string, locale: Locale): MapViewMod
     .filter(
       (uncertainty) =>
         uncertainty.status === 'OPEN' &&
+        !answered.has(uncertainty.id) &&
         uncertainty.materiality !== 'LOW' &&
         (uncertainty.resolvable_by_interview === 1 || uncertainty.kind === 'ATTRIBUTION'),
     )

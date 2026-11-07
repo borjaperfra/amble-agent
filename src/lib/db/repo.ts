@@ -756,6 +756,48 @@ export function getUncertainty(id: string): UncertaintyRow | undefined {
   return getDb().prepare('SELECT * FROM uncertainties WHERE id = ?').get(id) as unknown as UncertaintyRow | undefined
 }
 
+// Every question they answered, in any interview, oldest first (#47). A round
+// opens a new interview, so the current one alone forgot what the last round
+// asked: a doubt answered but not settled was asked again in other words.
+export function answeredTurns(candidateId: string): InterviewTurnRow[] {
+  return getDb()
+    .prepare(
+      `SELECT t.* FROM interview_turns t JOIN interviews i ON i.id = t.interview_id
+       WHERE i.candidate_id = ? AND t.answer IS NOT NULL AND t.kind != 'note' ORDER BY t.created_at ASC`,
+    )
+    .all(candidateId) as unknown as InterviewTurnRow[]
+}
+
+function idsOf(json: string): string[] {
+  try {
+    const value = JSON.parse(json) as unknown
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+// The doubts a question already asked about, once answered: asked once is
+// asked. What the answer did not settle stays on record, and is not asked again.
+export function answeredGapIds(candidateId: string): Set<string> {
+  return new Set(answeredTurns(candidateId).flatMap((turn) => idsOf(turn.target_uncertainty_ids)))
+}
+
+// How many questions about them are left to ask: what the map would show
+// under what is still unknown (not LOW, open, settled by an answer or by
+// defending the work), less what was already asked.
+export function askableGapCount(candidateId: string): number {
+  const answered = answeredGapIds(candidateId)
+  return (
+    getDb()
+      .prepare(
+        `SELECT id FROM uncertainties WHERE candidate_id = ? AND status = 'OPEN' AND materiality != 'LOW'
+           AND (resolvable_by_interview = 1 OR kind = 'ATTRIBUTION')`,
+      )
+      .all(candidateId) as { id: string }[]
+  ).filter((row) => !answered.has(row.id)).length
+}
+
 export function getOrCreateInterview(candidateId: string): InterviewRow {
   const db = getDb()
   const existing = db

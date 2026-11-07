@@ -3,7 +3,7 @@ import { canFillForms } from '../apply/chrome'
 import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
 import { chatAvailability } from '../channel/reach'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
-import { candidateById, getStatedAbout, listCapabilities, listConfirmedPreferences } from '../db/repo'
+import { askableGapCount, candidateById, getStatedAbout, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
@@ -16,6 +16,10 @@ import { workplaceShown } from './workplace'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { releaseDue } from './release'
+
+// A round of questions asks what the map shows under what is still unknown:
+// three (view.ts, MAP_GAPS_SHOWN; not imported, that module imports this one).
+const ROUND_QUESTIONS = 3
 
 // The first read starts while the setup's questions are answered (setup.ts).
 const SETUP_READ_MS = 15 * 60 * 1000
@@ -514,11 +518,10 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     decided: decisions.size,
     drought: fits.length + maybe.length === 0 && withheld === 0 ? droughtOf(candidate.id, discarded) : null,
     questions: {
-      open: (
-        getDb()
-          .prepare("SELECT COUNT(*) AS n FROM uncertainties WHERE candidate_id = ? AND status = 'OPEN' AND resolvable_by_interview = 1")
-          .get(candidate.id) as { n: number }
-      ).n,
+      // What the next round will really ask (#47): it asks what the map
+      // shows, three at most, and nothing already asked. Counting every open
+      // doubt said 27 to someone a round then asked two of, and never went down.
+      open: Math.min(askableGapCount(candidate.id), ROUND_QUESTIONS),
       languagesStated: getStatedAbout(candidate.id).languages !== null,
     },
   }
