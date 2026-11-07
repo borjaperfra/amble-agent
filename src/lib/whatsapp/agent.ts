@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { listExcludedCompanies } from '../db/excluded-companies'
 import { reachOf } from '../channel/reach'
 import { getDb } from '../db/db'
 import { listWanted } from '../db/matching'
@@ -33,7 +34,7 @@ import { isKnownMaliciousLink } from '../net/reputation'
 // that takes something off it, only on their yes). Anything about amble
 // itself reaches the owner.
 
-export const AGENT_VERSION = 'a16'
+export const AGENT_VERSION = 'a17'
 
 const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them in a chat app: the one named in "channel" (WhatsApp or Telegram). Wherever these rules say WhatsApp, read the app they are on, and name that one to them. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
@@ -47,6 +48,7 @@ WHAT YOU CAN DO, and nothing else:
 - Ask them the interview questions that are still open: one may be waiting (pendingInterviewQuestion). When their message answers it, set "answersInterview": true and thank them in a line; otherwise false, and the question keeps waiting: it is already in the chat, so do not repeat it or remind them of it unless they ask.
 - Keep why an offer does not fit them: when waitingForWhyItDoesNotFit is set, they just marked that offer as not fitting and were asked why. If their message gives the reason, even in a few words ("too junior", "no Barcelona"), set "reasonItDoesNotFit" to it in their words and thank them in a line, without a new question. If their message is about something else, leave it null and answer what they wrote.
 - Propose a change to what you listen for; it applies only when they confirm.
+- Stop showing them a company, when they ask (#44): when they say they want nothing (more) from a company ("no me enseñes más de Canonical", "de Affirm no me mandes nada", "ya me rechazaron en X y no puedo volver a aplicar"), set "action" to {"type": "exclude_company", "company": its name, "forAYear": true when it turned them down or will not let them apply again for a while, else false}; your reply is one short line taking it in, never that it is done: amble says so right after. To let one back in, {"type": "include_company", "company"}. The companies already excluded are companiesExcluded. Never say you noted, will avoid or will stop sending a company without this action.
 - Pause the search until further notice, or resume it, when they ask; it applies only when they confirm. While it is paused (searchPaused), amble reads nothing for them and writes nothing first; you still answer when they write.
 - Take an answer to what their map shows as still unknown: mapGaps are the questions the "still unknown" part of their map shows them, each with its id, which they may answer here without being asked. When their message answers one of them (it says what that question asks, even briefly), set "action" to {"type": "answers_gap", "gap": its id} and say in a line that you are adding it to their map; amble takes it in as the answer to that question and tells them what it changed. This comes before "profile_note" when both fit, and never when it answers pendingInterviewQuestion ("answersInterview" then).
 - Keep their map up to date from what they tell you (their map is the professional profile amble built from what they shared, which every offer is judged against). When their message adds something about their own work or experience that is not in what you know (a project, a responsibility, a result, a skill, how long), set "action" to {"type": "profile_note"} and say in a line that you are adding it to their map, never that it is already there: amble takes it from their own words, as it takes an answer to an interview question, and then tells them what it added. When their message says something in their map is wrong (not true, not theirs, the team's or someone else's work, a wrong number, title or date: "eso lo hizo el equipo, no yo", "son 6 años, no 4"), set "action" to {"type": "profile_correction", "what": what they say is wrong, and the right version if they give it, in a sentence close to their words} and say in one short line that you are looking for it in their map, and nothing more ("Vale, lo busco en tu mapa."): what would come off it follows on its own, with buttons to confirm, so do not describe it or the buttons. Only for what they say themselves about their own work: never for what you suggest or infer, a question about what their map says, or advice on how to present something. When their message answers pendingInterviewQuestion, that is "answersInterview", not this.
@@ -87,7 +89,7 @@ Do not remind them of something still pending (a change to confirm, an offer to 
 
 "reaction": one emoji to react to their message with, as a person would, only for real news or real thanks (good news: 🙌, thanks: 👍); null otherwise, which is most of the time.
 
-Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"offer_closed"|"show_offer"|"answers_gap"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "gap": string|null, "name": string|null, "language": "es"|"en"|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
+Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"offer_closed"|"show_offer"|"exclude_company"|"include_company"|"answers_gap"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "gap": string|null, "name": string|null, "language": "es"|"en"|null, "forAYear": boolean|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
 
 const INTENTS = ['offer', 'applications', 'preferences', 'pause', 'profile', 'coach', 'amble', 'smalltalk', 'off_topic', 'interview'] as const
 export type Intent = (typeof INTENTS)[number]
@@ -115,6 +117,9 @@ export type AgentAction =
   | { type: 'answers_gap'; gap: string }
   | { type: 'set_name'; name: string }
   | { type: 'set_language'; language: Locale }
+  // A company they want nothing from (#44), or one let back in.
+  | { type: 'exclude_company'; company: string; forAYear: boolean }
+  | { type: 'include_company'; company: string }
 
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 
@@ -157,6 +162,10 @@ const agentSchema = z.preprocess(
           ? { type, language: action.language }
           : action && type === 'answers_gap' && text(action.gap, 80)
           ? { type, gap: text(action.gap, 80) }
+          : action && type === 'exclude_company' && text(action.company, 120)
+          ? { type, company: text(action.company, 120), forAYear: action.forAYear === true }
+          : action && type === 'include_company' && text(action.company, 120)
+          ? { type, company: text(action.company, 120) }
           : action && type === 'offer_closed' && text(action.company, 120)
           ? { type, company: text(action.company, 120) }
           : action && type === 'show_offer' && text(action.company, 120)
@@ -195,6 +204,8 @@ const agentSchema = z.preprocess(
         z.object({ type: z.literal('profile_correction'), what: z.string() }),
         z.object({ type: z.literal('set_name'), name: z.string() }),
         z.object({ type: z.literal('set_language'), language: z.enum(['es', 'en']) }),
+        z.object({ type: z.literal('exclude_company'), company: z.string(), forAYear: z.boolean() }),
+        z.object({ type: z.literal('include_company'), company: z.string() }),
       ])
       .nullable(),
     reminders: z.array(z.object({ date: z.string(), message: z.string() })),
@@ -378,6 +389,8 @@ function contextFor(candidateId: string, message: string) {
     pendingInterviewQuestion: pendingInterviewQuestion(candidateId)?.question ?? null,
     // What their map shows them as still unknown, as it shows it.
     mapGaps: mapGapsOf(candidateId),
+    // Companies they want nothing from (#44): never shown or sent.
+    companiesExcluded: listExcludedCompanies(candidateId).map((row) => ({ company: row.name, until: row.until?.slice(0, 10) ?? null })),
     name: candidate.name,
     // The language you talk to them in, here and in the app.
     language: candidateLocale(candidate) === 'es' ? 'Spanish' : 'English',

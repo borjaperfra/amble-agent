@@ -10,6 +10,7 @@ import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GAT
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
 import { officeNotAllowed } from './office'
+import { excludedCompanyIds } from '../db/excluded-companies'
 import { workplaceShown } from './workplace'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
@@ -337,6 +338,8 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     ),
   )
   let withheld = 0
+  // A company they want nothing from: gone from what waits for an answer (#44).
+  const excluded = excludedCompanyIds(candidate.id)
 
   const found: FoundOpportunity[] = []
   const discarded: DiscardedOpportunity[] = []
@@ -349,6 +352,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     // What they decided is kept on the offer, not on this assessment of it.
     const decision = decisions.get(match.opportunity_id)
     const response = decision?.decision ?? null
+    if (excluded.has(match.company_id) && !decision && !match.response) continue
     // An offer they want has its own place: it is no longer something to answer.
     const wanted = wants(decision?.decision)
     const stale = match.profile_hash !== matchKey

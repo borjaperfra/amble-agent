@@ -1011,6 +1011,20 @@ function migrate(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS opportunities_open_seen ON opportunities (last_seen_at) WHERE closed_at IS NULL;
   `)
 
+  // Companies someone wants nothing from (#44, db/excluded-companies.ts):
+  // applied without the model where offers are released, shown and sent.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS excluded_companies (
+      candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+      company_id TEXT NOT NULL REFERENCES companies(id),
+      reason TEXT,
+      until TEXT,
+      source TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (candidate_id, company_id)
+    );
+  `)
+
   // Answers given before decisions had their own table lived on assessments.
   // Carried over once, the latest per offer; a later decision is never replaced.
   db.exec(`

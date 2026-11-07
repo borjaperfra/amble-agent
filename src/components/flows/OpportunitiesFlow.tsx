@@ -56,10 +56,26 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
   const [notice, setNotice] = useState<{ text: string; key: string } | null>(null)
   // A «no encaja» whose reason holds for other offers: asked at once (#42).
   const [rule, setRule] = useState<RuleProposal | null>(null)
+  // A «no encaja» that turned down the company itself: done, with a way back (#44).
+  const [excluded, setExcluded] = useState<{ companyId: string; company: string; until: string | null } | null>(null)
 
   async function askRule(matchId: string, reason: string) {
-    const { ok, data } = await postJson<{ proposal?: RuleProposal | null }>('/api/opportunities/learn', { matchId, reason })
-    if (ok && data.proposal) setRule(data.proposal)
+    const { ok, data } = await postJson<{ proposal?: RuleProposal | null; excluded?: { companyId: string; company: string; until: string | null } | null }>(
+      '/api/opportunities/learn',
+      { matchId, reason },
+    )
+    if (ok && data.excluded) {
+      setExcluded(data.excluded)
+      void reload()
+    } else if (ok && data.proposal) setRule(data.proposal)
+  }
+
+  async function undoExcluded() {
+    if (!excluded) return
+    const companyId = excluded.companyId
+    setExcluded(null)
+    const { ok } = await postJson('/api/opportunities/companies', { action: 'include', companyId })
+    if (ok) void reload()
   }
 
   async function decideRule(decision: 'confirmed' | 'rejected') {
@@ -390,7 +406,18 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
         </div>
       </main>
 
-      {rule && !notice && (
+      {excluded && !notice && (
+        <div className={styles.notice} role="group" aria-live="polite">
+          <span>{excluded.until ? t.opportunities.companyExcludedForAYear(excluded.company) : t.opportunities.companyExcluded(excluded.company)}</span>
+          <button type="button" className={styles.noticeAction} onClick={() => void undoExcluded()}>
+            {t.opportunities.companyUndo}
+          </button>
+          <button type="button" className={styles.noticeAction} onClick={() => setExcluded(null)}>
+            {t.opportunities.companyOk}
+          </button>
+        </div>
+      )}
+      {rule && !notice && !excluded && (
         <div className={styles.notice} role="group" aria-live="polite">
           <span>{t.opportunities.ruleAsk(rule.label ?? rule.statement)}</span>
           <button type="button" className={styles.noticeAction} onClick={() => void decideRule('confirmed')}>
