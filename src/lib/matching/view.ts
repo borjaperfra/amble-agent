@@ -1,5 +1,6 @@
 import { applicationCv, savedAnswers } from '../apply/answers'
 import { canFillForms } from '../apply/chrome'
+import { canFillForm } from '../apply/browser'
 import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
 import { chatAvailability } from '../channel/reach'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
@@ -134,6 +135,9 @@ export interface WantedOpportunity {
   prepared: PreparedApplication | null
   // What they answered on WhatsApp about an application they sent.
   outcome: FollowupAnswer | null
+  // Whether amble can fill this offer's own form (Ashby, Greenhouse), with a
+  // browser to do it: «Rellenar el formulario» only then (#48).
+  canFill: boolean
 }
 
 export interface OpportunitiesView {
@@ -230,6 +234,7 @@ function wantedOpportunities(candidateId: string, floor: Floor): WantedOpportuni
     const explanation = row.explanation ? (JSON.parse(row.explanation) as Explanation) : null
     byRole.set(key, {
       key,
+      canFill: canFillForms() && canFillForm(row.opportunity_id),
       opportunityIds: [row.opportunity_id],
       company: row.company_name,
       title: row.title,

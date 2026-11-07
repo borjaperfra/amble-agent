@@ -338,7 +338,8 @@ export default function OpportunitiesFlow({ view: initial, tab: initialTab, paus
                       preparing: Boolean(preparing[item.opportunityIds[0]]),
                       error: prepareErrors[item.opportunityIds[0]] || null,
                       onPrepare: () => void prepare(item),
-                      applicant: view.applicant,
+                      // Offered only where amble can fill that offer's form (#48).
+                      applicant: { ...view.applicant, canFill: item.canFill },
                     }}
                   />
                 )}
