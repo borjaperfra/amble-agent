@@ -184,6 +184,11 @@ export const CHAT_CAPABILITIES: readonly Capability[] = [
     actions: ['show_offer'],
   },
   {
+    id: 'what_amble_writes_first',
+    does: 'Write first, at most once a day and never at night, only when there is something for them, the most important first: a reminder they asked for; a follow-up a week after they sent an application, saying the day they sent it, and when they say they were called, a button to prepare that interview with you; on Mondays, when something moved, a summary of their week (what they sent, who called or said no, what interested them, and one they liked and have not sent); the day\'s offers; after four days with no offer for them, why, and a question that could widen the search; a rule proposed from an offer they turned down in the app, asked once; an offer they liked and have not sent after three days, asked once; a question for their map. When they ask why amble wrote, say which of these it was.',
+    channels: CHAT,
+  },
+  {
     id: 'where_offers_come_from',
     does: 'Say where amble reads offers (#51): on the job pages of the many companies it watches, and a part of the offers on LinkedIn and Indeed; not everything they see on LinkedIn reaches amble. whatAmbleListensFor says it too.',
     channels: EVERYWHERE,

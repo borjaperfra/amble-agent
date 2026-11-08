@@ -37,7 +37,7 @@ import { isKnownMaliciousLink } from '../net/reputation'
 
 // a20: what it can do comes from capabilities.ts, with the app's pages it
 // can send them to and what is off where amble runs (notAvailableNow).
-export const AGENT_VERSION = 'a20'
+export const AGENT_VERSION = 'a21'
 
 export const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them in a chat app: the one named in "channel" (WhatsApp or Telegram). Wherever these rules say WhatsApp, read the app they are on, and name that one to them. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
