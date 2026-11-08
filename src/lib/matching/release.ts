@@ -17,7 +17,8 @@ import { estimatedShort, estimatesFor } from '../salary/estimate'
 // every 24 hours. What is released is the same on the screens and on
 // WhatsApp, which sends only from it.
 //
-// Best first: their role before an adjacent one, then where it is (their city
+// Best first: their role before an adjacent one, then one that goes against
+// nothing that weighs for them before one that does (#51), then where it is (their city
 // or country, then open to them, then elsewhere in Europe, then outside it),
 // then what was published in the last FRESH_DAYS, then what publishes a
 // salary, then the newest. An
@@ -52,6 +53,14 @@ export interface Waiting {
   fresh: boolean
   salary: boolean
   publishedAt: string
+  // How many of what weighs for them it goes against (#51): those go after.
+  against: number
+}
+
+// What weighs for them that an offer goes against, as the reader said (v14
+// on); 0 for one read before.
+export function goesAgainst(explanation: Explanation): number {
+  return explanation.goesAgainst?.length ?? 0
 }
 
 export function releasedIds(candidateId: string): Set<string> {
@@ -131,6 +140,7 @@ export function waitingToRelease(candidateId: string, released: Set<string> = re
       fresh: at >= freshSince,
       salary: Boolean(match.salary_raw || match.salary_min || match.salary_max),
       publishedAt: at,
+      against: goesAgainst(explanation),
     })
   }
   // Estimated below their floor, publishing none: set aside, not released (#20).
@@ -139,6 +149,6 @@ export function waitingToRelease(candidateId: string, released: Set<string> = re
   const due = waiting.filter((item) => item.salary || !estimatedShort(estimates.get(item.opportunityId), floor))
   return due.sort(
     (a, b) =>
-      Number(b.fits) - Number(a.fits) || a.near - b.near || Number(b.fresh) - Number(a.fresh) || Number(b.salary) - Number(a.salary) || b.publishedAt.localeCompare(a.publishedAt),
+      Number(b.fits) - Number(a.fits) || a.against - b.against || a.near - b.near || Number(b.fresh) - Number(a.fresh) || Number(b.salary) - Number(a.salary) || b.publishedAt.localeCompare(a.publishedAt),
   )
 }

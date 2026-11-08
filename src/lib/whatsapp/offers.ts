@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { releaseDue } from '../matching/release'
+import { goesAgainst, releaseDue } from '../matching/release'
 import { applicationState, canFillForm, cancelApplication, fillApplication, filledPicture, submitApplication } from '../apply/browser'
 import { cloudBrowserConfigured } from '../apply/cloud'
 import { getPreparedApplication, prepareApplication, type PreparedApplication } from '../apply/prepare'
@@ -132,10 +132,12 @@ function candidatesToSend(candidateId: string, floor: { amount: number; currency
     )
     .get(candidateId) as { company_id: string } | undefined
   const again = (match: Listed) => Number(match.company_id === last?.company_id)
+  // Against what weighs for them: after the rest, on the list too (#51).
+  const against = (match: Listed) => goesAgainst(JSON.parse(match.explanation) as Explanation)
   // Estimated below their floor, publishing none: set aside, never sent (#20).
   return listed
     .filter((match) => match.estimate?.belowFloor == null)
-    .sort((a, b) => again(a) - again(b) || near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
+    .sort((a, b) => against(a) - against(b) || again(a) - again(b) || near(a) - near(b) || rank(b) - rank(a) || b.created_at.localeCompare(a.created_at))
 }
 
 function publishedSalary(match: MatchListing): string | null {
