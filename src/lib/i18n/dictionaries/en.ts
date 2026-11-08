@@ -221,6 +221,13 @@ export const en = {
     staleRules: (count: number) => `${count} ${count === 1 ? 'rule has' : 'rules have'} gone over three months unconfirmed, and I’m not applying ${count === 1 ? 'it' : 'them'}: review →`,
     weekKicker: 'This week',
     weekRead: (read: number, worth: number) => `read · ${worth} ${worth === 1 ? 'is' : 'are'} worth your time`,
+    // Where offers are read (#51). boards: some of LinkedIn's and Indeed's come too.
+    whereFrom: (companies: number, boards: boolean) => {
+      const about = companies >= 200 ? `over ${(Math.floor(companies / 100) * 100).toLocaleString('en-GB')}` : String(companies)
+      return boards
+        ? `I read offers on the job pages of ${about} companies, and some of LinkedIn’s and Indeed’s. Not everything you see on LinkedIn reaches me.`
+        : `I read offers on the job pages of ${about} companies. LinkedIn’s don’t reach me.`
+    },
     weekEmpty: 'Nothing new read this week yet. Still looking.',
     weekMaybe: 'Close, not quite your role',
     weekReasons: {
@@ -550,6 +557,26 @@ export const en = {
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',
+    // The chat quiet for days (#51): why, what waits in the app, and the question that could open it.
+    quiet: {
+      opening: (days: number) => `It’s been ${days} days without an offer from me, and not because I’m not looking.`,
+      why: {
+        role: 'Most of what I read isn’t your role, or is below your level.',
+        place: 'Most of what I read can’t be done from where you live.',
+        pay: 'Most of what I read pays less than your minimum.',
+        language: 'Most of what I read asks for a language you don’t speak.',
+      },
+      whyRule: (rule: string) => `Most of what I read clashes with «${rule}».`,
+      waiting: (count: number, link: string) => `In the app you have ${count} I haven’t sent you here: ${link}`,
+      ask: {
+        role: 'Shall I also look at roles close to yours?',
+        place: 'Would you consider other cities, or some office days?',
+        pay: 'Shall I also look at ones that pay a bit less, if the rest fits?',
+        language: 'Is there another language you speak that you haven’t told me?',
+      },
+      askRule: (rule: string) => `Shall I loosen «${rule}», or keep it?`,
+      askAny: 'Shall I widen anything in what I look for?',
+    },
     // The day's list (#51): what it is, and how to pick from it.
     digestIntro: (count: number) => `I have ${count} today that fit you:`,
     digestPick: 'Tap a number to see it in full, or reply with the ones you want («1 and 3»).',

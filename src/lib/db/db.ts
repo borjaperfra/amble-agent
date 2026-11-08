@@ -694,6 +694,10 @@ function migrate(db: DatabaseSync): void {
   // a short list they pick from, then each one they pick in full.
   addColumn(db, 'offer_sends', 'digest_id', 'TEXT')
   addColumn(db, 'offer_sends', 'digest_pos', 'INTEGER')
+  // The chat quiet for days (#51, whatsapp/quiet.ts): when amble last said
+  // why, and when it last looked whether to.
+  addColumn(db, 'candidates', 'quiet_note_at', 'TEXT')
+  addColumn(db, 'candidates', 'quiet_checked_at', 'TEXT')
   // Feedback already acted on leaves the owner's list: when, and what took
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')

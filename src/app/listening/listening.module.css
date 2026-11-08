@@ -481,6 +481,14 @@
   font-size: var(--text-body-sm);
 }
 
+/* Where offers are read (#51): a footnote to the week, not news. */
+.whereFrom {
+  margin-top: 16px;
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  color: var(--ink-tertiary);
+}
+
 .weekEmpty {
   margin-top: 12px;
   font-size: var(--text-body);

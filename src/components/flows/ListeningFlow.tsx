@@ -26,6 +26,9 @@ interface ListeningItem {
 }
 
 interface ListeningVm {
+  // Where offers are read (#51): the companies whose own job pages are read,
+  // and whether some of LinkedIn's and Indeed's come too (TheirStack).
+  sources: { companies: number; boards: boolean }
   evidenceCount: number
   capabilitiesCount: number
   hasIntent: boolean
@@ -421,6 +424,8 @@ export default function ListeningFlow({ vm }: { vm: ListeningVm }) {
               ) : (
                 <p className={styles.weekEmpty}>{paused ? t.listening.pause.line : vm.firstReading ? t.listening.weekFirstReading : t.listening.weekEmpty}</p>
               )}
+              {/* Where it reads, so a full LinkedIn and a quiet week make sense (#51). */}
+              {vm.sources.companies > 0 && <p className={styles.whereFrom}>{t.listening.whereFrom(vm.sources.companies, vm.sources.boards)}</p>}
             </section>
 
             <p className={styles.rep}>

@@ -17,8 +17,9 @@ export function wroteFirstRecently(candidateId: string, hours = QUIET_HOURS): bo
          UNION ALL SELECT 1 FROM application_followups WHERE candidate_id = ? AND asked_at >= ?
          UNION ALL SELECT 1 FROM whatsapp_questions WHERE candidate_id = ? AND asked_at >= ?
          UNION ALL SELECT 1 FROM whatsapp_reminders WHERE candidate_id = ? AND sent_at >= ?
+         UNION ALL SELECT 1 FROM candidates WHERE id = ? AND quiet_note_at >= ?
          LIMIT 1`,
       )
-      .get(candidateId, since, candidateId, since, candidateId, since, candidateId, since),
+      .get(candidateId, since, candidateId, since, candidateId, since, candidateId, since, candidateId, since),
   )
 }
