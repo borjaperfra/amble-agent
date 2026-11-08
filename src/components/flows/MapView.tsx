@@ -23,7 +23,8 @@ interface MapViewProps {
   // They paused the search until further notice.
   paused: boolean
   // Whether WhatsApp can be linked, and is: what is still unknown is asked there.
-  whatsapp: { available: boolean; linked: boolean }
+  // on: the app amble writes to them on; apps: the chat apps amble has (#52).
+  whatsapp: { available: boolean; linked: boolean; on: 'whatsapp' | 'telegram' | null; apps: ('whatsapp' | 'telegram')[] }
 }
 
 const NEXT_HREF: Record<'sources' | 'intent' | 'questions', string> = {
@@ -45,6 +46,10 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
   const searchLine = note === 'failed' ? t.listening.pause.failed : paused ? t.listening.pause.line : note === 'resumed' ? t.listening.pause.resumed : null
 
   const hasContent = vm.capabilities.length > 0
+  // The app their questions come on, and the ones they could connect (#52).
+  const appName = (app: 'whatsapp' | 'telegram') => (app === 'telegram' ? 'Telegram' : 'WhatsApp')
+  const onApp = appName(whatsapp.on ?? 'whatsapp')
+  const anyApp = t.map.chatApps((whatsapp.apps.length > 0 ? whatsapp.apps : (['whatsapp'] as const)).map(appName))
 
   return (
     <>
@@ -133,7 +138,7 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
         {vm.gaps.length > 0 && (
           <a href="#gaps" className={styles.gapsSummary}>
             <span className={styles.gapsSummaryLine}>{t.map.gapsSummary(Math.min(vm.gaps.length, GAPS_SHOWN))}</span>
-            <span className={styles.gapsSummaryHow}>{whatsapp.linked ? t.map.gapsHowLinked : t.map.gapsHow}</span>
+            <span className={styles.gapsSummaryHow}>{whatsapp.linked ? t.map.gapsHowLinked(onApp) : t.map.gapsHow(anyApp)}</span>
             <span className={styles.gapsSummaryAction}>{t.map.gapsSee}</span>
           </a>
         )}
@@ -221,14 +226,14 @@ export default function MapView({ vm, next, owner, paused: initiallyPaused, what
             )}
             {whatsapp.linked ? (
               <>
-                <p className={styles.gapsNote}>{t.map.gapsLater}</p>
+                <p className={styles.gapsNote}>{t.map.gapsLater(onApp)}</p>
                 {/* On one app already: only the other, if amble has it. */}
                 <WhatsAppConnect linked compact addOnly />
               </>
             ) : (
               whatsapp.available && (
                 <div className={styles.gapsConnect}>
-                  <p className={styles.gapsNote}>{t.map.gapsConnect}</p>
+                  <p className={styles.gapsNote}>{t.map.gapsConnect(anyApp)}</p>
                   <WhatsAppConnect linked={false} compact />
                 </div>
               )

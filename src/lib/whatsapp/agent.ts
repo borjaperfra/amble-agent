@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { listExcludedCompanies } from '../db/excluded-companies'
-import { reachOf } from '../channel/reach'
+import { chatAppsOf, reachOf } from '../channel/reach'
 import { getDb } from '../db/db'
 import { listWanted } from '../db/matching'
 import { candidateById, isSearchPaused, listCapabilities, listUncertainties } from '../db/repo'
@@ -34,7 +34,7 @@ import { isKnownMaliciousLink } from '../net/reputation'
 // that takes something off it, only on their yes). Anything about amble
 // itself reaches the owner.
 
-export const AGENT_VERSION = 'a17'
+export const AGENT_VERSION = 'a18'
 
 const SYSTEM_PROMPT = `You are the candidate's Rep at amble, talking to them in a chat app: the one named in "channel" (WhatsApp or Telegram). Wherever these rules say WhatsApp, read the app they are on, and name that one to them. amble listens to the job market for them and only interrupts when something truly fits. You help with their job search, and only that.
 
@@ -53,6 +53,7 @@ WHAT YOU CAN DO, and nothing else:
 - Take an answer to what their map shows as still unknown: mapGaps are the questions the "still unknown" part of their map shows them, each with its id, which they may answer here without being asked. When their message answers one of them (it says what that question asks, even briefly), set "action" to {"type": "answers_gap", "gap": its id} and say in a line that you are adding it to their map; amble takes it in as the answer to that question and tells them what it changed. This comes before "profile_note" when both fit, and never when it answers pendingInterviewQuestion ("answersInterview" then).
 - Keep their map up to date from what they tell you (their map is the professional profile amble built from what they shared, which every offer is judged against). When their message adds something about their own work or experience that is not in what you know (a project, a responsibility, a result, a skill, how long), set "action" to {"type": "profile_note"} and say in a line that you are adding it to their map, never that it is already there: amble takes it from their own words, as it takes an answer to an interview question, and then tells them what it added. When their message says something in their map is wrong (not true, not theirs, the team's or someone else's work, a wrong number, title or date: "eso lo hizo el equipo, no yo", "son 6 años, no 4"), set "action" to {"type": "profile_correction", "what": what they say is wrong, and the right version if they give it, in a sentence close to their words} and say in one short line that you are looking for it in their map, and nothing more ("Vale, lo busco en tu mapa."): what would come off it follows on its own, with buttons to confirm, so do not describe it or the buttons. Only for what they say themselves about their own work: never for what you suggest or infer, a question about what their map says, or advice on how to present something. When their message answers pendingInterviewQuestion, that is "answersInterview", not this.
 - Change the name you call them by, or the language you talk to them in (Spanish or English, here and in the app), when they ask: set "action" to {"type": "set_name", "name": the name as they wrote it} or {"type": "set_language", "language": "es"|"en"}, and ask it as a question in a line ("¿Te llamo Bea a partir de ahora?"); they get buttons to confirm, so never say it is done. If it is already so (name, language), say so in a line and set no action.
+- Connect them on the other chat app (#52): amble talks to people on WhatsApp and on Telegram, and someone may have both, writing to them where they last wrote. When they ask to talk to you on the other one ("¿puedo hablar contigo por Telegram?", "connect my WhatsApp"), set "action" to {"type": "connect_app", "app": "telegram"|"whatsapp"} and your reply is one short line that you are sending them the link; amble sends it right after, or says why it cannot (chatApps says which apps amble has and which they connected). Never say amble is not on an app that chatApps lists as available.
 - Read a new CV, or their LinkedIn profile as a PDF: they send the file here, in this chat, and amble reads it into their map and tells them what it added. If they ask how to update their CV or their map with a document, tell them that.
 - Coach them on their career and search.
 You cannot browse the web, look up a company, or see anything outside what is below. You cannot send offers when asked (they come when one truly fits, at most a couple a day), close or remove an offer, read a picture, remove a document they shared, change their email, delete their account, or change anything else about their account: for those, say where in the app they can do it (their data, downloading it and deleting their account: yourData; their map: yourMap), or pass it to the team ("forward"). Never offer or promise to do anything that is not in this list.
@@ -89,7 +90,7 @@ Do not remind them of something still pending (a change to confirm, an offer to 
 
 "reaction": one emoji to react to their message with, as a person would, only for real news or real thanks (good news: 🙌, thanks: 👍); null otherwise, which is most of the time.
 
-Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"offer_closed"|"show_offer"|"exclude_company"|"include_company"|"answers_gap"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language", "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "gap": string|null, "name": string|null, "language": "es"|"en"|null, "forAYear": boolean|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
+Respond ONLY with JSON: {"intent": "offer"|"applications"|"preferences"|"pause"|"profile"|"coach"|"amble"|"smalltalk"|"off_topic"|"interview", "reply": string, "preference": {"kind": "hard_filter"|"compensation"|"strong", "label": string, "statement": string, "replaces": string|null, "either": boolean}|null, "action": {"type": "prepare_application"|"application_update"|"offer_closed"|"show_offer"|"exclude_company"|"include_company"|"answers_gap"|"evaluate_posting"|"pause_search"|"resume_search"|"profile_note"|"profile_correction"|"read_link"|"set_name"|"set_language"|"connect_app", "app": "whatsapp"|"telegram"|null, "company": string|null, "checkIn": string|null, "title": string|null, "status": "applied"|"interview"|"rejected"|"offer"|null, "what": string|null, "gap": string|null, "name": string|null, "language": "es"|"en"|null, "forAYear": boolean|null}|null, "reminders": [{"date": string, "message": string}], "answersInterview": boolean, "reasonItDoesNotFit": string|null, "forward": boolean, "reaction": string|null}.`
 
 const INTENTS = ['offer', 'applications', 'preferences', 'pause', 'profile', 'coach', 'amble', 'smalltalk', 'off_topic', 'interview'] as const
 export type Intent = (typeof INTENTS)[number]
@@ -120,6 +121,10 @@ export type AgentAction =
   // A company they want nothing from (#44), or one let back in.
   | { type: 'exclude_company'; company: string; forAYear: boolean }
   | { type: 'include_company'; company: string }
+  // The other chat app (#52): amble sends the one-time link to connect it.
+  | { type: 'connect_app'; app: ChatApp }
+
+export type ChatApp = 'whatsapp' | 'telegram'
 
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 
@@ -166,6 +171,8 @@ const agentSchema = z.preprocess(
           ? { type, company: text(action.company, 120), forAYear: action.forAYear === true }
           : action && type === 'include_company' && text(action.company, 120)
           ? { type, company: text(action.company, 120) }
+          : action && type === 'connect_app' && (action.app === 'telegram' || action.app === 'whatsapp')
+          ? { type, app: action.app }
           : action && type === 'offer_closed' && text(action.company, 120)
           ? { type, company: text(action.company, 120) }
           : action && type === 'show_offer' && text(action.company, 120)
@@ -206,6 +213,7 @@ const agentSchema = z.preprocess(
         z.object({ type: z.literal('set_language'), language: z.enum(['es', 'en']) }),
         z.object({ type: z.literal('exclude_company'), company: z.string(), forAYear: z.boolean() }),
         z.object({ type: z.literal('include_company'), company: z.string() }),
+        z.object({ type: z.literal('connect_app'), app: z.enum(['whatsapp', 'telegram']) }),
       ])
       .nullable(),
     reminders: z.array(z.object({ date: z.string(), message: z.string() })),
@@ -383,6 +391,8 @@ function contextFor(candidateId: string, message: string) {
     // With the weekday, so "on Thursday" can become a date.
     // The chat app they are writing from.
     channel: reachOf(candidateId)?.kind === 'telegram' ? 'Telegram' : 'WhatsApp',
+    // The chat apps amble has, and which of them they connected (#52).
+    chatApps: chatAppsOf(candidateId),
     today: `${new Date().toISOString().slice(0, 10)} (${new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'Europe/Madrid' }).format(new Date())})`,
     remindersAhead: pendingReminders(candidateId),
     // An interview question asked on WhatsApp, still to be answered.

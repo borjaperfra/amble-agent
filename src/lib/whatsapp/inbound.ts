@@ -4,7 +4,7 @@ import { emailOwnerAbout, feedbackToday, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { MAX_AUDIO_BYTES, transcribe } from '../model/transcribe'
-import { companyAction, offerToShow, runAction } from './actions'
+import { companyAction, connectApp, offerToShow, runAction } from './actions'
 import { answerInterviewQuestion, pendingInterviewQuestion, sendTeasedQuestion } from './interview'
 import { leaveReminder, sendTeasedReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
@@ -417,6 +417,16 @@ async function answerWords(
     if (!done) await reply(w.companyNotFound(answer.action.company))
     else if (answer.action.type === 'include_company') await reply(w.companyIncluded(done.company))
     else await reply(done.until ? w.companyExcludedForAYear(done.company) : w.companyExcluded(done.company))
+  }
+  // The other chat app (#52): its link, sent by amble and not the model, so
+  // it is never one made up.
+  if (answer.action?.type === 'connect_app') {
+    const app = answer.action.app
+    const name = app === 'telegram' ? 'Telegram' : 'WhatsApp'
+    const done = connectApp(candidate.id, app, w.linkMessage)
+    if (done === 'unavailable') await reply(w.connectAppUnavailable(name))
+    else if (done === 'connected') await reply(w.connectAppAlready(name))
+    else await reply(app === 'telegram' ? w.connectTelegramLink(done.url) : w.connectWhatsAppLink(done.url))
   }
   // The offer they asked to see: its card, with its buttons to answer it.
   if (answer.action?.type === 'show_offer') {
