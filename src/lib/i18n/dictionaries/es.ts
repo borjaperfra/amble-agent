@@ -646,6 +646,10 @@ export const es: Dictionary = {
     preferenceButtons: { yes: 'Sí, cámbialo', no: 'No', only: 'Solo eso', prefer: 'Lo prefiero' },
     noRuleAsk: (label: string) => `¿Lo tengo en cuenta para todas? *${label}*`,
     noRuleButtons: { yes: 'Sí, para todas', no: 'Solo esta' },
+    // A rule proposed from a «no» in the app, asked once on the chat.
+    ruleAsk: (label: string, quote: string | null) =>
+      quote ? `Hace unos días, al decirme que no a una oferta, me dijiste «${quote}». ¿Lo tengo en cuenta para todas? *${label}*` : `¿Lo tengo en cuenta para todas las ofertas? *${label}*`,
+    ruleAskOnlyThat: 'Vale, solo para aquella.',
     companyExcluded: (company: string) => `Hecho: no te enseño nada más de ${company}. Si cambias de idea, dímelo.`,
     companyExcludedForAYear: (company: string) => `Hecho: nada de ${company} durante un año. Si cambias de idea, dímelo.`,
     companyIncluded: (company: string) => `Hecho: ${company} vuelve a entrar en lo que te busco.`,
@@ -1074,6 +1078,16 @@ Desde entonces te escribo en la app donde me hayas escrito por última vez.`,
     sayIt: 'Contármelo con tus palabras →',
     sample: 'Responder a unas ofertas de ejemplo →',
     saveFailed: 'No se ha guardado. Vuelve a intentarlo.',
+    // A rule just added, read back as it will be applied (#51).
+    readBack: {
+      never: (rule: string) => `Así lo aplico: aparto cualquier oferta que choque con «${rule}».`,
+      pay: (rule: string) => `Así lo aplico: «${rule}» es lo mínimo que tiene que pagar una oferta.`,
+      weighs: (rule: string) => `Así lo aplico: pongo antes las ofertas que cumplen «${rule}», sin apartar ninguna.`,
+      notFor: (rule: string) => `Así lo aplico: no aparto una oferta por «${rule}», aunque no lo cumpla.`,
+    },
+    readBackAsk: '¿Es eso?',
+    readBackYes: 'Sí',
+    readBackUndo: 'No, quítala',
     saved: 'Guardado. Releo tus ofertas recientes con esto.',
     back: 'Volver a tu Rep',
     // Where they live, what they work in, and the floor applied: decide offers without being rules.

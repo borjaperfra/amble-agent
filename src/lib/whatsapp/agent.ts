@@ -565,23 +565,45 @@ export function signAppLinks(candidateId: string, reply: string): string {
 // model tells it from the message.
 export async function answerMessage(candidateId: string, message: string, language: Locale | null = languageOf(message)): Promise<AgentAnswer> {
   const context = contextFor(candidateId, message)
-  const { data } = await runStructuredTask({
-    candidateId,
-    task: 'whatsapp_agent',
-    version: AGENT_VERSION,
-    system: SYSTEM_PROMPT,
-    user: `WHAT YOU KNOW:\n${JSON.stringify(context, null, 1)}\n\nTHEIR MESSAGE (reply in the language it is written in, whatever it asks):\n${clipMessage(message)}`,
-    schema: agentSchema,
-    temperature: 0.3,
-    // The language of their message, not of their account nor of the
-    // conversation so far.
-    language,
-  })
+  const user = `WHAT YOU KNOW:\n${JSON.stringify(context, null, 1)}\n\nTHEIR MESSAGE (reply in the language it is written in, whatever it asks):\n${clipMessage(message)}`
+  const ask = (text: string) =>
+    runStructuredTask({
+      candidateId,
+      task: 'whatsapp_agent',
+      version: AGENT_VERSION,
+      system: SYSTEM_PROMPT,
+      user: text,
+      schema: agentSchema,
+      temperature: 0.3,
+      // The language of their message, not of their account nor of the
+      // conversation so far.
+      language,
+    })
+  let { data } = await ask(user)
+  // A promise to keep something with nothing that keeps it (#44: «lo apunto»
+  // about Affirm, and nothing kept): asked once more, to do it or not say it.
+  if (promisesWithoutKeeping(data)) data = (await ask(`${user}\n\n${UNKEPT_PROMISE}`)).data
   const allowed = [appBase(), 'https://amble.fyi', ...context.offersSentOnWhatsApp.map((offer) => offer.url).filter((url): url is string => typeof url === 'string' && Boolean(url) && !isKnownMaliciousLink(url))]
   let reply = signAppLinks(candidateId, keepKnownLinks(data.reply, allowed))
   const crisis = soundsLikeCrisis(message)
   if (crisis && !reply.includes(HELP_LINE)) reply = `${reply}\n\n${dictionaries[candidateLocale(candidateById(candidateId))].whatsapp.helpLine}`
   return { ...data, reply, forward: data.forward || crisis }
+}
+
+// Words that promise to keep, note, avoid or stop something (Spanish and
+// English), said in the Rep's own voice.
+const PROMISE =
+  /(?<!\p{L})(lo (apunto|anoto|guardo|tengo en cuenta|tendré en cuenta)|apuntad[oa]|anotad[oa]|tomo nota|lo tendré presente|no te (mandaré|enviaré|enseñaré|volveré a)|dejaré de|evitaré|I'?ll (note|keep that in mind|keep it in mind|stop sending|avoid|remember)|I will (note|keep|stop|avoid|remember)|noted)(?!\p{L})/iu
+
+const UNKEPT_PROMISE =
+  'AMBLE CHECK: your reply promises to note, keep, avoid or stop something, but it sets no action, preference, reminder or answer that would do it, so nothing would be kept. Answer again: either set what does it (an action, a preference, a reminder), or write the reply so that it promises nothing amble will not do.'
+
+// Nothing in the answer does what its reply promises.
+export function promisesWithoutKeeping(
+  answer: Pick<AgentAnswer, 'reply' | 'action' | 'preference' | 'reminders' | 'answersInterview' | 'reasonItDoesNotFit'>,
+): boolean {
+  const keeps = answer.action !== null || answer.preference !== null || answer.reminders.length > 0 || answer.answersInterview || answer.reasonItDoesNotFit !== null
+  return !keeps && PROMISE.test(answer.reply)
 }
 
 // The questions the map shows under what is still unknown: the ones

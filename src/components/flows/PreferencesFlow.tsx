@@ -148,25 +148,33 @@ export default function PreferencesFlow({ initial }: { initial: RulesView }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<'saved' | 'failed' | null>(null)
   const [drafts, setDrafts] = useState<Record<RuleGroup, string>>({ never: '', pay: '', weighs: '', notFor: '' })
+  // The rule they just wrote, read back as it will be applied, until they
+  // say it is right or take it away: «Hands on» under «No descartes por»
+  // meant the opposite of what they wanted, and nothing said so (#51).
+  const [readBack, setReadBack] = useState<string | null>(null)
 
-  async function act(body: Record<string, unknown>): Promise<boolean> {
+  async function act(body: Record<string, unknown>): Promise<RulesView | null> {
     setBusy(true)
     setNote(null)
     const { ok, data } = await postJson<RulesView>('/api/rules', body)
     setBusy(false)
     if (!ok) {
       setNote('failed')
-      return false
+      return null
     }
     setRules({ rules: data.rules, proposed: data.proposed, about: data.about })
     setNote('saved')
-    return true
+    return data
   }
 
   async function add(group: RuleGroup) {
     const text = drafts[group].trim()
     if (!text) return
-    if (await act({ action: 'add', group, text })) setDrafts((prev) => ({ ...prev, [group]: '' }))
+    const before = new Set(rules.rules.map((rule) => rule.id))
+    const data = await act({ action: 'add', group, text })
+    if (!data) return
+    setDrafts((prev) => ({ ...prev, [group]: '' }))
+    setReadBack(data.rules.find((rule) => !before.has(rule.id) && rule.group === group)?.id ?? null)
   }
 
   const source = (rule: RuleView) => (rule.source ? (p.sources as Record<string, string>)[rule.source] : null)
@@ -250,6 +258,25 @@ export default function PreferencesFlow({ initial }: { initial: RulesView }) {
                             {p.remove}
                           </button>
                         </span>
+                        {readBack === rule.id && (
+                          <p className={styles.readBack} role="status">
+                            {p.readBack[group](rule.text)} {p.readBackAsk}{' '}
+                            <button type="button" className="text-btn" onClick={() => setReadBack(null)}>
+                              {p.readBackYes}
+                            </button>{' '}
+                            <button
+                              type="button"
+                              className="text-btn"
+                              disabled={busy}
+                              onClick={() => {
+                                setReadBack(null)
+                                void act({ action: 'remove', id: rule.id })
+                              }}
+                            >
+                              {p.readBackUndo}
+                            </button>
+                          </p>
+                        )}
                         {rule.stale && (
                           <p className={styles.staleNote}>
                             {p.stale}{' '}

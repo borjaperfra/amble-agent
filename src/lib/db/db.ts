@@ -698,6 +698,8 @@ function migrate(db: DatabaseSync): void {
   // why, and when it last looked whether to.
   addColumn(db, 'candidates', 'quiet_note_at', 'TEXT')
   addColumn(db, 'candidates', 'quiet_checked_at', 'TEXT')
+  // A proposed rule asked once on the chat (whatsapp/rule-asks.ts).
+  addColumn(db, 'revealed_preferences', 'asked_at', 'TEXT')
   // Feedback already acted on leaves the owner's list: when, and what took
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')

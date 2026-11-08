@@ -17,9 +17,10 @@ import { syncSaidRules } from './said-rules'
 //   declared  what the candidate said, structured and confirmed (§15)
 //   revealed  what their answers showed, confirmed by them one by one (§15.1)
 
-// Same horizon as a confirmed intent: preferences go stale, and stale ones must
-// not be applied as if they were current.
-const REVEALED_VALID_DAYS = 90
+// A rule holds until they change it or take it away: none lapses with time.
+// Until 2026-11-08 a rule stopped applying 90 days after it was confirmed,
+// unless they said it still held; nobody was told on the chat, so a rule
+// confirmed in October would have quietly stopped in January.
 
 export interface ListeningItem {
   id: string
@@ -58,15 +59,9 @@ export function shortLabel(row: RevealedPreferenceRow): string {
   return clause.length > 70 ? `${clause.slice(0, 67).trimEnd()}…` : clause
 }
 
-export function isStale(row: RevealedPreferenceRow, now: number): boolean {
-  if (!row.decided_at) return true
-  return now - Date.parse(row.decided_at) > REVEALED_VALID_DAYS * 24 * 60 * 60 * 1000
-}
-
 export function getListeningProfile(candidateId: string): ListeningProfile {
   // What they said and confirmed is among the rules below (said-rules.ts).
   syncSaidRules(candidateId)
-  const now = Date.now()
   // What they confirmed; before any, what they wrote (shown as not confirmed).
   const intent = getCurrentIntent(candidateId) ?? getLatestIntent(candidateId)
 
@@ -74,16 +69,13 @@ export function getListeningProfile(candidateId: string): ListeningProfile {
   const weighs: ListeningItem[] = []
   const money: ListeningItem[] = []
   const notFilteringOn: ListeningItem[] = []
-  let staleCount = 0
+  // No rule lapses (above): none is ever set aside as stale.
+  const staleCount = 0
 
   for (const row of listConfirmedPreferences(candidateId)) {
     // A self-filter never becomes a listening rule, confirmed or not: an agent
     // that inherits it discards offers the candidate would win, invisibly.
     if (row.kind === 'self_filter') continue
-    if (isStale(row, now)) {
-      staleCount++
-      continue
-    }
     const item = { id: row.id, label: shortLabel(row), statement: row.statement, wording: row.wording ?? row.statement, evidence: row.evidence, source: row.source }
     if (row.kind === 'hard_filter') wontConsider.push(item)
     else if (row.kind === 'strong') weighs.push(item)
@@ -101,7 +93,8 @@ export function getListeningProfile(candidateId: string): ListeningProfile {
     declared: {
       items: intent ? parseJsonArray(intent.listening_for) : [],
       confirmed: Boolean(intent?.confirmed_at),
-      stale: Boolean(intent?.valid_until && Date.parse(intent.valid_until) < now),
+      // What they said they look for holds until they change it, as rules do.
+      stale: false,
     },
     revealed: { rules: { wontConsider, weighs, money }, notFilteringOn, staleCount },
     pendingReview,

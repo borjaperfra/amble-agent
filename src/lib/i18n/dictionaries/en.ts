@@ -649,6 +649,10 @@ export const en = {
     preferenceButtons: { yes: 'Yes, change it', no: 'No', only: 'Only that', prefer: 'I prefer it' },
     noRuleAsk: (label: string) => `Shall I apply it to all of them? *${label}*`,
     noRuleButtons: { yes: 'Yes, to all', no: 'Just this one' },
+    // A rule proposed from a «no» in the app, asked once on the chat.
+    ruleAsk: (label: string, quote: string | null) =>
+      quote ? `A few days ago, turning an offer down, you told me «${quote}». Shall I apply it to all of them? *${label}*` : `Shall I apply it to every offer? *${label}*`,
+    ruleAskOnlyThat: 'OK, just for that one.',
     companyExcluded: (company: string) => `Done: nothing more from ${company}. If you change your mind, tell me.`,
     companyExcludedForAYear: (company: string) => `Done: nothing from ${company} for a year. If you change your mind, tell me.`,
     companyIncluded: (company: string) => `Done: ${company} is back in what I look for.`,
@@ -1078,6 +1082,16 @@ From then on I’ll write to you in whichever app you last wrote to me from.`,
     sayIt: 'Tell me in your own words →',
     sample: 'Answer a few sample offers →',
     saveFailed: 'It wasn’t saved. Try again.',
+    // A rule just added, read back as it will be applied (#51).
+    readBack: {
+      never: (rule: string) => `Here’s how I apply it: I set aside any offer that clashes with «${rule}».`,
+      pay: (rule: string) => `Here’s how I apply it: «${rule}» is the least an offer has to pay.`,
+      weighs: (rule: string) => `Here’s how I apply it: offers that meet «${rule}» go first, and none is set aside.`,
+      notFor: (rule: string) => `Here’s how I apply it: I don’t set an offer aside over «${rule}», even if it doesn’t meet it.`,
+    },
+    readBackAsk: 'Is that it?',
+    readBackYes: 'Yes',
+    readBackUndo: 'No, remove it',
     saved: 'Saved. I’m reading your recent offers again with this.',
     back: 'Back to your Rep',
     // Where they live, what they work in, and the floor applied: decide offers without being rules.

@@ -16,6 +16,7 @@ import { awaitedReason, handleOfferTap, parseOfferPayload, pickFromDigest, sendD
 import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
+import { answerRuleAsk, parseRuleAskPayload } from './rule-asks'
 import { getMatch } from '../db/matching'
 import { readNo } from '../pipeline/learn-from-no'
 import { answerProfile, parseProfilePayload, proposeCorrection, proposeLanguage, proposeName, takeGap, takeNote } from './profile'
@@ -211,6 +212,13 @@ export async function handleFromPerson(candidate: CandidateRow, input: PersonMes
     const thanks = answerFollowup(candidate.id, followupTap)
     // A question amble no longer has: said, not left unanswered.
     await reply(thanks ?? w.tapExpired)
+    return
+  }
+  // A rule proposed from a «no» in the app, asked once on the chat (rule-asks.ts).
+  const ruleAskTap = parseRuleAskPayload(interactiveId)
+  if (ruleAskTap) {
+    logMessage(candidate.id, 'in', text)
+    await answerRuleAsk(candidate.id, ruleAskTap, reply)
     return
   }
   const preferenceTap = parsePreferencePayload(interactiveId)

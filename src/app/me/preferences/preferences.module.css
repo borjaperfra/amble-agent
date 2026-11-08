@@ -113,6 +113,15 @@
   color: var(--ink-tertiary);
 }
 
+/* A rule just added, read back as it will be applied (#51). */
+.readBack {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
 .staleNote {
   grid-column: 1 / -1;
   font-size: var(--text-body-sm);

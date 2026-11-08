@@ -16,7 +16,7 @@ import {
   type RevealedPreferenceRow,
 } from '../db/repo'
 import { serverText } from '../i18n/candidate'
-import { getListeningProfile, isStale, shortLabel } from './listening'
+import { getListeningProfile, shortLabel } from './listening'
 import { buildMatchingProfile } from '../matching/profile'
 import { storedRoleQuery } from '../matching/role-query'
 
@@ -72,7 +72,7 @@ export class RuleError extends Error {
   }
 }
 
-function view(row: RevealedPreferenceRow, now: number): RuleView | null {
+function view(row: RevealedPreferenceRow): RuleView | null {
   const group = GROUP_OF[row.kind]
   // A self-filter is for talking about, never a rule (PRODUCT_SPEC §15.1): it stays in the triage.
   if (!group) return null
@@ -87,7 +87,8 @@ function view(row: RevealedPreferenceRow, now: number): RuleView | null {
     evidence: row.evidence,
     triageId: row.triage_id,
     decidedAt: row.decided_at,
-    stale: row.status === 'confirmed' && isStale(row, now),
+    // No rule lapses with time (listening.ts).
+    stale: false,
   }
 }
 
@@ -95,9 +96,8 @@ export function getRulesView(candidateId: string): RulesView {
   const candidate = candidateById(candidateId)
   // Writes the rules of what they said, if they are not written yet.
   getListeningProfile(candidate.id)
-  const now = Date.now()
   const rules = listConfirmedPreferences(candidate.id)
-    .map((row) => view(row, now))
+    .map((row) => view(row))
     .filter((item): item is RuleView => item !== null)
   const triage = getLatestOfferTriage(candidate.id)
   // What their latest triage suggests, and what an offer they turned down did.
@@ -105,7 +105,7 @@ export function getRulesView(candidateId: string): RulesView {
     ...(triage?.status === 'analysed' ? listRevealedPreferences(triage.id).filter((row) => row.status === 'proposed') : []),
     ...listProposedPreferences(candidate.id),
   ]
-    .map((row) => view(row, now))
+    .map((row) => view(row))
     .filter((item): item is RuleView => item !== null)
   return { rules, proposed, about: aboutOf(candidate.id) }
 }

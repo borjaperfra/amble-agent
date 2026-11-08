@@ -987,7 +987,8 @@ export function getCurrentIntent(candidateId: string): IntentRow | undefined {
 
 // Confirmed as they left it: what they edited is what the Rep listens for.
 export function confirmIntent(candidateId: string, id: string, groups?: { label: string; values: string[] }[]): boolean {
-  const validUntil = new Date(Date.now() + 1000 * 60 * 60 * 24 * 90).toISOString()
+  // It holds until they change it (listening.ts): no date it lapses on.
+  const validUntil = null
   const db = getDb()
   if (groups) {
     const kept = groups
@@ -1186,11 +1187,10 @@ export function listListeningCandidateIds(): string[] {
     .prepare(
       `SELECT c.id FROM candidates c
        WHERE c.search_paused_at IS NULL AND (EXISTS (SELECT 1 FROM revealed_preferences p WHERE p.candidate_id = c.id AND p.status = 'confirmed')
-          OR EXISTS (SELECT 1 FROM intent_profiles i WHERE i.candidate_id = c.id AND i.confirmed_at IS NOT NULL
-                     AND (i.valid_until IS NULL OR i.valid_until > ?)))
+          OR EXISTS (SELECT 1 FROM intent_profiles i WHERE i.candidate_id = c.id AND i.confirmed_at IS NOT NULL))
        ORDER BY c.created_at ASC`,
     )
-    .all(now()) as { id: string }[]
+    .all() as { id: string }[]
   return rows.map((row) => row.id)
 }
 
