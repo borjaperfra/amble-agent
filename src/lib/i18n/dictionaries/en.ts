@@ -258,14 +258,16 @@ export const en = {
     languagesAsk: 'Which languages do you speak, and how well? Tell me and I’ll take it into account in every offer.',
     languagesAction: 'Set languages →',
     noGaps: 'There’s nothing important left for me to ask you right now.',
-    gapsLater: 'Now and then I’ll send you one of these questions on WhatsApp; just reply to that message.',
+    gapsLater: (app: string) => `Now and then I’ll send you one of these questions on ${app}; just reply to that message.`,
     // WhatsApp not linked yet.
-    gapsConnect: 'Connect WhatsApp and I’ll ask you there.',
+    gapsConnect: (apps: string) => `Connect ${apps} and I’ll ask you there.`,
     gapsConnectAction: 'Connect WhatsApp →',
     // Near the top of the map: how much is still unknown, and where to answer it.
     gapsSummary: (count: number) => `There ${count === 1 ? 'is 1 thing' : `are ${count} things`} I don’t know about you yet.`,
-    gapsHow: 'You can tell me on WhatsApp or answer here.',
-    gapsHowLinked: 'I’ll ask you on WhatsApp, or answer here.',
+    gapsHow: (apps: string) => `You can tell me on ${apps} or answer here.`,
+    gapsHowLinked: (app: string) => `I’ll ask you on ${app}, or answer here.`,
+    // The chat apps amble has, named in a sentence.
+    chatApps: (apps: string[]) => apps.join(' or '),
     gapsSee: 'See which ↓',
     answerHere: 'Answer here →',
     nextStep: 'Next step',
@@ -548,6 +550,9 @@ export const en = {
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',
+    // What the company does and what they would do there (#50).
+    offerCompany: (text: string | null) => `*The company:* ${text ?? 'the offer doesn’t say what it does.'}`,
+    offerDayToDay: (text: string | null) => `*Your day to day:* ${text ?? 'the offer doesn’t spell it out.'}`,
     // The pay line of an offer: as published, estimated with its source, or said to be missing.
     salaryPublished: (salary: string) => `Salary: ${salary}`,
     salaryEstimated: (range: string, source: string) => `Estimated salary: ${range} · ${source}`,
@@ -616,6 +621,19 @@ export const en = {
     companyExcludedForAYear: (company: string) => `Done: nothing from ${company} for a year. If you change your mind, tell me.`,
     companyIncluded: (company: string) => `Done: ${company} is back in what I look for.`,
     companyNotFound: (company: string) => `I can’t find ${company} among the offers I read for you. If one of theirs comes, tell me then and I’ll take it out.`,
+    // The other chat app, asked for in the chat (#52). The link works once, for half an hour.
+    connectTelegramLink: (url: string) =>
+      `Open this link and tap «Start» in Telegram. It works once, for half an hour:
+${url}
+
+From then on I’ll write to you in whichever app you last wrote to me from.`,
+    connectWhatsAppLink: (url: string) =>
+      `Open this link and send the message already written in WhatsApp. It works once, for half an hour:
+${url}
+
+From then on I’ll write to you in whichever app you last wrote to me from.`,
+    connectAppAlready: (app: string) => `${app} is already connected. I write to you in whichever app you last wrote to me from.`,
+    connectAppUnavailable: (app: string) => `I can’t connect you on ${app} right now. Let’s keep going here.`,
     preferenceSaved: (label: string) => `Done, I’ll keep it in mind from now on (${label}). I’m reading what came in lately again with it.`,
     preferenceKept: 'OK, I’ll leave it as it was.',
     preferenceExpired: 'I no longer have that pending. If you want to change something, tell me again.',
@@ -949,6 +967,10 @@ export const en = {
       options: (options: string[]) => `Options: ${options.join(' · ')}`,
       copy: 'Copy',
       copied: 'Copied',
+      // The answers as text, beside the filled form (#49).
+      copyAll: 'Copy all',
+      answersTitle: 'The answers, as text',
+      answersFilledLead: 'To copy wherever you need them. What you change here doesn’t change the form above.',
       again: 'Prepare it again',
       show: 'Show',
       hide: 'Hide',

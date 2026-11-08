@@ -1,3 +1,6 @@
+import { chatAppsOf } from '../channel/reach'
+import { startTelegramLink } from '../telegram/link'
+import { startLink } from './link'
 import { getDb } from '../db/db'
 import { listWanted, respondToMatch, setProgress } from '../db/matching'
 import { now } from '../db/repo'
@@ -173,4 +176,18 @@ export function companyAction(
   const until = action.forAYear ? aYearFromNow() : null
   excludeCompany(candidateId, company.id, { reason: null, until, source: 'chat' })
   return { company: company.name, until }
+}
+
+// The other chat app (#52), asked for in the chat: the one-time link that
+// connects it, as the app's own button makes, or why there is none.
+export function connectApp(
+  candidateId: string,
+  app: 'whatsapp' | 'telegram',
+  whatsappMessage: (code: string) => string,
+): { url: string } | 'unavailable' | 'connected' {
+  const there = chatAppsOf(candidateId).find((item) => item.app === app)
+  if (!there) return 'unavailable'
+  if (there.connected) return 'connected'
+  const started = app === 'telegram' ? startTelegramLink(candidateId) : startLink(candidateId, whatsappMessage)
+  return started ? { url: started.url } : 'unavailable'
 }

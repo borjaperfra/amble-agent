@@ -13,7 +13,7 @@ import { runStructuredTask } from '../model/provider'
 // sends, it also writes the message, to them: the first reading's reasons
 // are written about the candidate, for a page.
 
-export const REVIEW_VERSION = 'r2'
+export const REVIEW_VERSION = 'r3'
 
 const MAX_DESCRIPTION_CHARS = 12_000
 
@@ -33,12 +33,14 @@ Decide:
 - "hold": anything less. Say the one reason in a short sentence.
 
 When you send it, also write the WhatsApp message, addressed to the candidate in the second person, as their Rep would: plain, specific, no hype, no exclamation marks. It is read on a phone, between other things: short. The title, company, place and pay are already above it, so do not repeat them.
-- "summary": one sentence of at most 25 words: what the job is, in plain words, and why it is theirs.
+- "company": what the company does, in one plain sentence of at most 20 words for someone who has never heard of it, starting with what it does, as it follows "The company:" ("makes software that helps finance teams plan their budgets"; in Spanish, "hace software para …"), taken from the posting alone; null when the posting does not say. Never from what you know of the company yourself.
+- "dayToDay": what they would do in this job, as two or three concrete tasks the posting names, in one sentence of at most 30 words starting with the first task, as it follows "Your day to day:" ("lead the data team, set the roadmap for the forecasting product and hire two engineers"; in Spanish, "liderar el equipo de datos, …"); null when the posting does not say. Not its requirements, perks or values.
+- "summary": one sentence of at most 25 words: why the job is theirs, in plain words. Not what the company does or the tasks again.
 - "reasons": 2 or 3 reasons of at most 20 words each, each taken from the FIRST READER's reasons: rephrase, never add a fact, a skill or a number that is not there. Each ties something the job asks for to something they have done (not a description of the job alone), and none repeats the summary.
 - "caveat": the one thing that could make it a no, from the first reader's considerAlso or unknowns, in at most 25 words, said as a fact about the offer ("it does not say whether you can work from Spain"), never as a verdict of yours, and not that the pay is unpublished (the message already says so); or null.
 Write in the language the task asks for, with no internal words: not "first reader", "rule", "filter", "floor" or "posting". Never assume their gender.
 
-Respond ONLY with JSON: {"decision": "send"|"hold", "reason": string, "message": {"summary": string, "reasons": string[], "caveat": string|null}|null}.`
+Respond ONLY with JSON: {"decision": "send"|"hold", "reason": string, "message": {"company": string|null, "dayToDay": string|null, "summary": string, "reasons": string[], "caveat": string|null}|null}.`
 
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 
@@ -52,6 +54,8 @@ const reviewSchema = z.preprocess(
       message:
         message && text(message.summary, 400)
           ? {
+              company: text(message.company, 300) || null,
+              dayToDay: text(message.dayToDay, 400) || null,
               summary: text(message.summary, 400),
               reasons: (Array.isArray(message.reasons) ? message.reasons : []).map((reason) => text(reason, 300)).filter(Boolean).slice(0, 3),
               caveat: text(message.caveat, 300) || null,
@@ -62,12 +66,16 @@ const reviewSchema = z.preprocess(
   z.object({
     decision: z.enum(['send', 'hold']),
     reason: z.string(),
-    message: z.object({ summary: z.string(), reasons: z.array(z.string()), caveat: z.string().nullable() }).nullable(),
+    message: z.object({ company: z.string().nullable(), dayToDay: z.string().nullable(), summary: z.string(), reasons: z.array(z.string()), caveat: z.string().nullable() }).nullable(),
   }),
 )
 
 // What goes on WhatsApp, in their words: "you", not "they".
 export interface Pitch {
+  // What the company does and what they would do there (#50), from the
+  // posting; null when it does not say. Absent in pitches written before r3.
+  company?: string | null
+  dayToDay?: string | null
   summary: string
   reasons: string[]
   caveat: string | null

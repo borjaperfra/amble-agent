@@ -261,14 +261,16 @@ export const es: Dictionary = {
     languagesAction: 'Indicar idiomas →',
     noGaps: 'Ahora mismo no me queda nada importante que preguntarte.',
     talkItThrough: 'Háblalo con tu Rep →',
-    gapsLater: 'De vez en cuando te mandaré una de estas preguntas por WhatsApp; contéstame a ese mensaje.',
+    gapsLater: (app: string) => `De vez en cuando te mandaré una de estas preguntas por ${app}; contéstame a ese mensaje.`,
     // WhatsApp not linked yet.
-    gapsConnect: 'Conecta WhatsApp y te lo pregunto por ahí.',
+    gapsConnect: (apps: string) => `Conecta ${apps} y te lo pregunto por ahí.`,
     gapsConnectAction: 'Conectar WhatsApp →',
     // Near the top of the map: how much is still unknown, and where to answer it.
     gapsSummary: (count: number) => `Hay ${count} ${count === 1 ? 'cosa' : 'cosas'} que aún no sé de ti.`,
-    gapsHow: 'Puedes contármelo por WhatsApp o responder por aquí.',
-    gapsHowLinked: 'Te lo iré preguntando por WhatsApp, o responde por aquí.',
+    gapsHow: (apps: string) => `Puedes contármelo por ${apps} o responder por aquí.`,
+    gapsHowLinked: (app: string) => `Te lo iré preguntando por ${app}, o responde por aquí.`,
+    // The chat apps amble has, named in a sentence.
+    chatApps: (apps: string[]) => apps.join(' o '),
     gapsSee: 'Ver cuáles ↓',
     answerHere: 'Responder aquí →',
     nextStep: 'Siguiente paso',
@@ -547,6 +549,9 @@ export const es: Dictionary = {
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',
+    // What the company does and what they would do there (#50).
+    offerCompany: (text: string | null) => `*La empresa:* ${text ?? 'la oferta no cuenta a qué se dedica.'}`,
+    offerDayToDay: (text: string | null) => `*Tu día a día:* ${text ?? 'la oferta no lo concreta.'}`,
     salaryPublished: (salary: string) => `Salario: ${salary}`,
     salaryEstimated: (range: string, source: string) => `Salario estimado: ${range} · ${source}`,
     salaryUnknown: 'Salario: no lo publica',
@@ -613,6 +618,19 @@ export const es: Dictionary = {
     companyExcludedForAYear: (company: string) => `Hecho: nada de ${company} durante un año. Si cambias de idea, dímelo.`,
     companyIncluded: (company: string) => `Hecho: ${company} vuelve a entrar en lo que te busco.`,
     companyNotFound: (company: string) => `No encuentro ${company} entre las ofertas que he leído para ti. Si te llega alguna suya, dímelo en ese momento y la quito.`,
+    // The other chat app, asked for in the chat (#52). The link works once, for half an hour.
+    connectTelegramLink: (url: string) =>
+      `Abre este enlace y toca «Iniciar» en Telegram. Sirve una vez y caduca en media hora:
+${url}
+
+Desde entonces te escribo en la app donde me hayas escrito por última vez.`,
+    connectWhatsAppLink: (url: string) =>
+      `Abre este enlace y envía el mensaje que ya va escrito en WhatsApp. Sirve una vez y caduca en media hora:
+${url}
+
+Desde entonces te escribo en la app donde me hayas escrito por última vez.`,
+    connectAppAlready: (app: string) => `${app} ya está conectado. Te escribo en la app donde me hayas escrito por última vez.`,
+    connectAppUnavailable: (app: string) => `Ahora mismo no puedo conectarte por ${app}. Seguimos por aquí.`,
     preferenceSaved: (label: string) => `Hecho, desde ahora lo tengo en cuenta (${label}). Vuelvo a leer con ello lo que ha llegado estos días.`,
     preferenceKept: 'Vale, lo dejo como estaba.',
     preferenceExpired: 'Eso ya no lo tengo pendiente. Si quieres cambiar algo, dímelo otra vez.',
@@ -945,6 +963,10 @@ export const es: Dictionary = {
       options: (options: string[]) => `Opciones: ${options.join(' · ')}`,
       copy: 'Copiar',
       copied: 'Copiado',
+      // The answers as text, beside the filled form (#49).
+      copyAll: 'Copiar todo',
+      answersTitle: 'Las respuestas, en texto',
+      answersFilledLead: 'Para copiarlas donde quieras. Lo que cambies aquí no cambia el formulario de arriba.',
       again: 'Prepararla de nuevo',
       show: 'Ver',
       hide: 'Ocultar',

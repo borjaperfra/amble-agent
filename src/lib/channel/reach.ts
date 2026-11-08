@@ -119,9 +119,23 @@ export function isReachable(candidateId: string): boolean {
 
 // For the screens: whether amble has a chat to offer (WhatsApp or Telegram),
 // and whether they connected one.
-export function chatAvailability(candidateId: string): { available: boolean; linked: boolean } {
+// on: the app amble writes to them on now, null when none. apps: the chat
+// apps amble has, so a page can name them (#52).
+export function chatAvailability(candidateId: string): { available: boolean; linked: boolean; on: ChannelKind | null; apps: ChannelKind[] } {
+  const apps = chatAppsOf(candidateId)
+  const on = apps.some((app) => app.connected) ? (reachOf(candidateId)?.kind ?? null) : null
   return {
-    available: zernioConfig() !== null || telegramConfig() !== null,
-    linked: (zernioConfig() !== null && linkOf(candidateId) !== null) || (telegramConfig() !== null && telegramLinkOf(candidateId) !== null),
+    available: apps.length > 0,
+    linked: apps.some((app) => app.connected),
+    on,
+    apps: apps.map((app) => app.app),
   }
+}
+
+// Each chat app amble has (WhatsApp first), and whether they connected it.
+export function chatAppsOf(candidateId: string): { app: ChannelKind; connected: boolean }[] {
+  const apps: { app: ChannelKind; connected: boolean }[] = []
+  if (zernioConfig()) apps.push({ app: 'whatsapp', connected: linkOf(candidateId) !== null })
+  if (telegramConfig()) apps.push({ app: 'telegram', connected: telegramLinkOf(candidateId) !== null })
+  return apps
 }
