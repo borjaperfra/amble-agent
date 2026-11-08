@@ -32,6 +32,7 @@ export const es: Dictionary = {
     switchTo: 'English',
     switchToLabel: 'Switch to English',
     data: 'Tus datos',
+    cv: 'Tu CV',
     // On the public page: for someone who already has an account.
     signIn: 'Entrar',
     openMenu: 'Abrir el menú',
@@ -471,6 +472,49 @@ export const es: Dictionary = {
     accepted: 'Aceptada',
     available: 'Sin usar',
   },
+  cv: {
+    nav: 'Tu CV',
+    title: 'Tu CV, mejor',
+    lead: 'He leído tu CV junto a las ofertas que encajan contigo y a lo que sé de ti. Esto es lo que cambiaría.',
+    basedOn: (offers: number, date: string) => `Comparado con ${offers} ofertas el ${date}.`,
+    refreshing: 'Tienes un CV nuevo: lo estoy comparando otra vez.',
+    noCv: 'Todavía no he leído un CV tuyo. Súbelo y lo comparo con las ofertas que encajan contigo.',
+    uploadCv: 'Subir mi CV',
+    fewOffers: (have: number, need: number) =>
+      have === 0
+        ? `Lo preparo cuando haya leído al menos ${need} ofertas que encajen contigo. Todavía no llevo ninguna.`
+        : `Lo preparo cuando haya leído al menos ${need} ofertas que encajen contigo. Llevo ${have}.`,
+    building: 'Estoy comparando tu CV con tus ofertas. Tarda un par de minutos; esta página se actualiza sola.',
+    failed: 'No he podido terminarlo. Lo vuelvo a intentar en un rato.',
+    nothing: 'Con lo que sé de ti, no veo nada claro que cambiar. Cuando lea más ofertas lo vuelvo a mirar.',
+    hiddenTitle: 'Lo tienes y tu CV no lo dice',
+    hiddenLead: 'Lo piden ofertas que encajan contigo, y sé que lo has hecho.',
+    weakTitle: 'Lo cuentas, pero se queda corto',
+    weakLead: 'Está en tu CV, pero sin el resultado o sin lo que hiciste tú.',
+    missingTitle: 'Te lo piden y no lo veo',
+    missingLead: 'Varias ofertas lo piden y no tengo nada tuyo que lo muestre. Si lo has hecho, cuéntamelo en el chat o añádelo a tu mapa.',
+    filterTitle: 'Lo que ve un filtro automático',
+    filterLead: 'Muchas empresas pasan los CV por un programa antes de que los lea una persona. Esto es lo que se le escaparía.',
+    askedBy: (companies: string) => `Lo piden ${companies}`,
+    andMore: (n: number) => `y ${n} más`,
+    and: 'y',
+    knownFrom: 'Lo sé porque',
+    yourCvSays: 'Tu CV dice',
+    youCouldWrite: 'Podrías poner',
+    copy: 'Copiar',
+    copied: 'Copiado',
+    toMap: 'Ir a tu mapa',
+    check: {
+      no_email: 'No encuentro un email.',
+      no_phone: 'No encuentro un teléfono.',
+      no_linkedin: 'No hay enlace a tu perfil de LinkedIn.',
+      short: 'Es muy corto: menos de 200 palabras. Un filtro tiene poco con lo que trabajar.',
+      long: (pages: number) => `Tiene ${pages} páginas. Con dos suele bastar: lo que va detrás se lee poco.`,
+      columns: 'Está maquetado a dos columnas. Muchos filtros lo leen de lado a lado y mezclan las dos.',
+      undated: (quote: string) => `«${quote}» no tiene fechas. Un filtro busca cuándo empezaste y cuándo acabaste en cada puesto.`,
+      generic: (quote: string) => `«${quote}» es genérico. Un filtro busca nombres concretos de herramientas y tecnologías.`,
+    },
+  },
   data: {
     title: 'Tus datos',
     lead: 'Lo que amble sabe de ti es tuyo. Puedes llevártelo o borrarlo cuando quieras.',
@@ -659,6 +703,9 @@ export const es: Dictionary = {
     ruleAskOnlyThat: 'Vale, solo para aquella.',
     // An offer they liked and have not sent, asked about once.
     wantedNudge: (title: string, company: string) => `*${title}* en ${company} te interesó hace unos días. Si quieres, te preparo la candidatura.`,
+    // Once, when their CV was compared with their offers (#55).
+    cvNudge: (count: number, example: string, url: string) =>
+      `He comparado tu CV con las ofertas que encajan contigo. ${count === 1 ? 'Hay una cosa que has hecho y tu CV no cuenta:' : `Hay ${count} cosas que has hecho y tu CV no cuenta, como`} ${example}. Te lo dejo aquí, con lo que podrías poner: ${url}`,
     // Monday's summary of their week.
     weekly: {
       title: 'Tu semana en la búsqueda:',

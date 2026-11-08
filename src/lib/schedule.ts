@@ -12,6 +12,7 @@ import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
 import { sendDueRuleQuestions } from './whatsapp/rule-asks'
 import { sendDueWantedNudges } from './whatsapp/nudges'
+import { sendDueCvNudges } from './whatsapp/cv-nudge'
 import { sendWeeklySummaries } from './whatsapp/weekly'
 import { refreshSummaries } from './telegram/summary'
 import { sendDueInterviewQuestions } from './whatsapp/interview'
@@ -185,6 +186,9 @@ async function pass(day: string, slot: string, until: number) {
     }
     // What this pass found that deserves a message, at the pace allowed.
     log(day, `offers: ${JSON.stringify(await sendDueOffers())}`)
+    // Once the afternoon's offers went: their compared CV, to whoever got
+    // nothing today and has nothing waiting (#55).
+    if (slot.endsWith('T16')) log(day, `cv: ${JSON.stringify(await sendDueCvNudges())}`)
     // On Telegram, the summary pinned in their chat, as it stands now.
     log(day, `telegram summaries: ${JSON.stringify(await refreshSummaries())}`)
   } catch (error) {

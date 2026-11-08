@@ -471,6 +471,18 @@ function createDb(): DatabaseSync {
       expires_at TEXT NOT NULL
     );
 
+    -- Their CV read against the offers that fit them and a filter's eye
+    -- (career/cv-review.ts, #55): the latest is shown on /me/cv.
+    CREATE TABLE IF NOT EXISTS cv_reviews (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT NOT NULL REFERENCES candidates(id),
+      source_id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      model_run_id TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS cv_reviews_candidate ON cv_reviews(candidate_id, created_at);
+
     -- Messages the agent left itself for a later day (reminders.ts).
     CREATE TABLE IF NOT EXISTS whatsapp_reminders (
       id TEXT PRIMARY KEY,
@@ -704,6 +716,12 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'opportunity_decisions', 'nudged_at', 'TEXT')
   // Monday's summary of their week, when it last went (whatsapp/weekly.ts).
   addColumn(db, 'candidates', 'weekly_at', 'TEXT')
+  // «Tu CV, mejor» (career/cv-review.ts): a build under way or that failed,
+  // when they first opened it, and when the chat told them of it, once.
+  addColumn(db, 'candidates', 'cv_review_started_at', 'TEXT')
+  addColumn(db, 'candidates', 'cv_review_failed_at', 'TEXT')
+  addColumn(db, 'candidates', 'cv_review_opened_at', 'TEXT')
+  addColumn(db, 'candidates', 'cv_review_told_at', 'TEXT')
   // Feedback already acted on leaves the owner's list: when, and what took
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')
