@@ -550,6 +550,11 @@ export const en = {
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',
+    // The day's list (#51): what it is, and how to pick from it.
+    digestIntro: (count: number) => `I have ${count} today that fit you:`,
+    digestPick: 'Tap a number to see it in full, or reply with the ones you want («1 and 3»).',
+    digestNoSalary: 'salary not published',
+    digestEstimated: (range: string) => `${range} (estimated)`,
     // What the company does and what they would do there (#50).
     offerCompany: (text: string | null) => `*The company:* ${text ?? 'the offer doesn’t say what it does.'}`,
     offerDayToDay: (text: string | null) => `*Your day to day:* ${text ?? 'the offer doesn’t spell it out.'}`,
@@ -819,6 +824,11 @@ From then on I’ll write to you in whichever app you last wrote to me from.`,
     emptyMore: 'You’ve seen today’s.',
     emptyMoreLead: 'I have more set aside. I’ll show them to you little by little, the best fits first.',
     worthHearing: 'This one is worth your time.',
+    // What the company does and what they would do there (#50).
+    aboutCompany: 'The company:',
+    aboutCompanyUnsaid: 'the offer doesn’t say what it does.',
+    aboutDayToDay: 'Your day to day:',
+    aboutDayToDayUnsaid: 'the offer doesn’t spell it out.',
     // It fits, but what such a role usually pays falls short of their floor: not sold as worth it.
     worthHearingShort: 'It fits you, though it may not reach your pay.',
     morePlaces: (count: number) => `and ${count} more`,

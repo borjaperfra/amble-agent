@@ -549,6 +549,11 @@ export const es: Dictionary = {
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',
+    // The day's list (#51): what it is, and how to pick from it.
+    digestIntro: (count: number) => `Hoy tengo ${count} que encajan contigo:`,
+    digestPick: 'Toca un número para verla entera, o contéstame con las que quieras («1 y 3»).',
+    digestNoSalary: 'no publica salario',
+    digestEstimated: (range: string) => `${range} (estimado)`,
     // What the company does and what they would do there (#50).
     offerCompany: (text: string | null) => `*La empresa:* ${text ?? 'la oferta no cuenta a qué se dedica.'}`,
     offerDayToDay: (text: string | null) => `*Tu día a día:* ${text ?? 'la oferta no lo concreta.'}`,
@@ -815,6 +820,11 @@ Desde entonces te escribo en la app donde me hayas escrito por última vez.`,
     emptyMore: 'Ya has visto las de hoy.',
     emptyMoreLead: 'Tengo más guardadas. Te las iré enseñando poco a poco, las que mejor encajen primero.',
     worthHearing: 'Esta merece tu tiempo.',
+    // What the company does and what they would do there (#50).
+    aboutCompany: 'La empresa:',
+    aboutCompanyUnsaid: 'la oferta no cuenta a qué se dedica.',
+    aboutDayToDay: 'Tu día a día:',
+    aboutDayToDayUnsaid: 'la oferta no lo concreta.',
     // It fits, but what such a role usually pays falls short of their floor: not sold as worth it.
     worthHearingShort: 'Encaja contigo, aunque quizá no llegue a tu salario.',
     morePlaces: (count: number) => `y ${count} más`,

@@ -52,6 +52,9 @@ export interface FoundOpportunity {
   why: { text: string; evidence: string | null; quote: string | null }[]
   considerAlso: { text: string; quote: string | null } | null
   unknowns: string[]
+  // What the company does and what they would do there (#50); null for an
+  // offer judged before it was asked (v13), each part null when it does not say.
+  about: { companyDoes: string | null; dayToDay: string | null } | null
   response: MatchResponse | null
   // Judged before their latest change of rules, and not yet again.
   stale: boolean
@@ -436,6 +439,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
         })),
         considerAlso: explanation.considerAlso,
         unknowns: explanation.unknowns,
+        about: 'companyDoes' in explanation ? { companyDoes: explanation.companyDoes ?? null, dayToDay: explanation.dayToDay ?? null } : null,
         response,
         stale,
       })

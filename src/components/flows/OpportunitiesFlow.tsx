@@ -713,6 +713,19 @@ function FoundCard({ item, onAnswered }: { item: FoundOpportunity; onAnswered: (
       {item.stale && <p className={styles.staleTag}>{t.opportunities.judgedBefore}</p>}
       {item.closed && <p className={styles.closed}>{t.opportunities.closed}</p>}
       <p className={styles.summary}>{item.summary}</p>
+      {/* What the company does and what they would do there (#50). */}
+      {item.about && (
+        <dl className={styles.about}>
+          <div>
+            <dt>{t.opportunities.aboutCompany}</dt>
+            <dd>{item.about.companyDoes ?? t.opportunities.aboutCompanyUnsaid}</dd>
+          </div>
+          <div>
+            <dt>{t.opportunities.aboutDayToDay}</dt>
+            <dd>{item.about.dayToDay ?? t.opportunities.aboutDayToDayUnsaid}</dd>
+          </div>
+        </dl>
+      )}
 
       {/* Why it fits, as points to scan; where each comes from, folded (#41). */}
       <section className={`${styles.block} ${styles.blockWhy}`}>

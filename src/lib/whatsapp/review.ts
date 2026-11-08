@@ -5,21 +5,22 @@ import type { Explanation } from '../matching/assess'
 import type { MatchingProfile } from '../matching/profile'
 import { runStructuredTask } from '../model/provider'
 
-// A second reading, before an offer interrupts someone on WhatsApp. The first
-// reading decided it deserves their attention; this one looks for why they
-// would be let down by it, with the whole posting, their profile and the
+// A second reading, before an offer goes on the day's list in their chat
+// (#51: r4, a list's bar, not an interruption's). The first reading decided
+// it deserves their attention; this one looks for why they would be let down
+// by it, with the whole posting, their profile and the
 // first reading's reasons in front of it. It only holds back: what it holds
 // stays in the app, where they can still see it, but nothing buzzes. When it
 // sends, it also writes the message, to them: the first reading's reasons
 // are written about the candidate, for a page.
 
-export const REVIEW_VERSION = 'r3'
+export const REVIEW_VERSION = 'r4'
 
 const MAX_DESCRIPTION_CHARS = 12_000
 
-const SYSTEM_PROMPT = `You are amble's second reader. Another reader has already judged that this job posting deserves this candidate's attention, and why. Before it is sent to them on WhatsApp, where it interrupts their day, you decide whether it truly does.
+const SYSTEM_PROMPT = `You are amble's second reader. Another reader has already judged that this job posting deserves this candidate's attention, and why. Once a day amble sends them, in their chat app, a short list of three or four such offers, one line each, and they pick the ones they want to see in full. You decide whether this one belongs on that list.
 
-The candidate asked for few offers, each a very strong fit. Sending a mediocre one costs their trust; holding back a good one costs little, because it stays in the app. Be strict.
+A line in a list they choose from costs them little; an offer that lets them down when they open it costs their trust, and so does a list that is always empty. Keep out what would disappoint them; let in what is a good fit, even if not a perfect one.
 
 Read the whole posting against the candidate's rules, capabilities and experience, and the first reader's reasons. Look for what would disappoint them:
 - the daily work is not what the title suggests, or not their kind of work;
@@ -29,10 +30,11 @@ Read the whole posting against the candidate's rules, capabilities and experienc
 - the posting is vague, a pooled or evergreen listing, or reads like a recruiter or agency repost.
 
 Decide:
-- "send": a strong fit you would be glad to put in front of them today.
-- "hold": anything less. Say the one reason in a short sentence.
+- "send": a good fit, worth a line on today's list.
+- "hold": when one of the above would disappoint them. Say the one reason in a short sentence.
 
 When you send it, also write the WhatsApp message, addressed to the candidate in the second person, as their Rep would: plain, specific, no hype, no exclamation marks. It is read on a phone, between other things: short. The title, company, place and pay are already above it, so do not repeat them.
+- "line": its line on the list: why it is theirs, in at most 14 words, tied to something they have done ("Llevarías el equipo de datos, como hiciste en Mahou"). Not the title, company or place.
 - "company": what the company does, in one plain sentence of at most 20 words for someone who has never heard of it, starting with what it does, as it follows "The company:" ("makes software that helps finance teams plan their budgets"; in Spanish, "hace software para …"), taken from the posting alone; null when the posting does not say. Never from what you know of the company yourself.
 - "dayToDay": what they would do in this job, as two or three concrete tasks the posting names, in one sentence of at most 30 words starting with the first task, as it follows "Your day to day:" ("lead the data team, set the roadmap for the forecasting product and hire two engineers"; in Spanish, "liderar el equipo de datos, …"); null when the posting does not say. Not its requirements, perks or values.
 - "summary": one sentence of at most 25 words: why the job is theirs, in plain words. Not what the company does or the tasks again.
@@ -40,7 +42,7 @@ When you send it, also write the WhatsApp message, addressed to the candidate in
 - "caveat": the one thing that could make it a no, from the first reader's considerAlso or unknowns, in at most 25 words, said as a fact about the offer ("it does not say whether you can work from Spain"), never as a verdict of yours, and not that the pay is unpublished (the message already says so); or null.
 Write in the language the task asks for, with no internal words: not "first reader", "rule", "filter", "floor" or "posting". Never assume their gender.
 
-Respond ONLY with JSON: {"decision": "send"|"hold", "reason": string, "message": {"company": string|null, "dayToDay": string|null, "summary": string, "reasons": string[], "caveat": string|null}|null}.`
+Respond ONLY with JSON: {"decision": "send"|"hold", "reason": string, "message": {"line": string, "company": string|null, "dayToDay": string|null, "summary": string, "reasons": string[], "caveat": string|null}|null}.`
 
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 
@@ -54,6 +56,7 @@ const reviewSchema = z.preprocess(
       message:
         message && text(message.summary, 400)
           ? {
+              line: text(message.line, 200) || null,
               company: text(message.company, 300) || null,
               dayToDay: text(message.dayToDay, 400) || null,
               summary: text(message.summary, 400),
@@ -66,12 +69,14 @@ const reviewSchema = z.preprocess(
   z.object({
     decision: z.enum(['send', 'hold']),
     reason: z.string(),
-    message: z.object({ company: z.string().nullable(), dayToDay: z.string().nullable(), summary: z.string(), reasons: z.array(z.string()), caveat: z.string().nullable() }).nullable(),
+    message: z.object({ line: z.string().nullable(), company: z.string().nullable(), dayToDay: z.string().nullable(), summary: z.string(), reasons: z.array(z.string()), caveat: z.string().nullable() }).nullable(),
   }),
 )
 
 // What goes on WhatsApp, in their words: "you", not "they".
 export interface Pitch {
+  // Its line in the day's list (#51); absent before r4.
+  line?: string | null
   // What the company does and what they would do there (#50), from the
   // posting; null when it does not say. Absent in pitches written before r3.
   company?: string | null

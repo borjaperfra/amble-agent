@@ -1,10 +1,10 @@
 import { getDb, inTransaction } from '../db/db'
-import { ASSESS_PROMPT_VERSION } from './assess'
+import { ASSESS_SAME_RULES } from './assess'
 import { waitingToRelease } from './release'
 import { currentMatchKey } from './run'
 
 // What is next to be shown to someone, judged again when the assessor's
-// rules changed since (ASSESS_PROMPT_VERSION): its judgment under their
+// rules changed since (ASSESS_SAME_RULES): its judgment under their
 // current key goes, and the pass's read judges it again with the rules of
 // now. Only what has not reached them yet (not released, answered or sent
 // on WhatsApp): what they have seen stays as they saw it. A few at a time,
@@ -41,7 +41,7 @@ export function recheckNextReleases(candidateId: string, limit: number = RECHECK
     if (runs.size >= limit) break
     const row = judgment.get(candidateId, item.opportunityId, key) as { id: string; model_run_id: string | null; task_version: string | null } | undefined
     if (!row?.model_run_id || runs.has(row.model_run_id)) continue
-    if ((row.task_version ?? '').split('@')[0] === ASSESS_PROMPT_VERSION) continue
+    if (ASSESS_SAME_RULES.has((row.task_version ?? '').split('@')[0])) continue
     runs.add(row.model_run_id)
   }
   let removed = 0
