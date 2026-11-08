@@ -537,7 +537,11 @@ export const es: Dictionary = {
       `Enviaste la de ${title} en ${company} ${sent.day}, hace ${sent.daysAgo} días. ¿Te han dicho algo?`,
     // Buttons: WhatsApp allows 20 characters each.
     answers: { called: 'Me han llamado', rejected: 'Me han dicho que no', nothing: 'Nada todavía' },
-    thanksCalled: (company: string) => `Buena señal. Cuando ${company ? `${company} te dé` : 'te den'} fecha para la entrevista, dímela y la preparamos.`,
+    thanksCalled: (company: string) =>
+      `Buena señal. Cuando ${company ? `${company} te dé` : 'te den'} fecha para la entrevista, dímela y te aviso la víspera. Si quieres, la preparamos ya.`,
+    // The button under it, and what it asks the Rep, in their words.
+    interviewPrepButton: 'Prepárala ya',
+    interviewPrepRequest: (title: string, company: string) => `Prepárame la entrevista de ${title} en ${company}.`,
     thanksRejected: 'Vaya, lo siento. Gracias por contármelo: me ayuda a afinar con las próximas.',
     thanksNothing: 'Vale. Te vuelvo a preguntar en una semana.',
     thanksNothingLast: 'Vale. No te pregunto más por esta.',

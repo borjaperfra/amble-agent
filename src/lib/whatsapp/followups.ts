@@ -40,6 +40,28 @@ export function parseFollowupPayload(value: string | null): FollowupTap | null {
   return match ? { opportunityId: match[1], round: Number(match[2]), answer: match[3] as FollowupAnswer } : null
 }
 
+// «Me han llamado»: preparing that interview is one tap away, not something
+// to remember to ask for. iv:<opportunity>.
+export function parseInterviewPrepPayload(value: string | null): string | null {
+  return value?.match(/^iv:([\w-]+)$/)?.[1] ?? null
+}
+
+export function interviewPrepButton(opportunityId: string, title: string): { title: string; payload: string } {
+  return { title, payload: `iv:${opportunityId}` }
+}
+
+// The role and company of one of their applications, to ask for it by name.
+export function applicationNamed(candidateId: string, opportunityId: string): { title: string; company: string } | null {
+  return (
+    (getDb()
+      .prepare(
+        `SELECT o.title, c.name AS company FROM opportunity_decisions d JOIN opportunities o ON o.id = d.opportunity_id JOIN companies c ON c.id = o.company_id
+         WHERE d.candidate_id = ? AND d.opportunity_id = ?`,
+      )
+      .get(candidateId, opportunityId) as { title: string; company: string } | undefined) ?? null
+  )
+}
+
 // Their answer, kept on the question; what to say back.
 export function answerFollowup(candidateId: string, tap: FollowupTap): string | null {
   const db = getDb()
