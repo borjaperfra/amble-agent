@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node scripts/test.mjs",
+    "eval:agent": "tsx --env-file-if-exists=.env.local scripts/eval-agent.ts",
     "career:example": "tsx scripts/career-example.ts",
     "career:example:check": "tsx scripts/career-example.ts --check",
     "sourcing": "tsx --env-file-if-exists=.env.local scripts/sourcing.ts",

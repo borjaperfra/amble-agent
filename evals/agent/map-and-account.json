@@ -1,0 +1,29 @@
+{
+  "issue": null,
+  "feedback": "Their map and how amble talks to them, from the chat: #24 (adding proof without waiting for a question), #42 (why an offer does not fit, taken there and then), #47 (answers to the map's open questions), and the name and language they asked to change.",
+  "cases": [
+    {
+      "id": "24-profile-note",
+      "message": "Una cosa que no está en mi mapa: lideré la migración de Stripe a Adyen en Cabify, con un equipo de 6.",
+      "expect": { "intent": "profile", "action": "profile_note" },
+      "forbid": ["/ya (lo )?(está|tengo) en tu mapa/"]
+    },
+    {
+      "id": "47-answers-gap",
+      "message": "Sobre lo de SQL: las consultas las escribía yo, a diario, con Metabase.",
+      "expect": { "action": "answers_gap", "actionHas": { "gap": "unc_sql" } }
+    },
+    {
+      "id": "42-why-it-does-not-fit",
+      "message": "Demasiado junior para mí",
+      "context": { "waitingForWhyItDoesNotFit": { "company": "Pigment", "title": "Senior Product Manager, Integrations" } },
+      "expect": { "reasonItDoesNotFit": true, "action": null }
+    },
+    {
+      "id": "set-name",
+      "message": "Llámame Sasha a partir de ahora",
+      "expect": { "intent": "profile", "action": "set_name", "actionHas": { "name": "Sasha" } },
+      "forbid": ["/^hecho/"]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "issue": 46,
+  "feedback": "«Me dice que puedo subir un CV actualizado en la sección onboarding pero no me deja hacerlo.» (/onboarding, 06-11). A newer CV goes in the chat, or in the app with «Subir uno nuevo».",
+  "cases": [
+    {
+      "id": "46-new-cv-how",
+      "message": "Quiero cambiar el CV que subí, tengo uno más nuevo. ¿Cómo lo hago?",
+      "expect": { "intent": "profile", "action": null, "replyIncludesAny": ["/aquí|este chat|por este|mándamelo|envíamelo|mándame|envíame/", "/onboarding/"] },
+      "forbid": ["no lo sé", "no se puede", "lo paso al equipo"]
+    },
+    {
+      "id": "46-new-cv-on-the-web",
+      "message": "¿Y desde la web puedo subir el CV nuevo?",
+      "expect": { "action": null, "replyIncludes": ["/onboarding"] },
+      "forbid": ["no lo sé", "no se puede", "/no (es posible|puedes)/", "lo paso al equipo"]
+    }
+  ]
+}

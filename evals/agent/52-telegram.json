@@ -1,0 +1,39 @@
+{
+  "issue": 52,
+  "feedback": "«¿Cómo puedo conectar amble con mi Telegram y que interactuemos por allí?» (WhatsApp, 13-10). The agent answered «Si amble funciona también allí, no lo sé; lo paso al equipo», with Telegram live since 09-10.",
+  "cases": [
+    {
+      "id": "52-connect-telegram",
+      "message": "¿Cómo puedo conectar amble con mi Telegram y que interactuemos por allí?",
+      "expect": { "action": "connect_app", "actionHas": { "app": "telegram" }, "forward": false },
+      "forbid": ["no lo sé", "lo paso al equipo", "/no (estoy|está|funciona) en telegram/"]
+    },
+    {
+      "id": "52-is-amble-on-telegram",
+      "message": "¿amble funciona también en Telegram?",
+      "expect": { "action": ["connect_app", null], "forward": false, "replyIncludes": ["Telegram"] },
+      "forbid": ["no lo sé", "lo paso al equipo", "/no (estoy|está|funciona) en telegram/"]
+    },
+    {
+      "id": "52-whatsapp-from-telegram",
+      "message": "Can I talk to you on WhatsApp instead?",
+      "context": {
+        "channel": "Telegram",
+        "language": "English",
+        "chatApps": [
+          { "app": "whatsapp", "connected": false },
+          { "app": "telegram", "connected": true }
+        ]
+      },
+      "expect": { "action": "connect_app", "actionHas": { "app": "whatsapp" }, "forward": false },
+      "forbid": ["I don't know", "pass it on to the team", "/not (on|available on) whatsapp/"]
+    },
+    {
+      "id": "52-telegram-not-set-up",
+      "message": "¿Puedo hablar contigo por Telegram?",
+      "context": { "chatApps": [{ "app": "whatsapp", "connected": true }] },
+      "expect": { "action": ["connect_app", null], "forward": false },
+      "forbid": ["no lo sé", "lo paso al equipo"]
+    }
+  ]
+}

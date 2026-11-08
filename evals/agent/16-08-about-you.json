@@ -1,0 +1,24 @@
+{
+  "issue": 16,
+  "feedback": "#16: «Le sorprende que no salgan ofertas de EE. UU.». #8: «No ha visto cómo indicar su nivel de idioma, y para él es un filtro determinante». #43: «Me ofreció una oferta en polaco; en el feedback le dije «no hablo polaco»». All three are set under «Sobre ti» on /me/preferences.",
+  "cases": [
+    {
+      "id": "16-us-offers",
+      "message": "¿Por qué no me salen ofertas de EE. UU.? Me interesarían, en remoto.",
+      "expect": { "forward": false, "replyIncludes": ["/me/preferences"] },
+      "forbid": ["no lo sé", "lo paso al equipo"]
+    },
+    {
+      "id": "08-language-level",
+      "message": "¿Dónde pongo mi nivel de inglés? Para mí es determinante.",
+      "expect": { "forward": false, "replyIncludes": ["/me/preferences"] },
+      "forbid": ["no lo sé", "lo paso al equipo", "/no (se puede|es posible)/"]
+    },
+    {
+      "id": "43-offer-in-polish",
+      "message": "Me has mandado una oferta en polaco y no hablo polaco.",
+      "expect": { "replyIncludesAny": ["/me/preferences", "/idioma/"] },
+      "forbid": ["lo paso al equipo"]
+    }
+  ]
+}

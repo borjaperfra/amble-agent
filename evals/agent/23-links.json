@@ -1,0 +1,31 @@
+{
+  "issue": 23,
+  "feedback": "«Si le pasas los enlaces o pruebas por WhatsApp, los malinterpreta como una oferta laboral.» (/me, 06-10), and an answer to a question read as a job question (05-10).",
+  "cases": [
+    {
+      "id": "23-portfolio",
+      "message": "Te paso mi portfolio para que lo tengas en cuenta: https://alexgarcia.dev\n\n(amble read that link; it does not mark itself as a job offer. Its title and first lines:)\n<<<PAGE 1a2b3c>>>\nAlex García · Product Manager\nCasos: rediseño del flujo de pagos para empresas en Cabify (2023); lanzamiento de la facturación automática; entrevistas con 40 clientes antes de priorizar.\n<<<END PAGE 1a2b3c>>>",
+      "expect": { "action": "read_link" },
+      "forbid": ["/encaja contigo/", "/la oferta/"],
+      "allow": ["links"]
+    },
+    {
+      "id": "23-news-article",
+      "message": "Mira esto https://elpais.com/economia/2026-11-01/las-fintech-espanolas-vuelven-a-contratar.html\n\n(amble read that link; it does not mark itself as a job offer. Its title and first lines:)\n<<<PAGE 9f8e7d>>>\nLas fintech españolas vuelven a contratar\nEl sector tecnológico financiero recupera el ritmo de contratación tras dos años de ajustes, según un informe publicado este lunes.\n<<<END PAGE 9f8e7d>>>",
+      "expect": { "action": null },
+      "forbid": ["/encaja contigo/", "/(la )?estoy leyendo/"],
+      "allow": ["links"]
+    },
+    {
+      "id": "23-posting-pasted",
+      "message": "Senior Product Manager – Payments\nRevolut · Madrid (híbrido)\n\nAbout the role\nYou will own the merchant payments roadmap, working with engineering, risk and compliance.\n\nWhat you'll need\n- 5+ years of product management in payments or fintech\n- Experience with B2B products\n- Fluent English",
+      "expect": { "action": "evaluate_posting", "actionHas": { "company": "Revolut" } }
+    },
+    {
+      "id": "23-answer-not-an-offer",
+      "message": "Yo decidí el alcance de la primera versión y negocié los plazos con finanzas; el diseño lo hizo el equipo.",
+      "context": { "pendingInterviewQuestion": "En el lanzamiento de la facturación automática en Cabify, ¿qué parte decidiste tú y cuál otra persona?" },
+      "expect": { "answersInterview": true, "action": null }
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { cloudBrowserConfigured } from '../apply/cloud'
+import { theirStackConfigured } from '../sourcing/theirstack'
 import { telegramConfig } from '../telegram/api'
 import type { AgentAction } from './agent'
 import { zernioConfig } from './zernio'
@@ -22,12 +23,14 @@ export type AgentActionType = AgentAction['type']
 
 // When something is there only on some deployments: off, the Rep is told it
 // is not available now (notAvailableNow) and never offers it.
-export type Condition = 'whatsapp' | 'telegram' | 'cloud_browser'
+// (Which chat apps amble has, the Rep also sees per person in chatApps.)
+export type Condition = 'whatsapp' | 'telegram' | 'cloud_browser' | 'theirstack'
 
 const CONDITIONS: Record<Condition, () => boolean> = {
   whatsapp: () => zernioConfig() !== null,
   telegram: () => telegramConfig() !== null,
   cloud_browser: cloudBrowserConfigured,
+  theirstack: theirStackConfigured,
 }
 
 // The app's pages the Rep may send them to, by the name it sees them under.
@@ -179,6 +182,13 @@ export const CHAT_CAPABILITIES: readonly Capability[] = [
     does: 'Send them the offers that fit, once a day, as a short numbered list (up to four, a line each) they pick from, tapping a number or writing it back ("2", "1 y 3", "todas"); a single offer comes in full at once. The ones on it are among the offers you sent them. Numbers they write back to it are handled by amble before you see them; when they name one of the list in words ("la de Pigment"), that is "show_offer". An offer in full comes with buttons to answer it (interested, not a fit, and on WhatsApp "tell me more").',
     channels: CHAT,
     actions: ['show_offer'],
+  },
+  {
+    id: 'where_offers_come_from',
+    does: 'Say where amble reads offers (#51): on the job pages of the many companies it watches, and a part of the offers on LinkedIn and Indeed; not everything they see on LinkedIn reaches amble. whatAmbleListensFor says it too.',
+    channels: EVERYWHERE,
+    page: 'whatAmbleListensFor',
+    when: { condition: 'theirstack', name: 'reading offers from LinkedIn and Indeed (amble reads only the job pages of the companies it watches; LinkedIn\'s offers do not reach it)' },
   },
   {
     id: 'offer_closed',

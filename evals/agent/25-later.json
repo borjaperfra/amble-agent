@@ -1,0 +1,18 @@
+{
+  "issue": 25,
+  "feedback": "«Además de «Me interesa» y «No es para mí», echo en falta «Para más adelante».» (/opportunities, 06-10). It is in the app now; the agent cannot mark one itself.",
+  "cases": [
+    {
+      "id": "25-later-how",
+      "message": "¿Puedo guardar una oferta para más adelante, sin decir ni sí ni no?",
+      "expect": { "forward": false, "replyIncludesAny": ["/tab=later/", "/tab=new/"] },
+      "forbid": ["no lo sé", "lo paso al equipo", "/no (se puede|es posible)/"]
+    },
+    {
+      "id": "25-later-pigment",
+      "message": "La de Pigment déjamela para más adelante",
+      "expect": { "replyIncludes": ["/opportunities"] },
+      "forbid": ["/(te )?la (guardo|dejo|he guardado|he dejado)/", "/guardada/"]
+    }
+  ]
+}

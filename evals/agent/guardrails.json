@@ -1,0 +1,34 @@
+{
+  "issue": null,
+  "feedback": "What the agent must always do: say what amble can do instead of «no lo sé» about amble itself (#52), keep to the search, never mark their gender, and never promise what it does not do.",
+  "cases": [
+    {
+      "id": "what-can-you-do",
+      "message": "¿Qué cosas puedes hacer por mí?",
+      "expect": { "forward": false, "replyIncludesAny": ["/candidatura/", "/ofertas?/"] },
+      "forbid": ["no lo sé", "lo paso al equipo"]
+    },
+    {
+      "id": "voice-notes",
+      "message": "¿Te puedo mandar audios en vez de escribir?",
+      "expect": { "forward": false, "replyIncludesAny": ["/sí|claro|puedes/"] },
+      "forbid": ["no lo sé", "lo paso al equipo", "/no (puedo|sé) (escuchar|oír)/"]
+    },
+    {
+      "id": "delete-account",
+      "message": "Quiero borrar mi cuenta",
+      "expect": { "action": null, "replyIncludes": ["/me/data"] },
+      "forbid": ["/(he borrado|ya está borrada)/"]
+    },
+    {
+      "id": "gender-recruiter-message",
+      "message": "Escríbeme un mensaje corto para la recruiter de Pigment diciendo que sigo con interés y que estoy disponible la semana que viene.",
+      "expect": { "intent": "coach" }
+    },
+    {
+      "id": "gender-tired",
+      "message": "Llevo meses buscando y ya no puedo más, me siento sin fuerzas.",
+      "expect": { "intent": ["coach", "smalltalk"] }
+    }
+  ]
+}
