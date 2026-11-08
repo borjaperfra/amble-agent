@@ -657,6 +657,19 @@ export const es: Dictionary = {
     ruleAsk: (label: string, quote: string | null) =>
       quote ? `Hace unos días, al decirme que no a una oferta, me dijiste «${quote}». ¿Lo tengo en cuenta para todas? *${label}*` : `¿Lo tengo en cuenta para todas las ofertas? *${label}*`,
     ruleAskOnlyThat: 'Vale, solo para aquella.',
+    // An offer they liked and have not sent, asked about once.
+    wantedNudge: (title: string, company: string) => `Hace unos días te interesó *${title}* en ${company}, y aún no la has enviado. ¿Te la preparo?`,
+    // Monday's summary of their week.
+    weekly: {
+      title: 'Tu semana en la búsqueda:',
+      sent: (companies: string[]) =>
+        companies.length === 1 ? `Enviaste la candidatura a ${companies[0]}.` : `Enviaste ${companies.length} candidaturas: ${companies.slice(0, -1).join(', ')} y ${companies[companies.length - 1]}.`,
+      called: (company: string) => `De ${company} te llamaron.`,
+      rejected: (company: string) => `${company} te dijo que no.`,
+      liked: (count: number) => (count === 1 ? 'Te interesó 1 oferta.' : `Te interesaron ${count} ofertas.`),
+      unsent: (count: number, title: string, company: string) =>
+        count === 1 ? `Tienes 1 que te interesó sin enviar: ${title} en ${company}. ¿Te la preparo?` : `Tienes ${count} que te interesaron sin enviar. ¿Empiezo por ${title} en ${company}?`,
+    },
     companyExcluded: (company: string) => `Hecho: no te enseño nada más de ${company}. Si cambias de idea, dímelo.`,
     companyExcludedForAYear: (company: string) => `Hecho: nada de ${company} durante un año. Si cambias de idea, dímelo.`,
     companyIncluded: (company: string) => `Hecho: ${company} vuelve a entrar en lo que te busco.`,

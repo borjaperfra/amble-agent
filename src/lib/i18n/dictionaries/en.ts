@@ -660,6 +660,19 @@ export const en = {
     ruleAsk: (label: string, quote: string | null) =>
       quote ? `A few days ago, turning an offer down, you told me «${quote}». Shall I apply it to all of them? *${label}*` : `Shall I apply it to every offer? *${label}*`,
     ruleAskOnlyThat: 'OK, just for that one.',
+    // An offer they liked and have not sent, asked about once.
+    wantedNudge: (title: string, company: string) => `A few days ago *${title}* at ${company} interested you, and you haven’t sent it yet. Shall I prepare it?`,
+    // Monday's summary of their week.
+    weekly: {
+      title: 'Your week in the search:',
+      sent: (companies: string[]) =>
+        companies.length === 1 ? `You applied to ${companies[0]}.` : `You sent ${companies.length} applications: ${companies.slice(0, -1).join(', ')} and ${companies[companies.length - 1]}.`,
+      called: (company: string) => `${company} called you.`,
+      rejected: (company: string) => `${company} said no.`,
+      liked: (count: number) => (count === 1 ? '1 offer interested you.' : `${count} offers interested you.`),
+      unsent: (count: number, title: string, company: string) =>
+        count === 1 ? `You have 1 you liked and haven’t sent: ${title} at ${company}. Shall I prepare it?` : `You have ${count} you liked and haven’t sent. Shall I start with ${title} at ${company}?`,
+    },
     companyExcluded: (company: string) => `Done: nothing more from ${company}. If you change your mind, tell me.`,
     companyExcludedForAYear: (company: string) => `Done: nothing from ${company} for a year. If you change your mind, tell me.`,
     companyIncluded: (company: string) => `Done: ${company} is back in what I look for.`,
