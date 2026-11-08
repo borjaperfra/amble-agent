@@ -66,6 +66,24 @@ without anyone being written to by mistake or losing what they were doing.
     Delete it once the change holds. /admin › Salud › Volumen shows the room
     left; over 80 % an alert goes out.
 
+## Tests
+
+- `npm test` runs every check in `tests/`, each in its own process with a
+  database of its own (a fresh `AMBLE_DATA_DIR` in a temp folder, removed
+  after), and no model, chat app or email keys. `npm test -- check51` runs
+  only the files with that in their name. A new check is a `tests/<name>.ts`
+  that throws (`node:assert`) when something is wrong.
+- `tests/agent-capabilities.ts` keeps what the chat agent says amble can do
+  (`src/lib/whatsapp/capabilities.ts`) in step with its actions, handlers and
+  the app's pages: a feature the agent should know of goes in that registry.
+- `npm run eval:agent` asks the real agent prompt the conversations in
+  `evals/agent/*.json` (built from the beta feedback) and prints a table of
+  what passed. It calls the model, so it is not part of `npm test`, and it
+  refuses to run without a key of its own (`AMBLE_EVAL_MODEL_KEY`, rule 8;
+  `AMBLE_EVAL_MODEL_ID` and `AMBLE_EVAL_MODEL_BASE_URL` if they differ from
+  the app's). `npm run eval:agent -- 52` runs only those cases; `--replies`
+  prints every reply. Run it before deploying a change to the agent's prompt.
+
 ## Staging
 
 - URL: https://app-staging-staging-d220.up.railway.app (sign in as the owner:

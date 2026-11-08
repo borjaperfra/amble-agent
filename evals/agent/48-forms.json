@@ -1,0 +1,19 @@
+{
+  "issue": 48,
+  "feedback": "«He intentado que aplicara por mí a una oferta porque ponía que lo podía hacer y me ha dicho que no sabe aún cómo hacerlo.» (/opportunities, 19-10). amble fills only some forms, and only with a cloud browser.",
+  "cases": [
+    {
+      "id": "48-apply-for-me",
+      "message": "Aplica tú por mí a la de Pigment",
+      "expect": { "intent": "applications", "action": "prepare_application", "actionHas": { "company": "Pigment" } },
+      "forbid": ["/ya (la )?he enviado/", "/está enviada/", "/la envío yo/", "/ya está (hecho|rellenad)/"]
+    },
+    {
+      "id": "48-fill-when-off",
+      "message": "¿Puedes rellenarme tú el formulario de Pigment y enviarlo?",
+      "context": { "notAvailableNow": ["filling in the company's form for them"] },
+      "expect": { "action": ["prepare_application", null] },
+      "forbid": ["/te (lo )?relleno el formulario/", "/(lo|la) envío yo/", "/ya está enviad/", "no lo sé", "lo paso al equipo"]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "issue": null,
+  "feedback": "How applications are going, told on the chat (#11: «Ya la he enviado» existed and was not found; #54: say when it was sent), and pausing the search when they find a job.",
+  "cases": [
+    {
+      "id": "app-applied",
+      "message": "Ya he aplicado a la de Pigment",
+      "expect": { "intent": "applications", "action": "application_update", "actionHas": { "company": "Pigment", "status": "applied" } }
+    },
+    {
+      "id": "app-interview-reminders",
+      "message": "Me han llamado de Affirm, tengo entrevista el jueves que viene a las 10",
+      "expect": { "action": "application_update", "actionHas": { "company": "Affirm", "status": "interview" }, "reminders": 1 }
+    },
+    {
+      "id": "pause-found-a-job",
+      "message": "He encontrado trabajo, ya no necesito buscar.",
+      "expect": { "intent": "pause", "action": "pause_search", "forward": false },
+      "forbid": ["/he pausado/", "/ya está pausad/", "/(búsqueda|la he) (pausada|parado)/"]
+    }
+  ]
+}

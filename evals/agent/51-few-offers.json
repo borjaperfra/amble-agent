@@ -1,0 +1,41 @@
+{
+  "issue": 51,
+  "feedback": "«No me está gustando porque no me localiza realmente ninguna propuesta interesante. Solamente me ha localizado una» (05-11), with 62 offers waiting in the app; «Entro en LinkedIn y hay bastantes ofertas (entiendo que no lee de LinkedIn)» (28-10); «Le dije que no buscaba particularmente hands-on y muchas de las ofertas eran hands-on» (14-10).",
+  "cases": [
+    {
+      "id": "51-only-one-offer",
+      "message": "No me está gustando porque no me localiza realmente ninguna propuesta interesante. Solamente me ha localizado una.",
+      "context": { "whatYouReadForThem": { "inTheAppToAnswer": { "fits": 62, "adjacent": 0 } } },
+      "expect": { "intent": "amble", "forward": true, "replyIncludesAny": ["62", "/tab=new/", "/la app/"] },
+      "forbid": ["/tus reglas (son|tienen la culpa)/"]
+    },
+    {
+      "id": "51-linkedin",
+      "message": "Entro en LinkedIn y hay bastantes ofertas. ¿No lees de LinkedIn?",
+      "expect": { "forward": false, "replyIncludes": ["LinkedIn"] },
+      "forbid": ["no lo sé", "lo paso al equipo"]
+    },
+    {
+      "id": "51-linkedin-not-read-here",
+      "message": "¿Lees las ofertas de LinkedIn?",
+      "context": { "notAvailableNow": ["reading offers from LinkedIn and Indeed (amble reads only the job pages of the companies it watches; LinkedIn's offers do not reach it)"] },
+      "expect": { "forward": false },
+      "forbid": ["no lo sé", "lo paso al equipo", "/(sí|también),? (leo|reviso)/", "/una parte de las (ofertas )?de linkedin/"]
+    },
+    {
+      "id": "51-hands-on",
+      "message": "Te dije que no buscaba hands-on y muchas de las ofertas que me mandas lo son.",
+      "expect": { "intent": ["preferences", "amble"] }
+    },
+    {
+      "id": "51-pick-from-the-list-by-name",
+      "message": "Quiero ver la de Affirm",
+      "context": {
+        "conversation": [
+          "you: Hoy tengo 3 que encajan contigo:\n1. Senior Product Manager, Integrations · Pigment\nMadrid · híbrido, 65.000 – 80.000 €\nProducto B2B, equipo pequeño\n2. Product Manager, Merchant Payments · Affirm\nRemoto, no publica salario\nPagos para comercios, como en Cabify\n3. Product Manager, Ubuntu Pro · Canonical\nRemoto, no publica salario\nB2B con equipos distribuidos\nToca un número para verla entera, o contéstame con las que quieras («1 y 3»)."
+        ]
+      },
+      "expect": { "intent": "offer", "action": "show_offer", "actionHas": { "company": "Affirm" } }
+    }
+  ]
+}

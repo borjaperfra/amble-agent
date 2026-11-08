@@ -1,0 +1,29 @@
+{
+  "issue": 44,
+  "feedback": "«No me gusta Canonical, no me enseñes más ofertas de esa empresa» (14-10); «Te dije que de Affirm no me mandases nada ya que ya me rechazaron y no puedes volver a aplicar durante un año» (23-10), after the agent had said «Lo apunto» and kept nothing.",
+  "cases": [
+    {
+      "id": "44-exclude-canonical",
+      "message": "No me gusta Canonical, no me enseñes más ofertas de esa empresa.",
+      "expect": { "action": "exclude_company", "actionHas": { "company": "Canonical", "forAYear": false } },
+      "forbid": ["/^hecho/", "/ya no te (enseñaré|mandaré)/"]
+    },
+    {
+      "id": "44-exclude-affirm-a-year",
+      "message": "Te dije que de Affirm no me mandases nada ya que ya me rechazaron y no puedo volver a aplicar durante un año.",
+      "expect": { "action": "exclude_company", "actionHas": { "company": "Affirm", "forAYear": true } },
+      "forbid": ["/^hecho/"]
+    },
+    {
+      "id": "44-let-canonical-back",
+      "message": "Vuelve a enseñarme ofertas de Canonical, he cambiado de idea.",
+      "context": { "companiesExcluded": [{ "company": "Canonical", "until": null }] },
+      "expect": { "action": "include_company", "actionHas": { "company": "Canonical" } }
+    },
+    {
+      "id": "44-no-promise-without-keeping",
+      "message": "Prefiero no trabajar en consultoras, tenlo en cuenta.",
+      "expect": { "intent": "preferences" }
+    }
+  ]
+}

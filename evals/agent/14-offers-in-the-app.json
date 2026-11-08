@@ -1,0 +1,18 @@
+{
+  "issue": 14,
+  "feedback": "«¿Por qué no puedes ver el detalle de las otras 13?» (WhatsApp). The agent knew how many offers waited in the app, not which.",
+  "cases": [
+    {
+      "id": "14-the-other-offers",
+      "message": "¿Por qué no puedes ver el detalle de las otras 13?",
+      "context": { "whatYouReadForThem": { "inTheAppToAnswer": { "fits": 13, "adjacent": 0 } } },
+      "expect": { "forward": false, "replyIncludesAny": ["Canonical", "OpenAI", "Factorial", "Keet", "/tab=new/"] },
+      "forbid": ["/no puedo ver (el detalle|las otras|esas)/", "lo paso al equipo"]
+    },
+    {
+      "id": "14-show-one",
+      "message": "Enséñame la de OpenAI",
+      "expect": { "intent": "offer", "action": "show_offer", "actionHas": { "company": "OpenAI" } }
+    }
+  ]
+}
