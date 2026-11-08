@@ -550,6 +550,9 @@ export const en = {
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',
+    // What the company does and what they would do there (#50).
+    offerCompany: (text: string | null) => `*The company:* ${text ?? 'the offer doesn’t say what it does.'}`,
+    offerDayToDay: (text: string | null) => `*Your day to day:* ${text ?? 'the offer doesn’t spell it out.'}`,
     // The pay line of an offer: as published, estimated with its source, or said to be missing.
     salaryPublished: (salary: string) => `Salary: ${salary}`,
     salaryEstimated: (range: string, source: string) => `Estimated salary: ${range} · ${source}`,

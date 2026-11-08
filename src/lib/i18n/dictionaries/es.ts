@@ -549,6 +549,9 @@ export const es: Dictionary = {
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',
+    // What the company does and what they would do there (#50).
+    offerCompany: (text: string | null) => `*La empresa:* ${text ?? 'la oferta no cuenta a qué se dedica.'}`,
+    offerDayToDay: (text: string | null) => `*Tu día a día:* ${text ?? 'la oferta no lo concreta.'}`,
     salaryPublished: (salary: string) => `Salario: ${salary}`,
     salaryEstimated: (range: string, source: string) => `Salario estimado: ${range} · ${source}`,
     salaryUnknown: 'Salario: no lo publica',
