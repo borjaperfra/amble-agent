@@ -530,9 +530,12 @@ export const en = {
     loginNotLinked: 'This Telegram account isn’t connected to amble. Sign in with your email, connect Telegram from the app, and next time you can sign in from here.',
     unknownTelegram: 'Hi, I’m amble’s AI agent. To talk to me here, go to app.amble.fyi and connect Telegram from there.',
     noted: 'Noted. Thank you.',
-    ask: (title: string, company: string) => `Any news about your application for ${title} at ${company}?`,
+    // sent: when they sent it (#54).
+    ask: (title: string, company: string, sent: { day: string; daysAgo: number }) =>
+      `Any news about your application for ${title} at ${company}? You sent it ${sent.day} (${sent.daysAgo} days ago).`,
     // The second and last time, a week later.
-    askAgain: (title: string, company: string) => `It’s been a couple of weeks since you sent the one for ${title} at ${company}. Have they said anything?`,
+    askAgain: (title: string, company: string, sent: { day: string; daysAgo: number }) =>
+      `You sent the one for ${title} at ${company} ${sent.day}, ${sent.daysAgo} days ago. Have they said anything?`,
     // Buttons: WhatsApp allows 20 characters each.
     answers: { called: 'They called me', rejected: 'They said no', nothing: 'Nothing yet' },
     thanksCalled: (company: string) => `Good sign. When ${company ? `${company} gives` : 'they give'} you a date for the interview, tell me and we’ll prepare it together.`,

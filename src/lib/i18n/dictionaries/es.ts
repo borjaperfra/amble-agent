@@ -530,8 +530,11 @@ export const es: Dictionary = {
     loginNotLinked: 'Esta cuenta de Telegram no está conectada a amble. Entra con tu email, conecta Telegram desde la app y la próxima vez podrás entrar desde aquí.',
     unknownTelegram: 'Hola, soy el agente de IA de amble. Para hablar conmigo por aquí, entra en app.amble.fyi y conecta Telegram desde allí.',
     noted: 'Lo he apuntado. Gracias.',
-    ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
-    askAgain: (title: string, company: string) => `Hace un par de semanas que enviaste la de ${title} en ${company}. ¿Te han dicho algo?`,
+    // sent: when they sent it (#54).
+    ask: (title: string, company: string, sent: { day: string; daysAgo: number }) =>
+      `¿Sabes algo de tu candidatura a ${title} en ${company}? La enviaste ${sent.day} (hace ${sent.daysAgo} días).`,
+    askAgain: (title: string, company: string, sent: { day: string; daysAgo: number }) =>
+      `Enviaste la de ${title} en ${company} ${sent.day}, hace ${sent.daysAgo} días. ¿Te han dicho algo?`,
     // Buttons: WhatsApp allows 20 characters each.
     answers: { called: 'Me han llamado', rejected: 'Me han dicho que no', nothing: 'Nada todavía' },
     thanksCalled: (company: string) => `Buena señal. Cuando ${company ? `${company} te dé` : 'te den'} fecha para la entrevista, dímela y la preparamos.`,
