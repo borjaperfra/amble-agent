@@ -556,6 +556,26 @@ export const es: Dictionary = {
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',
+    // The chat quiet for days (#51): why, what waits in the app, and the question that could open it.
+    quiet: {
+      opening: (days: number) => `Llevo ${days} días sin mandarte ofertas, y no es que no busque.`,
+      why: {
+        role: 'La mayoría de lo que leo no es tu rol, o se queda por debajo de tu nivel.',
+        place: 'La mayoría de lo que leo no se puede hacer desde donde vives.',
+        pay: 'La mayoría de lo que leo paga menos de tu mínimo.',
+        language: 'La mayoría de lo que leo pide un idioma que no hablas.',
+      },
+      whyRule: (rule: string) => `La mayoría de lo que leo choca con «${rule}».`,
+      waiting: (count: number, link: string) => `En la app ${count === 1 ? 'tienes 1 que no te he mandado' : `tienes ${count} que no te he mandado`} por aquí: ${link}`,
+      ask: {
+        role: '¿Quieres que mire también roles cercanos al tuyo?',
+        place: '¿Te planteas otras ciudades, o algún día de oficina?',
+        pay: '¿Miro también las que pagan algo menos, si lo demás encaja?',
+        language: '¿Hay algún otro idioma que hables y no me hayas dicho?',
+      },
+      askRule: (rule: string) => `¿Quieres que afloje «${rule}», o lo mantengo?`,
+      askAny: '¿Quieres que amplíe algo de lo que busco?',
+    },
     // The day's list (#51): what it is, and how to pick from it.
     digestIntro: (count: number) => `Hoy tengo ${count} que encajan contigo:`,
     digestPick: 'Toca un número para verla entera, o contéstame con las que quieras («1 y 3»).',

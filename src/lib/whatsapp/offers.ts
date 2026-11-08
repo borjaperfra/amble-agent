@@ -25,6 +25,7 @@ import { estimateRange, estimateSource } from '../salary/format'
 import { logMessage } from './conversation'
 import { wroteFirstRecently } from './proactive'
 import { reviewForSending, type Pitch } from './review'
+import { sendQuietNote } from './quiet'
 import { tellSent } from './sent'
 import { templatesEnabled } from './templates'
 import { reachableCandidateIds, reachOf, type Reach } from '../channel/reach'
@@ -391,7 +392,11 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
         break
       }
     }
-    if (passed.length === 0) continue
+    if (passed.length === 0) {
+      // Nothing for them again today: after days of that, say why (#51).
+      await sendQuietNote(candidateId).catch((error: unknown) => stats.skipped.push({ candidateId, reason: `quiet note: ${error instanceof Error ? error.message : String(error)}` }))
+      continue
+    }
     try {
       if (passed.length === 1) {
         const { match, pitch } = passed[0]
