@@ -5,27 +5,68 @@
     {
       "id": "51-only-one-offer",
       "message": "No me está gustando porque no me localiza realmente ninguna propuesta interesante. Solamente me ha localizado una.",
-      "context": { "whatYouReadForThem": { "inTheAppToAnswer": { "fits": 62, "adjacent": 0 } } },
-      "expect": { "intent": "amble", "forward": true, "replyIncludesAny": ["62", "/tab=new/", "/la app/"] },
-      "forbid": ["/tus reglas (son|tienen la culpa)/"]
+      "context": {
+        "whatYouReadForThem": {
+          "inTheAppToAnswer": {
+            "fits": 62,
+            "adjacent": 0
+          }
+        }
+      },
+      "expect": {
+        "intent": "amble",
+        "forward": true,
+        "replyIncludesAny": [
+          "62",
+          "/tab=new/",
+          "/la app/"
+        ]
+      },
+      "forbid": [
+        "/tus reglas (son|tienen la culpa)/"
+      ]
     },
     {
       "id": "51-linkedin",
       "message": "Entro en LinkedIn y hay bastantes ofertas. ¿No lees de LinkedIn?",
-      "expect": { "forward": false, "replyIncludes": ["LinkedIn"] },
-      "forbid": ["no lo sé", "lo paso al equipo"]
+      "expect": {
+        "forward": false,
+        "replyIncludes": [
+          "LinkedIn"
+        ]
+      },
+      "forbid": [
+        "no lo sé",
+        "lo paso al equipo"
+      ]
     },
     {
       "id": "51-linkedin-not-read-here",
       "message": "¿Lees las ofertas de LinkedIn?",
-      "context": { "notAvailableNow": ["reading offers from LinkedIn and Indeed (amble reads only the job pages of the companies it watches; LinkedIn's offers do not reach it)"] },
-      "expect": { "forward": false },
-      "forbid": ["no lo sé", "lo paso al equipo", "/(sí|también),? (leo|reviso)/", "/una parte de las (ofertas )?de linkedin/"]
+      "context": {
+        "notAvailableNow": [
+          "reading offers from LinkedIn and Indeed (amble reads only the job pages of the companies it watches; LinkedIn's offers do not reach it)"
+        ]
+      },
+      "expect": {
+        "forward": false
+      },
+      "forbid": [
+        "no lo sé",
+        "lo paso al equipo",
+        "/(sí|también),? (leo|reviso)/",
+        "/una parte de las (ofertas )?de linkedin/"
+      ]
     },
     {
       "id": "51-hands-on",
       "message": "Te dije que no buscaba hands-on y muchas de las ofertas que me mandas lo son.",
-      "expect": { "intent": ["preferences", "amble"] }
+      "expect": {
+        "intent": [
+          "preferences",
+          "amble"
+        ]
+      }
     },
     {
       "id": "51-pick-from-the-list-by-name",
@@ -35,7 +76,84 @@
           "you: Hoy tengo 3 que encajan contigo:\n1. Senior Product Manager, Integrations · Pigment\nMadrid · híbrido, 65.000 – 80.000 €\nProducto B2B, equipo pequeño\n2. Product Manager, Merchant Payments · Affirm\nRemoto, no publica salario\nPagos para comercios, como en Cabify\n3. Product Manager, Ubuntu Pro · Canonical\nRemoto, no publica salario\nB2B con equipos distribuidos\nToca un número para verla entera, o contéstame con las que quieras («1 y 3»)."
         ]
       },
-      "expect": { "intent": "offer", "action": "show_offer", "actionHas": { "company": "Affirm" } }
+      "expect": {
+        "intent": "offer",
+        "action": "show_offer",
+        "actionHas": {
+          "company": "Affirm"
+        }
+      }
+    },
+    {
+      "id": "51-send-me-more",
+      "message": "Mándame más ofertas, que solo me ha llegado una.",
+      "context": {
+        "whatYouReadForThem": {
+          "inTheAppToAnswer": {
+            "fits": 12,
+            "adjacent": 0
+          }
+        }
+      },
+      "expect": {
+        "action": "show_offer"
+      },
+      "forbid": [
+        "/no (puedo|te puedo) mandar(te)? (más )?ofertas/",
+        "lo paso al equipo"
+      ]
+    },
+    {
+      "id": "51-few-offers-widen",
+      "message": "¿Por qué me llegan tan pocas ofertas?",
+      "context": {
+        "whatYouReadForThem": {
+          "inTheAppToAnswer": {
+            "fits": 12,
+            "adjacent": 0
+          },
+          "setAsideByReason": {
+            "rule: Solo full remote": 230,
+            "salary_floor": 40
+          }
+        }
+      },
+      "expect": {
+        "forward": true,
+        "replyIncludesAny": [
+          "12",
+          "/tab=new/"
+        ]
+      },
+      "forbid": [
+        "/tus reglas (son|tienen la culpa)/",
+        "/no es (un )?problema de amble/"
+      ]
+    },
+    {
+      "id": "how-is-it-going-next-step",
+      "message": "¿Cómo va mi búsqueda?",
+      "context": {
+        "following": [
+          {
+            "company": "Pigment",
+            "title": "Head of Data",
+            "state": "they marked it as interesting, not sent yet",
+            "since": "2026-11-02",
+            "whatTheySaidLater": null,
+            "closed": false
+          }
+        ]
+      },
+      "expect": {
+        "intent": "smalltalk",
+        "replyIncludes": [
+          "Pigment"
+        ]
+      },
+      "forbid": [
+        "/he leído \\d+/"
+      ]
     }
   ]
 }
