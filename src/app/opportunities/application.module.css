@@ -306,6 +306,42 @@
   gap: 8px;
 }
 
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+label.fieldLabel {
+  display: block;
+}
+
+/* An answer to change and copy (#49): it reads as the text it is, not a box. */
+.answerEdit {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.answerEdit:focus-visible {
+  outline: 2px solid var(--ink-tertiary);
+  outline-offset: 1px;
+}
+
+/* Under 16 px, Safari on iOS zooms in on a field and stays there. */
+@media (pointer: coarse) {
+  .answerEdit {
+    font-size: 16px;
+  }
+}
+
 .answerText {
   font-size: var(--text-body-sm);
   line-height: 1.6;

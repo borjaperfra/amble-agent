@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Symbol from '@/components/Symbol'
 import LiveForm from '@/components/flows/LiveForm'
+import FormAnswers, { CopyButton, type Edits } from '@/components/flows/FormAnswers'
 import { applicationAction as post, requestJson } from '@/components/api'
 import { useT } from '@/components/I18nProvider'
 import type { PreparedAnswer, PreparedApplication } from '@/lib/apply/prepare'
@@ -24,28 +25,6 @@ function questionKey(label: string): string {
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-}
-
-function CopyButton({ text }: { text: string }) {
-  const t = useT().opportunities.apply
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      type="button"
-      className={styles.copy}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text)
-          setCopied(true)
-          window.setTimeout(() => setCopied(false), 1600)
-        } catch {
-          // Clipboard unavailable: the text is on screen to select.
-        }
-      }}
-    >
-      {copied ? t.copied : t.copy}
-    </button>
-  )
 }
 
 function CvField({ cv, onUploaded }: { cv: string | null; onUploaded: (name: string) => void }) {
@@ -86,32 +65,12 @@ function CvField({ cv, onUploaded }: { cv: string | null; onUploaded: (name: str
   )
 }
 
-function Field({ answer }: { answer: PreparedAnswer }) {
-  const t = useT().opportunities.apply
-  return (
-    <li className={`${styles.field} ${styles[answer.source]}`}>
-      <p className={styles.fieldLabel}>
-        {answer.label}
-        {answer.required && <span className={styles.required} aria-label={t.required}> *</span>}
-      </p>
-      {answer.source === 'rep' && answer.answer ? (
-        <div className={styles.fieldAnswer}>
-          <p className={styles.answerText}>{answer.answer}</p>
-          <CopyButton text={answer.answer} />
-        </div>
-      ) : (
-        <p className={styles.note}>{answer.source === 'you' ? t.youInForm : answer.note}</p>
-      )}
-    </li>
-  )
-}
-
 // A long part of the application, folded until they ask for it: on a phone
 // the letter and the form together are several screens. Folded, it is only
 // hidden, so nothing inside is lost or reset.
-function Fold({ id, title, summary, children }: { id: string; title: string; summary: React.ReactNode; children: React.ReactNode }) {
+function Fold({ id, title, summary, children, initiallyOpen = false }: { id: string; title: string; summary: React.ReactNode; children: React.ReactNode; initiallyOpen?: boolean }) {
   const a = useT().opportunities.apply
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initiallyOpen)
   return (
     <section className={styles.section}>
       <div className={styles.foldHead}>
@@ -156,6 +115,8 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
   const [cv, setCv] = useState(applicant.cv)
   const [stage, setStage] = useState<Stage>({ step: 'review' })
   const [problem, setProblem] = useState<string | null>(null)
+  // What they changed in an answer, to copy it (#49): kept through every step.
+  const [edits, setEdits] = useState<Edits>({})
   // Each new picture of the form, so the browser does not show the last one.
   const shots = useRef(0)
   // The look at the window they fill themselves ends when the panel goes.
@@ -194,6 +155,27 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
   // The form's questions, as listed (the CV has its own line).
   const fields = shown.filter((answer) => answer.kind !== 'resume')
   const yours = shown.filter((answer) => answer.source === 'you' && answer.kind !== 'resume' && !saved[questionKey(answer.label)]).length
+  // As text, to copy into the offer's own form (#49): every answer, what
+  // amble fills on its own too (their name, their email), the CV aside.
+  const textAnswers = prepared.answers.filter((answer) => answer.kind !== 'resume')
+  const answersText = (lead?: string) => (
+    <FormAnswers
+      answers={textAnswers}
+      edits={edits}
+      onEdit={(fieldId, text) => setEdits((value) => ({ ...value, [fieldId]: text }))}
+      savedOf={(answer: PreparedAnswer) => saved[questionKey(answer.label)]}
+      url={url}
+      lead={lead}
+    />
+  )
+  // Beside what amble filled: the same answers, to copy.
+  const answersBeside =
+    textAnswers.length > 0 ? (
+      <section className={styles.section}>
+        <h4 className={styles.sectionTitle}>{a.answersTitle}</h4>
+        {answersText(a.answersFilledLead)}
+      </section>
+    ) : null
 
   async function fill() {
     setProblem(null)
@@ -264,7 +246,12 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
   }
 
   if (stage.step === 'window' && stage.live) {
-    return <LiveForm opportunityId={opportunityId} company={company} left={stage.left} onSent={onSent} onClosed={() => setStage({ step: 'closed' })} />
+    return (
+      <>
+        <LiveForm opportunityId={opportunityId} company={company} left={stage.left} onSent={onSent} onClosed={() => setStage({ step: 'closed' })} />
+        {answersBeside}
+      </>
+    )
   }
 
   if (stage.step === 'window') {
@@ -285,6 +272,7 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
           </>
         )}
         <p className={styles.note}>{a.windowWatch}</p>
+        {answersBeside}
       </section>
     )
   }
@@ -328,6 +316,7 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
             {a.notYet}
           </button>
         </div>
+        {answersBeside}
       </section>
     )
   }
@@ -413,17 +402,15 @@ export default function ApplicationPanel({ opportunityId, company, url, prepared
         <Fold
           id={`apply-${opportunityId}-form`}
           title={a.formTitle}
+          // Without a browser here, these are what they copy: open from the start.
+          initiallyOpen={!applicant.canFill}
           summary={<p className={styles.note}>{a.formCount(fields.length, fields.filter((answer) => answer.source === 'you').length)}</p>}
         >
           <p className={styles.legend}>
             <span className={`${styles.dot} ${styles.dotRep}`} /> {a.legendRep}
             <span className={`${styles.dot} ${styles.dotYou}`} /> {a.legendYou}
           </p>
-          <ul className={styles.fields}>
-            {fields.map((answer) => (
-              <Field key={answer.fieldId} answer={answer} />
-            ))}
-          </ul>
+          {answersText()}
         </Fold>
       )}
 
