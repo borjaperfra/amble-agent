@@ -1078,6 +1078,16 @@ From then on I’ll write to you in whichever app you last wrote to me from.`,
     sayIt: 'Tell me in your own words →',
     sample: 'Answer a few sample offers →',
     saveFailed: 'It wasn’t saved. Try again.',
+    // A rule just added, read back as it will be applied (#51).
+    readBack: {
+      never: (rule: string) => `Here’s how I apply it: I set aside any offer that clashes with «${rule}».`,
+      pay: (rule: string) => `Here’s how I apply it: «${rule}» is the least an offer has to pay.`,
+      weighs: (rule: string) => `Here’s how I apply it: offers that meet «${rule}» go first, and none is set aside.`,
+      notFor: (rule: string) => `Here’s how I apply it: I don’t set an offer aside over «${rule}», even if it doesn’t meet it.`,
+    },
+    readBackAsk: 'Is that it?',
+    readBackYes: 'Yes',
+    readBackUndo: 'No, remove it',
     saved: 'Saved. I’m reading your recent offers again with this.',
     back: 'Back to your Rep',
     // Where they live, what they work in, and the floor applied: decide offers without being rules.
