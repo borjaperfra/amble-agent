@@ -12,7 +12,7 @@ import { answerMessage, languageOf, mapGapsOf } from './agent'
 import { logMessage } from './conversation'
 import { answerFollowup, parseFollowupPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
-import { awaitedReason, handleOfferTap, parseOfferPayload, sendDueOffers, settleAwaitedReason, showTeasedOffer } from './offers'
+import { awaitedReason, handleOfferTap, parseOfferPayload, pickFromDigest, sendDigest, sendDueOffers, settleAwaitedReason, showTeasedOffer } from './offers'
 import { templateTap } from './templates'
 import { answerPause, parsePausePayload, proposePause } from './pause'
 import { answerPreference, parsePreferencePayload, proposePreference } from './preferences'
@@ -184,10 +184,12 @@ export async function handleFromPerson(candidate: CandidateRow, input: PersonMes
       await reply(w.templateNotNow)
       return
     }
-    if (fromTemplate.startsWith('tpl:of:') || fromTemplate.startsWith('tpl:rem:') || fromTemplate === 'tpl:question') {
+    if (fromTemplate.startsWith('tpl:of:') || fromTemplate.startsWith('tpl:od:') || fromTemplate.startsWith('tpl:rem:') || fromTemplate === 'tpl:question') {
       logMessage(candidate.id, 'in', text)
       const shown = fromTemplate.startsWith('tpl:of:')
         ? await showTeasedOffer(candidate.id, fromTemplate.slice('tpl:of:'.length))
+        : fromTemplate.startsWith('tpl:od:')
+          ? await sendDigest(candidate.id, fromTemplate.slice('tpl:od:'.length))
         : fromTemplate.startsWith('tpl:rem:')
           ? await sendTeasedReminder(candidate.id, fromTemplate.slice('tpl:rem:'.length))
           : await sendTeasedQuestion(candidate.id)
@@ -279,6 +281,16 @@ async function answerWords(
   // Right after a "doesn't fit", amble waits to hear why; the agent tells
   // the reason from anything else they write.
   const awaited = awaitedReason(candidate.id)
+
+  // Numbers back to the day's list (#51): those offers, in full, with no
+  // model in between. Not while amble waits to hear why one did not fit.
+  const picked = awaited ? null : await pickFromDigest(candidate.id, text)
+  if (picked !== null) {
+    logMessage(candidate.id, 'in', text)
+    // What they picked closed since: said, not left unanswered.
+    if (picked === 0) await reply(w.tapExpired)
+    return
+  }
 
   // A person writes a message now and then; a flood is not a conversation.
   if (overLimit(candidate.id)) {

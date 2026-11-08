@@ -550,6 +550,11 @@ export const en = {
     outcome: { called: 'They called you', rejected: 'They said no', nothing: 'No news', offer: 'They made you an offer' },
     workplace: { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' },
     offerLink: 'The offer',
+    // The day's list (#51): what it is, and how to pick from it.
+    digestIntro: (count: number) => `I have ${count} today that fit you:`,
+    digestPick: 'Tap a number to see it in full, or reply with the ones you want («1 and 3»).',
+    digestNoSalary: 'salary not published',
+    digestEstimated: (range: string) => `${range} (estimated)`,
     // What the company does and what they would do there (#50).
     offerCompany: (text: string | null) => `*The company:* ${text ?? 'the offer doesn’t say what it does.'}`,
     offerDayToDay: (text: string | null) => `*Your day to day:* ${text ?? 'the offer doesn’t spell it out.'}`,

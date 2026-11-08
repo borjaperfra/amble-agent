@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { releaseDue } from '../matching/release'
 import { applicationState, canFillForm, cancelApplication, fillApplication, filledPicture, submitApplication } from '../apply/browser'
 import { cloudBrowserConfigured } from '../apply/cloud'
@@ -31,17 +32,24 @@ import { reachableCandidateIds, reachOf, type Reach } from '../channel/reach'
 // Offers on WhatsApp: only what the first reading found to be their kind of
 // role, and only after a second reading finds nothing that would let them
 // down. No quota: what goes out is decided by fit. Only a pace, so they never
-// arrive in a burst: at most one a day, and only on a day amble has not
+// arrive in a burst: one message a day, and only on a day amble has not
 // written first already (proactive.ts), at a decent hour. The rest waits in
-// the app. Each comes with three answers; what they say is kept exactly as in
-// the app, and a "no" asks why, so the Rep learns from it.
+// the app. That message is a short list (#51): up to DIGEST_SIZE offers, a
+// line each, and they pick the ones to see in full, by a number's button or
+// by writing the numbers; one alone goes in full at once. Each in full comes
+// with its answers; what they say is kept exactly as in the app, and a "no"
+// asks why, so the Rep learns from it.
 
 const PER_DAY = 1
 const HOURS_APART = 3
 const SEND_FROM_HOUR = 9
 const SEND_UNTIL_HOUR = 21
+// The day's list: three or four to pick from, not a page to sift.
+export const DIGEST_SIZE = 4
 // Second readings per person per run: each is a model call.
-const REVIEWS_PER_RUN = 4
+const REVIEWS_PER_RUN = 8
+// Numbers written back pick from a list this recent.
+const DIGEST_ANSWER_MS = 48 * 60 * 60 * 1000
 
 type Listed = MatchRow & MatchListing & { estimate: ShownEstimate | null }
 
@@ -176,7 +184,9 @@ export function offerText(match: Listed, pitch: Pitch | null, d: (typeof diction
     .join('\n')
 }
 
-async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promise<void> {
+// mark: counted as sent now; not for one picked from the day's list, which
+// was counted when the list went.
+async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null, mark = true): Promise<void> {
   const d = dictionaries[candidateLocale(candidateById(reach.candidateId))]
   const w = d.whatsapp
   const body = offerText(match, pitch, d)
@@ -199,14 +209,112 @@ async function sendOne(reach: Reach, match: Listed, pitch: Pitch | null): Promis
     idempotencyKey: `of:${match.id}`,
     card: { matchId: match.id, url: match.url ?? null },
   })
-  getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), reach.candidateId, match.id)
+  if (mark) getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), reach.candidateId, match.id)
   logMessage(reach.candidateId, 'out', body)
+}
+
+// The day's list (#51): each offer in three short lines, numbered, and how
+// to pick. Kept under WhatsApp's 1,024 characters for a message with
+// buttons: past that, the lines on why go first.
+const BUTTONS_TEXT_MAX = 1000
+
+export function digestText(items: { match: Listed; pitch: Pitch | null }[], d: (typeof dictionaries)['es']): string {
+  const w = d.whatsapp
+  const entry = (item: { match: Listed; pitch: Pitch | null }, index: number, withWhy: boolean) => {
+    const match = item.match
+    const published = publishedSalary(match)
+    const pay = published ?? (match.estimate ? w.digestEstimated(estimateRange(match.estimate)) : w.digestNoSalary)
+    const place = (match.location ?? '').split(' · ').filter(Boolean)[0] ?? null
+    const workplace = workplaceShown(match.opportunity_id, match.workplace)
+    const where = [place, workplace ? (w.workplace[workplace as keyof typeof w.workplace] ?? null) : null, pay].filter(Boolean).join(' · ')
+    const why = item.pitch?.line ?? null
+    return [`${index + 1}. *${match.title}* · ${match.company_name}`, `   ${where}`, withWhy && why ? `   ${why}` : null].filter(Boolean).join('\n')
+  }
+  const build = (withWhy: boolean) => [w.digestIntro(items.length), '', items.map((item, index) => entry(item, index, withWhy)).join('\n\n'), '', w.digestPick].join('\n')
+  const full = build(true)
+  return full.length <= BUTTONS_TEXT_MAX ? full : build(false)
+}
+
+function digestButtons(items: { match: Listed }[]) {
+  return items.map((item, index) => ({ title: String(index + 1), payload: `of:${item.match.id}:show`, beside: index > 0 }))
+}
+
+// The offers of one day's list, in its order, as they are now: one closed
+// since stays out.
+function digestItems(candidateId: string, digestId: string): { match: Listed; pitch: Pitch | null }[] {
+  const rows = getDb()
+    .prepare('SELECT match_id, pitch FROM offer_sends WHERE candidate_id = ? AND digest_id = ? ORDER BY digest_pos')
+    .all(candidateId, digestId) as unknown as { match_id: string; pitch: string | null }[]
+  const shown = new Map(shownMatches(candidateId).map((match) => [match.id, match]))
+  const floor = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))?.salaryFloor ?? null
+  const found = rows.flatMap((row) => {
+    const match = shown.get(row.match_id)
+    return match && !match.closed_at ? [{ row, match }] : []
+  })
+  const estimates = estimatesFor(found.map((item) => item.match.opportunity_id))
+  return found.map(({ row, match }) => ({
+    match: { ...match, estimate: publishedSalary(match) ? null : shownEstimate(estimates.get(match.opportunity_id), floor) },
+    pitch: row.pitch ? (JSON.parse(row.pitch) as Pitch) : null,
+  }))
+}
+
+// The list, sent: on the day, or when they tap «Cuéntame» on the template
+// that asked first. False when nothing of it is left to show.
+export async function sendDigest(candidateId: string, digestId: string): Promise<boolean> {
+  const reach = reachOf(candidateId)
+  if (!reach) return false
+  const items = digestItems(candidateId, digestId)
+  if (items.length === 0) return false
+  const d = dictionaries[candidateLocale(candidateById(candidateId))]
+  // Only one left of it: that one, in full.
+  if (items.length === 1) {
+    await sendOne(reach, items[0].match, items[0].pitch, false)
+    return true
+  }
+  const body = digestText(items, d)
+  await reach.send({ text: body, buttons: digestButtons(items), idempotencyKey: `od:${digestId}` })
+  logMessage(candidateId, 'out', body)
+  return true
+}
+
+// Numbers they write back to the day's list («2», «1 y 3», «todas»): the
+// offers they picked, each in full, and how many could be shown (an offer
+// closed since cannot). Null when the message is not that
+// (words beyond numbers, a number not on the list, no list lately), so it
+// goes to the agent as any message does.
+const PICK_WORDS = new Set(['y', 'e', 'and', 'la', 'las', 'el', 'los', 'ver', 'quiero', 'see', 'show', 'me', 'the'])
+const ALL_WORDS = new Set(['todas', 'todos', 'all'])
+
+export async function pickFromDigest(candidateId: string, text: string): Promise<number | null> {
+  const tokens = text.toLowerCase().split(/[\s,&+.;:!]+/).filter(Boolean)
+  if (tokens.length === 0 || tokens.length > 12) return null
+  if (!tokens.every((token) => /^\d$/.test(token) || PICK_WORDS.has(token) || ALL_WORDS.has(token))) return null
+  const all = tokens.some((token) => ALL_WORDS.has(token))
+  const numbers = [...new Set(tokens.filter((token) => /^\d$/.test(token)).map(Number))]
+  if (!all && numbers.length === 0) return null
+  const latest = getDb()
+    .prepare(
+      'SELECT digest_id, MAX(sent_at) AS sent_at FROM offer_sends WHERE candidate_id = ? AND digest_id IS NOT NULL AND sent_at IS NOT NULL GROUP BY digest_id ORDER BY sent_at DESC LIMIT 1',
+    )
+    .get(candidateId) as { digest_id: string; sent_at: string } | undefined
+  if (!latest || Date.now() - Date.parse(latest.sent_at) > DIGEST_ANSWER_MS) return null
+  const listed = (
+    getDb().prepare('SELECT match_id FROM offer_sends WHERE candidate_id = ? AND digest_id = ? ORDER BY digest_pos').all(candidateId, latest.digest_id) as unknown as {
+      match_id: string
+    }[]
+  ).map((row) => row.match_id)
+  // A number that is not on the list is an answer to something else.
+  if (numbers.some((number) => number < 1 || number > listed.length)) return null
+  const picked = all ? listed : numbers.map((number) => listed[number - 1])
+  let shown = 0
+  for (const matchId of picked) if (await showTeasedOffer(candidateId, matchId, false, false)) shown++
+  return shown
 }
 
 // "Cuéntame" on the offer's template: the offer itself, as reviewed when
 // the template went out; or one they asked the agent to see (by its offer).
 // False when it is no longer there to show.
-export async function showTeasedOffer(candidateId: string, matchId: string, byOpportunity = false): Promise<boolean> {
+export async function showTeasedOffer(candidateId: string, matchId: string, byOpportunity = false, mark = true): Promise<boolean> {
   const reach = reachOf(candidateId)
   if (!reach) return false
   // Where the screen looks: an offer judged with an earlier profile is still
@@ -216,7 +324,7 @@ export async function showTeasedOffer(candidateId: string, matchId: string, byOp
   const sent = getDb().prepare('SELECT pitch FROM offer_sends WHERE candidate_id = ? AND match_id = ?').get(candidateId, matchId) as { pitch: string | null } | undefined
   const floor = storedRoleQuery(candidateId, buildMatchingProfile(candidateId))?.salaryFloor ?? null
   const estimate = publishedSalary(match) ? null : shownEstimate(estimatesFor([match.opportunity_id]).get(match.opportunity_id), floor)
-  await sendOne(reach, { ...match, estimate }, sent?.pitch ? (JSON.parse(sent.pitch) as Pitch) : null)
+  await sendOne(reach, { ...match, estimate }, sent?.pitch ? (JSON.parse(sent.pitch) as Pitch) : null, mark)
   return true
 }
 
@@ -250,8 +358,10 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
     const query = storedRoleQuery(candidateId, profile)
     const floor = query?.salaryFloor ?? null
     let reviews = 0
+    // What passes the second reading, up to the day's list.
+    const passed: { match: Listed; pitch: Pitch | null }[] = []
     for (const match of candidatesToSend(candidateId, floor, query)) {
-      if (reviews >= REVIEWS_PER_RUN) break
+      if (reviews >= REVIEWS_PER_RUN || passed.length >= DIGEST_SIZE) break
       reviews++
       try {
         const review = await reviewForSending({ candidateId, match, profile })
@@ -273,18 +383,34 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
           stats.held++
           continue
         }
-        if (open) await sendOne(reach, match, review.pitch)
+        passed.push({ match, pitch: review.pitch })
+      } catch (error) {
+        stats.skipped.push({ candidateId, reason: error instanceof Error ? error.message : String(error) })
+        break
+      }
+    }
+    if (passed.length === 0) continue
+    try {
+      if (passed.length === 1) {
+        const { match, pitch } = passed[0]
+        if (open) await sendOne(reach, match, pitch)
         else {
           await reach.template('offer', [], [`tpl:of:${match.id}`, null], `tpl-of:${match.id}`)
           // Counted for the pace now; the whole offer follows their tap.
           getDb().prepare('UPDATE offer_sends SET sent_at = ? WHERE candidate_id = ? AND match_id = ?').run(now(), candidateId, match.id)
         }
-        stats.sent++
-        break
-      } catch (error) {
-        stats.skipped.push({ candidateId, reason: error instanceof Error ? error.message : String(error) })
-        break
+      } else {
+        // The day's list: counted for the pace, and each listed as sent, now.
+        const digestId = randomUUID()
+        const mark = getDb().prepare('UPDATE offer_sends SET sent_at = ?, digest_id = ?, digest_pos = ? WHERE candidate_id = ? AND match_id = ?')
+        passed.forEach((item, index) => mark.run(now(), digestId, index + 1, candidateId, item.match.id))
+        if (open) await sendDigest(candidateId, digestId)
+        // Outside the 24 hours, the template that asks first; the list follows their tap.
+        else await reach.template('offer', [], [`tpl:od:${digestId}`, null], `tpl-od:${digestId}`)
       }
+      stats.sent += passed.length
+    } catch (error) {
+      stats.skipped.push({ candidateId, reason: error instanceof Error ? error.message : String(error) })
     }
   }
   return stats
@@ -293,7 +419,7 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
 // ── What they answer ──────────────────────────────────────────────────────
 
 export type OfferTap =
-  | { kind: 'offer'; matchId: string; answer: 'interested' | 'not_fit' | 'more' | 'later' | 'applied' }
+  | { kind: 'offer'; matchId: string; answer: 'interested' | 'not_fit' | 'more' | 'later' | 'applied' | 'show' }
   | { kind: 'apply'; matchId: string; answer: 'yes' | 'no' }
   // Fill the prepared application in the company's own form, in the cloud.
   | { kind: 'fill'; matchId: string; answer: 'yes' | 'no' }
@@ -301,8 +427,8 @@ export type OfferTap =
   | { kind: 'send'; matchId: string; answer: 'yes' | 'look' | 'no' }
 
 export function parseOfferPayload(value: string | null): OfferTap | null {
-  const offer = value?.match(/^of:([\w-]+):(interested|not_fit|more|later|applied)$/)
-  if (offer) return { kind: 'offer', matchId: offer[1], answer: offer[2] as 'interested' | 'not_fit' | 'more' | 'later' | 'applied' }
+  const offer = value?.match(/^of:([\w-]+):(interested|not_fit|more|later|applied|show)$/)
+  if (offer) return { kind: 'offer', matchId: offer[1], answer: offer[2] as 'interested' | 'not_fit' | 'more' | 'later' | 'applied' | 'show' }
   const apply = value?.match(/^ap:([\w-]+):(yes|no)$/)
   if (apply) return { kind: 'apply', matchId: apply[1], answer: apply[2] as 'yes' | 'no' }
   const fill = value?.match(/^af:([\w-]+):(yes|no)$/)
@@ -389,6 +515,12 @@ export async function handleOfferTap(candidateId: string, tap: OfferTap, reply: 
     return
   }
   const explanation = JSON.parse(match.explanation) as Explanation
+
+  // A number on the day's list (#51): that offer, in full.
+  if (tap.kind === 'offer' && tap.answer === 'show') {
+    if (!(await showTeasedOffer(candidateId, match.id, false, false))) await reply(w.tapExpired)
+    return
+  }
 
   if (tap.kind === 'offer' && tap.answer === 'interested') {
     respondToMatch(match.id, candidateId, 'interested', null)

@@ -690,6 +690,10 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'whatsapp_links', 'template_taps', 'TEXT')
   // The offer's message as the second reading wrote it for them.
   addColumn(db, 'offer_sends', 'pitch', 'TEXT')
+  // The day's list it went out in (#51), and its number there: offers go as
+  // a short list they pick from, then each one they pick in full.
+  addColumn(db, 'offer_sends', 'digest_id', 'TEXT')
+  addColumn(db, 'offer_sends', 'digest_pos', 'INTEGER')
   // Feedback already acted on leaves the owner's list: when, and what took
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')

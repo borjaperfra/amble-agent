@@ -549,6 +549,11 @@ export const es: Dictionary = {
     outcome: { called: 'Te llamaron', rejected: 'Te dijeron que no', nothing: 'Sin noticias', offer: 'Te hicieron una oferta' },
     workplace: { remote: 'Remoto', hybrid: 'Híbrido', onsite: 'Presencial' },
     offerLink: 'La oferta',
+    // The day's list (#51): what it is, and how to pick from it.
+    digestIntro: (count: number) => `Hoy tengo ${count} que encajan contigo:`,
+    digestPick: 'Toca un número para verla entera, o contéstame con las que quieras («1 y 3»).',
+    digestNoSalary: 'no publica salario',
+    digestEstimated: (range: string) => `${range} (estimado)`,
     // What the company does and what they would do there (#50).
     offerCompany: (text: string | null) => `*La empresa:* ${text ?? 'la oferta no cuenta a qué se dedica.'}`,
     offerDayToDay: (text: string | null) => `*Tu día a día:* ${text ?? 'la oferta no lo concreta.'}`,
