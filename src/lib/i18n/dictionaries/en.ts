@@ -221,6 +221,13 @@ export const en = {
     staleRules: (count: number) => `${count} ${count === 1 ? 'rule has' : 'rules have'} gone over three months unconfirmed, and I’m not applying ${count === 1 ? 'it' : 'them'}: review →`,
     weekKicker: 'This week',
     weekRead: (read: number, worth: number) => `read · ${worth} ${worth === 1 ? 'is' : 'are'} worth your time`,
+    // Where offers are read (#51). boards: some of LinkedIn's and Indeed's come too.
+    whereFrom: (companies: number, boards: boolean) => {
+      const about = companies >= 200 ? `over ${(Math.floor(companies / 100) * 100).toLocaleString('en-GB')}` : String(companies)
+      return boards
+        ? `I read offers on the job pages of ${about} companies, and some of LinkedIn’s and Indeed’s. Not everything you see on LinkedIn reaches me.`
+        : `I read offers on the job pages of ${about} companies. LinkedIn’s don’t reach me.`
+    },
     weekEmpty: 'Nothing new read this week yet. Still looking.',
     weekMaybe: 'Close, not quite your role',
     weekReasons: {

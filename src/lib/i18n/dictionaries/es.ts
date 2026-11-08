@@ -224,6 +224,13 @@ export const es: Dictionary = {
     weekRead: (read: number, worth: number) =>
       `${read === 1 ? 'leída' : 'leídas'} · ${worth} ${worth === 1 ? 'merece' : 'merecen'} tu tiempo`,
     weekEmpty: 'Esta semana aún no he leído nada nuevo. Sigo mirando.',
+    // Where offers are read (#51). boards: some of LinkedIn's and Indeed's come too.
+    whereFrom: (companies: number, boards: boolean) => {
+      const about = companies >= 200 ? `más de ${String(Math.floor(companies / 100) * 100).replace(/\B(?=(\d{3})+$)/g, '.')}` : String(companies)
+      return boards
+        ? `Leo las ofertas en las páginas de empleo de ${about} empresas, y una parte de las de LinkedIn e Indeed. No todo lo que ves en LinkedIn me llega.`
+        : `Leo las ofertas en las páginas de empleo de ${about} empresas. Las de LinkedIn no me llegan.`
+    },
     weekMaybe: 'Cerca, pero no del todo tu rol',
     weekReasons: {
       wrongRole: 'No es tu rol',

@@ -1,3 +1,5 @@
+import { countOpportunities } from '@/lib/db/opportunities'
+import { theirStackConfigured } from '@/lib/sourcing/theirstack'
 import { requireCandidate } from '@/lib/auth/session'
 import { getRevealedPreference, listOfferProbes } from '@/lib/db/repo'
 import { isRereading, startFirstRead } from '@/lib/matching/run'
@@ -40,5 +42,6 @@ export default async function ListeningPage() {
   const vm = getListeningViewModel(candidate.id)
   const { wontConsider, weighs, money } = vm.revealed.rules
   const titles = offerTitles([...wontConsider, ...weighs, ...money].filter((item) => item.evidence).map((item) => item.id))
-  return <ListeningFlow vm={{ ...vm, firstReading, rereading, paused, whatsapp, offerTitles: titles }} />
+  const sources = { companies: countOpportunities().companies, boards: theirStackConfigured() }
+  return <ListeningFlow vm={{ ...vm, sources, firstReading, rereading, paused, whatsapp, offerTitles: titles }} />
 }
