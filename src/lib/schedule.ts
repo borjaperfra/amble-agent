@@ -10,6 +10,7 @@ import { checkOfferLinks } from './sourcing/liveness'
 import { releaseLock, takeLock } from './sourcing/lock'
 import { sendDueFollowups } from './whatsapp/followups'
 import { sendDueOffers } from './whatsapp/offers'
+import { sendDueRuleQuestions } from './whatsapp/rule-asks'
 import { refreshSummaries } from './telegram/summary'
 import { sendDueInterviewQuestions } from './whatsapp/interview'
 import { sendDueReminders } from './whatsapp/reminders'
@@ -260,6 +261,8 @@ export function startListeningSchedule(): void {
         const rounds: [string, () => Promise<unknown>][] = [
           ['followups', sendDueFollowups],
           ['reminders', sendDueReminders],
+          // A rule waiting for their yes comes before a question about their map.
+          ['rule questions', sendDueRuleQuestions],
           ['interview', sendDueInterviewQuestions],
           ['pause check-ins', sendPauseCheckIns],
         ]

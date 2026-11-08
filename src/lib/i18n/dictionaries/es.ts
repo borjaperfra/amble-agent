@@ -646,6 +646,10 @@ export const es: Dictionary = {
     preferenceButtons: { yes: 'Sí, cámbialo', no: 'No', only: 'Solo eso', prefer: 'Lo prefiero' },
     noRuleAsk: (label: string) => `¿Lo tengo en cuenta para todas? *${label}*`,
     noRuleButtons: { yes: 'Sí, para todas', no: 'Solo esta' },
+    // A rule proposed from a «no» in the app, asked once on the chat.
+    ruleAsk: (label: string, quote: string | null) =>
+      quote ? `Hace unos días, al decirme que no a una oferta, me dijiste «${quote}». ¿Lo tengo en cuenta para todas? *${label}*` : `¿Lo tengo en cuenta para todas las ofertas? *${label}*`,
+    ruleAskOnlyThat: 'Vale, solo para aquella.',
     companyExcluded: (company: string) => `Hecho: no te enseño nada más de ${company}. Si cambias de idea, dímelo.`,
     companyExcludedForAYear: (company: string) => `Hecho: nada de ${company} durante un año. Si cambias de idea, dímelo.`,
     companyIncluded: (company: string) => `Hecho: ${company} vuelve a entrar en lo que te busco.`,

@@ -649,6 +649,10 @@ export const en = {
     preferenceButtons: { yes: 'Yes, change it', no: 'No', only: 'Only that', prefer: 'I prefer it' },
     noRuleAsk: (label: string) => `Shall I apply it to all of them? *${label}*`,
     noRuleButtons: { yes: 'Yes, to all', no: 'Just this one' },
+    // A rule proposed from a «no» in the app, asked once on the chat.
+    ruleAsk: (label: string, quote: string | null) =>
+      quote ? `A few days ago, turning an offer down, you told me «${quote}». Shall I apply it to all of them? *${label}*` : `Shall I apply it to every offer? *${label}*`,
+    ruleAskOnlyThat: 'OK, just for that one.',
     companyExcluded: (company: string) => `Done: nothing more from ${company}. If you change your mind, tell me.`,
     companyExcludedForAYear: (company: string) => `Done: nothing from ${company} for a year. If you change your mind, tell me.`,
     companyIncluded: (company: string) => `Done: ${company} is back in what I look for.`,
