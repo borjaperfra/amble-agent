@@ -46,6 +46,7 @@ export const APP_PAGES = {
   sayWhatYouWant: '/me/intent',
   sampleOffers: '/me/triage',
   yourMap: '/me',
+  yourCv: '/me/cv',
   questionsAboutYou: '/onboarding/interview',
   addDocument: '/onboarding',
   yourData: '/me/data',
@@ -185,7 +186,7 @@ export const CHAT_CAPABILITIES: readonly Capability[] = [
   },
   {
     id: 'what_amble_writes_first',
-    does: 'Write first, at most once a day and never at night, only when there is something for them, the most important first: a reminder they asked for; a follow-up a week after they sent an application, saying the day they sent it, and when they say they were called, a button to prepare that interview with you; on Mondays, when something moved, a summary of their week (what they sent, who called or said no, what interested them, and one they liked and have not sent); the day\'s offers; after four days with no offer for them, why, and a question that could widen the search; a rule proposed from an offer they turned down in the app, asked once; an offer they liked and have not sent after three days, asked once; a question for their map. When they ask why amble wrote, say which of these it was.',
+    does: 'Write first, at most once a day and never at night, only when there is something for them, the most important first: a reminder they asked for; a follow-up a week after they sent an application, saying the day they sent it, and when they say they were called, a button to prepare that interview with you; on Mondays, when something moved, a summary of their week (what they sent, who called or said no, what interested them, and one they liked and have not sent); the day\'s offers; after four days with no offer for them, why, and a question that could widen the search; a rule proposed from an offer they turned down in the app, asked once; an offer they liked and have not sent after three days, asked once; a question for their map; once, on a day with nothing else, that their CV was compared with their offers (yourCv). When they ask why amble wrote, say which of these it was.',
     channels: CHAT,
   },
   {
@@ -264,6 +265,12 @@ export const APP_CAPABILITIES: readonly Capability[] = [
     does: 'See their map, and add proof of one of its capabilities under its evidence, in words or with a link, without waiting for a question.',
     channels: ['app'],
     page: 'yourMap',
+  },
+  {
+    id: 'cv_review',
+    does: 'See what to change in their CV (#55, "Tu CV, mejor" in Spanish): amble reads it next to the offers that fit them and their map, and lists what they have done that their CV does not say (with a line to copy, from their own proof), what it says without a result, what several offers ask for that amble has not seen in them, and what a filter program would miss (no dates, generic words, two columns, missing contact). No score. It is ready once amble has read at least ten offers that fit them. When they ask for help with their CV, send them there; you cannot rewrite their whole CV or make a file of it.',
+    channels: ['app'],
+    page: 'yourCv',
   },
   {
     id: 'questions',

@@ -4,9 +4,15 @@
 // made-up WHAT YOU KNOW (BASE below, changed by each case). It prints what
 // passed and what did not, and why.
 //
-// It calls the model, so it is not part of npm test, and it runs only with a
-// key of its own (DEVELOPMENT.md, rule 8):
-//   AMBLE_EVAL_MODEL_KEY       the key, never production's (refused if it is the same)
+// It calls the model, so it is not part of npm test, and it runs with a key
+// set apart for it (DEVELOPMENT.md, rule 8):
+//   AMBLE_EVAL_MODEL_KEY       the key; production's only with the line below
+//   AMBLE_EVAL_SHARED_KEY=1    the owner chose one of production's keys for tests
+//                              (2026-11-08). Production does not see these calls
+//                              and the provider allows 10 at once per key, so then
+//                              it asks two at a time and never during a listening
+//                              pass (08, 12, 16, 20 Madrid), when production fills
+//                              its slots.
 //   AMBLE_EVAL_MODEL_ID        the model (else AMBLE_MODEL_ID)
 //   AMBLE_EVAL_MODEL_BASE_URL  the provider (else AMBLE_MODEL_BASE_URL, else the default)
 // What it records (each model run) goes to a temp database, never .amble-data/.
@@ -34,6 +40,9 @@ function refuse(message: string): never {
   process.exit(2)
 }
 
+// One of production's keys (AMBLE_EVAL_SHARED_KEY): fewer calls at once.
+let shared = false
+
 function setUpEnvironment() {
   const key = process.env.AMBLE_EVAL_MODEL_KEY?.trim()
   if (!key) {
@@ -42,7 +51,14 @@ function setUpEnvironment() {
     )
   }
   const production = [process.env.AMBLE_MODEL_API_KEY, ...(process.env.AMBLE_MODEL_API_KEYS ?? '').split(',')].map((value) => value?.trim()).filter(Boolean)
-  if (production.includes(key)) refuse('AMBLE_EVAL_MODEL_KEY is the same key as AMBLE_MODEL_API_KEY(S): use a key of its own.')
+  shared = production.includes(key) || process.env.AMBLE_EVAL_SHARED_KEY === '1'
+  if (production.includes(key) && process.env.AMBLE_EVAL_SHARED_KEY !== '1') {
+    refuse('AMBLE_EVAL_MODEL_KEY is one of production’s keys: set AMBLE_EVAL_SHARED_KEY=1 to use it anyway (two calls at a time, never during a listening pass).')
+  }
+  if (shared) {
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(new Date()))
+    if ([8, 12, 16, 20].includes(hour)) refuse(`it is ${hour}:xx in Madrid, a listening pass: the shared key is production's then. Try after ${hour + 1}:00.`)
+  }
   const modelId = process.env.AMBLE_EVAL_MODEL_ID?.trim() || process.env.AMBLE_MODEL_ID?.trim()
   if (!modelId) refuse('needs AMBLE_EVAL_MODEL_ID (or AMBLE_MODEL_ID): the model to ask.')
   // The model path reads these: only the eval's key, and nothing that reaches anyone.
@@ -102,7 +118,7 @@ async function main() {
       }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(4, cases.length) }, worker))
+  await Promise.all(Array.from({ length: Math.min(shared ? 2 : 4, cases.length) }, worker))
   results.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
 
   console.log(`${cell('case', 30)} ${cell('', 4)} ${cell('intent', 12)} ${cell('action', 34)} why`)

@@ -21,8 +21,9 @@ export function wroteFirstRecently(candidateId: string, hours = QUIET_HOURS): bo
          UNION ALL SELECT 1 FROM revealed_preferences WHERE candidate_id = ? AND asked_at >= ?
          UNION ALL SELECT 1 FROM opportunity_decisions WHERE candidate_id = ? AND nudged_at >= ?
          UNION ALL SELECT 1 FROM candidates WHERE id = ? AND weekly_at >= ?
+         UNION ALL SELECT 1 FROM candidates WHERE id = ? AND cv_review_told_at >= ?
          LIMIT 1`,
       )
-      .get(...Array.from({ length: 8 }, () => [candidateId, since]).flat()),
+      .get(...Array.from({ length: 9 }, () => [candidateId, since]).flat()),
   )
 }

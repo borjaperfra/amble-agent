@@ -31,6 +31,7 @@ export const en = {
     switchTo: 'Español',
     switchToLabel: 'Cambiar a español',
     data: 'Your data',
+    cv: 'Your CV',
     // On the public page: for someone who already has an account.
     signIn: 'Sign in',
     openMenu: 'Open the menu',
@@ -471,6 +472,49 @@ export const en = {
     accepted: 'Accepted',
     available: 'Not used yet',
   },
+  cv: {
+    nav: 'Your CV',
+    title: 'Your CV, better',
+    lead: 'I read your CV next to the offers that fit you and what I know about you. This is what I would change.',
+    basedOn: (offers: number, date: string) => `Compared with ${offers} offers on ${date}.`,
+    refreshing: 'You have a new CV: I am comparing it again.',
+    noCv: 'I have not read a CV of yours yet. Upload it and I will compare it with the offers that fit you.',
+    uploadCv: 'Upload my CV',
+    fewOffers: (have: number, need: number) =>
+      have === 0
+        ? `I will prepare it once I have read at least ${need} offers that fit you. None yet.`
+        : `I will prepare it once I have read at least ${need} offers that fit you. So far, ${have}.`,
+    building: 'I am comparing your CV with your offers. It takes a couple of minutes; this page updates itself.',
+    failed: 'I could not finish it. I will try again in a while.',
+    nothing: 'With what I know about you, I see nothing clear to change. I will look again when I have read more offers.',
+    hiddenTitle: 'You have it and your CV does not say it',
+    hiddenLead: 'Offers that fit you ask for it, and I know you have done it.',
+    weakTitle: 'It is there, but it falls short',
+    weakLead: 'Your CV says it without the result, or without what you did yourself.',
+    missingTitle: 'They ask for it and I do not see it',
+    missingLead: 'Several offers ask for it and I have nothing of yours that shows it. If you have done it, tell me in the chat or add it to your map.',
+    filterTitle: 'What a filter program sees',
+    filterLead: 'Many companies run CVs through a program before a person reads them. This is what it would miss.',
+    askedBy: (companies: string) => `Asked for by ${companies}`,
+    andMore: (n: number) => `and ${n} more`,
+    and: 'and',
+    knownFrom: 'I know because',
+    yourCvSays: 'Your CV says',
+    youCouldWrite: 'You could write',
+    copy: 'Copy',
+    copied: 'Copied',
+    toMap: 'Go to your map',
+    check: {
+      no_email: 'I cannot find an email.',
+      no_phone: 'I cannot find a phone number.',
+      no_linkedin: 'There is no link to your LinkedIn profile.',
+      short: 'It is very short: under 200 words. A filter has little to work with.',
+      long: (pages: number) => `It has ${pages} pages. Two are usually enough: what comes after is barely read.`,
+      columns: 'It is laid out in two columns. Many filters read across the page and mix them.',
+      undated: (quote: string) => `«${quote}» has no dates. A filter looks for when you started and left each role.`,
+      generic: (quote: string) => `«${quote}» is generic. A filter looks for the names of tools and technologies.`,
+    },
+  },
   data: {
     title: 'Your data',
     lead: 'What amble knows about you is yours. Take it with you or delete it whenever you like.',
@@ -662,6 +706,9 @@ export const en = {
     ruleAskOnlyThat: 'OK, just for that one.',
     // An offer they liked and have not sent, asked about once.
     wantedNudge: (title: string, company: string) => `*${title}* at ${company} interested you a few days ago. If you like, I’ll prepare the application.`,
+    // Once, when their CV was compared with their offers (#55).
+    cvNudge: (count: number, example: string, url: string) =>
+      `I compared your CV with the offers that fit you. ${count === 1 ? 'There is one thing you have done that your CV does not tell:' : `There are ${count} things you have done that your CV does not tell, like`} ${example}. Here it is, with what you could write: ${url}`,
     // Monday's summary of their week.
     weekly: {
       title: 'Your week in the search:',

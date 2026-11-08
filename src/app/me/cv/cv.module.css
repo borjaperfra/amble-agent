@@ -1,0 +1,97 @@
+.page {
+  max-width: var(--conversation-max);
+  margin: 0 auto;
+  padding: 40px var(--page-pad) 96px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--heading-xl);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 48px;
+}
+
+.lead {
+  margin-top: 20px;
+  font-size: var(--text-body-lg);
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 44ch;
+}
+
+.section {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--heading-md);
+  font-weight: 400;
+}
+
+.body {
+  margin-top: 12px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  max-width: 52ch;
+}
+
+.meta {
+  margin-top: 8px;
+  font-size: var(--text-small, 0.875rem);
+  color: var(--ink-secondary);
+}
+
+.items {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.item {
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.need {
+  font-weight: 600;
+}
+
+.label {
+  display: block;
+  font-size: var(--text-small, 0.875rem);
+  color: var(--ink-secondary);
+  margin-bottom: 4px;
+}
+
+.quote,
+.proof,
+.line {
+  margin-top: 12px;
+}
+
+.proof ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.line p {
+  margin: 0 0 8px;
+}
+
+.actions {
+  margin-top: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
