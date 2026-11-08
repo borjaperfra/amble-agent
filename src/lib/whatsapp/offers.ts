@@ -162,7 +162,11 @@ export function offerText(match: Listed, pitch: Pitch | null, d: (typeof diction
     '',
     // What the company does and what they would do (#50): said, or said
     // that the offer does not say. Not in a message written before r3.
-    ...(pitch && 'company' in pitch ? [w.offerCompany(pitch.company ?? null), w.offerDayToDay(pitch.dayToDay ?? null), ''] : []),
+    ...(pitch && 'company' in pitch
+      ? [w.offerCompany(pitch.company ?? null), w.offerDayToDay(pitch.dayToDay ?? null), '']
+      : 'companyDoes' in explanation
+        ? [w.offerCompany(explanation.companyDoes ?? null), w.offerDayToDay(explanation.dayToDay ?? null), '']
+        : []),
     pitch?.summary ?? explanation.summary,
     ...(pitch?.reasons ?? explanation.why.slice(0, 3).map((reason) => reason.text)).map((reason) => `• ${reason}`),
     // The offer itself, to read in full.

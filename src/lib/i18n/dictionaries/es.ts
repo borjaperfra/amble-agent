@@ -815,6 +815,11 @@ Desde entonces te escribo en la app donde me hayas escrito por última vez.`,
     emptyMore: 'Ya has visto las de hoy.',
     emptyMoreLead: 'Tengo más guardadas. Te las iré enseñando poco a poco, las que mejor encajen primero.',
     worthHearing: 'Esta merece tu tiempo.',
+    // What the company does and what they would do there (#50).
+    aboutCompany: 'La empresa:',
+    aboutCompanyUnsaid: 'la oferta no cuenta a qué se dedica.',
+    aboutDayToDay: 'Tu día a día:',
+    aboutDayToDayUnsaid: 'la oferta no lo concreta.',
     // It fits, but what such a role usually pays falls short of their floor: not sold as worth it.
     worthHearingShort: 'Encaja contigo, aunque quizá no llegue a tu salario.',
     morePlaces: (count: number) => `y ${count} más`,
