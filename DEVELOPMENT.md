@@ -47,8 +47,10 @@ without anyone being written to by mistake or losing what they were doing.
    locked. Nothing that reads like a job offer from a stranger.
 8. **Tests that write run on copies.** Before a script writes to
    `.amble-data/amble.db`, `VACUUM INTO` a backup and restore it after, unless
-   the write is the point. Model calls in tests use a key of their own, not
-   production's.
+   the write is the point. Model calls in tests use a key set apart for them:
+   since 2026-11-08 one of production's two, by the owner's choice
+   (`AMBLE_EVAL_SHARED_KEY=1`), so they go two at a time and never during a
+   listening pass, when production needs every slot.
 9. **On the server, read-only checks go through `railway ssh --environment
    production --service app`**; anything that writes (deleting an account,
    restoring) starts with a backup (rule 11).
@@ -79,7 +81,7 @@ without anyone being written to by mistake or losing what they were doing.
 - `npm run eval:agent` asks the real agent prompt the conversations in
   `evals/agent/*.json` (built from the beta feedback) and prints a table of
   what passed. It calls the model, so it is not part of `npm test`, and it
-  refuses to run without a key of its own (`AMBLE_EVAL_MODEL_KEY`, rule 8;
+  refuses to run without a key set apart for it (`AMBLE_EVAL_MODEL_KEY`, rule 8;
   `AMBLE_EVAL_MODEL_ID` and `AMBLE_EVAL_MODEL_BASE_URL` if they differ from
   the app's). `npm run eval:agent -- 52` runs only those cases; `--replies`
   prints every reply. Run it before deploying a change to the agent's prompt.
