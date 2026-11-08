@@ -21,7 +21,7 @@ const items = [
 ]
 const text = digestText(items, dictionaries.es)
 console.log(text)
-assert.ok(text.startsWith('Hoy tengo 3 que encajan contigo:'))
+assert.ok(text.startsWith('Hoy he encontrado 3 que creo que merecen tu atención:'))
 assert.ok(text.includes('1. *Head of Data* · Pigment\n   Madrid · 90.000 €\n   Llevarías el equipo de datos, como en Mahou.'))
 assert.ok(text.includes('2. *Data Lead* · Factorial\n   Madrid · no publica salario'))
 assert.ok(text.includes('3. *Analytics Manager* · Cabify\n   Madrid · no publica salario'))

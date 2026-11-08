@@ -566,14 +566,14 @@ export const en = {
     offerLink: 'The offer',
     // The chat quiet for days (#51): why, what waits in the app, and the question that could open it.
     quiet: {
-      opening: (days: number) => `It’s been ${days} days without an offer from me, and not because I’m not looking.`,
+      opening: (days: number) => `I haven’t sent you anything in ${days} days: what I read wasn’t worth your attention.`,
       why: {
-        role: 'Most of what I read isn’t your role, or is below your level.',
-        place: 'Most of what I read can’t be done from where you live.',
-        pay: 'Most of what I read pays less than your minimum.',
-        language: 'Most of what I read asks for a language you don’t speak.',
+        role: 'Most of it wasn’t your role, or was below your level.',
+        place: 'Most of it couldn’t be done from where you live.',
+        pay: 'Most of it paid less than your minimum.',
+        language: 'Most of it asked for a language you don’t speak.',
       },
-      whyRule: (rule: string) => `Most of what I read clashes with «${rule}».`,
+      whyRule: (rule: string) => `Most of it clashed with «${rule}».`,
       waiting: (count: number, link: string) => `In the app you have ${count} I haven’t sent you here: ${link}`,
       ask: {
         role: 'Shall I also look at roles close to yours?',
@@ -585,7 +585,7 @@ export const en = {
       askAny: 'Shall I widen anything in what I look for?',
     },
     // The day's list (#51): what it is, and how to pick from it.
-    digestIntro: (count: number) => `I have ${count} today that fit you:`,
+    digestIntro: (count: number) => `Today I found ${count} I think are worth your attention:`,
     digestPick: 'Tap a number to see it in full, or reply with the ones you want («1 and 3»).',
     digestNoSalary: 'salary not published',
     digestEstimated: (range: string) => `${range} (estimated)`,
@@ -661,7 +661,7 @@ export const en = {
       quote ? `A few days ago, turning an offer down, you told me «${quote}». Shall I apply it to all of them? *${label}*` : `Shall I apply it to every offer? *${label}*`,
     ruleAskOnlyThat: 'OK, just for that one.',
     // An offer they liked and have not sent, asked about once.
-    wantedNudge: (title: string, company: string) => `A few days ago *${title}* at ${company} interested you, and you haven’t sent it yet. Shall I prepare it?`,
+    wantedNudge: (title: string, company: string) => `*${title}* at ${company} interested you a few days ago. If you like, I’ll prepare the application.`,
     // Monday's summary of their week.
     weekly: {
       title: 'Your week in the search:',

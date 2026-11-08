@@ -12,10 +12,10 @@ const rule = quietNoteText({ days: 5, reason: { kind: 'rule', rule: 'Solo full r
 console.log(rule)
 assert.equal(
   rule,
-  'Llevo 5 días sin mandarte ofertas, y no es que no busque. La mayoría de lo que leo choca con «Solo full remote».\n\nEn la app tienes 12 que no te he mandado por aquí: https://app.amble.fyi/x\n\n¿Quieres que afloje «Solo full remote», o lo mantengo?',
+  'Llevo 5 días sin mandarte nada: lo que he leído no merecía tu atención. La mayoría chocaba con «Solo full remote».\n\nEn la app tienes 12 que no te he mandado por aquí: https://app.amble.fyi/x\n\n¿Quieres que afloje «Solo full remote», o lo mantengo?',
 )
 const pay = quietNoteText({ days: 4, reason: { kind: 'pay', rule: null, count: 40 }, waiting: 0, link }, d)!
-assert.ok(pay.includes('paga menos de tu mínimo') && pay.endsWith('¿Miro también las que pagan algo menos, si lo demás encaja?') && !pay.includes('En la app'))
+assert.ok(pay.includes('pagaba menos de tu mínimo') && pay.endsWith('¿Miro también las que pagan algo menos, si lo demás encaja?') && !pay.includes('En la app'))
 // Only what waits in the app: said, with the general question.
 const onlyWaiting = quietNoteText({ days: 6, reason: null, waiting: 1, link }, d)!
 assert.ok(onlyWaiting.includes('tienes 1 que no te he mandado') && onlyWaiting.endsWith('¿Quieres que amplíe algo de lo que busco?'))
