@@ -26,6 +26,7 @@ import { logMessage } from './conversation'
 import { wroteFirstRecently } from './proactive'
 import { reviewForSending, type Pitch } from './review'
 import { sendQuietNote } from './quiet'
+import { moreImportantToday } from './arbiter'
 import { tellSent } from './sent'
 import { templatesEnabled } from './templates'
 import { reachableCandidateIds, reachOf, type Reach } from '../channel/reach'
@@ -350,6 +351,12 @@ export async function sendDueOffers(onlyCandidateId?: string): Promise<OfferStat
     const reach = reachOf(candidateId)
     // Paused: nothing goes out until they resume it.
     if (!reach || isSearchPaused(candidateId) || !paceAllows(candidateId) || wroteFirstRecently(candidateId)) continue
+    // Something that matters more goes today, at 11:00; the offers tomorrow (arbiter.ts).
+    const first = moreImportantToday(candidateId)
+    if (first) {
+      stats.skipped.push({ candidateId, reason: `${first} first today` })
+      continue
+    }
     // Outside the 24 hours an offer goes as the approved template that asks
     // first; the shared test number has none.
     const open = reach.open

@@ -700,6 +700,10 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'candidates', 'quiet_checked_at', 'TEXT')
   // A proposed rule asked once on the chat (whatsapp/rule-asks.ts).
   addColumn(db, 'revealed_preferences', 'asked_at', 'TEXT')
+  // An offer they liked and did not send, asked about once (whatsapp/nudges.ts).
+  addColumn(db, 'opportunity_decisions', 'nudged_at', 'TEXT')
+  // Monday's summary of their week, when it last went (whatsapp/weekly.ts).
+  addColumn(db, 'candidates', 'weekly_at', 'TEXT')
   // Feedback already acted on leaves the owner's list: when, and what took
   // care of it (an issue, a commit, a line).
   addColumn(db, 'feedback', 'done_at', 'TEXT')

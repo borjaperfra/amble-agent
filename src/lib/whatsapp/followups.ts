@@ -40,6 +40,28 @@ export function parseFollowupPayload(value: string | null): FollowupTap | null {
   return match ? { opportunityId: match[1], round: Number(match[2]), answer: match[3] as FollowupAnswer } : null
 }
 
+// «Me han llamado»: preparing that interview is one tap away, not something
+// to remember to ask for. iv:<opportunity>.
+export function parseInterviewPrepPayload(value: string | null): string | null {
+  return value?.match(/^iv:([\w-]+)$/)?.[1] ?? null
+}
+
+export function interviewPrepButton(opportunityId: string, title: string): { title: string; payload: string } {
+  return { title, payload: `iv:${opportunityId}` }
+}
+
+// The role and company of one of their applications, to ask for it by name.
+export function applicationNamed(candidateId: string, opportunityId: string): { title: string; company: string } | null {
+  return (
+    (getDb()
+      .prepare(
+        `SELECT o.title, c.name AS company FROM opportunity_decisions d JOIN opportunities o ON o.id = d.opportunity_id JOIN companies c ON c.id = o.company_id
+         WHERE d.candidate_id = ? AND d.opportunity_id = ?`,
+      )
+      .get(candidateId, opportunityId) as { title: string; company: string } | undefined) ?? null
+  )
+}
+
 // Their answer, kept on the question; what to say back.
 export function answerFollowup(candidateId: string, tap: FollowupTap): string | null {
   const db = getDb()
@@ -74,6 +96,8 @@ interface Due {
   round: number
   title: string
   company: string
+  // When they sent it (#54): «La enviaste el martes 21 (hace 9 días)».
+  sent_at: string
 }
 
 // The next question owed to one person, if any.
@@ -83,7 +107,7 @@ function nextDue(candidateId: string): Due | null {
   // A first question, a week after it was sent, for one not asked about yet.
   const first = db
     .prepare(
-      `SELECT d.opportunity_id, 1 AS round, o.title, c.name AS company FROM opportunity_decisions d
+      `SELECT d.opportunity_id, 1 AS round, o.title, c.name AS company, d.progress_at AS sent_at FROM opportunity_decisions d
        JOIN opportunities o ON o.id = d.opportunity_id JOIN companies c ON c.id = o.company_id
        WHERE d.candidate_id = ? AND d.progress = 'applied' AND d.progress_at <= ?
          AND NOT EXISTS (SELECT 1 FROM application_followups f WHERE f.candidate_id = d.candidate_id AND f.opportunity_id = d.opportunity_id)
@@ -94,7 +118,7 @@ function nextDue(candidateId: string): Due | null {
   // Once more, a week after "nothing yet" or no answer at all, and never again.
   const again = db
     .prepare(
-      `SELECT f.opportunity_id, f.round + 1 AS round, o.title, c.name AS company FROM application_followups f
+      `SELECT f.opportunity_id, f.round + 1 AS round, o.title, c.name AS company, d.progress_at AS sent_at FROM application_followups f
        JOIN opportunity_decisions d ON d.candidate_id = f.candidate_id AND d.opportunity_id = f.opportunity_id AND d.progress = 'applied'
        JOIN opportunities o ON o.id = f.opportunity_id JOIN companies c ON c.id = o.company_id
        WHERE f.candidate_id = ? AND f.round < ? AND f.asked_at <= ? AND (f.answer IS NULL OR f.answer = 'nothing')
@@ -103,6 +127,23 @@ function nextDue(candidateId: string): Due | null {
     )
     .get(candidateId, LAST_ROUND, since(AGAIN_AFTER_DAYS)) as Due | undefined
   return again ?? null
+}
+
+// A day they sent it, as people say it: «el martes 21», «on Tuesday 21»,
+// and how many days ago.
+export function sentOn(at: string, locale: 'es' | 'en', today = new Date()): { day: string; daysAgo: number } {
+  const date = new Date(at)
+  const parts = new Intl.DateTimeFormat(locale === 'es' ? 'es-ES' : 'en-GB', { weekday: 'long', day: 'numeric', timeZone: 'Europe/Madrid' }).formatToParts(date)
+  const weekday = parts.find((part) => part.type === 'weekday')?.value ?? ''
+  const day = parts.find((part) => part.type === 'day')?.value ?? ''
+  const daysAgo = Math.max(0, Math.round((Date.parse(today.toISOString().slice(0, 10)) - Date.parse(date.toISOString().slice(0, 10))) / DAY_MS))
+  return { day: locale === 'es' ? `el ${weekday} ${day}` : `on ${weekday[0]?.toUpperCase() ?? ''}${weekday.slice(1)} ${day}`, daysAgo }
+}
+
+// The next follow-up owed today, if any, and not asked today yet: for the
+// day's one message (arbiter.ts).
+export function followupDueToday(candidateId: string): boolean {
+  return !askedToday(candidateId) && nextDue(candidateId) !== null
 }
 
 function askedToday(candidateId: string): boolean {
@@ -139,7 +180,9 @@ export async function sendDueFollowups(): Promise<FollowupStats> {
     }
     const w = dictionaries[candidateLocale(candidateById(candidateId))].whatsapp
     // The second time says how long it has been, not the same question again.
-    const text = due.round > 1 ? w.askAgain(due.title, due.company) : w.ask(due.title, due.company)
+    // And when they sent it (#54), as a day of the week and how long ago.
+    const sent = sentOn(due.sent_at, candidateLocale(candidateById(candidateId)))
+    const text = due.round > 1 ? w.askAgain(due.title, due.company, sent) : w.ask(due.title, due.company, sent)
     try {
       // Past the 24 hours, the approved template asks it, its buttons in the
       // template's order (replied, nothing yet, a no).

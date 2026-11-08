@@ -10,7 +10,7 @@ import { leaveReminder, sendTeasedReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
 import { answerMessage, languageOf, mapGapsOf } from './agent'
 import { logMessage } from './conversation'
-import { answerFollowup, parseFollowupPayload } from './followups'
+import { answerFollowup, applicationNamed, interviewPrepButton, parseFollowupPayload, parseInterviewPrepPayload } from './followups'
 import { linkBySender, saveLink, takeLinkCode, touchLink } from './link'
 import { awaitedReason, handleOfferTap, parseOfferPayload, pickFromDigest, sendDigest, sendDueOffers, settleAwaitedReason, showTeasedOffer } from './offers'
 import { templateTap } from './templates'
@@ -210,9 +210,24 @@ export async function handleFromPerson(candidate: CandidateRow, input: PersonMes
   if (followupTap) {
     logMessage(candidate.id, 'in', text)
     const thanks = answerFollowup(candidate.id, followupTap)
-    // A question amble no longer has: said, not left unanswered.
-    await reply(thanks ?? w.tapExpired)
+    // A question amble no longer has: said, not left unanswered. A call:
+    // preparing the interview, one tap away.
+    await reply(
+      thanks ?? w.tapExpired,
+      thanks && followupTap.answer === 'called' ? [interviewPrepButton(followupTap.opportunityId, w.interviewPrepButton)] : undefined,
+    )
     return
+  }
+  // «Prepárame la entrevista»: asked of the agent as if they had written it,
+  // so it coaches from their map and that offer.
+  const prepFor = parseInterviewPrepPayload(interactiveId)
+  if (prepFor) {
+    const named = applicationNamed(candidate.id, prepFor)
+    if (!named) {
+      await reply(w.tapExpired)
+      return
+    }
+    return answerWords(candidate, w.interviewPrepRequest(named.title, named.company), reply, w, io)
   }
   // A rule proposed from a «no» in the app, asked once on the chat (rule-asks.ts).
   const ruleAskTap = parseRuleAskPayload(interactiveId)

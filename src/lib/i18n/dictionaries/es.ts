@@ -530,11 +530,18 @@ export const es: Dictionary = {
     loginNotLinked: 'Esta cuenta de Telegram no está conectada a amble. Entra con tu email, conecta Telegram desde la app y la próxima vez podrás entrar desde aquí.',
     unknownTelegram: 'Hola, soy el agente de IA de amble. Para hablar conmigo por aquí, entra en app.amble.fyi y conecta Telegram desde allí.',
     noted: 'Lo he apuntado. Gracias.',
-    ask: (title: string, company: string) => `¿Sabes algo de tu candidatura a ${title} en ${company}?`,
-    askAgain: (title: string, company: string) => `Hace un par de semanas que enviaste la de ${title} en ${company}. ¿Te han dicho algo?`,
+    // sent: when they sent it (#54).
+    ask: (title: string, company: string, sent: { day: string; daysAgo: number }) =>
+      `¿Sabes algo de tu candidatura a ${title} en ${company}? La enviaste ${sent.day} (hace ${sent.daysAgo} días).`,
+    askAgain: (title: string, company: string, sent: { day: string; daysAgo: number }) =>
+      `Enviaste la de ${title} en ${company} ${sent.day}, hace ${sent.daysAgo} días. ¿Te han dicho algo?`,
     // Buttons: WhatsApp allows 20 characters each.
     answers: { called: 'Me han llamado', rejected: 'Me han dicho que no', nothing: 'Nada todavía' },
-    thanksCalled: (company: string) => `Buena señal. Cuando ${company ? `${company} te dé` : 'te den'} fecha para la entrevista, dímela y la preparamos.`,
+    thanksCalled: (company: string) =>
+      `Buena señal. Cuando ${company ? `${company} te dé` : 'te den'} fecha para la entrevista, dímela y te aviso la víspera. Si quieres, la preparamos ya.`,
+    // The button under it, and what it asks the Rep, in their words.
+    interviewPrepButton: 'Prepárala ya',
+    interviewPrepRequest: (title: string, company: string) => `Prepárame la entrevista de ${title} en ${company}.`,
     thanksRejected: 'Vaya, lo siento. Gracias por contármelo: me ayuda a afinar con las próximas.',
     thanksNothing: 'Vale. Te vuelvo a preguntar en una semana.',
     thanksNothingLast: 'Vale. No te pregunto más por esta.',
@@ -650,6 +657,19 @@ export const es: Dictionary = {
     ruleAsk: (label: string, quote: string | null) =>
       quote ? `Hace unos días, al decirme que no a una oferta, me dijiste «${quote}». ¿Lo tengo en cuenta para todas? *${label}*` : `¿Lo tengo en cuenta para todas las ofertas? *${label}*`,
     ruleAskOnlyThat: 'Vale, solo para aquella.',
+    // An offer they liked and have not sent, asked about once.
+    wantedNudge: (title: string, company: string) => `Hace unos días te interesó *${title}* en ${company}, y aún no la has enviado. ¿Te la preparo?`,
+    // Monday's summary of their week.
+    weekly: {
+      title: 'Tu semana en la búsqueda:',
+      sent: (companies: string[]) =>
+        companies.length === 1 ? `Enviaste la candidatura a ${companies[0]}.` : `Enviaste ${companies.length} candidaturas: ${companies.slice(0, -1).join(', ')} y ${companies[companies.length - 1]}.`,
+      called: (company: string) => `De ${company} te llamaron.`,
+      rejected: (company: string) => `${company} te dijo que no.`,
+      liked: (count: number) => (count === 1 ? 'Te interesó 1 oferta.' : `Te interesaron ${count} ofertas.`),
+      unsent: (count: number, title: string, company: string) =>
+        count === 1 ? `Tienes 1 que te interesó sin enviar: ${title} en ${company}. ¿Te la preparo?` : `Tienes ${count} que te interesaron sin enviar. ¿Empiezo por ${title} en ${company}?`,
+    },
     companyExcluded: (company: string) => `Hecho: no te enseño nada más de ${company}. Si cambias de idea, dímelo.`,
     companyExcludedForAYear: (company: string) => `Hecho: nada de ${company} durante un año. Si cambias de idea, dímelo.`,
     companyIncluded: (company: string) => `Hecho: ${company} vuelve a entrar en lo que te busco.`,

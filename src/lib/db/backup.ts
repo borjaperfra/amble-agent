@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -39,7 +40,15 @@ export interface VolumeUsage {
 export type BackupResult =
   | { status: 'exists' }
   // offsite: up to R2, or why not (the copies then stay here, a week of them).
-  | { status: 'done'; file: string; bytes: number; removed: string[]; offsite?: { key: string } | { error: string } }
+  | {
+      status: 'done'
+      file: string
+      bytes: number
+      removed: string[]
+      offsite?: { key: string } | { error: string }
+      // The files people gave (CVs, PDFs, applications), up to R2 beside it.
+      files?: { key: string; bytes: number } | { error: string }
+    }
   | { status: 'skipped'; reason: string; removed: string[] }
 
 const size = (file: string) => {
@@ -126,7 +135,35 @@ export async function backupToday(): Promise<BackupResult> {
   }
   const offsite = await sendOffsite(target)
   if (offsite && 'key' in offsite) removed.push(...keepOnlyToday(target))
-  return { status: 'done', file: target, bytes: size(target), removed, ...(offsite ? { offsite } : {}) }
+  const files = offsite && 'key' in offsite ? await sendFilesOffsite(day) : null
+  return { status: 'done', file: target, bytes: size(target), removed, ...(offsite ? { offsite } : {}), ...(files ? { files } : {}) }
+}
+
+// What people gave amble lives only on the volume: their CVs and PDFs
+// (uploads), what went with their applications (applications) and other
+// files (files). The database's copy holds none of it, so a lost volume
+// would lose every CV. Each day, beside the database's copy and under the
+// same name scheme, so the bucket's rule deletes it on the same day: what a
+// deleted account leaves goes from R2 within the week, as amble promises.
+// Packed off the volume (os.tmpdir) and never kept on it.
+const FILE_DIRECTORIES = ['uploads', 'applications', 'files']
+
+export async function sendFilesOffsite(day: string): Promise<{ key: string; bytes: number } | { error: string } | null> {
+  const config = offsiteConfig()
+  if (!config) return null
+  const present = FILE_DIRECTORIES.filter((name) => fs.existsSync(path.join(DATA_DIRECTORY, name)))
+  if (present.length === 0) return null
+  const archive = path.join(os.tmpdir(), `amble-files-${day}.tar.gz`)
+  try {
+    execFileSync('tar', ['-czf', archive, '-C', DATA_DIRECTORY, ...present], { stdio: 'ignore' })
+    const key = `daily/${path.basename(archive)}`
+    await uploadOffsite(config, archive, key)
+    return { key, bytes: size(archive) }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    fs.rmSync(archive, { force: true })
+  }
 }
 
 // The day's copy to R2, when it is set.
