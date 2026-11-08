@@ -10,3 +10,4 @@ The short version:
 - A push to `main` restarts production: deploy outside the listening passes (08/12/16/20 Madrid) and when nobody is mid-setup.
 - Work against an anonymised replica (`npm run db:pull`), not production; back up before any write on the server.
 - After `railway environment link staging`, link production back at once; prefer `--environment` on every command.
+- Anything a candidate reads (screens, chat, emails, the agent's prompt) follows VOICE.md, the owner's voice document: when a request clashes with it, say the clash instead of resolving it quietly.

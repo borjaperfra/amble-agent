@@ -565,14 +565,14 @@ export const es: Dictionary = {
     offerLink: 'La oferta',
     // The chat quiet for days (#51): why, what waits in the app, and the question that could open it.
     quiet: {
-      opening: (days: number) => `Llevo ${days} días sin mandarte ofertas, y no es que no busque.`,
+      opening: (days: number) => `Llevo ${days} días sin mandarte nada: lo que he leído no merecía tu atención.`,
       why: {
-        role: 'La mayoría de lo que leo no es tu rol, o se queda por debajo de tu nivel.',
-        place: 'La mayoría de lo que leo no se puede hacer desde donde vives.',
-        pay: 'La mayoría de lo que leo paga menos de tu mínimo.',
-        language: 'La mayoría de lo que leo pide un idioma que no hablas.',
+        role: 'La mayoría no era tu rol, o se quedaba por debajo de tu nivel.',
+        place: 'La mayoría no se podía hacer desde donde vives.',
+        pay: 'La mayoría pagaba menos de tu mínimo.',
+        language: 'La mayoría pedía un idioma que no hablas.',
       },
-      whyRule: (rule: string) => `La mayoría de lo que leo choca con «${rule}».`,
+      whyRule: (rule: string) => `La mayoría chocaba con «${rule}».`,
       waiting: (count: number, link: string) => `En la app ${count === 1 ? 'tienes 1 que no te he mandado' : `tienes ${count} que no te he mandado`} por aquí: ${link}`,
       ask: {
         role: '¿Quieres que mire también roles cercanos al tuyo?',
@@ -584,7 +584,7 @@ export const es: Dictionary = {
       askAny: '¿Quieres que amplíe algo de lo que busco?',
     },
     // The day's list (#51): what it is, and how to pick from it.
-    digestIntro: (count: number) => `Hoy tengo ${count} que encajan contigo:`,
+    digestIntro: (count: number) => `Hoy he encontrado ${count} que creo que merecen tu atención:`,
     digestPick: 'Toca un número para verla entera, o contéstame con las que quieras («1 y 3»).',
     digestNoSalary: 'no publica salario',
     digestEstimated: (range: string) => `${range} (estimado)`,
@@ -658,7 +658,7 @@ export const es: Dictionary = {
       quote ? `Hace unos días, al decirme que no a una oferta, me dijiste «${quote}». ¿Lo tengo en cuenta para todas? *${label}*` : `¿Lo tengo en cuenta para todas las ofertas? *${label}*`,
     ruleAskOnlyThat: 'Vale, solo para aquella.',
     // An offer they liked and have not sent, asked about once.
-    wantedNudge: (title: string, company: string) => `Hace unos días te interesó *${title}* en ${company}, y aún no la has enviado. ¿Te la preparo?`,
+    wantedNudge: (title: string, company: string) => `*${title}* en ${company} te interesó hace unos días. Si quieres, te preparo la candidatura.`,
     // Monday's summary of their week.
     weekly: {
       title: 'Tu semana en la búsqueda:',
