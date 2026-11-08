@@ -4,7 +4,7 @@ import { emailOwnerAbout, feedbackToday, recordFeedback } from '../feedback'
 import { candidateLocale } from '../i18n/candidate'
 import { dictionaries } from '../i18n/dictionaries'
 import { MAX_AUDIO_BYTES, transcribe } from '../model/transcribe'
-import { offerToShow, runAction } from './actions'
+import { companyAction, offerToShow, runAction } from './actions'
 import { answerInterviewQuestion, pendingInterviewQuestion, sendTeasedQuestion } from './interview'
 import { leaveReminder, sendTeasedReminder } from './reminders'
 import { judgeShared, pastedOffer, readSharedLink, type SharedVerdict } from './shared'
@@ -397,15 +397,26 @@ async function answerWords(
   if (awaited && reason && !buttons?.length) {
     const opportunityId = getMatch(awaited.matchId)?.opportunity_id
     const rule = opportunityId
-      ? await readNo(candidate.id, opportunityId, reason).catch((error: unknown) => {
+      ? await readNo(candidate.id, opportunityId, reason, 'chat').catch((error: unknown) => {
           console.error('[amble] learn from a no failed:', error instanceof Error ? error.message : error)
           return null
         })
       : null
-    if (rule) {
+    if (rule && 'excluded' in rule) {
+      // The company itself, turned down: done, and said (#44).
+      await reply(rule.until ? w.companyExcludedForAYear(rule.company) : w.companyExcluded(rule.company))
+    } else if (rule) {
       const label = rule.label ?? rule.statement
       await reply(w.noRuleAsk(label), proposePreference(candidate.id, { kind: rule.kind, label, statement: rule.statement, replaces: null }, w.noRuleButtons))
     }
+  }
+  // A company they want nothing from, or one let back in (#44): done here,
+  // and said, so the agent never says it noted one it did not.
+  if (answer.action?.type === 'exclude_company' || answer.action?.type === 'include_company') {
+    const done = companyAction(candidate.id, answer.action)
+    if (!done) await reply(w.companyNotFound(answer.action.company))
+    else if (answer.action.type === 'include_company') await reply(w.companyIncluded(done.company))
+    else await reply(done.until ? w.companyExcludedForAYear(done.company) : w.companyExcluded(done.company))
   }
   // The offer they asked to see: its card, with its buttons to answer it.
   if (answer.action?.type === 'show_offer') {

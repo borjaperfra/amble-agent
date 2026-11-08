@@ -1,19 +1,26 @@
 import { applicationCv, savedAnswers } from '../apply/answers'
 import { canFillForms } from '../apply/chrome'
+import { canFillForm } from '../apply/browser'
 import { followupOutcomes, type FollowupAnswer } from '../whatsapp/followups'
 import { chatAvailability } from '../channel/reach'
 import { getPreparedApplication, type PreparedApplication } from '../apply/prepare'
-import { candidateById, getStatedAbout, listCapabilities, listConfirmedPreferences } from '../db/repo'
+import { askableGapCount, candidateById, getStatedAbout, listCapabilities, listConfirmedPreferences } from '../db/repo'
 import { getDb } from '../db/db'
 import { listDecisions, listMatchesForKey, listWanted, type MatchListing, type MatchProgress, type MatchResponse, type MatchRow } from '../db/matching'
 import { ASSESS_VERSION, LANGUAGE_GATE, OFFICE_ABROAD_GATE, OFFICE_ELSEWHERE_GATE, REMOTE_COUNTRIES_GATE, REMOTE_ELSEWHERE_GATE, REMOTE_UNCONFIRMED_GATE, SALARY_FLOOR_GATE, type Explanation, type Gate, type RoleFit } from './assess'
 import { currentMatchKey, lastReadStats, placeFit } from './run'
 import { buildMatchingProfile } from './profile'
 import { officeNotAllowed } from './office'
+import { roleKey } from './role-key'
+import { excludedCompanyIds } from '../db/excluded-companies'
 import { workplaceShown } from './workplace'
 import { storedRoleQuery } from './role-query'
 import { estimatesFor, payRank, shownEstimate, type ShownEstimate } from '../salary/estimate'
 import { releaseDue } from './release'
+
+// A round of questions asks what the map shows under what is still unknown:
+// three (view.ts, MAP_GAPS_SHOWN; not imported, that module imports this one).
+const ROUND_QUESTIONS = 3
 
 // The first read starts while the setup's questions are answered (setup.ts).
 const SETUP_READ_MS = 15 * 60 * 1000
@@ -128,6 +135,9 @@ export interface WantedOpportunity {
   prepared: PreparedApplication | null
   // What they answered on WhatsApp about an application they sent.
   outcome: FollowupAnswer | null
+  // Whether amble can fill this offer's own form (Ashby, Greenhouse), with a
+  // browser to do it: «Rellenar el formulario» only then (#48).
+  canFill: boolean
 }
 
 export interface OpportunitiesView {
@@ -224,6 +234,7 @@ function wantedOpportunities(candidateId: string, floor: Floor): WantedOpportuni
     const explanation = row.explanation ? (JSON.parse(row.explanation) as Explanation) : null
     byRole.set(key, {
       key,
+      canFill: canFillForms() && canFillForm(row.opportunity_id),
       opportunityIds: [row.opportunity_id],
       company: row.company_name,
       title: row.title,
@@ -257,18 +268,30 @@ function salaryText(match: Pick<MatchListing, 'salary_raw' | 'salary_min' | 'sal
 // Postings of one role in several cities were judged together (one model run):
 // the screen shows the role once, with every city. The link and the state are
 // those of a posting still open, if any is.
-function collapseRoles(matches: (MatchRow & MatchListing)[]): (MatchRow & MatchListing)[] {
+// One role posted many times is one offer (#45, role-key.ts), whichever
+// pass judged each copy. The copy that leads: one they answered (their
+// answer holds for the role), else an open one amble would show, else an
+// open one, the nearest to them first («within Spain» before «within
+// Poland»: its link is the one they get); its places are those of the
+// copies judged as it was.
+function collapseRoles(matches: (MatchRow & MatchListing)[], answered: Set<string>, near: (location: string | null) => number): (MatchRow & MatchListing)[] {
   const roles = new Map<string, (MatchRow & MatchListing)[]>()
   for (const match of matches) {
-    const key = match.model_run_id ? `${match.model_run_id}|${match.title}` : match.id
+    const key = roleKey(match)
     const postings = roles.get(key)
     if (postings) postings.push(match)
     else roles.set(key, [match])
   }
-  return [...roles.values()].map((postings) => {
-    const lead = postings.find((posting) => !posting.closed_at) ?? postings[0]
-    const open = postings.filter((posting) => !posting.closed_at)
-    const places = [...new Set((open.length ? open : postings).map((posting) => posting.location).filter(Boolean))]
+  return [...roles.values()].map((unsorted) => {
+    const postings = unsorted.length > 1 ? [...unsorted].sort((a, b) => near(a.location) - near(b.location)) : unsorted
+    const lead =
+      postings.find((posting) => answered.has(posting.opportunity_id) || posting.response) ??
+      postings.find((posting) => !posting.closed_at && posting.verdict === 'show') ??
+      postings.find((posting) => !posting.closed_at) ??
+      postings[0]
+    const alike = postings.filter((posting) => posting.verdict === lead.verdict)
+    const open = alike.filter((posting) => !posting.closed_at)
+    const places = [...new Set((open.length ? open : alike).map((posting) => posting.location).filter(Boolean))]
     return { ...lead, location: places.join(' · ') || null }
   })
 }
@@ -316,7 +339,12 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   const candidate = candidateById(candidateId)
   const matchKey = currentMatchKey(candidate.id)
   const current = listMatchesForKey(candidate.id, matchKey)
-  const matches = collapseRoles([...current, ...earlierMatches(candidate.id, matchKey, new Set(current.map((match) => match.opportunity_id)))])
+  const nearQuery = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))
+  const matches = collapseRoles(
+    [...current, ...earlierMatches(candidate.id, matchKey, new Set(current.map((match) => match.opportunity_id)))],
+    new Set(listDecisions(candidate.id).keys()),
+    (location) => (nearQuery ? placeFit(location, nearQuery) : 1),
+  )
   const capabilityNames = new Map(listCapabilities(candidate.id).map((capability) => [capability.id, capability.name]))
   const ruleLabels = new Map([
     ...listConfirmedPreferences(candidate.id).map((row): [string, string] => [row.id, row.label ?? row.wording ?? row.statement]),
@@ -325,7 +353,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
   // What the table says the roles that publish no salary pay, and the floor
   // it is compared with (from the query already designed for their profile).
   const estimates = estimatesFor(matches.map((match) => match.opportunity_id))
-  const roleQuery = storedRoleQuery(candidate.id, buildMatchingProfile(candidate.id))
+  const roleQuery = nearQuery
   const floor = roleQuery?.salaryFloor ?? null
 
   // A few at a time: what is not released yet waits, unless they answered
@@ -337,6 +365,8 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     ),
   )
   let withheld = 0
+  // A company they want nothing from: gone from what waits for an answer (#44).
+  const excluded = excludedCompanyIds(candidate.id)
 
   const found: FoundOpportunity[] = []
   const discarded: DiscardedOpportunity[] = []
@@ -349,6 +379,7 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     // What they decided is kept on the offer, not on this assessment of it.
     const decision = decisions.get(match.opportunity_id)
     const response = decision?.decision ?? null
+    if (excluded.has(match.company_id) && !decision && !match.response) continue
     // An offer they want has its own place: it is no longer something to answer.
     const wanted = wants(decision?.decision)
     const stale = match.profile_hash !== matchKey
@@ -492,11 +523,10 @@ export function getOpportunitiesView(candidateId: string): OpportunitiesView {
     decided: decisions.size,
     drought: fits.length + maybe.length === 0 && withheld === 0 ? droughtOf(candidate.id, discarded) : null,
     questions: {
-      open: (
-        getDb()
-          .prepare("SELECT COUNT(*) AS n FROM uncertainties WHERE candidate_id = ? AND status = 'OPEN' AND resolvable_by_interview = 1")
-          .get(candidate.id) as { n: number }
-      ).n,
+      // What the next round will really ask (#47): it asks what the map
+      // shows, three at most, and nothing already asked. Counting every open
+      // doubt said 27 to someone a round then asked two of, and never went down.
+      open: Math.min(askableGapCount(candidate.id), ROUND_QUESTIONS),
       languagesStated: getStatedAbout(candidate.id).languages !== null,
     },
   }

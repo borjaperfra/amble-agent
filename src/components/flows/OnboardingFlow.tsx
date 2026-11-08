@@ -101,8 +101,9 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
   }
 
   // What fills each place: one rejected or failed is said where it was
-  // tried, and leaves the place free.
-  const placed = (slot: Slot) => sources.filter((source) => slotOf(source) === slot && source.status !== 'rejected' && source.status !== 'failed')
+  // tried, and leaves the place free; a CV a newer one replaced is gone.
+  const placed = (slot: Slot) =>
+    sources.filter((source) => slotOf(source) === slot && source.status !== 'rejected' && source.status !== 'failed' && source.status !== 'replaced')
 
   const errorAt = (at: ErrorAt) =>
     error?.at === at && (
@@ -111,7 +112,10 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
       </p>
     )
 
-  const chip = (source: SourceItem, label: string) => (
+  // replace: a CV already read into their map can be followed by a newer
+  // one, which takes its place once read (#46); the server already does it
+  // (replaceOlderCvs), the page offered no way to send it.
+  const chip = (source: SourceItem, label: string, replaceable = false) => (
     <div key={source.id} className={`${styles.row} ${styles.rowConnected} ${styles.enter}`}>
       <span className={styles.rowLabel}>{label}</span>
       <span className={styles.rowRight}>
@@ -125,6 +129,11 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
         {source.status !== 'processed' && (
           <button type="button" className={styles.remove} onClick={() => void remove(source)} disabled={busy} aria-label={t.onboarding.remove(source.name)}>
             ×
+          </button>
+        )}
+        {source.status === 'processed' && replaceable && (
+          <button type="button" className="text-btn" onClick={() => fileInputRef.current?.click()} disabled={busy} aria-label={t.onboarding.replaceCvLabel}>
+            {pending === 'file' ? t.onboarding.reading : t.onboarding.replaceCv}
           </button>
         )}
       </span>
@@ -180,7 +189,15 @@ export default function OnboardingFlow({ initialSources = [] }: { initialSources
           />
 
           {cvs.length > 0 ? (
-            cvs.map((source) => chip(source, t.onboarding.cv))
+            <>
+              {cvs.map((source) =>
+                // Only the newest read one offers a newer: one waiting to be read is already that.
+                chip(source, t.onboarding.cv, cvs.every((item) => item.status === 'processed')),
+              )}
+              {cvs.some((item) => item.status === 'processed') && cvs.some((item) => item.status !== 'processed') && (
+                <p className={styles.rowHint}>{t.onboarding.replaceNote}</p>
+              )}
+            </>
           ) : (
             <button
               type="button"

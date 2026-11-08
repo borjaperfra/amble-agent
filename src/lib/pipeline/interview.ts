@@ -25,6 +25,8 @@ import {
   linkCapabilityEvidence,
   type InterviewTurnRow,
   type UncertaintyRow,
+  answeredTurns,
+  answeredGapIds,
 } from '../db/repo'
 import {
   runExtractAnswerClaimsTask,
@@ -136,7 +138,8 @@ async function planRound(candidateId: string): Promise<NextQuestion> {
   } else {
     planned = parseJsonArray(interview.planned_gaps)
   }
-  const askedAbout = new Set(everyTurn.flatMap((turn) => parseJsonArray(turn.target_uncertainty_ids)))
+  // Asked in this round, or answered in any before it (#47).
+  const askedAbout = new Set([...everyTurn.flatMap((turn) => parseJsonArray(turn.target_uncertainty_ids)), ...answeredGapIds(candidateId)])
   for (const id of [...planned]) {
     if (askedAbout.has(id)) continue
     const gap = getUncertainty(id)
@@ -144,7 +147,10 @@ async function planRound(candidateId: string): Promise<NextQuestion> {
     if (!gap || gap.candidate_id !== candidateId || gap.status !== 'OPEN') continue
     const turn = await roundTurn(candidateId, interview.id, everyTurn, gap)
     if (turn) return asTurn(turn)
-    // Nothing worth asking about it after all: it leaves the round.
+    // Nothing worth asking about it after all (what was asked about that
+    // capability already covers it): it leaves the round, and the map, and
+    // is not counted again as a question to come (#47).
+    if (gap.kind !== 'ATTRIBUTION') updateUncertaintyStatus(gap.id, 'ACCEPTED_UNKNOWN', null, null)
     planned = planned.filter((other) => other !== id)
     setPlannedGaps(interview.id, planned)
   }
@@ -180,10 +186,25 @@ async function roundTurn(candidateId: string, interviewId: string, everyTurn: In
     })),
     uncertainties: [{ id: gap.id, capabilityId: gap.capability_id, description: gap.description, materiality: gap.materiality }],
     resolvedUncertaintyIds: listUncertainties(candidateId, 'RESOLVED').map((uncertainty) => uncertainty.id),
-    recentTurns: everyTurn.slice(-6).map((turn) => ({
-      question: turn.question ?? '',
-      answer: turn.answer === null ? '(asked, not answered yet: do not ask about this again)' : turn.answer.slice(0, 2000),
-    })),
+    // What this round asked, and what any round before asked about this same
+    // capability (#47): a new round starts a new interview, and the planner,
+    // seeing nothing, asked «what did you decide in the Mahou launches» again
+    // as «what did you do in El Grifo Mahou en Casa». Those it must not ask
+    // again in other words; when they cover the doubt, it stops.
+    recentTurns: [
+      ...answeredTurns(candidateId).filter(
+        (turn) => !everyTurn.some((current) => current.id === turn.id) && gap.capability_id !== null && parseJsonArray(turn.target_capability_ids).includes(gap.capability_id),
+      ),
+      ...everyTurn,
+    ]
+      .slice(-8)
+      .map((turn) => ({
+        question: turn.question ?? '',
+        answer:
+          turn.answer === null
+            ? '(asked, not answered yet: do not ask about this again)'
+            : `${turn.answer.slice(0, 2000)}\n(already asked: do not ask the same thing again in other words; if this covers what is still unknown, STOP)`,
+      })),
     questionsAsked: asked(everyTurn).length,
     minimumTarget: 1,
     lookingFor: lookingFor(candidateId),
@@ -718,7 +739,20 @@ async function reassessScope(
     // Those that matter little are kept, and the map does not show them.
     const weight: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
     let shownOpened = 0
-    for (const uncertainty of [...reassessData.newUncertainties].sort((a, b) => (weight[a.materiality] ?? 3) - (weight[b.materiality] ?? 3))) {
+    // A capability already asked about twice gets no new question from an
+    // answer: digging the same hole is what made the questions feel endless
+    // and the same (#47). It is kept, LOW, for the record.
+    const askedTwice = new Set(
+      Object.entries(
+        answeredTurns(candidateId)
+          .flatMap((answered) => parseJsonArray(answered.target_capability_ids))
+          .reduce<Record<string, number>>((count, id) => ({ ...count, [id]: (count[id] ?? 0) + 1 }), {}),
+      )
+        .filter(([, times]) => times >= 2)
+        .map(([id]) => id),
+    )
+    for (const found of [...reassessData.newUncertainties].sort((a, b) => (weight[a.materiality] ?? 3) - (weight[b.materiality] ?? 3))) {
+      const uncertainty = found.capabilitySlug && askedTwice.has(found.capabilitySlug) ? { ...found, materiality: 'LOW' as const } : found
       if (uncertaintyExistsByDescription(candidateId, uncertainty.description)) continue
       if (uncertainty.materiality !== 'LOW' && shownOpened++ >= MAX_NEW_GAPS_PER_ANSWER) continue
       insertUncertainty({

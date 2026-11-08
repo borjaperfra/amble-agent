@@ -2,6 +2,7 @@ import { getDb } from '../db/db'
 import { listWanted, respondToMatch, setProgress } from '../db/matching'
 import { now } from '../db/repo'
 import { reportedClosed } from '../sourcing/liveness'
+import { aYearFromNow, excludeCompany, findTheirCompany, includeCompany, listExcludedCompanies } from '../db/excluded-companies'
 import type { AgentAction } from './agent'
 import type { FollowupAnswer } from './followups'
 
@@ -152,4 +153,24 @@ export function runAction(
       .run(candidateId, offer.opportunityId, now(), outcome, now())
   }
   return { done: true }
+}
+
+// A company they want nothing from, or one let back in (#44): the name they
+// gave, found among the companies whose offers amble judged for them. Null
+// when nothing of theirs is called that, so the reply can say so.
+export function companyAction(
+  candidateId: string,
+  action: { type: 'exclude_company'; company: string; forAYear: boolean } | { type: 'include_company'; company: string },
+): { company: string; until: string | null } | null {
+  if (action.type === 'include_company') {
+    const wanted = norm(action.company)
+    const row = listExcludedCompanies(candidateId).find((item) => norm(item.name) === wanted || norm(item.name).includes(wanted) || wanted.includes(norm(item.name)))
+    if (!row || !includeCompany(candidateId, row.companyId)) return null
+    return { company: row.name, until: null }
+  }
+  const company = findTheirCompany(candidateId, action.company)
+  if (!company) return null
+  const until = action.forAYear ? aYearFromNow() : null
+  excludeCompany(candidateId, company.id, { reason: null, until, source: 'chat' })
+  return { company: company.name, until }
 }
