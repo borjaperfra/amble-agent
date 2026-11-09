@@ -334,6 +334,13 @@ async function callChatCompletion(
   }
 }
 
+// The error as model_runs keeps it: the message, then the provider's own
+// words, shortened and with anything shaped like a key blanked out.
+export function withDetail(error: ModelError): string {
+  const detail = error.detail?.replace(/sk-[A-Za-z0-9_-]{4,}/g, 'sk-…').replace(/\s+/g, ' ').trim()
+  return detail ? `${error.message} ${detail.slice(0, 500)}` : error.message
+}
+
 export async function runStructuredTask<T>(options: StructuredTaskOptions<T>): Promise<StructuredRun<T>> {
   const config = getModelConfig()
   if (!config) throw new ModelNotConfiguredError()
@@ -381,7 +388,10 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
     } catch (error) {
       // HTTP, network or time: recorded, and the task ends.
       const modelError = error instanceof ModelError ? error : new ModelError(error instanceof Error ? error.message : 'Unknown model error')
-      record({ content: null, latencyMs: null, error: modelError.message })
+      // With what the provider said: a bare "HTTP 400" left a gateway that
+      // switched to a model the key may not call (2026-11-09) to guesswork.
+      // The message stays first, so LIKE '%HTTP 429%' still counts limits.
+      record({ content: null, latencyMs: null, error: withDetail(modelError) })
       throw modelError
     }
     const { content, latencyMs, usage } = reply
@@ -400,7 +410,7 @@ IMPORTANT: your previous response failed validation: ${lastError?.detail ?? 'unk
     } catch (error) {
       // A shape so far off that reading it failed.
       const modelError = new ModelError('The model response could not be read.', { detail: error instanceof Error ? error.message : undefined })
-      record({ content, latencyMs, usage, error: modelError.message })
+      record({ content, latencyMs, usage, error: withDetail(modelError) })
       throw modelError
     }
     if (!validated.success) {
