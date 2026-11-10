@@ -166,8 +166,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function isBusy(error: unknown): error is ModelError {
-  return error instanceof ModelError && (BUSY_STATUSES.has(error.status ?? 0) || error.unreachable === true)
+// When its model struggles, Helmcode's gateway sends the call to
+// `<model>-fallback`, which our keys may not call, and answers 400 "Invalid
+// model name passed in model=deepseek-v4-flash-fallback". Nothing wrong with
+// the request: the model is busy. Answered in half a second and never
+// retried, it emptied a listening pass in ten minutes (2026-11-09 and 10:
+// nine calls in ten). It waits and tries again, like a 503.
+const GATEWAY_FALLBACK = /invalid model name.*-fallback\b/i
+
+export function isBusy(error: unknown): error is ModelError {
+  if (!(error instanceof ModelError)) return false
+  if (BUSY_STATUSES.has(error.status ?? 0) || error.unreachable === true) return true
+  return error.status === 400 && GATEWAY_FALLBACK.test(error.detail ?? '')
 }
 
 function busyWait(error: ModelError, retry: number): number {
