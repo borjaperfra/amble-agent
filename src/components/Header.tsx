@@ -11,7 +11,7 @@ import { useIsOwner } from './OwnerProvider'
 import { adminDictionaries } from '@/lib/i18n/dictionaries/admin'
 import styles from './Header.module.css'
 
-const navRoutes = ['/me', '/me/intent', '/me/data', '/me/triage', '/listening', '/opportunities', '/invites', '/admin']
+const navRoutes = ['/me', '/me/cv', '/me/intent', '/me/data', '/me/triage', '/listening', '/opportunities', '/invites', '/admin']
 
 interface HeaderProps {
   right?: React.ReactNode
@@ -36,6 +36,7 @@ export default function Header({ right, language = true, nav = true }: HeaderPro
   const navItems = [
     { href: '/listening', label: t.header.rep },
     { href: '/me', label: t.header.map },
+    { href: '/me/cv', label: t.header.cv },
     { href: '/opportunities', label: t.opportunities.nav },
     { href: '/invites', label: t.invites.nav },
     { href: '/me/data', label: t.header.data },

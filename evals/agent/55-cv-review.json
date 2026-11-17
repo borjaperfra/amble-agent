@@ -1,0 +1,18 @@
+{
+  "issue": 55,
+  "feedback": "«Añadiría al onboarding de la parte del CV lo otro que tenías implementado, que ayudaba mucho a mejorar el CV, incluso con preguntas para mejorarlo o algún tipo de asistente para dejarlo niquelao.» (/opportunities, 28-10). «Tu CV, mejor» is on /me/cv.",
+  "cases": [
+    {
+      "id": "55-help-with-cv",
+      "message": "¿Me ayudas a mejorar mi CV?",
+      "expect": { "action": null, "replyIncludes": ["/me/cv"] },
+      "forbid": ["no lo sé", "lo paso al equipo", "/no (puedo|te puedo) ayudar/"]
+    },
+    {
+      "id": "55-what-is-missing-in-my-cv",
+      "message": "¿Qué le falta a mi CV para las ofertas que me mandas?",
+      "expect": { "action": null, "replyIncludes": ["/me/cv"] },
+      "forbid": ["no lo sé", "lo paso al equipo"]
+    }
+  ]
+}
